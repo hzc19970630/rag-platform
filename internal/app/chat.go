@@ -1,0 +1,29 @@
+package app
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/example/rag-platform/internal/config"
+	"github.com/example/rag-platform/internal/platform/llm"
+)
+
+// NewChatter resolves the generation adapter from configuration. The
+// conversation layer depends only on the llm.Chatter interface, so swapping the
+// offline extractive adapter for a hosted model is a configuration change.
+func NewChatter(cfg config.Config) (llm.Chatter, error) {
+	switch cfg.Chat.Source {
+	case "local":
+		return llm.NewLocalChatter(), nil
+	case "remote":
+		return llm.NewRemoteChatter(llm.RemoteChatterOptions{
+			BaseURL:   cfg.Chat.BaseURL,
+			APIKey:    cfg.Chat.APIKey,
+			Model:     cfg.Chat.Model,
+			MaxTokens: cfg.Chat.MaxTokens,
+			Timeout:   time.Duration(cfg.Chat.TimeoutSec) * time.Second,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported CHAT_SOURCE %q", cfg.Chat.Source)
+	}
+}

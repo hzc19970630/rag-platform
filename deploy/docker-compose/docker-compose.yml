@@ -1,0 +1,213 @@
+services:
+  postgres:
+    image: paradedb/paradedb:v0.22.6-pg17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rag_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-rag_platform}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - backend
+
+  minio:
+    image: pgsty/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rag-local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-local-only}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+
+  docreader:
+    build:
+      context: ../..
+      dockerfile: services/docreader/Dockerfile
+    environment:
+      PARSER_VERSION: ${PARSER_VERSION:-docreader-m2-v2}
+    expose:
+      - "50051"
+      - "8080"
+    read_only: true
+    user: "10001:10001"
+    cap_drop: ["ALL"]
+    cpus: "${PARSER_SANDBOX_CPU_LIMIT:-2}"
+    mem_limit: "${PARSER_SANDBOX_MEMORY_MB:-2048}m"
+    pids_limit: ${PARSER_SANDBOX_PIDS_LIMIT:-128}
+    security_opt:
+      - no-new-privileges:true
+      # Docker's default seccomp profile is applied when no custom profile is set.
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      API_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-rag_platform}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-rag_platform}?sslmode=disable
+      REDIS_ADDR: redis:6379
+      DOCREADER_GRPC_ADDR: docreader:50051
+      PARSER_VERSION: ${PARSER_VERSION:-docreader-m2-v2}
+      S3_ENDPOINT: minio:9000
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      docreader:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8082}:8080"
+    networks:
+      - backend
+      - frontend
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/migrate"]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-rag_platform}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-rag_platform}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
+  seed:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/seed"]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-rag_platform}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-rag_platform}?sslmode=disable
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    entrypoint: ["/usr/local/bin/worker"]
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-rag_platform}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/${POSTGRES_DB:-rag_platform}?sslmode=disable
+      REDIS_ADDR: redis:6379
+      DOCREADER_GRPC_ADDR: docreader:50051
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      docreader:
+        condition: service_healthy
+    networks:
+      - backend
+      # The worker calls the embedding provider over the public internet when
+      # EMBEDDING_SOURCE=remote, and `backend` is internal-only (no egress or
+      # external DNS), so it needs this network too.
+      - frontend
+
+  web:
+    build:
+      context: ../../web
+    environment:
+      VITE_API_BASE_URL: ${API_PUBLIC_URL:-http://localhost:8082}/api/v1
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "5173:5173"
+    networks:
+      - frontend
+
+  # Development-only OIDC provider. The checked-in realm fixture contains local
+  # credentials and must not be used in production. KC_HOSTNAME has to be
+  # reachable from both the host browser and the api container, so localhost
+  # only works when the API is not containerized.
+  keycloak:
+    image: keycloak/keycloak:26.0
+    profiles: ["oidc"]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin-local-only}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-http://localhost:8083}
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8083:8080"
+    volumes:
+      - ../keycloak/rag-realm.json:/opt/keycloak/data/import/rag-realm.json:ro
+    networks:
+      - frontend
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+
+networks:
+  backend:
+    internal: true
+  frontend:

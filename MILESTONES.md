@@ -1,0 +1,314 @@
+# 实施里程碑清单
+
+本文件把 [DESIGN.md](./DESIGN.md) 分解为可实施、可验收的交付阶段。`DESIGN.md` 是最终架构事实源；本文件只规定实现顺序、范围和完成门槛，不另行改变架构决策。若实施中发现设计冲突，先记录决策和影响，再更新设计，不得由实现代码悄悄形成第二套架构。
+
+## 执行约定
+
+- 一次只执行一个里程碑，除非用户明确要求跨阶段实施。
+- 开始前检查仓库现状、未提交改动、已完成里程碑和依赖；不得覆盖用户已有内容。
+- 先完成端到端最小垂直切片，再扩展边缘能力；不预先实现后续里程碑的空模块或占位抽象。
+- 领域代码依赖端口，不依赖 Casbin、Asynq、对象存储或模型供应商的具体 SDK；适配器在相应边界内实现。
+- 按本里程碑验收条件运行测试。只有测试通过、迁移可执行、配置文档更新后，才能勾选完成项。
+- 如遇到外部凭据或服务不可用，提供可运行的本地替代配置和明确阻塞说明，不得伪报通过。
+- 每个里程碑结束时报告：完成项、改动文件、测试命令与结果、未完成项、下一阶段依赖。
+
+## 阶段总览
+
+
+| 里程碑 | 交付结果                                  | 依赖          | 级别        |
+| --- | ------------------------------------- | ----------- | --------- |
+| M0  | 可重复启动的工程骨架和本地基础设施                     | 无           | P0        |
+| M1  | 开发身份、租户、知识库和授权边界                      | M0          | P0        |
+| M2  | 安全、可追踪的 Evidence 入库流水线                | M0、M1       | P0        |
+| M3  | 有权限约束、可引用的 RAG 问答 MVP                 | M1、M2       | P0        |
+| M4  | 企业治理、运营可靠性和文档生命周期                     | M3          | P1        |
+| M5  | 外部数据源连接和增量同步                          | M4          | P1        |
+| M6  | LLM Wiki 与 Knowledge Index 投影         | M3、M4       | P1        |
+| M7  | Knowledge Graph / Relation Projection | M3、M4       | P1        |
+| M8  | 规模化、复杂查询和可选扩展                         | M4、M5、M6、M7 | P2 / 条件启动 |
+| M9  | 前端工作台与可视化配置                           | M1、M2、M3、M4 | P1        |
+
+
+M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线至少还要完成 M4 中的身份、审计、密钥和运营要求。M6 与 M7 相互独立，可以分开交付。M9 只重构前端工作台并开放数据库级热改配置，不依赖 M8，也不改变 M8 的条件启动门槛。
+
+## M0：工程骨架与本地环境
+
+**目标**：开发者和自动化 Agent 可以从干净环境重复启动服务、执行迁移和运行测试。
+
+**范围**：
+
+- [x] 建立 `cmd/api`、`cmd/worker`、`services/docreader`、`web`、`migrations`、`deploy/docker-compose` 的最小目录结构。
+- [x] 建立 Go API、React/TypeScript 前端和 Python Docreader 的健康检查入口。
+- [x] 建立 Docker Compose 本地环境：PostgreSQL、Redis、MinIO、API、Worker、Docreader、Web。
+- [x] `.env.example` 中每个被 Compose 或应用读取的变量都有明确用途；启动时校验必填配置并给出可读错误。
+- [x] 实现数据库迁移入口、种子数据入口、统一日志和 `/healthz`、`/readyz`。
+- [x] 建立 Makefile 或等价命令，提供 `dev-up`、`dev-down`、`migrate`、`test`、`lint` 等常用任务。
+- [x] 建立 CI：格式检查、静态检查、单元测试、前端构建和容器构建。
+- [x] 冻结 MVP 首批文件格式：数字 PDF（必须有可提取文本层）、DOCX、Markdown、TXT；XLSX、PPTX、HTML 和图像 OCR 后续扩展。
+- [x] 确认首期 BM25 实现、PostgreSQL/pgvector/ParadeDB 的版本兼容矩阵，并在 Compose 中实际验证迁移和索引创建。
+
+**验收门槛**：
+
+- 新环境按 README 指令可以启动全套依赖并通过 readiness 检查。
+- 空数据库可以完成迁移；重复执行迁移命令安全失败或无副作用。
+- Compose 中没有真实密钥；真实 `.env` 被 Git 忽略。
+- CI 在无外部 LLM 凭据时仍能完成基础测试和构建。
+
+**暂不做**：Kubernetes/Helm、高可用、多区域、生产密钥轮换。
+
+## M1：身份、租户与知识库授权
+
+**目标**：先建立可信的身份上下文和可测试的租户/知识库边界，所有后续用例都从同一授权入口进入。
+
+**范围**：
+
+- [x] 实现 `users`、`tenants`、`memberships`、`knowledge_bases` 的最小领域模型和迁移。
+- [x] 提供仅本地/测试使用的开发身份注入方式；明确禁止将开发身份模式用于生产。
+- [x] 实现 `AccessContext`、`AuthorizationPort`、`AuthorizationScope` 和 Casbin Adapter。
+- [x] 首期权限粒度限制为租户成员角色与知识库角色；统一 `Owner`、`Admin`、`Editor`、`Viewer` 的动作矩阵。
+- [x] `AuthorizationScope` 首期输出主体、租户、允许访问的知识库 ID、capabilities 和 ACL 版本，不把 Casbin matcher 或 policy row 暴露给业务模块。
+- [x] 实现知识库创建、列表、详情、更新、删除及成员授权 API；React 页面仅呈现后端允许的动作。
+- [x] API、Repository 和检索接口都强制携带 tenant/resource scope；禁止按客户端传入 ID 直接裸查。
+- [x] 保留授权审计接口；具体审计面板在 M4 实现。
+
+**验收门槛**：
+
+- 用户无法跨租户读取、修改或删除知识库；覆盖伪造 ID 和直接 API 调用测试。
+- Viewer 无法写入，Editor 无法管理成员，授权失败返回一致错误码并记录主体、动作和资源。
+- HTTP、Worker 和测试用例通过同一授权服务构造访问范围。
+
+**暂不做**：生产 OIDC/SSO、API Key、文件夹继承、单文档共享、OpenFGA、OPA。
+
+## M2：Evidence 入库流水线
+
+**目标**：将一个上传文件可靠地转为可检索、可追溯且带权限元数据的 Evidence Package。
+
+**范围**：
+
+- [x] 实现知识库内文件上传、大小/MIME 校验、对象存储写入和 `DocumentVersion` 创建。
+- [x] 实现 Docreader gRPC 契约、数字 PDF/DOCX/Markdown/TXT 解析和 `NormalizedDocumentV1`。
+- [x] MVP 对纯扫描 PDF 及包含扫描页的混合 PDF 返回稳定错误码 `unsupported_scanned_pdf`，明确显示不支持，不允许静默略过页面或索引部分文本。
+- [x] Docreader 在受限容器中运行：非 root、只读根文件系统、移除 capabilities、Docker 默认 seccomp、无外网、CPU/内存/PID/超时限制、任务临时目录清理；不挂载 Docker Socket 和宿主机目录。
+- [x] 实现清洗、结构化、父子 Chunk、页码/标题/来源位置和内容哈希。
+- [x] 外置切分策略：`Chunker` 端口 + `RuneChunker` 实现，参数由 `CHUNK_SIZE`、`CHUNK_OVERLAP`、`CHUNK_SPLIT_MARKERS`、`CHUNK_MIN_SIZE` 注入；启动时校验区间；内嵌常量与 `splitRunes` 已移除。
+- [x] 实现 Embedding Adapter 和关键词索引 Adapter；写入 pgvector 与 M0 冻结的 BM25 实现。
+- [x] Embedding 模型配置化：`Embedder` 接口 + `local`/`remote` 两种 Adapter，维度、批量和超时由环境变量注入；`chunks` 记录 `embedding_model`；`APP_ENV=production` 禁止本地哈希向量；启动时校验维度为正整数。
+- [x] 产出 `EvidencePackageV1`；队列消息传 Package ID/版本/幂等键，不传整篇文档内容。
+- [x] 实现 Pipeline A 的 `pipeline_runs`、`stage_runs`、任务重试和阶段状态迁移。
+- [x] 以 `pipeline_runs/stage_runs` 为处理状态唯一事实源；如保留 `ingestion_jobs`，它只能是面向用户的聚合视图，不能维护第二套阶段状态。
+- [x] API 数据库事务通过 Outbox 投递入库任务；Worker 使用 Inbox/幂等键避免重复切分、Embedding 和索引。
+- [x] 文档删除或重处理可使旧版本退出检索，并阻止旧任务覆盖新版本。
+- [x] 扩展 docreader 解析格式（2026-10-30）：在数字 PDF/DOCX/Markdown/TXT 之外新增 `.xlsx`、`.pptx`、`.html/.htm`，仍用 Python 标准库（`zipfile`/`ElementTree`/`html.parser`），输出同一 `NormalizedDocumentV1`（heading/paragraph）并带 sheet/slide/行号来源；Excel 日期序列号转 ISO 日期，PPTX 按 `p:sldIdLst` 而非文件名排序取页，HTML 剥离脚本样式且永不被内联预览；上传白名单、连接器白名单与 `/readyz` `supported_formats` 同步为七种格式。OLE 二进制 `.xls/.ppt` 返回 `unsupported_legacy_office`，损坏包返回 `unsupported_corrupt_document`，超限包返回 `document_too_complex`（三者均为终态、不重试）。
+
+**验收门槛**：
+
+- 上传支持的文件后可观察各阶段状态，最终成为 `EvidenceReady`；失败有明确阶段、错误码和可重试状态。
+- 重复投递同一任务不会生成重复 Chunk 或错误覆盖版本。
+- 越权用户不能上传到或读取其他租户/知识库的文件及对象存储内容。
+- 超大文件、错误 MIME、解析超时和解析器崩溃不会拖垮 API/Worker；临时文件会清理。
+- 集成测试覆盖数据库、Redis、对象存储和 Docreader。
+
+**暂不做**：扫描 PDF（包括混合扫描页 PDF）、OCR/版面识别、图片解析、OLE 二进制 `.xls/.ppt`（及 `.doc`）、PPTX 演讲者备注/图表/SmartArt、Excel 公式重算与合并单元格值扇出、Wiki/Relation 投影、外部连接器、人工 Chunk 编辑。
+
+## M3：授权 RAG 与引用交付（MVP Gate）
+
+**目标**：用户可以查看已授权文档的解析内容，对有权访问的知识库提问，并获得流式回答和可验证的原文引用。文档内容预览是 RAG 引用交付的前置产品能力，不等同于 LLM 问答。
+
+**范围**：
+
+- [x] 实现会话、消息、查询请求和 SSE 事件持久化/续传。
+- [x] 实现文档详情页：处理状态、原始文件受控预览、解析内容预览和 Chunk 分页查看（列表只含可检索子块，父块按 Chunk ID 展开，避免与子块重复展示同一段文本）；上传成功后可从知识库列表进入详情页。
+- [x] 实现只读 `DocumentPreviewV1` 和 `ChunkPageV1` 查询接口；按文档反查知识库并统一执行 `AuthorizationScope`，不得通过对象存储 URL 或 Chunk ID 绕过租户/知识库权限。
+- [x] 只有当前版本达到 `EVIDENCE_READY` 才展示解析内容和 Chunk；处理中、失败、删除和被替换版本展示明确状态，不展示部分或过期内容。
+- [x] 补齐知识库下的文档浏览入口：`GET /api/v1/knowledge-bases/:id/documents`（`DocumentPageV1`，游标分页）与 React 知识库详情视图，使已入库文档在刷新后仍可发现、可进入详情、可替换为新版本和删除。删除与替换上传的接口自 M2/M3 起已交付并验收，此前只是缺少界面入口；重新解析、版本历史和删除后恢复仍属于 M4。
+- [x] 实现 QueryPlan 的首期固定策略：事实类问题只查询 Evidence Index；不先建设 LLM 意图 Agent。
+- [x] BM25 与向量召回并行执行，所有查询在召回时强制使用 `AuthorizationScope` 过滤 tenant、knowledge base 和可用版本。
+- [x] 实现 RRF 融合、去重、父块/邻块扩展、Top-K 和上下文 Token 限制；Rerank 做成可配置能力，先以离线评估决定默认开关。
+- [x] 建立 `config/prompt_templates/` 目录并外置首批 Prompt（系统提示、上下文模板、fallback、查询改写、摘要、知识库描述、会话标题）；Go 代码不出现 Prompt 字面量；模板 ID 引用在启动时校验。
+- [x] 检索参数实现三级覆盖：YAML 全局默认 → 知识库级覆盖（数据库，审计）→ 会话级覆盖；服务端做区间校验，向量阈值 0-1、Rerank 阈值 -10 到 10、Top-K 0-200。
+- [x] LLM Adapter 以短引用 ID 接收证据；模型不能自行创建可持久化引用。
+- [x] 实现引用注册、Citation Validation、来源定位和消息落库；对最终 EvidenceSet 执行权限和版本二次校验。
+- [x] 在线问答在 API 请求生命周期内执行并 SSE 输出；Redis/Asynq 不承载普通同步聊天请求，只处理明确的后台长任务或补偿任务。
+- [x] 建立首批人工校验的问答评估集，至少覆盖事实查找、无答案拒答、跨文档问题和权限负向样例。
+- [x] 对 Prompt Injection、来源冲突、证据不足、超时、模型错误和客户端断连定义行为。
+
+**MVP 验收门槛**：
+
+- 从上传文件到可提问、回答和点击引用定位原文形成端到端闭环。
+- 从上传文件到文档详情、解析内容、Chunk 位置和问答引用定位形成端到端闭环；详情页预览与引用展开使用同一文档版本和权限边界。
+- 刷新后仍能从知识库视图列出已入库文档并执行进入详情、替换为新版本和删除；被删除的文档不再出现在列表和检索结果中。
+- 引用只能来自本次已授权 EvidenceSet；不存在或越权的引用被拒绝输出。
+- 权限负向用例零泄漏；无证据问题明确拒答，不用模型常识填空。
+- SSE 的事件顺序、错误、完成状态及断线续传可通过自动化测试。
+- 在固定评估集上记录检索和引用指标，并由产品/架构负责人确定发布阈值。
+
+**MVP 定义**：M0-M3 完成后可启动内部试点。面向企业客户的生产发布还必须通过 M4 安全与运维门槛。
+
+## M4：企业治理与可运营性
+
+**目标**：把内部试点升级为可接入企业身份、审计和支持持续运行的服务。
+
+**范围**：
+
+- [x] 接入一个 OIDC Provider；定义登录、登出、回调、租户映射、会话更新和密钥轮换行为。协议级集成测试使用 wire-level 测试 Provider 覆盖 discovery、PKCE/nonce、签名校验与 issuer 不匹配；真实 IdP 联调需要部署方提供 issuer/client 凭据。
+- [x] 实现 API Key 哈希存储、capabilities、知识库范围、过期/撤销和审计。
+- [x] 完成角色/共享关系的唯一事实源及 Casbin 策略投影刷新机制；权限变更必须及时失效缓存和派生结果。
+- [x] 实现文档版本历史、重新解析、删除、恢复/清理规则；文件夹和 Chunk 人工修订按“根据需要”不纳入本里程碑（延续 M2/M3 的“暂不做”），当前以自动版本与回滚满足生命周期要求。
+- [x] 完成 Outbox Publisher、Inbox 幂等、死信、人工重试/取消、TaskInspector 和 reconciliation。
+- [x] 完成限流、配额、审计查询、Worker Pool 基础隔离和告警指标。
+- [x] 增加备份恢复演练、迁移兼容检查、优雅关闭和故障演练文档。
+
+**验收门槛**：
+
+- OIDC、API Key 和角色权限的正负向集成测试通过。
+- 角色撤销后，后续检索不得继续使用旧授权缓存或暴露已撤权内容。
+- Redis/Worker 重启、重复 Outbox 发布、死信重放和 reconciliation 后数据状态一致。
+- 备份可以恢复到新环境；关键队列、解析失败率、检索耗时和模型错误有可观测信号。
+
+
+
+## M5：外部数据源和增量同步
+
+**目标**：让外部数据源复用 Pipeline A，不绕过文档版本、ACL 和 Evidence 契约。
+
+**范围**：
+
+- [x] 先实现一个有明确用户需求的连接器，不同时铺开多种网盘/IM。
+- [x] 连接器凭据加密存储；同步任务支持 cursor、增量变更、删除 tombstone、限流和续跑。
+- [x] 同步产物统一转换为 SourceObject/DocumentVersion，进入现有 Evidence Pipeline。
+- [x] 支持按连接器/知识库取消同步、重试、查看运行记录和权限映射。
+
+**验收门槛**：
+
+- 首次全量同步、增量更新、删除、权限变更和中断续跑均可重复执行且无重复文档。
+- Connector 不直接写索引，不绕过 Pipeline A 和授权端口。
+
+
+
+## M6：LLM Wiki 与 Knowledge Index
+
+**目标**：基于已授权 Evidence Package 构建可追溯、可重建的知识页面，不改变 RAG 事实来源。
+
+**范围**：
+
+- [x] 实现 `wiki_enabled` 策略开关、Wiki Projection Run/Stage 状态和独立重试。
+- [x] 实现 Wiki 页面、页面版本、来源 Chunk 映射、生成模型/提示词版本、审核状态和 ACL 版本。
+- [x] 页面生成及更新只消费 EvidencePackage，不读取原始对象绕过第二层。
+- [x] 实现 Knowledge Index 检索适配器、来源权限约束、过期/撤权失效和重建。
+- [x] 实现人工审核、发布、回滚及 `ProjectionJoin`；Wiki 故障不影响 Evidence RAG。
+
+**验收门槛**：
+
+- 每个页面段落或内容块可追溯到来源版本和 Chunk。
+- 多来源页面不得向无权用户暴露任一受限来源的内容；ACL 变更后派生页面及时失效。
+- Wiki 失败/重试/重建不改变 Evidence Index，Join 状态符合 `KnowledgeReady/KnowledgePartial` 规则。
+
+
+
+## M7：Knowledge Graph / Relation Projection
+
+**目标**：建立有来源证据、权限过滤和独立生命周期的实体关系投影。
+
+**范围**：
+
+- [x] 实现 `graph_enabled` 策略开关、实体/关系抽取 Schema、Relation Projection Run/Stage 和失败重试。
+- [x] 首期 Relation Store 使用 PostgreSQL 表；实体、关系、别名、来源 Chunk、ACL 和快照关系完整。
+- [x] 实现实体规范化/合并的可审计规则，抽取结果可审核、失效和重建。
+- [x] 实现有深度/节点数上限的关系查询，所有节点、边和路径查询均受 `AuthorizationScope` 约束。
+- [x] 实现 ProjectionJoin；Relation 失败不阻塞 Wiki 或 Evidence RAG。
+- [x] 用真实问答集验证关系查询相对纯 RAG 的收益，再决定是否保留复杂图查询功能。（评估已完成：V2 为 30 文档 / 135 子块 / 34 用例（28 可答、20 多跳、6 负例），多跳 graph 100% vs strict RAG 70%，rescue 6、hop exact 100%、负例 100%，delta +30%，harness 建议 `keep-bounded-graph-query`；同一集合四次独立索引构建下 strict RAG 为 85%/60%/80%/70%，报告已声明重建敏感性，发布决策前应重复运行；是否物理裁剪复杂图查询由产品依据报告决定，M7 不删除已验证的接口。）
+
+**验收门槛**：
+
+- 每条关系可回溯到来源文档版本和 Chunk；无来源关系不能进入可用快照。
+- 通过隐藏节点、隐藏边、共享实体和多跳路径用例验证无侧信道越权。
+- 重复抽取可幂等，来源删除/版本替换后关系失效或重建结果正确。
+- 不因引入图谱而要求所有查询调用图检索。
+
+
+
+## M8：规模化与条件扩展
+
+**目标**：只在实测瓶颈或明确产品需求出现时扩展基础设施和 Agent 能力。
+
+**候选工作项**：
+
+- [ ] 基于文档量、索引写入、查询延迟和运营成本的压测结果，决定是否迁移 OpenSearch/Milvus。召回侧已有 `KeywordSearcher`/`VectorSearcher` 端口，但索引写入仍为 PostgreSQL 实现，迁移需同时改造写入侧。
+- [ ] 基于多跳查询延迟、查询复杂度和关系规模，评估 Neo4j/其他图数据库；迁移必须通过 `RelationStore` 端口（`internal/relationstore`，首期实现 `internal/platform/relationstore`），不泄漏厂商查询类型。该端口已于 2026-11-03 落地（ADR 0001），M8 仍未开始。
+- [ ] 只有出现动态分支、循环检索、工具调用、人工审批或可恢复长任务时，才评估 LangGraph/Agent 编排。
+- [ ] 根据多租户规模和访问关系复杂度，评估 OpenFGA；不得在没有迁移方案时与 Casbin 双写授权事实。
+- [ ] 基于部署规模和 RTO/RPO 要求，实施 Kubernetes、分片、多区域和高可用。
+- [ ] 按真实渠道需求增加 MCP、IM、Widget 和复杂连接器。
+- [ ] 若产品数据确认需要扫描件，再增加独立 OCR 里程碑：按页分类、混合 PDF 策略、OCR Adapter/引擎选择、版面与坐标 Schema、置信度和失败/人工复核状态、权限与保留策略、OCR 评估集。未满足这些验收前不得默认接收扫描 PDF。
+
+**启动门槛**：每项候选扩展都要附带可复现的容量数据或已确认的产品需求、成本评估、迁移回滚方案和验收测试。没有证据时不启动。
+
+**容量基线工具（2026-10-28）**：`make m8-capacity` / `make m8-capacity-validate` 提供启动门槛所需的容量证据：在本地栈按固定种子写入确定性语料，记录上传/入库吞吐、各阶段耗时、检索 P50/P95、关系投影与 depth 1–3 图查询延迟、未知种子负例与 PostgreSQL 表体积/行数，产出 `tests/eval/m8_capacity_report.json`（`M8CapacityReportV1`）。报告附 7 项候选的证据登记，`startedCandidates` 恒为空；该工具只收集证据、不启动任何候选扩展，M8 状态保持未开始。成本评估、迁移回滚方案与验收测试仍须在候选扩展立项时逐项补齐。
+
+## M9：前端工作台与可视化配置
+
+**目标**：参照本地 WeKnora 的信息架构和视觉语言，把单页管理台重构为可日常运营的前端工作台，并只开放数据库级可安全热改的配置；设计见 DESIGN.md §4.6。
+
+**依赖**：M1、M2、M3、M4。M5/M6/M7 的界面仅在既有 API 已存在时接入，不新增后端能力；与 M8 独立，不触发 M8 的任何条件扩展。
+
+**范围**：
+
+- [x] 应用外壳迁移到 React Router + Ant Design + TanStack Query + Zustand + i18next，保留 DESIGN.md §4.1 的技术边界；不引入 Vue/TDesign，也不复制 WeKnora 源码。
+- [x] 建立设计令牌（品牌绿、语义色、圆角、间距、字号、明暗主题）并替换现有原生 CSS；支持 light/dark/system。
+- [x] 左侧导航（知识库/问答/运维）、页面标题区和可折叠侧边栏；导航只展示后端允许的入口。
+- [x] 知识库列表改为卡片网格，知识库详情包含文档、成员和投影页签，Chunk 在文档详情内展示；问答沿用独立工作台；M1-M4 既有流程保持可用。
+- [x] 知识库设置采用分区弹窗/抽屉：基本信息、检索与索引、成员、投影、数据源、危险区；权限不足时只读或隐藏，投影/数据源在对应 API 不存在时不显示空壳。
+- [x] 新增 `GET /api/v1/knowledge-bases/{id}/configuration`（`KnowledgeBaseConfigurationV1`），返回索引开关、检索参数三层来源与只读系统配置，不返回密钥或连接串。
+- [x] 新增 `PUT /api/v1/knowledge-bases/{id}/retrieval-config`，按整体替换语义保存知识库级检索覆盖，`{}` 表示清除覆盖；保留现有 `PATCH` 的合并语义。
+- [x] 检索与索引设置使用“设置行”表单：显示继承/覆盖状态、单位、范围和生效值；前端与服务端复用同一校验规则，保存后写审计。
+- [x] 环境/YAML 项（Embedding 来源/模型/维度、切分、Chat/Rerank/Parser）只读展示来源和生效方式，不提供伪造编辑控件。
+- [x] 问答、引用展开、文档预览和运维面板按新令牌重做视觉；空态、错误态、加载态和异步任务反馈一致。
+- [x] 补充前端组件测试、后端配置接口单元/集成测试，以及 M1-M4 回归测试。
+
+**验收门槛**：
+
+- M1-M4 的用户流程无回归：登录/租户切换、知识库 CRUD、成员管理、上传/重解析/删除、文档预览、问答与引用、API Key 和运维面板。
+- 配置读取与保存按知识库权限判定：viewer 只读，editor 及以上可写，越权返回 403 且无数据泄露；非法值返回 400；每次保存写入审计。
+- 检索参数保存后下一次查询生效；索引开关关闭后对应通道停止参与检索但既有索引不删除；Wiki/Graph 开关触发投影失效/重建，界面如实展示状态。
+- `PUT` 传 `{}` 能清除知识库级覆盖并回退全局默认；`PATCH` 仍为合并语义；界面不存在无法清除覆盖的假“恢复默认”按钮。
+- 界面不返回、不展示任何密钥、连接串或对象存储键；只读配置没有可编辑控件。
+- light/dark/system 主题、既有断点和键盘操作通过手动检查；文字与控件对比度达标。
+- `npm test`、`npm run build`、`tsc` 检查（如启用）、`make lint` 与 `./scripts/m1_acceptance.sh` 至 `m4_acceptance.sh` 按各脚本既有运行模式全部通过后，才能更新状态为已完成。
+- 未引入 DESIGN.md §4.1 之外的主要前端框架，未复制 WeKnora 源码或 TDesign 主题。
+
+**暂不做**：按知识库配置切分粒度；Embedding 模型/维度热切换；统一配置中心；Agent/MCP/IM/OCR 前端；自定义主题编辑器；WeKnora 的会话列表、分享和活动流完整复刻。
+
+## 里程碑状态记录
+
+实施时仅在对应验收门槛全部满足后更新状态：
+
+
+| 里程碑 | 状态  | 完成日期 | 变更/验收记录 |
+| --- | --- | ---- | ------- |
+| M0  | 已完成 | 2026-10-09 | `make test`, `make lint`, `./scripts/m0_acceptance.sh` 通过；验证空库迁移、幂等种子、健康检查、扩展、BM25 与 HNSW。 |
+| M1  | 已完成 | 2026-10-09 | `make test`, `make lint`, `./scripts/m1_acceptance.sh` 通过；验证开发身份、Owner/Admin/Editor/Viewer、跨租户隔离、成员管理、Casbin 策略投影、审计和 Worker。 |
+| M2  | 已完成 | 2026-10-10 | `docker run ... gofmt`, `go test ./...`, `go vet ./...`, `npm run build`, `./scripts/m2_acceptance.sh` 通过；验证四种数字文档、扫描 PDF 稳定失败、对象存储、Redis、Outbox/Inbox 幂等、重处理版本隔离、跨租户读写、错误 MIME、超大文件、删除清理和受限 Docreader 容器。<br>新增 `.xlsx`/`.pptx`/`.html/.htm` 解析（2026-10-30）：docreader 用标准库（`zipfile` + `ElementTree` + `html.parser`）实现三种格式，`PARSER_VERSION` 升为 `docreader-m2-v2`，无新增第三方依赖；sheet/slide 顺序分别取自 `xl/workbook.xml` 的 `<sheets>` 与 `ppt/presentation.xml` 的 `p:sldIdLst`（不按 `sheetN.xml`/`slideN.xml` 文件名排序），Excel 日期序列号按 1899-12-30 纪元转 ISO，PPTX 按标题占位符判 heading 并跳过图片/图表/备注，HTML 剥离 script/style 等标签、`<title>` 作文档标题、`getpos()` 行号写入 `source_path`。上传白名单、连接器白名单与 `/readyz` `supported_formats` 同步为七种格式；预览处置不变，只对 PDF/Markdown/纯文本内联，HTML/XLSX/PPTX 一律 `attachment` + `nosniff`。新增稳定错误码 `unsupported_legacy_office`（`.xls/.ppt`）、`unsupported_corrupt_document`、`document_too_complex`（zip 炸弹/XML 实体/深度上限），与 `unsupported_scanned_pdf` 一样按终态处理、不消耗重试预算。验收：`make test`、`make lint`、`./scripts/m2_acceptance.sh` 通过；m2 脚本新增容器内解析断言（sheet 文件名乱序、日期序列 45292→`2024-01-01`、`sldIdLst` 顺序与文件名相反、script/style 内容不出现、实体只解码一次、错误码矩阵）、临时知识库端到端（xlsx → `EVIDENCE_READY` 且 `chunks` 含 `Budget` heading 与 `2024-06-30`，html 预览为 attachment，`.xls`/`.ppt`/`.png` 上传 400）与 `/readyz` 格式断言；回归 m1/m3。图片/OCR 与 OLE 二进制仍不在范围；本轮未重跑 `m3_eval.py`（评估集仅同步格式描述与对齐证据）。 |
+| M3  | 已完成 | 2026-10-16 | `gofmt -l`, `go test ./...`, `go vet ./...`, `npm run build`, `./scripts/m1_acceptance.sh`, `./scripts/m2_acceptance.sh`, `./scripts/m3_acceptance.sh` 通过；`python3 scripts/m3_eval.py` 记录 recall@K 1.0、引用准确率 1.0、Groundedness 1.0、拒答率 1.0、权限负向 1.0、注入标记 1.0（离线哈希 Embedding 无语义能力，发布阈值待人工确认，见 `tests/eval/m3_eval_report.json`）。<br>补齐文档列表入口后重跑（同一日期）：`gofmt -l cmd internal`, `go test ./...`, `go vet ./...`（golang:1.26-alpine 容器内）、`npm test -- --passWithNoTests`, `npm run build`, m1/m2/m3 三个验收脚本全部通过。m3 脚本新增断言覆盖：列表返回当前版本状态与 `contentReady`/`previewable`、cursor 翻页不重不漏、非法 cursor 返回 400、跨租户查列表返回 403、列表响应不含对象存储键、删除后文档离开列表且版本与 Chunk 退役。浏览器端验证刷新后可列出已入库文档，详情、替换为新版本（v1 → v2，旧版本 `superseded`）和删除均可用。同一轮移除了 `document_versions` 对象存储键的响应序列化（`SourceObjectKey`/`NormalizedKey` 改为 `json:"-"`，符合 DESIGN.md §7.1.1），`scripts/m2_acceptance.sh` 改为从 psql 读取对象键，并在 m2（上传响应）与 m3（文档读取响应、文档列表响应）脚本中加入"响应不得包含对象存储键"的断言。本轮未重跑 `m3_eval.py`。<br>修复文档详情页 Chunk 列表重复展示：`ChunkPageV1` 原先同时返回父块与子块，而短于 `CHUNK_SIZE` 的段落只会切出一个子块，其内容与父块逐字相同，同一段文字因此在列表中展示两遍；父块 `ordinal`（块序号）与子块 `ordinal`（版本内全局子块序号）交叉还会让游标翻页漏块。现改为只返回子块，父块仍可按 Chunk ID 展开，符合 DESIGN.md §7.1.1 接口规则。<br>真实模型复评与评估集重做（同一日期）：先在隔离的 `rag-eval` 栈上复跑 `scripts/m3_eval.py`（chat `gpt-6-sol`、embedding `qwen3.7-text-embedding` 1024 维），确认本地哈希 embedder 下的指标确实不能作为发布依据。随后重做：(1) 评估集由 3 篇 fixtures / 9 个用例扩到 17 篇 / 49 个用例（事实 18、跨文档 8、拒答 6、权限负向 7、注入 5、冲突 5），新增 `expectedDocuments` 声明，并加入约束"注入文本必须与被问事实同段"——chunker 按段落块切分，分段的注入文本会单独成块、不进入 top-K，注入标记便永不触发（该约束由作者期校验脚本断言）。(2) `precisionAtK` 由 `documentHitRate` 取代（前者主要反映父块/邻块扩展行为，实测本地哈希 0.25 vs 真实模型 0.275，区分不出模型好坏）；`alignedDocuments` 默认放开为全部文档，使 `citationAccuracy` 收敛为"引用不得超出本次授权证据集"。(3) 安全/权限不变量改为脚本强制判定并返回非零退出码：权限探测被放行、引用未注册（`citation_rejected`）、拒答携带引用，或权限负向/拒答率/引用准确率≠1.0；权限负向探测改为用例声明 `actor` + `probes`（search/session/messages/document/documentContent/chunk/events/upload/members/memberRemove），并新增在租户内 `viewer-a`/`editor-a` 成员的准备步骤。其余指标写入报告 `gates` 块标记为诊断项，`conflictFlagRate` 明确降级为诊断项（同语料连跑三轮为 1.0/1.0/0.0，且证据文档数恒为 2、变的只是答案引用 1 或 2 个文档，说明它随模型输出波动、不可复现，不可用于判定发布）。(4) 偶发 provider 错误重试 3 次，仍失败则从聚合中剔除并列入 `metrics.excludedCases`，空组记为 `null` 而非 0.0（负向验证：chat 端点不可达时 7 个用例被排除、模型相关指标为 `null`）。最终一轮 49 个用例、0 排除、门槛通过：recallAtK 1.0、documentHitRate 0.8889、citationAccuracy 1.0、groundedness 1.0、refusalRate 1.0、permissionNegativeDenials 1.0、injectionFlagRate 1.0、conflictFlagRate 1.0、meanLatencyMs 8571。门槛有效性另行负向验证：用最小用例集让 owner 去探测自己的知识库，脚本报出"probe search 被允许 200、document 被允许 200、upload 被允许 202"、未测到的门槛报"could not be measured"，退出码 1。<br>修复 MinIO 建桶竞态：`EnsureBucket` 的存在性检查与创建不是原子操作，api 与 worker 同时启动时输的一方收到 `BucketAlreadyOwnedByYou` 并 `exit 1`（全新栈上稳定复现，且每次挂掉的组件不同）；现把该状态码与 `BucketAlreadyExists` 视为达成目标（`internal/platform/storage/s3.go`），清空卷重建后两侧均正常启动。DESIGN.md §11 的质量评估条目同步区分为"强制判定的安全不变量"与"仅作诊断的质量指标"。<br>recallAtK 纳入重复采样：新增 `--recall-samples`（默认 3），每条用例重复检索 N 次、`recallAtK` 取均值（可落在 0 到 1 之间），样本出现分歧的用例记入 `metrics.recallUnstableCases`；该部分不消耗模型调用。实跑 49 个用例、0 排除、门槛通过，`recallUnstableCases` 为空（23 个对齐用例全部 3/3 命中）。为判断「重复检索是否真能取到信息」，另在同一知识库上对 6 类问题（含跨文档、关键词通道中文用例）各连续检索 25 次：每个问题的证据集合与顺序**完全一致**，说明同一索引上固定查询的检索是确定性的，重复检索本身取不到新信息；真正的检索波动只能来自重新入库（新建 HNSW 图与写入顺序）或检索期间的并发写入，需要整轮"重新入库 + 重新检索"才能衡量，本轮未实施。<br>`--recall-samples` 默认值由 3 改为 1（同一日期）：上一条已实测同一索引上固定查询的检索是确定性的，默认重复 3 次取不到新信息，故默认改为单次；默认值下 `recallAtK` 只能是 0 或 1，`N>1` 时才可能落在 0 到 1 之间，报告的 `limitations` 已按样本数分支表述，`--recall-samples 0` 仍按 `max(1, N)` 兜底；README 的示例与说明同步。已用新默认值重跑刷新报告（`tests/eval/m3_eval_report.json`，不传 `--recall-samples` 即 1）：`recallSamples` 1、对齐用例 `recallAtK` 全为 0/1、`recallUnstableCases` 为空，说明改动无副作用；但该轮**门槛未通过**：`refusalRate` 0.8333（5/6），`no-answer-coffee-machine`（"coffee machine maintenance schedule"，靠 `sessionOverride: {"vector_threshold": 1.0}` 制造无答案）未拒答且引用了 `untrusted` 文档（`grounded` true、`injectionFlagged` true、`attempts` 1、2305ms）。该轮 relay 明显抖动：10 次 provider 错误、9 个用例被迫重试、`meanLatencyMs` 6437 → 14637。定向复现（同一 KB `kb-54e410…`、同一会话、同一 override、同一 `gpt-6-sol`，连问 3 次，`generate()` 不传会话历史故条件等价）：**3/3 均正确拒答且零引用**（各自 `attempts` 1/1/2），判定为模型输出层的偶发波动而非行为变化，门槛的强制判定本身有效。失败产物另存 `tests/eval/m3_eval_report.20261020-1523.json`（当时的 12:31 产物已被原地覆盖）；因 relay 未恢复稳定，尚未取得一份门槛为 passed 的新产物。同轮另修两处：门槛报错按用例 `refused` 区分"未拒答却带引用"与"拒答带引用"（`scripts/m3_eval.py` 的 `gate_failures`），`--recall-samples` 解析后统一 `max(1, N)` 成为单一事实源并删除两处重复兜底。<br>检索参数配置面补全（同一日期）：审计发现 11 个检索参数虽"解析→校验→三级覆盖"管道齐全，但 `rerank_top_k` 与 `rerank_threshold` 从不被读、`adjacent_expansion` 只当布尔用；`rrfK=60` 与 `expansionScoreFactor=0.5` 写死在代码里；Rerank 实现硬编码在组合根，`.env`/`.env.example` 的 `LLM_RERANK_MODEL` 零引用。本轮修复：(1) `fuseFRL` 接收 `rrf_k`，`ChunkExpander` 改为接收 `ExpansionOptions{PerSide, MaxTotal, ScoreFactor}`，两个常量进入 `Params`/`ParamsOverride`（区间 `rrf_k` 1-200、`expansion_score_factor` 0-1），与其余参数共用三级覆盖；(2) rerank 实际运行时按 `rerank_threshold` 过滤、按 `rerank_top_k` 截断（0=不截断），`LexicalReranker` 不再把融合分覆盖成命中词数（归一化到 0-1 的 `RerankScore`），排序统一走 `SortCandidates`（`orderScore` 让 rerank 顺序不被最终排序抹掉）；(3) 新增 `RerankConfig` 与 `RERANK_SOURCE`（默认 `none` 直通 / `lexical` / `remote`）及 OpenAI 兼容 `/rerank` 适配器与工厂，`LLM_RERANK_MODEL` 从此被读取；(4) 扩展语义归位：父块始终补齐、两个计数只约束邻居块（`max_adjacent_chunks` 从"每侧 2 个且总数不限"改为真正的总数上限）。**默认配置下结果构成随之变化**（融合分与 `both` 条目不变）：`how does the ingestion pipeline work` 由 4 both + 4 neighbor 变为 4 both + 2 neighbor + 2 parent，`权限撤销` 由 2 both + 6 neighbor 变为 2 both + 2 neighbor + 4 parent；要恢复旧覆盖面需显式设 `adjacent_expansion: 2` + `max_adjacent_chunks: 8`。验证（隔离 `rag-eval` 栈，同库 A/B）：`rrf_k: 10` 使榜首融合分由 0.032787（2/61）变为 0.181818（2/11）而 `vectorScore` 不变；`adjacent_expansion:0` + `max_adjacent_chunks:0` 仍返回 13 个 `parent`、0 个 `neighbor`；开 rerank 后 `rerankApplied` 为 true、引用分仍为融合分 0.03278688524590164；会话级越界返回 400。`make test`（gofmt + go test + go vet）与前端测试通过。同轮审计 `.env`/`.env.example`：补齐 `MIGRATIONS_DIR`/`SEEDS_DIR` 声明，标注 14 个"声明但无读取方"的键（`ASYNQ_QUEUE_*_WEIGHT`、`JWT_SIGNING_KEY`、`WEB_PUBLIC_URL`、`POSTGRES_HOST`/`POSTGRES_SSLMODE`、`PARSER_SANDBOX_NETWORK`/`_SCRATCH_DIR`、`OTEL_*`、`OIDC_*`），其中 `REDIS_PASSWORD` 与 `S3_FORCE_PATH_STYLE` 属真实接线缺口，已在同一轮修掉：`queue.NewPublisher` 与 worker 的 asynq server 现在带上 `RedisPassword`，`storage.NewS3` 在 `S3_FORCE_PATH_STYLE=true` 时把 `minio.Options.BucketLookup` 置为 `BucketLookupPath`（该键缺省为 false = 不强制，保留客户端自身的端点探测）。验证：在带密码的临时 Redis 上 `queue.NewPublisher(addr, password)` 发布成功且任务确实进入 `asynq:{ingestion}:pending`，空密码报 `NOAUTH`、错密码报 `WRONGPASS`；dev 栈重建后端到端上传 → `EVIDENCE_READY` → `GET /api/v1/documents/:id/preview` 返回 200、251 字节且含埋入的标记，证明对象经 MinIO 写入并被读回。<br>发布阈值确定（2026-10-21）：产品/架构负责人确认 `recallAtK` = 1.0、`documentHitRate` ≥ 0.85，`groundedness`、`injectionFlagRate` 与既有 `permissionNegativeDenials`/`refusalRate`/`citationAccuracy` 一并作为强制门槛（均要求 1.0）；`conflictFlagRate` 与 `meanLatencyMs` 仅作诊断、不设发布门槛。`scripts/m3_eval.py` 的 `GATE_THRESHOLDS` 为单一事实源，报告 `gates` 块新增 `thresholds` 并保留 enforced/diagnostics 列表，README 与 DESIGN §11 同步。当日重跑 `./scripts/m1_acceptance.sh`（首次因开发库 `kb-dev` 被删、`seed_runs` 仍标记 0002 已执行而失败，按 `migrations/seeds/0002_m1_dev_identity.sql` 恢复后通过）、`./scripts/m2_acceptance.sh`、`./scripts/m3_acceptance.sh`，三套验收全部通过。 |
+| M4  | 已完成 | 2026-10-21 | `make test`, `make lint`, `./scripts/m4_acceptance.sh`, `./scripts/m4_backup_restore.sh` 通过；验证 OIDC（wire-level 测试 Provider）、API Key、ACL 撤权与缓存失效、版本历史/重解析/回滚、软删除/恢复/清理、Outbox/Inbox 幂等、死信重试/放弃、reconciliation、限流/配额/审计/指标、Worker 队列隔离与优雅退出。<br>2026-10-23 本地开发栈按当前代码重建 api/worker 后，m4/m1/m2/m3 四套 acceptance 全量回归通过；m4 后三个队列 archived=0，死信仅 RESOLVED/DISCARDED。隔离栈 `rag-eval` 完成模型网关断电与对象桶快照恢复演练，发现并修复死信重放/放弃时 Asynq archived 残留、对象缺失时响应回显对象键两项缺陷，均补测试并复验。<br>2026-10-23 使用本地 Keycloak 26 完成真实 OIDC 授权码联调：discovery、PKCE/state/nonce、登录、`/me` 会话主体、登出撤销均通过（协议级与浏览器），并修复 `OIDCIssuer`/`OIDCSubject` 被 GORM 映射为 `o_id_c_*` 导致的账号链接失败，新增列名单测。realm 配置已固化在 `deploy/keycloak/rag-realm.json` 并接入 docker compose。生产 IdP 凭据/回调地址、生产对象桶快照与真实网关断电演练仍待部署方输入。 |
+| M5  | 已完成 | 2026-10-26 | `gofmt`, `go test -count=1 ./...`, `go vet ./...`（golang:1.26-alpine 容器内）通过；`./scripts/m5_acceptance.sh` 通过：`http_manifest` 单连接器首次全量同步、增量更新、删除 tombstone 与重新出现恢复、ACL 撤权/恢复、API Key 只读、运行级/连接器级/知识库级取消与断点续跑、重复同步零新增、调度开关、凭据 AES-GCM 封装且响应不回显、同步文档经 Pipeline A 到达 `EVIDENCE_READY` 且未直接写索引。回归 `./scripts/m1_acceptance.sh`、`m2`、`m3` 通过；`m4` 在 `OIDC_ENABLED=false` 下通过，随后已恢复本地 Keycloak 的 `OIDC_ENABLED=true` 配置。本轮同时修复：`sync_runs.resume_of_run_id` 空字符串违反外键（改为可空指针）、ingestion Outbox 仅发布 `document.parse` 导致 normalize/chunk/embed/index 阶段滞留（改为发布全部 `document.*`）。<br>2026-10-26 补齐两项边界并复验：空清单 `{"items":[]}` 按完整快照处理，将全部现存条目转 tombstone，恢复条目后复用原文档 ID/版本（新增单测与 m5 验收断言）；`requestsPerSecond` 变更通过重建每连接器 limiter 在下一轮同步生效，无需重启 worker（新增单测）。同轮修正 m5 验收脚本 `doc_ids_sql` 生成单个带逗号字符串、导致“重复同步不新增文档/版本”断言恒真的问题。复验时发现恢复路径缺陷：删除操作会取消仍在处理的 Pipeline，条目重新出现命中同一幂等键后却直接返回已取消记录，文档永远停在 `CANCELLED`；现改为恢复时从第一个未成功的阶段重新入队（重置该阶段及后续 StageRun 的 attempts/inbox，并重新打开 outbox），证据包已生成但阶段记录未收尾的 Pipeline 直接收敛为 `EVIDENCE_READY`；embed/index 支持幂等重放，`completeStage` 会重新打开已发布过的下一阶段 outbox 事件，避免重启链在中间静默停止（新增状态回退/重启目标单测）。`gofmt`、`go test -count=1 ./...`、`go vet ./...` 与 `./scripts/m5_acceptance.sh` 重新通过（含空清单删除全部与完整重现两个新步骤）。<br>当前边界：仅实现 `http_manifest`（JSON 清单指向 PDF/DOCX/MD/TXT，2026-10-30 起同步支持 XLSX/PPTX/HTML，验收仍以 Markdown 覆盖同步语义）；与 DESIGN 一致，不提供逐条 ACL，同步文档继承知识库成员权限；删除连接器保留既有 outbox/审计历史，已同步文档按知识库生命周期管理。m5 验收在本机需 `CONNECTOR_ALLOW_PRIVATE_NETWORKS=true`，因为 fixture 服务运行在宿主机；生产环境该开关强制为 false。 |
+| M6  | 已完成 | 2026-10-26 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test -- --passWithNoTests`）、`make lint`（gofmt/vet + `npm run build`）、`./scripts/m6_acceptance.sh` 通过。验收覆盖：`IndexingStrategyV1` 默认 wiki/graph 关闭且 join 为 `EVIDENCE_READY`，`graph_enabled` 与“required wiki 但未启用 wiki”在写入口返回 400；启用 wiki 后 COLLECT/GENERATE/FINALIZE 三阶段生成 2 个文档页 + 1 个 overview，每个内容块均带 `sourceChunkIds`，页面来源映射到文档版本与 Chunk，运行记录 model/promptVersion/sourceHash；审核/发布/回滚权限（owner/editor 可写，viewer/API key 不可写），只有 PUBLISHED 且 ACL 版本一致的版本进入 Knowledge Index；知识检索按租户/成员/来源 Chunk 逐项复核，任一受限来源隐藏整页；删除原始对象后仅凭 EvidencePackage 可重建投影；ACL 变更立即删除索引行并把页面置 STALE，重建/重新发布后恢复；回滚到旧 ACL 版本返回 409。注入 `FAILED_WIKI` 后 join 变 `KNOWLEDGE_PARTIAL`，已发布页面仍可读但 `joined=false`，Evidence RAG 不受影响；仅 owner 可对失败运行重试，重试只重跑失败阶段、不新增页面版本，成功后回到 `KNOWLEDGE_READY`，对非失败运行重试返回 409。另验证手动重建不改 Evidence Index、成员移除/关闭 wiki 即时清理派生内容、删除知识库级联清空六张表。回归：`./scripts/m1_acceptance.sh`、`m2`、`m3`、`m4`、`m5` 全部通过（m3 需把 api/worker 以 `CHAT_SOURCE=local` 重建后运行——compose 的 `env_file` 会覆盖 `--env-file`，运行栈实际读取 `.env` 的远程 chat，首次回归时 provider 抖动导致生成阶段 FAILED；m4 在 `OIDC_ENABLED=false` 的 override 下运行，随后已恢复本地 Keycloak 的 `OIDC_ENABLED=true` 栈；m5 在恢复后的正常栈上通过）。修复验收中发现的独立重试缺陷：Asynq 已保留的完成任务 ID 会吞掉重试入队，且 inbox 仍为 SUCCEEDED；现在重试使用 `stage.attempts+1` 的新任务 ID 并把对应 inbox 重置为可领取，新增回归单测。边界：Wiki 生成复用既有 `CHAT_SOURCE`/`CHAT_MODEL`，未新增编辑器/自动发布/查询扩展/页面链接；relation/graph projection 属 M7。验收使用 `local-extractive` 确定性 chat 通过完整 E2E，远程 chat 适配复用既有链路并已联调。 |
+| M7  | 已完成 | 2026-10-27 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test -- --passWithNoTests`）、`make lint`（gofmt/vet + `npm run build`）、`./scripts/m7_acceptance.sh`、`make m7-eval`、`make m7-eval-validate` 通过。范围：`graph_enabled` 开关、`RelationProjectionPackageV1`、关系投影运行 COLLECT → EXTRACT → FINALIZE 与独立重试；五张关系表（`graph_snapshots`/`graph_entities`/`graph_entity_aliases`/`graph_relations`/`graph_relation_sources`）及级联；实体归一/合并规则 `declared_alias`/`normalized_merge`；有界图查询 depth 默认 2/上限 3、节点默认 30/上限 50 与显式截断；快照 `PENDING_REVIEW` → 审核批准（重校验每条来源、旧 `ACTIVE` 置 `SUPERSEDED`）/拒绝，ACL 变更置 `STALE` 且不可查询；按能力粒度的 ProjectionJoin（聚合状态仅展示，wiki 失败不阻塞 relation/evidence，反之亦然），修复原聚合门槛导致 wiki/evidence 查询 409 的缺陷（`internal/retrieval/ports.go` 新增 `CapabilityStatus`、`capabilities.go` 按声明能力逐项判断、`internal/knowledgeprojection/join.go` 实现，新增 `capabilities_gate_test.go`）。验收覆盖：每条关系回指文档版本与 Chunk，FINALIZE 拒绝无来源/不可回指关系（`terminal:untraceable_relation`、`terminal:unsourced_relations`）；隐藏文档、隐藏边、共享实体与多跳路径无侧信道泄漏（含跨租户 403 与边级可见性）；幂等重建、源版本替换/重新解析后快照正确失效或重建；关闭开关后图查询与知识索引分别清理，删除知识库级联 0 残留。评估（`tests/eval/m7_eval_report.json`）：V1（9 文档 / 10 用例）为 graph 100% vs RAG 100%、rescue 0，建议 `simplify`；V2 扩为 30 篇 fixtures / 135 子块 / 34 用例（28 可答、20 多跳、6 负例，含三条关系链、别名/归一化种子、分叉、近名干扰与 depth-bound 负例），`make m7-eval-validate` 通过（30 fixtures / 34 cases / 135 chunks）。远程 chat 抽取连续两轮 `context deadline exceeded`，改用确定性 local-extractive 抽取器实跑：多跳 graph 100% vs strict RAG 70%（loose 70%）、graph-only rescue 6、RAG-only 0、hop exact 100%（20 项）、种子解析 100%、负例 100%（unknown-seed 4/4、depth-bound 2/2）、RAG 干扰误报 0/2、RAG 文档命中 92.9%、均值延迟 graph 20.3ms vs RAG 187.9ms，delta +30%，harness 建议 `keep-bounded-graph-query`。同一集合在四次独立索引构建下多跳 strict RAG 为 85%/60%/80%/70%（graph 恒 100%），报告 limitations 已注明单次索引样本与重建敏感性、发布前应重复运行；是否裁剪复杂图查询由产品依据报告决定。回归 m1–m6 全部通过：m3 在 remote chat 下通过；m4 在 `OIDC_ENABLED=false` override 下通过并已恢复 `OIDC_ENABLED=true`；m5 在正常栈通过；m6 需 `CHAT_SOURCE=local` 确定性适配器（remote 适配器下重建必然产生新内容并正确进入 `REVIEW_REQUIRED`，脚本“全部 PUBLISHED”断言不适用），运行后已恢复 `CHAT_SOURCE=remote`。边界：未引入外部图数据库、实体消歧模型或图驱动查询扩展；图查询为显式调用，不进入默认问答计划。 |
+| M8  | 未开始 | -    | -       |
+| M9  | 已完成 | 2026-11-03 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test` 16/16）、`make lint`（gofmt/vet + `tsc -b` + `npm run build`）、`./scripts/m1_acceptance.sh`、`m2_acceptance.sh`、`m3_acceptance.sh`、`m4_acceptance.sh` 全部通过。m1/m2 在默认栈运行；m3 按脚本既有模式临时使用 `CHAT_SOURCE=local`（远程 chat 在生成阶段中断，SSE 停在 GENERATING），m4 使用 `OIDC_ENABLED=false`，运行后均已恢复 `.env` 并重建 api/worker。后端：`GET /api/v1/knowledge-bases/{id}/configuration`（`KnowledgeBaseConfigurationV1`）与 `PUT .../retrieval-config`（整体替换，`{}` 清除覆盖；PATCH 合并语义不变），读/写分别校验 read/write，越权 403、非法值 400、保存写审计；`retrieval_config` 不因 vector/keyword 开关变化而失效，仅 wiki/graph 开关触发 ACL 递增与投影失效/重建。前端：迁移到 React Router + Ant Design + TanStack Query + Zustand + i18next，建立设计令牌与 light/dark/system，左侧导航、知识库卡片网格、文档/成员/投影页签、文档详情 Chunk、独立问答工作台、分区设置抽屉、运维与登录重构；只读系统配置无编辑控件，危险区与成员按能力隐藏。`required_capabilities` 语义冲突按运行时事实收敛：默认仅 evidence，开启 wiki/graph 不自动追加为默认查询要求，关闭投影时前端剪除、服务端 400；DESIGN.md §4.6.5 已同步。真实浏览器逐断点检查 1280/1024/768/375：均无横向溢出，1280 展开侧栏 3 列卡片、1024 折叠侧栏 2 列、768 折叠/375 抽屉，Tab 顺序覆盖导航→操作→内容且焦点可见，抽屉可用 Enter 打开、Escape 关闭并归还焦点，system 跟随 `prefers-color-scheme`；抽样文字/按钮对比度 light 4.57–16.29、dark 5.10–12.98，主按钮 5.44/6.38。剩余提示：Vite 单个 chunk 约 1.42 MB 的性能告警，不阻塞本里程碑。 |
+
+
+
+
+## 大模型执行提示模板
+
+每次给编码 Agent 下达一个里程碑任务时，使用以下约束并替换 `Mx`：
+
+```text
+先阅读 DESIGN.md 和 MILESTONES.md。DESIGN.md 是架构事实源，MILESTONES.md 是本次实施范围。
+本次只实施 Mx，不提前实现后续里程碑，不擅自引入新框架或改变边界。
+先检查当前仓库、已有实现、未提交改动和 Mx 的前置里程碑状态；保留所有既有用户改动。
+实现 Mx 的全部范围和验收门槛，补充必要的单元、集成和端到端测试。
+完成后运行相关测试/静态检查，只有实际通过的项目才能标记完成。
+若设计存在阻塞性歧义，先列出具体冲突、影响和最小建议；不得自行假设后继续扩展范围。
+最后报告改动文件、实现内容、测试命令及结果、未完成项和下一里程碑依赖。
+```

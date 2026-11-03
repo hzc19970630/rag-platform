@@ -1,0 +1,4 @@
+id: fallback
+description: Returned when the authorized evidence set cannot support an answer.
+template: |
+  根据当前有权限访问的资料，不足以回答这个问题。

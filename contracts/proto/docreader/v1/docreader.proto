@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package docreader.v1;
+
+option go_package = "github.com/example/rag-platform/services/docreader/generated;docreaderv1";
+
+service DocumentReader {
+  rpc ParseDocument(ParseDocumentRequest) returns (ParseDocumentResponse);
+}
+
+message ParseDocumentRequest {
+  string schema_version = 1;
+  string document_version_id = 2;
+  string filename = 3;
+  string mime_type = 4;
+  bytes content = 5;
+}
+
+message ParseDocumentResponse {
+  string schema_version = 1;
+  string document_version_id = 2;
+  string content_hash = 3;
+  string mime_type = 4;
+  string title = 5;
+  string language = 6;
+  string parser_version = 7;
+  string error_code = 8;
+  string error_message = 9;
+  repeated DocumentBlock blocks = 10;
+}
+
+message DocumentBlock {
+  string block_id = 1;
+  string kind = 2;
+  string text = 3;
+  string heading_path = 4;
+  int32 page_number = 5;
+  string source_path = 6;
+  int32 start_offset = 7;
+  int32 end_offset = 8;
+}

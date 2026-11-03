@@ -1,0 +1,863 @@
+{
+  "schemaVersion": "M7EvaluationSetV2",
+  "name": "M7 relation projection: bounded graph query vs pure Evidence RAG (30 fixtures, 34 cases)",
+  "notes": [
+    "Three independent relation chains plus distractor and filler documents. Every fixture is short-line markdown, so each non-blank line becomes one child chunk and the corpus is ~133 chunks; production RAG returns at most top_k=8 of them.",
+    "Relations are annotated with deterministic [[subject|predicate|object]] triples; the optional fourth field declares aliases for the subject. Questions are natural language and never contain the expected answer entity.",
+    "ragStrictHit means every alignedEvidence marker appears in a returned chunk whose documentId is the expectedDocument, and no forbiddenEvidence phrase appears in any returned chunk. ragLooseHit (marker anywhere) is reported only as a diagnostic.",
+    "graphHit means every expected node is present, no forbidden node is present, and the shortest hop from the seed equals expectedHops when declared. Unknown-seed negatives require an empty graph with an active snapshot; depth-bound negatives require the forbidden node to stay outside the queried depth.",
+    "The set is still directional rather than statistically powered, but the case-count guard in the harness prevents a keep/simplify recommendation on fewer than 10 multi-hop cases."
+  ],
+  "corpus": {
+    "fixtures": 30,
+    "chains": 21,
+    "distractors": 5,
+    "fillers": 4,
+    "expectedChunks": 135
+  },
+  "fixtures": [
+    {
+      "role": "chain-a",
+      "filename": "acme-supplier.md",
+      "content": "# Acme procurement\nAcme supplies turbine blades to Beta Corp under a five-year contract.\nThe contract covers the northern assembly programme and includes scheduled audits.\nDeliveries are tracked against quarterly volume targets.\n[[Acme|supplies|Beta Corp]]\n"
+    },
+    {
+      "role": "chain-a",
+      "filename": "beta-operations.md",
+      "content": "# Beta operations\nBeta Corp operates the Gamma Plant assembly site in the northern district.\nThe site runs two shifts and reports output weekly.\nSafety reviews are completed at the start of each quarter.\n[[Beta Corp|operates|Gamma Plant]]\n"
+    },
+    {
+      "role": "chain-a",
+      "filename": "gamma-cooling.md",
+      "content": "# Gamma cooling\nThe Gamma Plant draws coolant from the Delta Reservoir pipeline.\nCooling water is tested every morning before the first shift.\nIntake readings are logged for the environmental audit.\n[[Gamma Plant|draws_coolant_from|Delta Reservoir]]\n"
+    },
+    {
+      "role": "chain-a",
+      "filename": "delta-reservoir.md",
+      "content": "# Delta Reservoir\nDelta Reservoir is maintained by the Epsilon Water Authority.\nThe reservoir serves the northern industrial corridor.\nWater levels are published on a public dashboard.\n[[Delta Reservoir|maintained_by|Epsilon Water Authority]]\n"
+    },
+    {
+      "role": "chain-a",
+      "filename": "epsilon-authority.md",
+      "content": "# Epsilon Water Authority\nEpsilon Water Authority reports to the Zeta Regional Board.\nThe authority publishes an annual water quality report.\nInspection findings are shared with industrial users.\n[[Epsilon Water Authority|reports_to|Zeta Regional Board]]\n"
+    },
+    {
+      "role": "chain-a",
+      "filename": "zeta-board.md",
+      "content": "# Zeta Regional Board\nThe Zeta Regional Board meets quarterly in Theta City.\nBoard meetings review infrastructure spending.\nMinutes are published after each session.\n[[Zeta Regional Board|meets_in|Theta City]]\n"
+    },
+    {
+      "role": "chain-a",
+      "filename": "theta-city.md",
+      "content": "# Theta City\nTheta City hosts the Regional Command Center.\nThe city coordinates emergency planning for the region.\nMunicipal services publish a monthly readiness bulletin.\n[[Theta City|hosts|Regional Command Center]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "northwind-shipping.md",
+      "content": "# Northwind shipping\nNorthwind ships precision components to Contoso.\nShipments leave the eastern depot every Tuesday.\nEach consignment is sealed and scanned at dispatch.\n[[Northwind|ships|Contoso]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "contoso-assembly.md",
+      "content": "# Contoso assembly\nContoso assembles the Orion Device for the navigation market.\nThe device is assembled from incoming precision components.\nAssembly lines are audited twice a year.\n[[Contoso|assembles|Orion Device]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "orion-device.md",
+      "content": "# Orion Device\nThe Orion Device uses Halcyon Alloy in its guidance housing.\nNavigation units ship with redundant sensors.\nField returns are tracked by serial number.\n[[Orion Device|uses|Halcyon Alloy]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "halcyon-foundry.md",
+      "content": "# Halcyon foundry\nHalcyon Alloy is produced at the Vantage Port foundry.\nThe foundry casts housings for precision instruments.\nCasting batches are traceable to source lots.\n[[Halcyon Alloy|produced_at|Vantage Port]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "vantage-port.md",
+      "content": "# Vantage Port\nVantage Port handles two outbound carriers, Kestrel Rail and Mira Basin.\nPort capacity is reviewed each quarter.\nBerth schedules are coordinated with regional freight operators.\n[[Vantage Port|handles|Kestrel Rail]]\n[[Vantage Port|handles|Mira Basin]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "kestrel-rail.md",
+      "content": "# Kestrel Rail\nKestrel Rail delivers finished housings to Ostra Holding.\nRail service departs the port twice daily.\nFreight manifests are filed before departure.\n[[Kestrel Rail|delivers_to|Ostra Holding]]\n"
+    },
+    {
+      "role": "chain-b",
+      "filename": "mira-basin.md",
+      "content": "# Mira Basin\nMira Basin is maintained by Ostra Holding under a port services agreement.\nThe basin supports bulk carriers and storage barges.\nDredging is scheduled outside peak shipping periods.\n[[Mira Basin|maintained_by|Ostra Holding]]\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "verdant-labs.md",
+      "content": "# Verdant Labs\nVerdant Labs develops the Serum X candidate.\nThe programme focuses on early-stage metabolic disease.\nLaboratory results are reviewed by an independent panel.\n[[Verdant Labs|develops|Serum X|Verdant;Verdant Laboratories]]\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "serum-x.md",
+      "content": "# Serum X\nSerum X is evaluated in Trial 7 under an adaptive protocol.\nDosing schedules are reviewed monthly.\nParticipants are monitored for twelve weeks.\n[[Serum X|evaluated_in|Trial 7]]\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "trial-7.md",
+      "content": "# Trial 7\nTrial 7 is reviewed by two regulators, Regulator A and Regulator B.\nThe trial enrolled adults across three sites.\nSafety data is submitted after each review cycle.\n[[Trial 7|regulated_by|Regulator A]]\n[[Trial 7|regulated_by|Regulator B]]\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "regulator-a.md",
+      "content": "# Regulator A\nRegulator A reports to the Health Directorate.\nThe regulator publishes inspection findings.\nCompliance notices are issued after site visits.\n[[Regulator A|reports_to|Health Directorate]]\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "regulator-b.md",
+      "content": "# Regulator B\nRegulator B reports to the Oversight Committee.\nThe regulator reviews trial safety data quarterly.\nFindings are shared with participating sites.\n[[Regulator B|reports_to|Oversight Committee]]\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "health-directorate.md",
+      "content": "# Health Directorate\nThe Health Directorate publishes annual trial safety notices.\nNotices are distributed to participating sites.\n"
+    },
+    {
+      "role": "chain-c",
+      "filename": "oversight-committee.md",
+      "content": "# Oversight Committee\nThe Oversight Committee reviews regulator findings quarterly.\nFindings feed into the annual assurance report.\n"
+    },
+    {
+      "role": "distractor",
+      "filename": "regional-logistics.md",
+      "content": "# Regional logistics bulletin\nBeta Corp and Gamma Plant appear in a shipment delay notice.\nThe notice concerns Delta Storage, a separate warehouse.\nNo production schedule changes were announced.\n"
+    },
+    {
+      "role": "distractor",
+      "filename": "northern-works.md",
+      "content": "# Northern works review\nAcme and Northwind attended the supplier fair.\nOrion Router demonstrations drew crowds.\nThe review covers regional sourcing trends.\n"
+    },
+    {
+      "role": "distractor",
+      "filename": "halcyon-logistics.md",
+      "content": "# Halcyon Logistics\nHalcyon Logistics operates warehouses near Vantage Port.\nThe operator handles general freight only.\nIts services are separate from alloy production.\n"
+    },
+    {
+      "role": "distractor",
+      "filename": "gamma-planning.md",
+      "content": "# Gamma planning office\nGamma Planners advise on site scheduling.\nThe office has no role at the assembly site.\nA monthly planning note is circulated internally.\n"
+    },
+    {
+      "role": "distractor",
+      "filename": "zeta-counsel.md",
+      "content": "# Zeta Regional Counsel\nZeta Regional Counsel provides legal advice to the board.\nThe counsel does not set meeting locations.\nIts engagement is reviewed each year.\n"
+    },
+    {
+      "role": "filler",
+      "filename": "facilities-handbook.md",
+      "content": "# Facilities handbook\nBadge access is required after hours.\nMeeting rooms can be booked through the front desk.\n"
+    },
+    {
+      "role": "filler",
+      "filename": "travel-policy.md",
+      "content": "# Travel policy\nTravel bookings require manager approval.\nExpense reports are due within ten days.\n"
+    },
+    {
+      "role": "filler",
+      "filename": "data-retention.md",
+      "content": "# Data retention\nOperational logs are retained for ninety days.\nRetention exceptions require written approval.\n"
+    },
+    {
+      "role": "filler",
+      "filename": "vendor-onboarding.md",
+      "content": "# Vendor onboarding\nNew vendors complete a security questionnaire.\nContract review follows the questionnaire.\n"
+    }
+  ],
+  "cases": [
+    {
+      "id": "control-supplier",
+      "type": "single-hop",
+      "question": "Who does Acme supply turbine blades to?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 1,
+      "tags": [
+        "chain-a",
+        "control"
+      ],
+      "expectedNodes": [
+        "Beta Corp"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "acme-supplier.md",
+      "alignedEvidence": [
+        "supplies turbine blades to Beta Corp"
+      ]
+    },
+    {
+      "id": "control-board-city",
+      "type": "single-hop",
+      "question": "Where does the Zeta Regional Board meet?",
+      "seed": "Zeta Regional Board",
+      "seedKind": "canonical",
+      "depth": 1,
+      "tags": [
+        "chain-a",
+        "control"
+      ],
+      "expectedNodes": [
+        "Theta City"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "zeta-board.md",
+      "alignedEvidence": [
+        "meets quarterly in Theta City"
+      ]
+    },
+    {
+      "id": "control-alias",
+      "type": "single-hop",
+      "question": "Which candidate does Verdant Laboratories develop?",
+      "seed": "Verdant Laboratories",
+      "seedKind": "alias",
+      "depth": 1,
+      "tags": [
+        "chain-c",
+        "control",
+        "alias"
+      ],
+      "expectedNodes": [
+        "Serum X"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "verdant-labs.md",
+      "alignedEvidence": [
+        "develops the Serum X candidate"
+      ]
+    },
+    {
+      "id": "control-normalized",
+      "type": "single-hop",
+      "question": "Which company receives northwind shipments?",
+      "seed": "northwind",
+      "seedKind": "normalized",
+      "depth": 1,
+      "tags": [
+        "chain-b",
+        "control",
+        "normalized"
+      ],
+      "expectedNodes": [
+        "Contoso"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "northwind-shipping.md",
+      "alignedEvidence": [
+        "ships precision components to Contoso"
+      ]
+    },
+    {
+      "id": "control-command-center",
+      "type": "single-hop",
+      "question": "What does Theta City host?",
+      "seed": "Theta City",
+      "seedKind": "canonical",
+      "depth": 1,
+      "tags": [
+        "chain-a",
+        "control"
+      ],
+      "expectedNodes": [
+        "Regional Command Center"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "theta-city.md",
+      "alignedEvidence": [
+        "hosts the Regional Command Center"
+      ]
+    },
+    {
+      "id": "control-regulator",
+      "type": "single-hop",
+      "question": "Which committee does Regulator B report to?",
+      "seed": "Regulator B",
+      "seedKind": "canonical",
+      "depth": 1,
+      "tags": [
+        "chain-c",
+        "control"
+      ],
+      "expectedNodes": [
+        "Oversight Committee"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "regulator-b.md",
+      "alignedEvidence": [
+        "reports to the Oversight Committee"
+      ]
+    },
+    {
+      "id": "two-hop-plant",
+      "type": "multi-hop",
+      "question": "Which assembly plant does the company Acme supplies operate?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Gamma Plant"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "beta-operations.md",
+      "alignedEvidence": [
+        "operates the Gamma Plant assembly site"
+      ]
+    },
+    {
+      "id": "two-hop-coolant",
+      "type": "multi-hop",
+      "question": "What does the assembly plant operated by Beta Corp use for cooling?",
+      "seed": "Beta Corp",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-a",
+        "multi-hop",
+        "rag-distractor"
+      ],
+      "expectedNodes": [
+        "Delta Reservoir"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "gamma-cooling.md",
+      "alignedEvidence": [
+        "draws coolant from the Delta Reservoir pipeline"
+      ],
+      "forbiddenEvidence": [
+        "Delta Storage"
+      ]
+    },
+    {
+      "id": "two-hop-board",
+      "type": "multi-hop",
+      "question": "Which board oversees the authority that maintains Delta Reservoir?",
+      "seed": "Delta Reservoir",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Zeta Regional Board"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "epsilon-authority.md",
+      "alignedEvidence": [
+        "reports to the Zeta Regional Board"
+      ]
+    },
+    {
+      "id": "two-hop-command",
+      "type": "multi-hop",
+      "question": "Which command center is hosted by the city where the Zeta Regional Board meets?",
+      "seed": "Zeta Regional Board",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Regional Command Center"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "theta-city.md",
+      "alignedEvidence": [
+        "hosts the Regional Command Center"
+      ]
+    },
+    {
+      "id": "two-hop-device",
+      "type": "multi-hop",
+      "question": "What does the company receiving Northwind shipments assemble?",
+      "seed": "Northwind",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-b",
+        "multi-hop",
+        "rag-distractor"
+      ],
+      "expectedNodes": [
+        "Orion Device"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "contoso-assembly.md",
+      "alignedEvidence": [
+        "assembles the Orion Device"
+      ],
+      "forbiddenEvidence": [
+        "Orion Router"
+      ]
+    },
+    {
+      "id": "two-hop-alloy",
+      "type": "multi-hop",
+      "question": "Which alloy does the Orion Device assembled by Contoso use?",
+      "seed": "Contoso",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Halcyon Alloy"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "orion-device.md",
+      "alignedEvidence": [
+        "uses Halcyon Alloy"
+      ]
+    },
+    {
+      "id": "two-hop-port",
+      "type": "multi-hop",
+      "question": "Where is the alloy used by the Orion Device produced?",
+      "seed": "Orion Device",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Vantage Port"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "halcyon-foundry.md",
+      "alignedEvidence": [
+        "produced at the Vantage Port foundry"
+      ]
+    },
+    {
+      "id": "two-hop-trial",
+      "type": "multi-hop",
+      "question": "Which trial evaluates the candidate developed by Verdant Labs?",
+      "seed": "Verdant Labs",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Trial 7"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "serum-x.md",
+      "alignedEvidence": [
+        "evaluated in Trial 7"
+      ]
+    },
+    {
+      "id": "two-hop-regulator",
+      "type": "multi-hop",
+      "question": "Which regulator reporting to the Health Directorate reviews the trial that evaluates Serum X?",
+      "seed": "Serum X",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Regulator A"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "trial-7.md",
+      "alignedEvidence": [
+        "reviewed by two regulators, Regulator A"
+      ]
+    },
+    {
+      "id": "two-hop-alias-seed",
+      "type": "multi-hop",
+      "question": "Which trial evaluates the candidate developed by Verdant Laboratories?",
+      "seed": "Verdant Laboratories",
+      "seedKind": "alias",
+      "depth": 2,
+      "tags": [
+        "chain-c",
+        "multi-hop",
+        "alias"
+      ],
+      "expectedNodes": [
+        "Trial 7"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "serum-x.md",
+      "alignedEvidence": [
+        "evaluated in Trial 7"
+      ]
+    },
+    {
+      "id": "three-hop-reservoir",
+      "type": "multi-hop",
+      "question": "Which reservoir supplies coolant to the plant operated by the company Acme supplies?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-a",
+        "multi-hop",
+        "depth-bound-pair"
+      ],
+      "expectedNodes": [
+        "Delta Reservoir"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "gamma-cooling.md",
+      "alignedEvidence": [
+        "draws coolant from the Delta Reservoir pipeline"
+      ]
+    },
+    {
+      "id": "three-hop-alloy",
+      "type": "multi-hop",
+      "question": "Which alloy is used in the device assembled by the company that receives Northwind shipments?",
+      "seed": "Northwind",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-b",
+        "multi-hop",
+        "depth-bound-pair"
+      ],
+      "expectedNodes": [
+        "Halcyon Alloy"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "orion-device.md",
+      "alignedEvidence": [
+        "uses Halcyon Alloy"
+      ]
+    },
+    {
+      "id": "three-hop-authority",
+      "type": "multi-hop",
+      "question": "Which water authority maintains the reservoir used by the plant operated by Beta Corp?",
+      "seed": "Beta Corp",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Epsilon Water Authority"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "delta-reservoir.md",
+      "alignedEvidence": [
+        "maintained by the Epsilon Water Authority"
+      ]
+    },
+    {
+      "id": "three-hop-board",
+      "type": "multi-hop",
+      "question": "Which board oversees the authority that maintains the reservoir supplying the Gamma Plant?",
+      "seed": "Gamma Plant",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Zeta Regional Board"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "epsilon-authority.md",
+      "alignedEvidence": [
+        "reports to the Zeta Regional Board"
+      ]
+    },
+    {
+      "id": "three-hop-city",
+      "type": "multi-hop",
+      "question": "Which city hosts the quarterly meetings of the board that oversees the authority maintaining Delta Reservoir?",
+      "seed": "Delta Reservoir",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Theta City"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "zeta-board.md",
+      "alignedEvidence": [
+        "meets quarterly in Theta City"
+      ]
+    },
+    {
+      "id": "three-hop-port",
+      "type": "multi-hop",
+      "question": "Where is the alloy used by the device assembled by Contoso produced?",
+      "seed": "Contoso",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Vantage Port"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "halcyon-foundry.md",
+      "alignedEvidence": [
+        "produced at the Vantage Port foundry"
+      ]
+    },
+    {
+      "id": "three-hop-rail",
+      "type": "multi-hop",
+      "question": "Which carrier delivers housings from the port where the alloy used by the Orion Device is produced?",
+      "seed": "Orion Device",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Kestrel Rail"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "vantage-port.md",
+      "alignedEvidence": [
+        "handles two outbound carriers, Kestrel Rail"
+      ]
+    },
+    {
+      "id": "three-hop-basin",
+      "type": "multi-hop",
+      "question": "Which basin is handled by the port that produces the alloy used by the Orion Device?",
+      "seed": "Orion Device",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Mira Basin"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "vantage-port.md",
+      "alignedEvidence": [
+        "Kestrel Rail and Mira Basin"
+      ]
+    },
+    {
+      "id": "three-hop-regulator-a",
+      "type": "multi-hop",
+      "question": "Which regulator reviews the trial evaluating the candidate developed by Verdant Labs and reports to the Health Directorate?",
+      "seed": "Verdant Labs",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Regulator A"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "trial-7.md",
+      "alignedEvidence": [
+        "reviewed by two regulators, Regulator A"
+      ]
+    },
+    {
+      "id": "three-hop-oversight",
+      "type": "multi-hop",
+      "question": "Which committee receives reports from Regulator B, which reviews the trial evaluating Serum X?",
+      "seed": "Serum X",
+      "seedKind": "canonical",
+      "depth": 3,
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "expectedNodes": [
+        "Oversight Committee"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "regulator-b.md",
+      "alignedEvidence": [
+        "reports to the Oversight Committee"
+      ]
+    },
+    {
+      "id": "branch-vantage-carriers",
+      "type": "branch",
+      "question": "Which two carriers does Vantage Port handle?",
+      "seed": "Vantage Port",
+      "seedKind": "canonical",
+      "depth": 1,
+      "tags": [
+        "chain-b",
+        "branch"
+      ],
+      "expectedNodes": [
+        "Kestrel Rail",
+        "Mira Basin"
+      ],
+      "expectedDocument": "vantage-port.md",
+      "alignedEvidence": [
+        "Kestrel Rail",
+        "Mira Basin"
+      ]
+    },
+    {
+      "id": "branch-trial-regulators",
+      "type": "branch",
+      "question": "Which two regulators review Trial 7?",
+      "seed": "Trial 7",
+      "seedKind": "canonical",
+      "depth": 1,
+      "tags": [
+        "chain-c",
+        "branch"
+      ],
+      "expectedNodes": [
+        "Regulator A",
+        "Regulator B"
+      ],
+      "expectedDocument": "trial-7.md",
+      "alignedEvidence": [
+        "Regulator A",
+        "Regulator B"
+      ]
+    },
+    {
+      "id": "negative-unknown-acme",
+      "type": "negative",
+      "question": "Which company supplies Acme Procurement Group?",
+      "seed": "Acme Procurement Group",
+      "seedKind": "unknown",
+      "depth": 2,
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "expectNoAnswer": true,
+      "expectEmptyGraph": true,
+      "negativeKind": "unknown-seed",
+      "expectedNodes": [],
+      "expectedDocument": "",
+      "alignedEvidence": []
+    },
+    {
+      "id": "negative-unknown-halcyon",
+      "type": "negative",
+      "question": "Which site does Halcyon Freight operate?",
+      "seed": "Halcyon Freight",
+      "seedKind": "unknown",
+      "depth": 2,
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "expectNoAnswer": true,
+      "expectEmptyGraph": true,
+      "negativeKind": "unknown-seed",
+      "expectedNodes": [],
+      "expectedDocument": "",
+      "alignedEvidence": []
+    },
+    {
+      "id": "negative-unknown-gamma",
+      "type": "negative",
+      "question": "Which plant does the Gamma Planning Bureau operate?",
+      "seed": "Gamma Planning Bureau",
+      "seedKind": "unknown",
+      "depth": 2,
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "expectNoAnswer": true,
+      "expectEmptyGraph": true,
+      "negativeKind": "unknown-seed",
+      "expectedNodes": [],
+      "expectedDocument": "",
+      "alignedEvidence": []
+    },
+    {
+      "id": "negative-unknown-zeta",
+      "type": "negative",
+      "question": "Which board does the Zeta Regional Council advise?",
+      "seed": "Zeta Regional Council",
+      "seedKind": "unknown",
+      "depth": 2,
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "expectNoAnswer": true,
+      "expectEmptyGraph": true,
+      "negativeKind": "unknown-seed",
+      "expectedNodes": [],
+      "expectedDocument": "",
+      "alignedEvidence": []
+    },
+    {
+      "id": "negative-depth-reservoir",
+      "type": "negative",
+      "question": "Which reservoir supplies coolant to the plant operated by Acme?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-a",
+        "negative",
+        "depth-bound"
+      ],
+      "expectNoAnswer": true,
+      "expectEmptyGraph": false,
+      "negativeKind": "depth-bound",
+      "expectedNodes": [],
+      "expectedDocument": "",
+      "alignedEvidence": [],
+      "forbiddenNodes": [
+        "Delta Reservoir"
+      ]
+    },
+    {
+      "id": "negative-depth-alloy",
+      "type": "negative",
+      "question": "Which alloy is used in the device assembled by the company receiving Northwind shipments?",
+      "seed": "Northwind",
+      "seedKind": "canonical",
+      "depth": 2,
+      "tags": [
+        "chain-b",
+        "negative",
+        "depth-bound"
+      ],
+      "expectNoAnswer": true,
+      "expectEmptyGraph": false,
+      "negativeKind": "depth-bound",
+      "expectedNodes": [],
+      "expectedDocument": "",
+      "alignedEvidence": [],
+      "forbiddenNodes": [
+        "Halcyon Alloy"
+      ]
+    }
+  ]
+}

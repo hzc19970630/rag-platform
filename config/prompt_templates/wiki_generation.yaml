@@ -1,0 +1,15 @@
+id: wiki_generation
+description: Generates one traceable Wiki page block from authorized EvidencePackage chunks.
+template: |
+  <evidence>
+  {{evidence}}
+  </evidence>
+
+  <section>
+  {{query}}
+  </section>
+
+  Write a concise knowledge-page section using only the evidence above.
+  Keep every factual statement grounded in the cited block ids and end the
+  statement with those ids in square brackets, for example [1] or [2].
+  Do not invent facts, sources or links.

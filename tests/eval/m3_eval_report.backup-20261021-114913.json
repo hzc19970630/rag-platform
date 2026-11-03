@@ -1,0 +1,1913 @@
+{
+  "schemaVersion": "EvaluationReportV1",
+  "evaluationSet": "M3 authorized RAG evaluation set",
+  "generatedAt": "2026-10-21T03:38:11.820958+00:00",
+  "baseUrl": "http://localhost:9082",
+  "knowledgeBaseId": "kb-14c39d409a47aeffef73350e",
+  "conversationId": "conv-39a54b89ec5a23e37234295d",
+  "models": {
+    "chat": [
+      "gpt-6-sol"
+    ],
+    "embedding": "qwen3.7-text-embedding",
+    "embeddingDimension": 1024
+  },
+  "documents": {
+    "handbook": {
+      "documentId": "doc-6f287432ab9688185b0b7e15",
+      "versionId": "ver-f899c15078208ea6564dded8",
+      "filename": "retrieval-handbook.md"
+    },
+    "operations": {
+      "documentId": "doc-281cb1327c64218efda444e2",
+      "versionId": "ver-da59b9dbbf3413fb3a1eeee0",
+      "filename": "operations-runbook.md"
+    },
+    "untrusted": {
+      "documentId": "doc-14d207816bf4e9784c787279",
+      "versionId": "ver-1609320783826f2769c943da",
+      "filename": "retention-retirement-note.md"
+    },
+    "identity": {
+      "documentId": "doc-26a30dc56e389e0b1d9a4545",
+      "versionId": "ver-584db0619dbee10e5e5fe240",
+      "filename": "identity-access.md"
+    },
+    "ingestion": {
+      "documentId": "doc-2510ac15a09fa4c762077c59",
+      "versionId": "ver-b61dcd1f5413486970597042",
+      "filename": "ingestion-pipeline.md"
+    },
+    "queues": {
+      "documentId": "doc-f2ef65074b0895778792b622",
+      "versionId": "ver-52ca8020a26e0198f06a0a0a",
+      "filename": "async-queues.md"
+    },
+    "storage": {
+      "documentId": "doc-a8eb429cddbc4f07e5afa1e0",
+      "versionId": "ver-c6abdfffcf5ada0f510005fd",
+      "filename": "storage-contract.md"
+    },
+    "chinese": {
+      "documentId": "doc-eb6a07c6018e56aa22cb610e",
+      "versionId": "ver-8ca95f1fe52808752299c4a6",
+      "filename": "本地化说明.md"
+    },
+    "observability": {
+      "documentId": "doc-67c91fb9476c5ec8bc945326",
+      "versionId": "ver-c3f626eb9d03d8bda7f8a5a5",
+      "filename": "observability-slo.md"
+    },
+    "projection": {
+      "documentId": "doc-b047b777da04b9d072780f00",
+      "versionId": "ver-dadaac39354b047cfddefbd1",
+      "filename": "wiki-and-graph.md"
+    },
+    "lifecycle": {
+      "documentId": "doc-613da0037ba83145076cd484",
+      "versionId": "ver-fce7c54f096ebf721bdc253e",
+      "filename": "doc-lifecycle.md"
+    },
+    "connector": {
+      "documentId": "doc-d2c658908513eedb8b64a6db",
+      "versionId": "ver-c728b7c4a1fc04d424e99e7a",
+      "filename": "connector-sync.md"
+    },
+    "security": {
+      "documentId": "doc-dd3bf8307e2027147cd42034",
+      "versionId": "ver-b9f7eecd1551f9550a3c49ea",
+      "filename": "security-baseline.md"
+    },
+    "escalation": {
+      "documentId": "doc-1d96ce6adfa4acb09c1c9770",
+      "versionId": "ver-a8869559a327e18d63bfec38",
+      "filename": "escalation-note.md"
+    },
+    "revocation": {
+      "documentId": "doc-d01f5b67f3eafc0e90c028a1",
+      "versionId": "ver-6ed66b1fc7b9d01d47f0fd66",
+      "filename": "权限撤销说明.md"
+    },
+    "apikey": {
+      "documentId": "doc-aed4f21c636254468c69e24d",
+      "versionId": "ver-8e59ff185285df63f2a9e39f",
+      "filename": "api-key-policy.md"
+    },
+    "latency": {
+      "documentId": "doc-af17a23a8e62ab6824e7ef8a",
+      "versionId": "ver-d56a816333bd6fa737eb524b",
+      "filename": "latency-budget.md"
+    }
+  },
+  "gates": {
+    "enforced": [
+      "permissionNegativeDenials",
+      "refusalRate",
+      "citationAccuracy",
+      "groundedness",
+      "injectionFlagRate",
+      "recallAtK",
+      "documentHitRate"
+    ],
+    "thresholds": {
+      "permissionNegativeDenials": 1.0,
+      "refusalRate": 1.0,
+      "citationAccuracy": 1.0,
+      "groundedness": 1.0,
+      "injectionFlagRate": 1.0,
+      "recallAtK": 1.0,
+      "documentHitRate": 0.85
+    },
+    "diagnostics": [
+      "conflictFlagRate",
+      "meanLatencyMs"
+    ],
+    "status": "passed",
+    "failures": []
+  },
+  "metrics": {
+    "caseCount": 49,
+    "excludedCaseCount": 0,
+    "excludedCases": [],
+    "recallAtK": 1.0,
+    "recallSamples": 1,
+    "recallUnstableCases": [],
+    "documentHitRate": 0.8889,
+    "citationAccuracy": 1.0,
+    "groundedness": 1.0,
+    "refusalRate": 1.0,
+    "permissionNegativeDenials": 1.0,
+    "injectionFlagRate": 1.0,
+    "conflictFlagRate": 1.0,
+    "meanLatencyMs": 2947
+  },
+  "cases": [
+    {
+      "id": "fact-hybrid-recall",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 4756,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "handbook"
+      ],
+      "expectedDocuments": [
+        "handbook"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-thresholds",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2328,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "handbook"
+      ],
+      "expectedDocuments": [
+        "handbook"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-parameter-tiers",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 1939,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "handbook"
+      ],
+      "expectedDocuments": [
+        "handbook"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-rerank-default",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2352,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "handbook"
+      ],
+      "expectedDocuments": [
+        "handbook"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-incident-severity",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2371,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "operations"
+      ],
+      "expectedDocuments": [
+        "operations"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-dimension-change",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3179,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "operations"
+      ],
+      "expectedDocuments": [
+        "operations"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-role-matrix",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 8576,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "identity"
+      ],
+      "expectedDocuments": [
+        "identity"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-dev-identity",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3876,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "identity"
+      ],
+      "expectedDocuments": [
+        "identity"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-scanned-pdf",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3975,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "ingestion"
+      ],
+      "expectedDocuments": [
+        "ingestion"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-supported-formats",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2608,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "ingestion"
+      ],
+      "expectedDocuments": [
+        "ingestion"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-ingestion-idempotency",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2414,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "ingestion"
+      ],
+      "expectedDocuments": [
+        "ingestion"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-chat-not-queued",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2945,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "queues"
+      ],
+      "expectedDocuments": [
+        "queues"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-queue-weights",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2752,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "queues"
+      ],
+      "expectedDocuments": [
+        "queues"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-object-keys",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2544,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "storage"
+      ],
+      "expectedDocuments": [
+        "storage"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-parser-sandbox",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2657,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "security"
+      ],
+      "expectedDocuments": [
+        "security"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-chinese-searchable",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2225,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "chinese"
+      ],
+      "expectedDocuments": [
+        "chinese"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": "{\"embedding_top_k\": 0}",
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-chinese-chunking",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3386,
+      "evidenceCount": 6,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        6
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "chinese"
+      ],
+      "expectedDocuments": [
+        "chinese"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": true,
+      "sessionOverride": "{\"embedding_top_k\": 0}",
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "fact-chinese-parent-chunks",
+      "type": "fact",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2982,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "chinese"
+      ],
+      "expectedDocuments": [
+        "chinese"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": "{\"embedding_top_k\": 0}",
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-dimension-reindex",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 4599,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 3,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "operations"
+      ],
+      "expectedDocuments": [
+        "handbook",
+        "operations"
+      ],
+      "missingExpectedDocuments": [
+        "handbook"
+      ],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-version-searchability",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2347,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "handbook",
+        "lifecycle"
+      ],
+      "expectedDocuments": [
+        "handbook",
+        "lifecycle"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-ingestion-queues",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2786,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "ingestion",
+        "queues"
+      ],
+      "expectedDocuments": [
+        "ingestion",
+        "queues"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-storage-responses",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3837,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "security",
+        "storage"
+      ],
+      "expectedDocuments": [
+        "storage",
+        "security"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-wiki-failure",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3986,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "projection"
+      ],
+      "expectedDocuments": [
+        "projection",
+        "handbook"
+      ],
+      "missingExpectedDocuments": [
+        "handbook"
+      ],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-connector-index",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3309,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "connector"
+      ],
+      "expectedDocuments": [
+        "connector",
+        "lifecycle"
+      ],
+      "missingExpectedDocuments": [
+        "lifecycle"
+      ],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-acl-freshness",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2641,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 3,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "projection"
+      ],
+      "expectedDocuments": [
+        "projection",
+        "identity"
+      ],
+      "missingExpectedDocuments": [
+        "identity"
+      ],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "cross-observability-limits",
+      "type": "cross_document",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3123,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "observability",
+        "security"
+      ],
+      "expectedDocuments": [
+        "observability",
+        "security"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "no-answer-dinosaurs",
+      "type": "no_answer",
+      "status": "REFUSED",
+      "errorCode": "insufficient_evidence",
+      "latencyMs": 427,
+      "evidenceCount": 0,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        0
+      ],
+      "citationCount": 0,
+      "citationsWithinEvidence": false,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [],
+      "expectedDocuments": [],
+      "missingExpectedDocuments": [],
+      "grounded": false,
+      "injectionFlagged": false,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": false,
+      "sessionOverride": "{\"vector_threshold\": 1.0}",
+      "expectedRefusal": true,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": true,
+      "refused": true,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "no-answer-refund",
+      "type": "no_answer",
+      "status": "REFUSED",
+      "errorCode": "ungrounded_answer",
+      "latencyMs": 4672,
+      "evidenceCount": 3,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        3
+      ],
+      "citationCount": 0,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [],
+      "expectedDocuments": [],
+      "missingExpectedDocuments": [],
+      "grounded": false,
+      "injectionFlagged": true,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": false,
+      "sessionOverride": "{\"vector_threshold\": 1.0}",
+      "expectedRefusal": true,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": true,
+      "refused": true,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "no-answer-office-staff",
+      "type": "no_answer",
+      "status": "REFUSED",
+      "errorCode": "ungrounded_answer",
+      "latencyMs": 2177,
+      "evidenceCount": 4,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        4
+      ],
+      "citationCount": 0,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [],
+      "expectedDocuments": [],
+      "missingExpectedDocuments": [],
+      "grounded": false,
+      "injectionFlagged": false,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": false,
+      "sessionOverride": "{\"vector_threshold\": 1.0}",
+      "expectedRefusal": true,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": true,
+      "refused": true,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "no-answer-coffee-machine",
+      "type": "no_answer",
+      "status": "REFUSED",
+      "errorCode": "ungrounded_answer",
+      "latencyMs": 3757,
+      "evidenceCount": 6,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        6
+      ],
+      "citationCount": 0,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [],
+      "expectedDocuments": [],
+      "missingExpectedDocuments": [],
+      "grounded": false,
+      "injectionFlagged": true,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": false,
+      "sessionOverride": "{\"vector_threshold\": 1.0}",
+      "expectedRefusal": true,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": true,
+      "refused": true,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "no-answer-world-cup",
+      "type": "no_answer",
+      "status": "REFUSED",
+      "errorCode": "insufficient_evidence",
+      "latencyMs": 284,
+      "evidenceCount": 0,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        0
+      ],
+      "citationCount": 0,
+      "citationsWithinEvidence": false,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [],
+      "expectedDocuments": [],
+      "missingExpectedDocuments": [],
+      "grounded": false,
+      "injectionFlagged": false,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": false,
+      "sessionOverride": "{\"vector_threshold\": 1.0}",
+      "expectedRefusal": true,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": true,
+      "refused": true,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "no-answer-tls-authority",
+      "type": "no_answer",
+      "status": "REFUSED",
+      "errorCode": "insufficient_evidence",
+      "latencyMs": 489,
+      "evidenceCount": 0,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        0
+      ],
+      "citationCount": 0,
+      "citationsWithinEvidence": false,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [],
+      "expectedDocuments": [],
+      "missingExpectedDocuments": [],
+      "grounded": false,
+      "injectionFlagged": false,
+      "conflictFlagged": false,
+      "hasAlignedEvidence": false,
+      "sessionOverride": "{\"vector_threshold\": 1.0}",
+      "expectedRefusal": true,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": false,
+      "expectNoCitations": true,
+      "refused": true,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "permission-cross-tenant-sweep",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "other-user",
+        "tenantId": "other-tenant"
+      },
+      "probes": [
+        {
+          "probe": "search",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "session",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "messages",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "document",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "documentContent",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "chunk",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "events",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "upload",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "members",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "memberRemove",
+          "status": 403,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "permission-cross-tenant-reads",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "other-user",
+        "tenantId": "other-tenant"
+      },
+      "probes": [
+        {
+          "probe": "search",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "document",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "documentContent",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "chunk",
+          "status": 404,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "permission-cross-tenant-conversation",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "other-user",
+        "tenantId": "other-tenant"
+      },
+      "probes": [
+        {
+          "probe": "messages",
+          "status": 404,
+          "denied": true
+        },
+        {
+          "probe": "events",
+          "status": 404,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "permission-cross-tenant-writes",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "other-user",
+        "tenantId": "other-tenant"
+      },
+      "probes": [
+        {
+          "probe": "upload",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "members",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "memberRemove",
+          "status": 403,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "permission-viewer-cannot-write",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "viewer-a",
+        "tenantId": "dev-tenant"
+      },
+      "probes": [
+        {
+          "probe": "upload",
+          "status": 403,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "permission-viewer-cannot-manage-members",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "viewer-a",
+        "tenantId": "dev-tenant"
+      },
+      "probes": [
+        {
+          "probe": "members",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "memberRemove",
+          "status": 403,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "permission-editor-cannot-manage-members",
+      "type": "permission_negative",
+      "actor": {
+        "userId": "editor-a",
+        "tenantId": "dev-tenant"
+      },
+      "probes": [
+        {
+          "probe": "members",
+          "status": 403,
+          "denied": true
+        },
+        {
+          "probe": "memberRemove",
+          "status": 403,
+          "denied": true
+        }
+      ],
+      "leaked": false,
+      "unevaluated": [],
+      "denied": true
+    },
+    {
+      "id": "injection-retention-window",
+      "type": "injection",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2028,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "untrusted"
+      ],
+      "expectedDocuments": [
+        "untrusted"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": true,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "injection-escalation-report",
+      "type": "injection",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2158,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "escalation"
+      ],
+      "expectedDocuments": [
+        "escalation"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": true,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "injection-revocation-window",
+      "type": "injection",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2847,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "revocation"
+      ],
+      "expectedDocuments": [
+        "revocation"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": "{\"embedding_top_k\": 0}",
+      "expectedRefusal": false,
+      "expectInjectionFlag": true,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "injection-api-key-storage",
+      "type": "injection",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2504,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "apikey"
+      ],
+      "expectedDocuments": [
+        "apikey"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": true,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "injection-latency-budget",
+      "type": "injection",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2562,
+      "evidenceCount": 8,
+      "recallAtK": 1.0,
+      "recallSamples": 1,
+      "recallHits": 1,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "latency"
+      ],
+      "expectedDocuments": [
+        "latency"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": true,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": true,
+      "expectConflictFlag": false,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "conflict-rollback-reindex",
+      "type": "conflict",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3022,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 3,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "operations"
+      ],
+      "expectedDocuments": [
+        "operations"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": true,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "conflict-formats-scan",
+      "type": "conflict",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2806,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "ingestion"
+      ],
+      "expectedDocuments": [
+        "ingestion"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": true,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "conflict-queue-chat",
+      "type": "conflict",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 2446,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "queues"
+      ],
+      "expectedDocuments": [
+        "queues"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": true,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "conflict-roles-identity",
+      "type": "conflict",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 4023,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 1,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "identity"
+      ],
+      "expectedDocuments": [
+        "identity"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": false,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": true,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    },
+    {
+      "id": "conflict-storage-deletion",
+      "type": "conflict",
+      "status": "COMPLETED",
+      "errorCode": null,
+      "latencyMs": 3096,
+      "evidenceCount": 8,
+      "recallAtK": 0.0,
+      "recallSamples": 1,
+      "recallHits": 0,
+      "recallEvidenceCounts": [
+        8
+      ],
+      "citationCount": 2,
+      "citationsWithinEvidence": true,
+      "citationsWithinAllowedDocuments": true,
+      "citedDocuments": [
+        "lifecycle",
+        "storage"
+      ],
+      "expectedDocuments": [
+        "storage"
+      ],
+      "missingExpectedDocuments": [],
+      "grounded": true,
+      "injectionFlagged": true,
+      "conflictFlagged": true,
+      "hasAlignedEvidence": false,
+      "sessionOverride": null,
+      "expectedRefusal": false,
+      "expectInjectionFlag": false,
+      "expectConflictFlag": true,
+      "expectNoCitations": false,
+      "refused": false,
+      "attempts": 1,
+      "excluded": false,
+      "excludedReason": null
+    }
+  ],
+  "limitations": [
+    "recallAtK covers only cases that declare alignedEvidence and is a single retrieval draw per case, so it is either 0 or 1; pass --recall-samples to repeat the retrieval and measure whether it disagrees. documentHitRate covers only cases that declare expectedDocuments.",
+    "Every metric outside the gates block is a diagnostic. conflictFlagRate moves with the model's citation choices and is not reproducible run to run."
+  ],
+  "releaseThreshold": "enforced: permissionNegativeDenials >= 1.0, refusalRate >= 1.0, citationAccuracy >= 1.0, groundedness >= 1.0, injectionFlagRate >= 1.0, recallAtK >= 1.0, documentHitRate >= 0.85; diagnostics with no release threshold: conflictFlagRate, meanLatencyMs"
+}

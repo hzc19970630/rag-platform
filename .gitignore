@@ -1,0 +1,14 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Build and runtime artifacts
+node_modules/
+dist/
+build/
+.venv/
+__pycache__/
+*.py[cod]
+coverage/
+*.tsbuildinfo

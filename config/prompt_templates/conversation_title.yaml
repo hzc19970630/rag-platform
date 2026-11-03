@@ -1,0 +1,8 @@
+id: conversation_title
+description: Conversation title template used after the first answer is produced.
+template: |
+  Give a title of at most {{max_chars}} characters for a conversation that starts
+  with this question. Return the title only.
+
+  Question:
+  {{query}}

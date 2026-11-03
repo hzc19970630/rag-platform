@@ -1,0 +1,354 @@
+package config
+
+import "testing"
+
+func lookupFrom(env map[string]string) Lookup {
+	return func(key string) (string, bool) {
+		value, ok := env[key]
+		return value, ok
+	}
+}
+
+func TestLoadFromAppliesDefaults(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{}))
+	if cfg.APIAddr != ":8080" {
+		t.Fatalf("APIAddr default: %q", cfg.APIAddr)
+	}
+	if cfg.AppEnv != "development" {
+		t.Fatalf("AppEnv default: %q", cfg.AppEnv)
+	}
+	if cfg.RedisAddr != "redis:6379" || cfg.DocreaderAddr != "docreader:50051" {
+		t.Fatalf("service defaults: %+v", cfg)
+	}
+	if cfg.S3UseTLS {
+		t.Fatalf("S3UseTLS should default to false")
+	}
+	if !cfg.ParserSandbox {
+		t.Fatalf("ParserSandbox should default to true")
+	}
+	if cfg.MaxFileBytes != 100*1024*1024 {
+		t.Fatalf("MaxFileBytes default: %d", cfg.MaxFileBytes)
+	}
+	if cfg.TaskTimeoutSeconds != 120 {
+		t.Fatalf("TaskTimeoutSeconds default: %d", cfg.TaskTimeoutSeconds)
+	}
+	wantFormats := map[string]bool{"pdf-text": true, "docx": true, "xlsx": true, "pptx": true, "markdown": true, "txt": true, "html": true}
+	if len(cfg.SupportedFormats) != len(wantFormats) {
+		t.Fatalf("SupportedFormats default: %v", cfg.SupportedFormats)
+	}
+	for _, format := range cfg.SupportedFormats {
+		if !wantFormats[format] {
+			t.Fatalf("unexpected supported format %q in %v", format, cfg.SupportedFormats)
+		}
+	}
+}
+
+func TestLoadFromReadsOverridesAndIgnoresEmpty(t *testing.T) {
+	env := map[string]string{
+		"API_ADDR":                       ":9090",
+		"APP_LOG_LEVEL":                  "debug",
+		"S3_USE_TLS":                     "TRUE",
+		"DOCREADER_MAX_FILE_MB":          "20",
+		"DOCREADER_TASK_TIMEOUT_SECONDS": "45",
+		"REDIS_ADDR":                     "",
+	}
+	cfg := LoadFrom(lookupFrom(env))
+	if cfg.APIAddr != ":9090" || cfg.LogLevel != "debug" {
+		t.Fatalf("overrides not applied: %+v", cfg)
+	}
+	if !cfg.S3UseTLS {
+		t.Fatalf("S3_USE_TLS should be case-insensitive")
+	}
+	if cfg.MaxFileBytes != 20*1024*1024 || cfg.TaskTimeoutSeconds != 45 {
+		t.Fatalf("numeric overrides not applied: %+v", cfg)
+	}
+	if cfg.RedisAddr != "redis:6379" {
+		t.Fatalf("empty value must fall back to default, got %q", cfg.RedisAddr)
+	}
+}
+
+func TestValidateRequiresInfrastructureForAPI(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{"DATABASE_URL": ""}))
+	if err := cfg.Validate("api"); err == nil {
+		t.Fatalf("expected api validation to fail without DATABASE_URL")
+	}
+
+	valid := map[string]string{
+		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+	}
+	cfg = LoadFrom(lookupFrom(valid))
+	if err := cfg.Validate("api"); err != nil {
+		t.Fatalf("expected api validation to pass, got %v", err)
+	}
+}
+
+func TestValidateRejectsBadDatabaseURL(t *testing.T) {
+	valid := map[string]string{
+		"DATABASE_URL":             "not-a-url",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+	}
+	cfg := LoadFrom(lookupFrom(valid))
+	if err := cfg.Validate("api"); err == nil {
+		t.Fatalf("expected invalid DATABASE_URL to be rejected")
+	}
+}
+
+func TestValidateProductionGuards(t *testing.T) {
+	base := map[string]string{
+		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"APP_ENV":                  "production",
+		"EMBEDDING_SOURCE":         "remote",
+		"LLM_EMBEDDING_MODEL":      "bge-m3",
+		"EMBEDDING_BASE_URL":       "https://api.example.com/v1",
+		// M3 adds a generation adapter with the same production guard, so the
+		// valid production profile must name a remote model as well.
+		"CHAT_SOURCE":    "remote",
+		"CHAT_BASE_URL":  "https://api.example.com/v1",
+		"LLM_CHAT_MODEL": "gpt-4o-mini",
+		// M4 requires OIDC in production, so the valid profile must configure it.
+		"OIDC_ENABLED":       "true",
+		"OIDC_ISSUER":        "https://idp.example.com",
+		"OIDC_CLIENT_ID":     "rag-platform",
+		"OIDC_CLIENT_SECRET": "client-secret",
+		"OIDC_REDIRECT_URL":  "https://rag.example.com/api/auth/callback",
+	}
+
+	noSandbox := map[string]string{}
+	for key, value := range base {
+		noSandbox[key] = value
+	}
+	noSandbox["PARSER_SANDBOX_ENABLED"] = "false"
+	if err := LoadFrom(lookupFrom(noSandbox)).Validate("api"); err == nil {
+		t.Fatalf("production must require parser sandbox")
+	}
+
+	localEmbedding := map[string]string{}
+	for key, value := range base {
+		localEmbedding[key] = value
+	}
+	localEmbedding["EMBEDDING_SOURCE"] = "local"
+	if err := LoadFrom(lookupFrom(localEmbedding)).Validate("api"); err == nil {
+		t.Fatalf("production must reject local embedding adapter")
+	}
+
+	if err := LoadFrom(lookupFrom(base)).Validate("api"); err != nil {
+		t.Fatalf("valid production config must pass: %v", err)
+	}
+}
+
+func TestConnectorConfigDefaultsAndOverrides(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{}))
+	if cfg.Connector.EncryptionKey != "" {
+		t.Fatalf("connector key must have no default")
+	}
+	if cfg.Connector.AllowPrivateNetworks {
+		t.Fatalf("private networks must default to false")
+	}
+	if cfg.Connector.RequestTimeoutSec != 30 || cfg.Connector.MaxManifestBytes != 2*1024*1024 || cfg.Connector.DefaultRatePerSecond != 2 {
+		t.Fatalf("unexpected connector defaults: %+v", cfg.Connector)
+	}
+
+	overrides := map[string]string{
+		"CONNECTOR_ENCRYPTION_KEY":          "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"CONNECTOR_ALLOW_PRIVATE_NETWORKS":  "true",
+		"CONNECTOR_REQUEST_TIMEOUT_SECONDS": "5",
+		"CONNECTOR_MAX_MANIFEST_BYTES":      "1048576",
+		"CONNECTOR_REQUESTS_PER_SECOND":     "10",
+	}
+	cfg = LoadFrom(lookupFrom(overrides))
+	if !cfg.Connector.AllowPrivateNetworks || cfg.Connector.RequestTimeoutSec != 5 ||
+		cfg.Connector.MaxManifestBytes != 1048576 || cfg.Connector.DefaultRatePerSecond != 10 {
+		t.Fatalf("connector overrides not applied: %+v", cfg.Connector)
+	}
+}
+
+func TestConnectorConfigValidation(t *testing.T) {
+	valid := ConnectorConfig{
+		EncryptionKey:     "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		RequestTimeoutSec: 30, MaxManifestBytes: 1 << 20, DefaultRatePerSecond: 2,
+	}
+	if err := valid.Validate("development"); err != nil {
+		t.Fatalf("valid connector config rejected: %v", err)
+	}
+
+	missingKey := valid
+	missingKey.EncryptionKey = " "
+	if err := missingKey.Validate("development"); err == nil {
+		t.Fatalf("connector key must be required")
+	}
+
+	productionPrivate := valid
+	productionPrivate.AllowPrivateNetworks = true
+	if err := productionPrivate.Validate("production"); err == nil {
+		t.Fatalf("production must reject private connector networks")
+	}
+	if err := productionPrivate.Validate("development"); err != nil {
+		t.Fatalf("development must allow private connector networks: %v", err)
+	}
+
+	badTimeout := valid
+	badTimeout.RequestTimeoutSec = 0
+	if err := badTimeout.Validate("development"); err == nil {
+		t.Fatalf("timeout must be positive")
+	}
+
+	badManifest := valid
+	badManifest.MaxManifestBytes = 0
+	if err := badManifest.Validate("development"); err == nil {
+		t.Fatalf("manifest size limit must be positive")
+	}
+
+	for _, rate := range []float64{0, 51, -1} {
+		badRate := valid
+		badRate.DefaultRatePerSecond = rate
+		if err := badRate.Validate("development"); err == nil {
+			t.Fatalf("rate %v must be rejected", rate)
+		}
+	}
+}
+
+func TestValidateEmbedctlRequiresDatabaseAndEmbedding(t *testing.T) {
+	if err := LoadFrom(lookupFrom(map[string]string{"EMBEDDING_DIMENSION": "768"})).Validate("embedctl"); err == nil {
+		t.Fatalf("embedctl must require DATABASE_URL")
+	}
+
+	// The rebuild command validates the same embedding contract as the worker,
+	// so a remote source without an endpoint is rejected here too.
+	remoteWithoutEndpoint := map[string]string{
+		"DATABASE_URL":        "postgres://user:pass@localhost:5432/rag",
+		"EMBEDDING_SOURCE":    "remote",
+		"LLM_EMBEDDING_MODEL": "bge-m3",
+	}
+	if err := LoadFrom(lookupFrom(remoteWithoutEndpoint)).Validate("embedctl"); err == nil {
+		t.Fatalf("embedctl must reject a remote source without EMBEDDING_BASE_URL")
+	}
+
+	valid := map[string]string{
+		"DATABASE_URL":        "postgres://user:pass@localhost:5432/rag",
+		"EMBEDDING_DIMENSION": "768",
+	}
+	if err := LoadFrom(lookupFrom(valid)).Validate("embedctl"); err != nil {
+		t.Fatalf("valid embedctl config must pass, got %v", err)
+	}
+}
+
+func TestValidateUnknownComponent(t *testing.T) {
+	if err := LoadFrom(lookupFrom(map[string]string{})).Validate("unknown"); err == nil {
+		t.Fatalf("expected unknown component error")
+	}
+}
+
+func TestValidateWorkerChecksEmbeddingAndChunk(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{"EMBEDDING_SOURCE": "remote", "EMBEDDING_DIMENSION": "0"}))
+	if err := cfg.Validate("worker"); err == nil {
+		t.Fatalf("worker validation must reject non-positive embedding dimension")
+	}
+
+	cfg = LoadFrom(lookupFrom(map[string]string{"CHUNK_SIZE": "100", "CHUNK_OVERLAP": "200"}))
+	if err := cfg.Validate("worker"); err == nil {
+		t.Fatalf("worker validation must reject overlap larger than size")
+	}
+}
+
+func TestChunkConfigDefaults(t *testing.T) {
+	cfg := LoadFrom(func(string) (string, bool) { return "", false })
+	if cfg.Chunk.Size != 900 || cfg.Chunk.Overlap != 120 {
+		t.Fatalf("unexpected defaults: %+v", cfg.Chunk)
+	}
+	if len(cfg.Chunk.Markers) == 0 {
+		t.Fatalf("expected default split markers")
+	}
+	if err := cfg.Chunk.Validate(); err != nil {
+		t.Fatalf("defaults must validate: %v", err)
+	}
+}
+
+func TestChunkConfigReadsOverrides(t *testing.T) {
+	env := map[string]string{
+		"CHUNK_SIZE":     "512",
+		"CHUNK_OVERLAP":  "50",
+		"CHUNK_MIN_SIZE": "20",
+		// A single backslash is what an operator writes in .env; the loader
+		// unescapes it into a real newline marker.
+		"CHUNK_SPLIT_MARKERS": `\n\n,\n,。`,
+	}
+	cfg := LoadFrom(func(key string) (string, bool) { value, ok := env[key]; return value, ok })
+	if cfg.Chunk.Size != 512 || cfg.Chunk.Overlap != 50 || cfg.Chunk.MinSize != 20 {
+		t.Fatalf("unexpected overrides: %+v", cfg.Chunk)
+	}
+	if len(cfg.Chunk.Markers) != 3 {
+		t.Fatalf("expected 3 markers, got %v", cfg.Chunk.Markers)
+	}
+	if cfg.Chunk.Markers[0] != "\n\n" || cfg.Chunk.Markers[1] != "\n" || cfg.Chunk.Markers[2] != "。" {
+		t.Fatalf("markers not unescaped: %q", cfg.Chunk.Markers)
+	}
+}
+
+func TestChunkConfigAllowsZeroOverlap(t *testing.T) {
+	env := map[string]string{"CHUNK_OVERLAP": "0"}
+	cfg := LoadFrom(func(key string) (string, bool) { value, ok := env[key]; return value, ok })
+	if cfg.Chunk.Overlap != 0 {
+		t.Fatalf("explicit zero overlap must be preserved, got %d", cfg.Chunk.Overlap)
+	}
+}
+
+func TestChunkConfigRejectsInvalidRanges(t *testing.T) {
+	cases := []map[string]string{
+		{"CHUNK_SIZE": "0"},
+		{"CHUNK_SIZE": "100", "CHUNK_OVERLAP": "100"},
+		{"CHUNK_SIZE": "100", "CHUNK_MIN_SIZE": "150"},
+	}
+	for _, env := range cases {
+		current := map[string]string{}
+		for key, value := range env {
+			current[key] = value
+		}
+		cfg := LoadFrom(func(key string) (string, bool) { value, ok := current[key]; return value, ok })
+		if err := cfg.Chunk.Validate(); err == nil {
+			t.Fatalf("expected validation error for %v", env)
+		}
+	}
+}
+
+func TestLoadFromReadsRedisPasswordAndS3PathStyle(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{
+		"REDIS_PASSWORD":      "s3cret",
+		"S3_FORCE_PATH_STYLE": "true",
+	}))
+	if cfg.RedisPassword != "s3cret" {
+		t.Fatalf("REDIS_PASSWORD was not applied: %q", cfg.RedisPassword)
+	}
+	if !cfg.S3ForcePathStyle {
+		t.Fatalf("S3_FORCE_PATH_STYLE was not applied")
+	}
+
+	// Unset values stay permissive: no Redis auth, and the storage client keeps
+	// its own endpoint detection instead of being forced to path style.
+	unset := LoadFrom(lookupFrom(map[string]string{}))
+	if unset.RedisPassword != "" {
+		t.Fatalf("expected an empty Redis password by default, got %q", unset.RedisPassword)
+	}
+	if unset.S3ForcePathStyle {
+		t.Fatalf("path style must not be forced unless asked for")
+	}
+}

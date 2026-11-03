@@ -1,0 +1,10 @@
+id: knowledge_base_description
+description: Knowledge-base description template. Externalized in M3 as part of the
+  prompt contract; consumed by later projection milestones.
+template: |
+  Write a one paragraph description of what this knowledge base covers, based on
+  the sample documents below. State only what the samples support.
+
+  <samples>
+  {{samples}}
+  </samples>

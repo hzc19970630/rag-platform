@@ -1,0 +1,62 @@
+# One-off overlay for the M3 real-model evaluation run. It is not part of the
+# normal local stack: run it under a separate project name so the long-running
+# stack keeps its own containers, volumes and host ports.
+#
+#   docker compose -p rag-eval \
+#     --env-file .env --env-file .env.eval \
+#     -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/docker-compose/docker-compose.eval.yml \
+#     up -d --wait postgres redis minio docreader api worker
+#
+# .env.eval (git-ignored via the .env.* rule) carries the provider settings.
+# Chat and embedding are configured separately because they may live behind
+# different gateways:
+#
+#   EVAL_CHAT_BASE_URL=https://gateway-a.example/v1
+#   EVAL_CHAT_API_KEY=...
+#   EVAL_CHAT_MODEL=gpt-6-sol
+#   EVAL_EMBEDDING_BASE_URL=https://gateway-b.example/v1
+#   EVAL_EMBEDDING_API_KEY=...
+#   EVAL_EMBEDDING_MODEL=text-embedding-3-small
+#   EVAL_EMBEDDING_DIMENSION=1536
+#
+# Differences from the local stack:
+#   - remote chat and embedding adapters against OpenAI-compatible endpoints
+#     (EVAL_EMBEDDING_DIMENSION must match the provider's vector length, and a
+#     mismatch fails ingestion loudly instead of storing wrong-width vectors);
+#   - host ports moved out of the way of the local stack;
+#   - worker attached to the non-internal frontend network, because the backend
+#     network has no egress and remote embeddings are called from the worker.
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:55432:5432"
+
+  redis:
+    ports: !override
+      - "127.0.0.1:56379:6379"
+
+  minio:
+    ports: !override
+      - "127.0.0.1:59000:9000"
+      - "127.0.0.1:59001:9001"
+
+  api:
+    environment: &remote-models
+      CHAT_SOURCE: remote
+      CHAT_BASE_URL: ${EVAL_CHAT_BASE_URL:?set EVAL_CHAT_BASE_URL}
+      CHAT_API_KEY: ${EVAL_CHAT_API_KEY:?set EVAL_CHAT_API_KEY}
+      LLM_CHAT_MODEL: ${EVAL_CHAT_MODEL:?set EVAL_CHAT_MODEL}
+      EMBEDDING_SOURCE: remote
+      EMBEDDING_BASE_URL: ${EVAL_EMBEDDING_BASE_URL:?set EVAL_EMBEDDING_BASE_URL}
+      EMBEDDING_API_KEY: ${EVAL_EMBEDDING_API_KEY:?set EVAL_EMBEDDING_API_KEY}
+      LLM_EMBEDDING_MODEL: ${EVAL_EMBEDDING_MODEL:?set EVAL_EMBEDDING_MODEL}
+      EMBEDDING_DIMENSION: ${EVAL_EMBEDDING_DIMENSION:?set EVAL_EMBEDDING_DIMENSION}
+    ports: !override
+      - "127.0.0.1:9082:8080"
+
+  worker:
+    environment: *remote-models
+    networks:
+      - backend
+      - frontend

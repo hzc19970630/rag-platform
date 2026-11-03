@@ -1,0 +1,1851 @@
+{
+  "schemaVersion": "M7EvaluationReportV2",
+  "generatedAt": "2026-10-28T09:22:39.460244+00:00",
+  "baseUrl": "http://localhost:8082",
+  "set": "M7 relation projection: bounded graph query vs pure Evidence RAG (30 fixtures, 34 cases)",
+  "setSchemaVersion": "M7EvaluationSetV2",
+  "knowledgeBaseId": "kb-7f4f1ee9ca2df6372649abbc",
+  "kept": false,
+  "setStats": {
+    "fixtures": 30,
+    "fixtureRoles": {
+      "chain-a": 7,
+      "chain-b": 7,
+      "chain-c": 7,
+      "distractor": 5,
+      "filler": 4
+    },
+    "cases": 34,
+    "casesByType": {
+      "single-hop": 6,
+      "multi-hop": 20,
+      "branch": 2,
+      "negative": 6
+    },
+    "answerableCases": 28,
+    "multiHopCases": 20,
+    "negativeCases": 6,
+    "expectedChunks": 135
+  },
+  "searchParams": {
+    "ragTopK": "service-default",
+    "observed": {
+      "TopK": 8,
+      "EmbeddingTopK": 20,
+      "KeywordTopK": 20,
+      "VectorThreshold": 0.2,
+      "KeywordThreshold": 0,
+      "RerankEnabled": false,
+      "RerankTopK": 8,
+      "RerankThreshold": -10,
+      "ContextTokenLimit": 3000,
+      "AdjacentExpansion": 1,
+      "MaxAdjacentChunks": 2,
+      "RRFK": 60,
+      "ExpansionScoreFactor": 0.5
+    }
+  },
+  "graphQuery": {
+    "limit": 40,
+    "maxDepth": 3
+  },
+  "extractor": {
+    "model": "local-extractive",
+    "promptVersion": "relation_extraction/35be37d92322",
+    "sourceHash": "1892b6950c0c612afa0a5502b9b64cac0648acea8675e21f100bff51b0b574c8"
+  },
+  "snapshot": {
+    "id": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+    "status": "ACTIVE",
+    "aclVersion": 2,
+    "entities": 23,
+    "relations": 21,
+    "aliases": 2,
+    "traceable": true
+  },
+  "metrics": {
+    "caseCount": 34,
+    "answerableCaseCount": 28,
+    "multiHopCaseCount": 20,
+    "negativeCaseCount": 6,
+    "ragStrictHitRate": 0.7857,
+    "ragLooseHitRate": 0.7857,
+    "ragDocumentHitRate": 0.9286,
+    "ragAnswerRankMedian": 3.0,
+    "ragAnswerRankP95": 8,
+    "multiHopRagStrictHitRate": 0.7,
+    "multiHopRagLooseHitRate": 0.7,
+    "multiHopGraphHitRate": 1.0,
+    "multiHopHopExactRate": 1.0,
+    "multiHopHopCheckedCount": 20,
+    "graphSeedResolveRate": 1.0,
+    "graphRescueCount": 6,
+    "graphRescueIds": [
+      "two-hop-coolant",
+      "two-hop-device",
+      "two-hop-regulator",
+      "three-hop-rail",
+      "three-hop-basin",
+      "three-hop-regulator-a"
+    ],
+    "ragOnlyCount": 0,
+    "ragOnlyIds": [],
+    "bothHitCount": 14,
+    "neitherCount": 0,
+    "negativePassRate": 1.0,
+    "negativeGraphFalsePositiveCount": 0,
+    "negativeByKind": {
+      "depth-bound": {
+        "count": 2,
+        "passCount": 2,
+        "passRate": 1.0
+      },
+      "unknown-seed": {
+        "count": 4,
+        "passCount": 4,
+        "passRate": 1.0
+      }
+    },
+    "ragDistractorCaseCount": 2,
+    "ragDistractorFalsePositiveCount": 0,
+    "ragDistractorFalsePositiveRate": 0.0,
+    "truncatedQueryCount": 0,
+    "meanRagLatencyMs": 187.9,
+    "p95RagLatencyMs": 315.8,
+    "meanGraphLatencyMs": 20.3,
+    "p95GraphLatencyMs": 47.2,
+    "perType": {
+      "branch": {
+        "count": 2,
+        "ragStrictHitRate": 1.0,
+        "ragLooseHitRate": 1.0,
+        "graphHitRate": 1.0,
+        "graphHopExactRate": null
+      },
+      "multi-hop": {
+        "count": 20,
+        "ragStrictHitRate": 0.7,
+        "ragLooseHitRate": 0.7,
+        "graphHitRate": 1.0,
+        "graphHopExactRate": 1.0
+      },
+      "negative": {
+        "count": 6,
+        "graphPassRate": 1.0
+      },
+      "single-hop": {
+        "count": 6,
+        "ragStrictHitRate": 1.0,
+        "ragLooseHitRate": 1.0,
+        "graphHitRate": 1.0,
+        "graphHopExactRate": 1.0
+      }
+    },
+    "perTag": {
+      "alias": {
+        "count": 2,
+        "ragStrictHitRate": 1.0,
+        "graphHitRate": 1.0
+      },
+      "branch": {
+        "count": 2,
+        "ragStrictHitRate": 1.0,
+        "graphHitRate": 1.0
+      },
+      "chain-a": {
+        "count": 12,
+        "ragStrictHitRate": 0.8333,
+        "graphHitRate": 1.0
+      },
+      "chain-b": {
+        "count": 10,
+        "ragStrictHitRate": 0.6,
+        "graphHitRate": 1.0
+      },
+      "chain-c": {
+        "count": 8,
+        "ragStrictHitRate": 0.75,
+        "graphHitRate": 1.0
+      },
+      "control": {
+        "count": 6,
+        "ragStrictHitRate": 1.0,
+        "graphHitRate": 1.0
+      },
+      "depth-bound": {
+        "count": 2,
+        "ragStrictHitRate": 0.0,
+        "graphHitRate": 1.0
+      },
+      "depth-bound-pair": {
+        "count": 2,
+        "ragStrictHitRate": 1.0,
+        "graphHitRate": 1.0
+      },
+      "multi-hop": {
+        "count": 20,
+        "ragStrictHitRate": 0.7,
+        "graphHitRate": 1.0
+      },
+      "negative": {
+        "count": 6,
+        "ragStrictHitRate": 0.0,
+        "graphHitRate": 1.0
+      },
+      "normalized": {
+        "count": 1,
+        "ragStrictHitRate": 1.0,
+        "graphHitRate": 1.0
+      },
+      "rag-distractor": {
+        "count": 2,
+        "ragStrictHitRate": 0.0,
+        "graphHitRate": 1.0
+      },
+      "unknown-seed": {
+        "count": 4,
+        "ragStrictHitRate": 0.0,
+        "graphHitRate": 1.0
+      }
+    },
+    "setStats": {
+      "fixtures": 30,
+      "fixtureRoles": {
+        "chain-a": 7,
+        "chain-b": 7,
+        "chain-c": 7,
+        "distractor": 5,
+        "filler": 4
+      },
+      "cases": 34,
+      "casesByType": {
+        "single-hop": 6,
+        "multi-hop": 20,
+        "branch": 2,
+        "negative": 6
+      },
+      "answerableCases": 28,
+      "multiHopCases": 20,
+      "negativeCases": 6,
+      "expectedChunks": 135
+    }
+  },
+  "decision": {
+    "recommendation": "keep-bounded-graph-query",
+    "rationale": "on multi-hop cases graph reached the answer 100% versus strict RAG 70% (+30%), with 6 graph-only rescue(s)",
+    "delta": 0.3,
+    "guard": {
+      "minMultiHopCases": 10,
+      "minAnswerableCases": 20,
+      "multiHopCaseCount": 20,
+      "answerableCaseCount": 28,
+      "unknownSeedNegativesPassed": true
+    }
+  },
+  "cases": [
+    {
+      "id": "control-supplier",
+      "type": "single-hop",
+      "tags": [
+        "chain-a",
+        "control"
+      ],
+      "question": "Who does Acme supply turbine blades to?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Beta Corp"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "acme-supplier.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 1,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-ad9e1bf1259ef7bc667d3f01",
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-fa57f5f1f6aea0976672b9ba"
+      ],
+      "ragLatencyMs": 315.8,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 2,
+      "graphEdgeCount": 1,
+      "graphPathCount": 1,
+      "graphExpectedPresent": {
+        "Beta Corp": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 1,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 17.3
+    },
+    {
+      "id": "control-board-city",
+      "type": "single-hop",
+      "tags": [
+        "chain-a",
+        "control"
+      ],
+      "question": "Where does the Zeta Regional Board meet?",
+      "seed": "Zeta Regional Board",
+      "seedKind": "canonical",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Theta City"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "zeta-board.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 3,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-39bf26d2a2448c5539a03db1",
+        "doc-44ec21b44e62f276dbc7b8a0",
+        "doc-4f283c5c925feb57fcc60ac7",
+        "doc-95cc3fc14c95587631d1fe45"
+      ],
+      "ragLatencyMs": 197.7,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Theta City": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 1,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 22.3
+    },
+    {
+      "id": "control-alias",
+      "type": "single-hop",
+      "tags": [
+        "chain-c",
+        "control",
+        "alias"
+      ],
+      "question": "Which candidate does Verdant Laboratories develop?",
+      "seed": "Verdant Laboratories",
+      "seedKind": "alias",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Serum X"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "verdant-labs.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 3,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-f7e5431fcd29ae4cdc9ba37f",
+        "doc-fc916b4277827fedba4dbbd6"
+      ],
+      "ragLatencyMs": 176.8,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 2,
+      "graphEdgeCount": 1,
+      "graphPathCount": 1,
+      "graphExpectedPresent": {
+        "Serum X": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 1,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 19.4
+    },
+    {
+      "id": "control-normalized",
+      "type": "single-hop",
+      "tags": [
+        "chain-b",
+        "control",
+        "normalized"
+      ],
+      "question": "Which company receives northwind shipments?",
+      "seed": "northwind",
+      "seedKind": "normalized",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Contoso"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "northwind-shipping.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 4,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9aedce40b0cc615a9f1cc968",
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-fa57f5f1f6aea0976672b9ba"
+      ],
+      "ragLatencyMs": 317.7,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 2,
+      "graphEdgeCount": 1,
+      "graphPathCount": 1,
+      "graphExpectedPresent": {
+        "Contoso": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 1,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 18.9
+    },
+    {
+      "id": "control-command-center",
+      "type": "single-hop",
+      "tags": [
+        "chain-a",
+        "control"
+      ],
+      "question": "What does Theta City host?",
+      "seed": "Theta City",
+      "seedKind": "canonical",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Regional Command Center"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "theta-city.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 4,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-39bf26d2a2448c5539a03db1",
+        "doc-417f5850c1962729cb2bf172",
+        "doc-4f283c5c925feb57fcc60ac7"
+      ],
+      "ragLatencyMs": 187.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Regional Command Center": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 1,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 23.5
+    },
+    {
+      "id": "control-regulator",
+      "type": "single-hop",
+      "tags": [
+        "chain-c",
+        "control"
+      ],
+      "question": "Which committee does Regulator B report to?",
+      "seed": "Regulator B",
+      "seedKind": "canonical",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Oversight Committee"
+      ],
+      "expectedHops": 1,
+      "expectedDocument": "regulator-b.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 2,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-177dc2bcbe2d05b25d1ceada",
+        "doc-4d18a66e36421619801f6128",
+        "doc-7ea400c4895c88c67148ad82",
+        "doc-c06f9e4305025e4e6b2738ca"
+      ],
+      "ragLatencyMs": 158.8,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Oversight Committee": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 1,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 13.9
+    },
+    {
+      "id": "two-hop-plant",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "question": "Which assembly plant does the company Acme supplies operate?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Gamma Plant"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "beta-operations.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 4,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-ad9e1bf1259ef7bc667d3f01",
+        "doc-d3c95e1882fec594b6a04d3b"
+      ],
+      "ragLatencyMs": 186.6,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Gamma Plant": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 19.0
+    },
+    {
+      "id": "two-hop-coolant",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop",
+        "rag-distractor"
+      ],
+      "question": "What does the assembly plant operated by Beta Corp use for cooling?",
+      "seed": "Beta Corp",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Delta Reservoir"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "gamma-cooling.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [
+        "Delta Storage"
+      ],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": true,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-206556d6392a4f51aa150bd9",
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-9f79e2bf70eed684982cea58",
+        "doc-ad9e1bf1259ef7bc667d3f01"
+      ],
+      "ragLatencyMs": 160.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 4,
+      "graphEdgeCount": 3,
+      "graphPathCount": 3,
+      "graphExpectedPresent": {
+        "Delta Reservoir": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 20.1
+    },
+    {
+      "id": "two-hop-board",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "question": "Which board oversees the authority that maintains Delta Reservoir?",
+      "seed": "Delta Reservoir",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Zeta Regional Board"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "epsilon-authority.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 6,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9143a8e8ec7c09c072977218",
+        "doc-95cc3fc14c95587631d1fe45",
+        "doc-9f79e2bf70eed684982cea58"
+      ],
+      "ragLatencyMs": 239.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Zeta Regional Board": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 29.4
+    },
+    {
+      "id": "two-hop-command",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "question": "Which command center is hosted by the city where the Zeta Regional Board meets?",
+      "seed": "Zeta Regional Board",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Regional Command Center"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "theta-city.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 5,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-39bf26d2a2448c5539a03db1",
+        "doc-44ec21b44e62f276dbc7b8a0",
+        "doc-4f283c5c925feb57fcc60ac7",
+        "doc-95cc3fc14c95587631d1fe45"
+      ],
+      "ragLatencyMs": 123.5,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Regional Command Center": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 18.4
+    },
+    {
+      "id": "two-hop-device",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop",
+        "rag-distractor"
+      ],
+      "question": "What does the company receiving Northwind shipments assemble?",
+      "seed": "Northwind",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Orion Device"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "contoso-assembly.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [
+        "Orion Router"
+      ],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-ad9e1bf1259ef7bc667d3f01",
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-fa57f5f1f6aea0976672b9ba"
+      ],
+      "ragLatencyMs": 152.4,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Orion Device": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 12.5
+    },
+    {
+      "id": "two-hop-alloy",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "question": "Which alloy does the Orion Device assembled by Contoso use?",
+      "seed": "Contoso",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Halcyon Alloy"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "orion-device.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 3,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 153.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 4,
+      "graphEdgeCount": 3,
+      "graphPathCount": 3,
+      "graphExpectedPresent": {
+        "Halcyon Alloy": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 16.9
+    },
+    {
+      "id": "two-hop-port",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "question": "Where is the alloy used by the Orion Device produced?",
+      "seed": "Orion Device",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Vantage Port"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "halcyon-foundry.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 6,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 135.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Vantage Port": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 14.7
+    },
+    {
+      "id": "two-hop-trial",
+      "type": "multi-hop",
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "question": "Which trial evaluates the candidate developed by Verdant Labs?",
+      "seed": "Verdant Labs",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Trial 7"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "serum-x.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 8,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-c06f9e4305025e4e6b2738ca",
+        "doc-f7e5431fcd29ae4cdc9ba37f",
+        "doc-fc916b4277827fedba4dbbd6"
+      ],
+      "ragLatencyMs": 255.3,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Trial 7": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 54.2
+    },
+    {
+      "id": "two-hop-regulator",
+      "type": "multi-hop",
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "question": "Which regulator reporting to the Health Directorate reviews the trial that evaluates Serum X?",
+      "seed": "Serum X",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Regulator A"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "trial-7.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": true,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-183436a00cfc101fd3affc55",
+        "doc-4d18a66e36421619801f6128",
+        "doc-7ea400c4895c88c67148ad82",
+        "doc-c06f9e4305025e4e6b2738ca",
+        "doc-fc916b4277827fedba4dbbd6"
+      ],
+      "ragLatencyMs": 213.5,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Regulator A": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 14.5
+    },
+    {
+      "id": "two-hop-alias-seed",
+      "type": "multi-hop",
+      "tags": [
+        "chain-c",
+        "multi-hop",
+        "alias"
+      ],
+      "question": "Which trial evaluates the candidate developed by Verdant Laboratories?",
+      "seed": "Verdant Laboratories",
+      "seedKind": "alias",
+      "depth": 2,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Trial 7"
+      ],
+      "expectedHops": 2,
+      "expectedDocument": "serum-x.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 8,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-c06f9e4305025e4e6b2738ca",
+        "doc-f7e5431fcd29ae4cdc9ba37f",
+        "doc-fc916b4277827fedba4dbbd6"
+      ],
+      "ragLatencyMs": 180.3,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {
+        "Trial 7": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 2,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 35.3
+    },
+    {
+      "id": "three-hop-reservoir",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop",
+        "depth-bound-pair"
+      ],
+      "question": "Which reservoir supplies coolant to the plant operated by the company Acme supplies?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Delta Reservoir"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "gamma-cooling.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 1,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-9143a8e8ec7c09c072977218",
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-9f79e2bf70eed684982cea58",
+        "doc-ad9e1bf1259ef7bc667d3f01"
+      ],
+      "ragLatencyMs": 202.9,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 4,
+      "graphEdgeCount": 3,
+      "graphPathCount": 3,
+      "graphExpectedPresent": {
+        "Delta Reservoir": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 47.2
+    },
+    {
+      "id": "three-hop-alloy",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop",
+        "depth-bound-pair"
+      ],
+      "question": "Which alloy is used in the device assembled by the company that receives Northwind shipments?",
+      "seed": "Northwind",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Halcyon Alloy"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "orion-device.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 3,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 132.3,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 4,
+      "graphEdgeCount": 3,
+      "graphPathCount": 3,
+      "graphExpectedPresent": {
+        "Halcyon Alloy": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 12.9
+    },
+    {
+      "id": "three-hop-authority",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "question": "Which water authority maintains the reservoir used by the plant operated by Beta Corp?",
+      "seed": "Beta Corp",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Epsilon Water Authority"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "delta-reservoir.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 3,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-206556d6392a4f51aa150bd9",
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-9143a8e8ec7c09c072977218",
+        "doc-95cc3fc14c95587631d1fe45",
+        "doc-9f79e2bf70eed684982cea58"
+      ],
+      "ragLatencyMs": 226.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Epsilon Water Authority": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 23.8
+    },
+    {
+      "id": "three-hop-board",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "question": "Which board oversees the authority that maintains the reservoir supplying the Gamma Plant?",
+      "seed": "Gamma Plant",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Zeta Regional Board"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "epsilon-authority.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 7,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-9143a8e8ec7c09c072977218",
+        "doc-95cc3fc14c95587631d1fe45",
+        "doc-9f79e2bf70eed684982cea58"
+      ],
+      "ragLatencyMs": 229.4,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 6,
+      "graphEdgeCount": 5,
+      "graphPathCount": 5,
+      "graphExpectedPresent": {
+        "Zeta Regional Board": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 21.3
+    },
+    {
+      "id": "three-hop-city",
+      "type": "multi-hop",
+      "tags": [
+        "chain-a",
+        "multi-hop"
+      ],
+      "question": "Which city hosts the quarterly meetings of the board that oversees the authority maintaining Delta Reservoir?",
+      "seed": "Delta Reservoir",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Theta City"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "zeta-board.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 3,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-39bf26d2a2448c5539a03db1",
+        "doc-4f283c5c925feb57fcc60ac7",
+        "doc-9143a8e8ec7c09c072977218",
+        "doc-95cc3fc14c95587631d1fe45"
+      ],
+      "ragLatencyMs": 126.9,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 7,
+      "graphEdgeCount": 6,
+      "graphPathCount": 6,
+      "graphExpectedPresent": {
+        "Theta City": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 26.4
+    },
+    {
+      "id": "three-hop-port",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "question": "Where is the alloy used by the device assembled by Contoso produced?",
+      "seed": "Contoso",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Vantage Port"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "halcyon-foundry.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 5,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-c253343a4b59278001855c81",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 148.3,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Vantage Port": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 13.0
+    },
+    {
+      "id": "three-hop-rail",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "question": "Which carrier delivers housings from the port where the alloy used by the Orion Device is produced?",
+      "seed": "Orion Device",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Kestrel Rail"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "vantage-port.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fa57f5f1f6aea0976672b9ba",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 227.1,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 7,
+      "graphEdgeCount": 6,
+      "graphPathCount": 6,
+      "graphExpectedPresent": {
+        "Kestrel Rail": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 22.7
+    },
+    {
+      "id": "three-hop-basin",
+      "type": "multi-hop",
+      "tags": [
+        "chain-b",
+        "multi-hop"
+      ],
+      "question": "Which basin is handled by the port that produces the alloy used by the Orion Device?",
+      "seed": "Orion Device",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Mira Basin"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "vantage-port.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": true,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9aedce40b0cc615a9f1cc968",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 145.6,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 7,
+      "graphEdgeCount": 6,
+      "graphPathCount": 6,
+      "graphExpectedPresent": {
+        "Mira Basin": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 16.0
+    },
+    {
+      "id": "three-hop-regulator-a",
+      "type": "multi-hop",
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "question": "Which regulator reviews the trial evaluating the candidate developed by Verdant Labs and reports to the Health Directorate?",
+      "seed": "Verdant Labs",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Regulator A"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "trial-7.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": true,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-183436a00cfc101fd3affc55",
+        "doc-4d18a66e36421619801f6128",
+        "doc-7ea400c4895c88c67148ad82",
+        "doc-c06f9e4305025e4e6b2738ca",
+        "doc-f7e5431fcd29ae4cdc9ba37f"
+      ],
+      "ragLatencyMs": 173.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 5,
+      "graphEdgeCount": 4,
+      "graphPathCount": 4,
+      "graphExpectedPresent": {
+        "Regulator A": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 18.6
+    },
+    {
+      "id": "three-hop-oversight",
+      "type": "multi-hop",
+      "tags": [
+        "chain-c",
+        "multi-hop"
+      ],
+      "question": "Which committee receives reports from Regulator B, which reviews the trial evaluating Serum X?",
+      "seed": "Serum X",
+      "seedKind": "canonical",
+      "depth": 3,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Oversight Committee"
+      ],
+      "expectedHops": 3,
+      "expectedDocument": "regulator-b.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 1,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-177dc2bcbe2d05b25d1ceada",
+        "doc-4d18a66e36421619801f6128",
+        "doc-c06f9e4305025e4e6b2738ca",
+        "doc-fc916b4277827fedba4dbbd6"
+      ],
+      "ragLatencyMs": 136.4,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 7,
+      "graphEdgeCount": 6,
+      "graphPathCount": 6,
+      "graphExpectedPresent": {
+        "Oversight Committee": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": 3,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 17.8
+    },
+    {
+      "id": "branch-vantage-carriers",
+      "type": "branch",
+      "tags": [
+        "chain-b",
+        "branch"
+      ],
+      "question": "Which two carriers does Vantage Port handle?",
+      "seed": "Vantage Port",
+      "seedKind": "canonical",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Kestrel Rail",
+        "Mira Basin"
+      ],
+      "expectedHops": null,
+      "expectedDocument": "vantage-port.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 1,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9aedce40b0cc615a9f1cc968",
+        "doc-c253343a4b59278001855c81",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fa57f5f1f6aea0976672b9ba"
+      ],
+      "ragLatencyMs": 160.0,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 4,
+      "graphEdgeCount": 3,
+      "graphPathCount": 3,
+      "graphExpectedPresent": {
+        "Kestrel Rail": true,
+        "Mira Basin": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 15.0
+    },
+    {
+      "id": "branch-trial-regulators",
+      "type": "branch",
+      "tags": [
+        "chain-c",
+        "branch"
+      ],
+      "question": "Which two regulators review Trial 7?",
+      "seed": "Trial 7",
+      "seedKind": "canonical",
+      "depth": 1,
+      "negativeKind": "",
+      "expectEmptyGraph": false,
+      "expectedNodes": [
+        "Regulator A",
+        "Regulator B"
+      ],
+      "expectedHops": null,
+      "expectedDocument": "trial-7.md",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": true,
+      "ragLooseHit": true,
+      "ragDocumentHit": true,
+      "ragAnswerRank": 1,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-4d18a66e36421619801f6128",
+        "doc-c06f9e4305025e4e6b2738ca",
+        "doc-fc916b4277827fedba4dbbd6"
+      ],
+      "ragLatencyMs": 302.6,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 4,
+      "graphEdgeCount": 3,
+      "graphPathCount": 3,
+      "graphExpectedPresent": {
+        "Regulator A": true,
+        "Regulator B": true
+      },
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 15.1
+    },
+    {
+      "id": "negative-unknown-acme",
+      "type": "negative",
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "question": "Which company supplies Acme Procurement Group?",
+      "seed": "Acme Procurement Group",
+      "seedKind": "unknown",
+      "depth": 2,
+      "negativeKind": "unknown-seed",
+      "expectEmptyGraph": true,
+      "expectedNodes": [],
+      "expectedHops": null,
+      "expectedDocument": "",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9c72f052bdec162bcfae5555",
+        "doc-ad9e1bf1259ef7bc667d3f01",
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-fa57f5f1f6aea0976672b9ba"
+      ],
+      "ragLatencyMs": 166.9,
+      "graphHit": true,
+      "graphSeedResolved": false,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 0,
+      "graphEdgeCount": 0,
+      "graphPathCount": 0,
+      "graphExpectedPresent": {},
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": false,
+      "graphTruncated": false,
+      "graphLatencyMs": 15.5
+    },
+    {
+      "id": "negative-unknown-halcyon",
+      "type": "negative",
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "question": "Which site does Halcyon Freight operate?",
+      "seed": "Halcyon Freight",
+      "seedKind": "unknown",
+      "depth": 2,
+      "negativeKind": "unknown-seed",
+      "expectEmptyGraph": true,
+      "expectedNodes": [],
+      "expectedHops": null,
+      "expectedDocument": "",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9aedce40b0cc615a9f1cc968",
+        "doc-c253343a4b59278001855c81",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fa57f5f1f6aea0976672b9ba",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 144.8,
+      "graphHit": true,
+      "graphSeedResolved": false,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 0,
+      "graphEdgeCount": 0,
+      "graphPathCount": 0,
+      "graphExpectedPresent": {},
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": false,
+      "graphTruncated": false,
+      "graphLatencyMs": 16.2
+    },
+    {
+      "id": "negative-unknown-gamma",
+      "type": "negative",
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "question": "Which plant does the Gamma Planning Bureau operate?",
+      "seed": "Gamma Planning Bureau",
+      "seedKind": "unknown",
+      "depth": 2,
+      "negativeKind": "unknown-seed",
+      "expectEmptyGraph": true,
+      "expectedNodes": [],
+      "expectedHops": null,
+      "expectedDocument": "",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-206556d6392a4f51aa150bd9",
+        "doc-80e4bd6c194f4646764efe29",
+        "doc-9a546fa8f28b04233d13b7da",
+        "doc-9f79e2bf70eed684982cea58"
+      ],
+      "ragLatencyMs": 153.5,
+      "graphHit": true,
+      "graphSeedResolved": false,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 0,
+      "graphEdgeCount": 0,
+      "graphPathCount": 0,
+      "graphExpectedPresent": {},
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": false,
+      "graphTruncated": false,
+      "graphLatencyMs": 14.1
+    },
+    {
+      "id": "negative-unknown-zeta",
+      "type": "negative",
+      "tags": [
+        "negative",
+        "unknown-seed"
+      ],
+      "question": "Which board does the Zeta Regional Council advise?",
+      "seed": "Zeta Regional Council",
+      "seedKind": "unknown",
+      "depth": 2,
+      "negativeKind": "unknown-seed",
+      "expectEmptyGraph": true,
+      "expectedNodes": [],
+      "expectedHops": null,
+      "expectedDocument": "",
+      "forbiddenNodes": [],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-39bf26d2a2448c5539a03db1",
+        "doc-44ec21b44e62f276dbc7b8a0",
+        "doc-4f283c5c925feb57fcc60ac7",
+        "doc-95cc3fc14c95587631d1fe45"
+      ],
+      "ragLatencyMs": 144.8,
+      "graphHit": true,
+      "graphSeedResolved": false,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 0,
+      "graphEdgeCount": 0,
+      "graphPathCount": 0,
+      "graphExpectedPresent": {},
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": false,
+      "graphTruncated": false,
+      "graphLatencyMs": 10.5
+    },
+    {
+      "id": "negative-depth-reservoir",
+      "type": "negative",
+      "tags": [
+        "chain-a",
+        "negative",
+        "depth-bound"
+      ],
+      "question": "Which reservoir supplies coolant to the plant operated by Acme?",
+      "seed": "Acme",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "depth-bound",
+      "expectEmptyGraph": false,
+      "expectedNodes": [],
+      "expectedHops": null,
+      "expectedDocument": "",
+      "forbiddenNodes": [
+        "Delta Reservoir"
+      ],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-9143a8e8ec7c09c072977218",
+        "doc-9f79e2bf70eed684982cea58",
+        "doc-ad9e1bf1259ef7bc667d3f01"
+      ],
+      "ragLatencyMs": 193.2,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {},
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 15.7
+    },
+    {
+      "id": "negative-depth-alloy",
+      "type": "negative",
+      "tags": [
+        "chain-b",
+        "negative",
+        "depth-bound"
+      ],
+      "question": "Which alloy is used in the device assembled by the company receiving Northwind shipments?",
+      "seed": "Northwind",
+      "seedKind": "canonical",
+      "depth": 2,
+      "negativeKind": "depth-bound",
+      "expectEmptyGraph": false,
+      "expectedNodes": [],
+      "expectedHops": null,
+      "expectedDocument": "",
+      "forbiddenNodes": [
+        "Halcyon Alloy"
+      ],
+      "forbiddenEvidence": [],
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
+      "ragForbiddenEvidenceHit": false,
+      "ragReturnedDocuments": [
+        "doc-bfcf717b0acfcfe56a91474b",
+        "doc-d3c95e1882fec594b6a04d3b",
+        "doc-d52b4c019ba04f0702608041",
+        "doc-fcbdc982770097aa4421a1fe"
+      ],
+      "ragLatencyMs": 220.8,
+      "graphHit": true,
+      "graphSeedResolved": true,
+      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphNodeCount": 3,
+      "graphEdgeCount": 2,
+      "graphPathCount": 2,
+      "graphExpectedPresent": {},
+      "graphForbiddenHit": false,
+      "graphHops": null,
+      "graphJoined": true,
+      "graphTruncated": false,
+      "graphLatencyMs": 18.0
+    }
+  ],
+  "limitations": [
+    "Relations are seeded with the deterministic [[subject|predicate|object]] annotation, so extraction quality is not measured here; the comparison isolates bounded graph reachability versus Evidence RAG.",
+    "Graph queries need a caller-supplied seed entity, taken from the question; alias and normalized seed forms are exercised, but automatic seed extraction from free text is out of scope.",
+    "The set has 34 hand-authored cases over 30 fixtures (about 135 child chunks). It is a directional benefit check, not a statistically powered benchmark.",
+    "Strict Evidence RAG hit requires the answer marker in a chunk from the expected document; the loose marker-anywhere reading is reported only as a diagnostic. Neither measures whether the chat model would answer correctly.",
+    "RAG retrieval is measured against a single freshly built index per run; HNSW construction and ingestion-time embedding variation can change top-k membership across rebuilds. The graph side is deterministic because relations come from seeded triples, so the delta and the recommendation can shift between otherwise identical runs; treat this report as one sample and repeat the run before a release decision.",
+    "Extraction ran with the deterministic local chat adapter (CHAT_SOURCE=local), so the graph contains the seeded triples without model-added relations and depth-bound negatives cannot be polluted by extra edges; remote extraction may add edges.",
+    "The corpus is synthetic operational prose; it does not represent production document length, formatting or query distribution."
+  ]
+}

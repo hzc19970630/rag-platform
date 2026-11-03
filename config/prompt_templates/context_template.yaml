@@ -1,0 +1,12 @@
+id: context_template
+description: Wraps the authorized evidence set into a bounded, delimited context.
+template: |
+  <evidence>
+  {{evidence}}
+  </evidence>
+
+  <user_question>
+  {{query}}
+  </user_question>
+
+  Answer using the evidence above, citing block ids in square brackets.

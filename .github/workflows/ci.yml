@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Go format check
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Go tests and vet
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Web tests and build
+        working-directory: web
+        run: |
+          npm ci
+          npm test -- --passWithNoTests
+          npm run build
+      - name: Compose configuration
+        run: docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml config --quiet
+      - name: Container build
+        run: docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml build

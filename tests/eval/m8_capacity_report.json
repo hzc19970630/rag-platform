@@ -1,0 +1,1267 @@
+{
+  "schemaVersion": "M8CapacityReportV1",
+  "generatedAt": "2026-10-28T10:08:16.916581+00:00",
+  "baseUrl": "http://localhost:8082",
+  "knowledgeBaseId": "kb-57d92cd9259113d73c19b71e",
+  "kept": false,
+  "parameters": {
+    "documents": 40,
+    "linesPerDocument": 10,
+    "queries": 12,
+    "repeats": 5,
+    "depths": [
+      1,
+      2,
+      3
+    ],
+    "graphEnabled": true,
+    "ingestTimeout": 1800,
+    "searchSettleTimeout": 60,
+    "projectionTimeout": 1200,
+    "seed": 20261028,
+    "storageProbe": true,
+    "requestIntervalMs": 150
+  },
+  "corpus": {
+    "documents": 40,
+    "linesPerDocument": 10,
+    "expectedChunks": 400,
+    "bytes": 33031,
+    "seed": 20261028,
+    "firstDocumentChunks": 10
+  },
+  "writePath": {
+    "documentsUploaded": 40,
+    "documentsReady": 40,
+    "firstDocumentId": "doc-d3b43d1134547760f056469c",
+    "uploadLatencyMs": {
+      "count": 40,
+      "p50": 180.7,
+      "p95": 190.1,
+      "mean": 181.6,
+      "min": 168.7,
+      "max": 243.2
+    },
+    "readyLatencyMs": {
+      "count": 40,
+      "p50": 84631.4,
+      "p95": 88842.4,
+      "mean": 79518.7,
+      "min": 35570.7,
+      "max": 89360.4
+    },
+    "ingestionWallMs": 101312.1,
+    "timeToFirstReadyMs": 35570.7,
+    "documentsPerSecond": 0.3948,
+    "chunksPerSecond": 3.9482,
+    "stages": {
+      "parse": {
+        "count": 35,
+        "p50": 20.7,
+        "p95": 73.1,
+        "mean": 23.4,
+        "min": 13.1,
+        "max": 76.4,
+        "documents": 35
+      },
+      "normalize": {
+        "count": 34,
+        "p50": 19.9,
+        "p95": 29.9,
+        "mean": 20.3,
+        "min": 13.6,
+        "max": 30.1,
+        "documents": 34
+      },
+      "chunk": {
+        "count": 26,
+        "p50": 22.3,
+        "p95": 35.3,
+        "mean": 22.4,
+        "min": 9.2,
+        "max": 45.1,
+        "documents": 26
+      },
+      "embed": {
+        "count": 36,
+        "p50": 48.6,
+        "p95": 63.9,
+        "mean": 47.9,
+        "min": 23.1,
+        "max": 69.2,
+        "documents": 36
+      },
+      "index": {
+        "count": 32,
+        "p50": 27.9,
+        "p95": 37.2,
+        "mean": 27.8,
+        "min": 13.4,
+        "max": 41.6,
+        "documents": 32
+      }
+    },
+    "attempts": {
+      "parse": 1,
+      "normalize": 1,
+      "chunk": 1,
+      "embed": 1,
+      "index": 1
+    }
+  },
+  "search": {
+    "queries": 12,
+    "repeats": 5,
+    "samples": 60,
+    "settleMs": 1855.0,
+    "latencyMs": {
+      "count": 60,
+      "p50": 36.2,
+      "p95": 43.3,
+      "mean": 34.9,
+      "min": 20.0,
+      "max": 51.5
+    },
+    "families": {
+      "marker": {
+        "count": 6,
+        "latencyMs": {
+          "count": 30,
+          "p50": 36.6,
+          "p95": 42.3,
+          "mean": 35.1,
+          "min": 22.9,
+          "max": 43.3
+        }
+      },
+      "topical": {
+        "count": 6,
+        "latencyMs": {
+          "count": 30,
+          "p50": 36.0,
+          "p95": 44.1,
+          "mean": 34.8,
+          "min": 20.0,
+          "max": 51.5
+        }
+      }
+    },
+    "emptyResultCount": 0,
+    "expectedDocumentHitCount": 60,
+    "expectedDocumentSampleCount": 60,
+    "expectedDocumentHitRate": 1.0,
+    "observedParams": {
+      "TopK": 8,
+      "EmbeddingTopK": 20,
+      "KeywordTopK": 20,
+      "VectorThreshold": 0.2,
+      "KeywordThreshold": 0,
+      "RerankEnabled": false,
+      "RerankTopK": 8,
+      "RerankThreshold": -10,
+      "ContextTokenLimit": 3000,
+      "AdjacentExpansion": 1,
+      "MaxAdjacentChunks": 2,
+      "RRFK": 60,
+      "ExpansionScoreFactor": 0.5
+    },
+    "perQuery": [
+      {
+        "id": "marker-0001",
+        "family": "marker",
+        "query": "audit marker qz-0001",
+        "latencyMs": {
+          "count": 5,
+          "p50": 38.0,
+          "p95": 43.3,
+          "mean": 38.8,
+          "min": 37.0,
+          "max": 43.3
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "marker-0007",
+        "family": "marker",
+        "query": "audit marker qz-0007",
+        "latencyMs": {
+          "count": 5,
+          "p50": 34.7,
+          "p95": 37.9,
+          "mean": 35.4,
+          "min": 33.6,
+          "max": 37.9
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "marker-0013",
+        "family": "marker",
+        "query": "audit marker qz-0013",
+        "latencyMs": {
+          "count": 5,
+          "p50": 30.0,
+          "p95": 40.8,
+          "mean": 30.9,
+          "min": 23.4,
+          "max": 40.8
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "marker-0019",
+        "family": "marker",
+        "query": "audit marker qz-0019",
+        "latencyMs": {
+          "count": 5,
+          "p50": 37.8,
+          "p95": 42.3,
+          "mean": 37.6,
+          "min": 31.7,
+          "max": 42.3
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "marker-0025",
+        "family": "marker",
+        "query": "audit marker qz-0025",
+        "latencyMs": {
+          "count": 5,
+          "p50": 35.2,
+          "p95": 41.4,
+          "mean": 35.0,
+          "min": 25.9,
+          "max": 41.4
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "marker-0031",
+        "family": "marker",
+        "query": "audit marker qz-0031",
+        "latencyMs": {
+          "count": 5,
+          "p50": 37.6,
+          "p95": 38.8,
+          "mean": 32.9,
+          "min": 22.9,
+          "max": 38.8
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "topical-0001",
+        "family": "topical",
+        "query": "quarterly review operating log Station 0001",
+        "latencyMs": {
+          "count": 5,
+          "p50": 36.8,
+          "p95": 51.5,
+          "mean": 39.2,
+          "min": 34.1,
+          "max": 51.5
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "topical-0007",
+        "family": "topical",
+        "query": "quarterly review operating log Station 0007",
+        "latencyMs": {
+          "count": 5,
+          "p50": 35.1,
+          "p95": 43.4,
+          "mean": 36.3,
+          "min": 28.7,
+          "max": 43.4
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "topical-0013",
+        "family": "topical",
+        "query": "quarterly review operating log Station 0013",
+        "latencyMs": {
+          "count": 5,
+          "p50": 36.2,
+          "p95": 42.6,
+          "mean": 35.9,
+          "min": 30.1,
+          "max": 42.6
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "topical-0019",
+        "family": "topical",
+        "query": "quarterly review operating log Station 0019",
+        "latencyMs": {
+          "count": 5,
+          "p50": 25.0,
+          "p95": 39.1,
+          "mean": 27.3,
+          "min": 20.5,
+          "max": 39.1
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "topical-0025",
+        "family": "topical",
+        "query": "quarterly review operating log Station 0025",
+        "latencyMs": {
+          "count": 5,
+          "p50": 36.9,
+          "p95": 44.1,
+          "mean": 38.1,
+          "min": 34.4,
+          "max": 44.1
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      },
+      {
+        "id": "topical-0031",
+        "family": "topical",
+        "query": "quarterly review operating log Station 0031",
+        "latencyMs": {
+          "count": 5,
+          "p50": 35.1,
+          "p95": 38.8,
+          "mean": 31.9,
+          "min": 20.0,
+          "max": 38.8
+        },
+        "meanItems": 8.0,
+        "emptyResults": 0,
+        "expectedDocumentHits": 5,
+        "expectedDocumentSamples": 5
+      }
+    ]
+  },
+  "graph": {
+    "enabled": true,
+    "projection": {
+      "status": "RELATION_READY",
+      "model": "local-extractive",
+      "promptVersion": "relation_extraction/35be37d92322",
+      "wallMs": 3426.8,
+      "snapshot": {
+        "id": "gs-0636c3229ad93ef99f5ce7e7cf765181c01ec9c88bf9eb82",
+        "status": "ACTIVE",
+        "entities": 200,
+        "relations": 160,
+        "aliases": 40,
+        "traceable": true
+      }
+    },
+    "queryGroups": [
+      {
+        "depth": 1,
+        "seeds": 8,
+        "samples": 40,
+        "latencyMs": {
+          "count": 40,
+          "p50": 33.3,
+          "p95": 49.2,
+          "mean": 34.8,
+          "min": 20.9,
+          "max": 67.0
+        },
+        "meanNodes": 3.0,
+        "minNodes": 3,
+        "truncatedCount": 0
+      },
+      {
+        "depth": 2,
+        "seeds": 8,
+        "samples": 40,
+        "latencyMs": {
+          "count": 40,
+          "p50": 33.2,
+          "p95": 42.1,
+          "mean": 32.2,
+          "min": 17.5,
+          "max": 46.8
+        },
+        "meanNodes": 4.0,
+        "minNodes": 4,
+        "truncatedCount": 0
+      },
+      {
+        "depth": 3,
+        "seeds": 8,
+        "samples": 40,
+        "latencyMs": {
+          "count": 40,
+          "p50": 34.3,
+          "p95": 40.8,
+          "mean": 34.0,
+          "min": 15.8,
+          "max": 48.0
+        },
+        "meanNodes": 5.0,
+        "minNodes": 5,
+        "truncatedCount": 0
+      }
+    ],
+    "knownSeeds": [
+      {
+        "seed": "Station 0001",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 1,
+        "nodes": 3
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 2,
+        "nodes": 4
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0001",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0006",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0011",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0016",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0021",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0026",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0031",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 3,
+        "nodes": 5
+      },
+      {
+        "seed": "Station 0036",
+        "depth": 3,
+        "nodes": 5
+      }
+    ],
+    "unknownSeeds": {
+      "samples": 15,
+      "latencyMs": {
+        "count": 15,
+        "p50": 23.5,
+        "p95": 35.9,
+        "mean": 22.6,
+        "min": 12.4,
+        "max": 35.9
+      },
+      "emptyCount": 15,
+      "snapshotPresentCount": 15
+    },
+    "limit": 40,
+    "maxDepth": 3
+  },
+  "storageProbes": {
+    "available": true,
+    "databaseSizeBytes": 46200499,
+    "tableBytes": {
+      "chunks": 12845056,
+      "document_versions": 303104,
+      "documents": 188416,
+      "graph_entities": 393216,
+      "graph_entity_aliases": 81920,
+      "graph_relation_sources": 344064,
+      "graph_relations": 491520,
+      "graph_snapshots": 131072,
+      "knowledge_bases": 81920
+    },
+    "knowledgeBaseCounts": {
+      "documents": 40,
+      "document_versions": 40,
+      "chunks": 800,
+      "graph_entities": 200,
+      "graph_relations": 160,
+      "graph_relation_sources": 160
+    },
+    "embeddingModels": [
+      "local-deterministic:1024"
+    ]
+  },
+  "gateEvidence": {
+    "candidates": [
+      {
+        "id": "search-index-backend",
+        "item": "OpenSearch/Milvus migration",
+        "needs": "capacity data: document volume, index write, query latency, operating cost",
+        "evidenceStatus": "capacity-collected",
+        "evidenceCollected": [
+          "documentVolume",
+          "ingestionThroughput",
+          "searchLatency"
+        ],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ],
+        "storageFootprintCollected": true
+      },
+      {
+        "id": "graph-database",
+        "item": "Neo4j/other graph database",
+        "needs": "capacity data: multi-hop query latency, query complexity, relation scale",
+        "evidenceStatus": "capacity-collected",
+        "evidenceCollected": [
+          "graphLatency",
+          "relationScale"
+        ],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ]
+      },
+      {
+        "id": "agent-orchestration",
+        "item": "LangGraph/Agent orchestration",
+        "needs": "confirmed need: dynamic branching, loops, tool calls, human approval or recoverable long tasks",
+        "evidenceStatus": "not-collected",
+        "evidenceCollected": [],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ],
+        "reason": "not measurable by an infrastructure capacity baseline"
+      },
+      {
+        "id": "openfga",
+        "item": "OpenFGA authorization engine",
+        "needs": "multi-tenant scale and access-relationship complexity",
+        "evidenceStatus": "not-collected",
+        "evidenceCollected": [],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ],
+        "reason": "not measurable by an infrastructure capacity baseline"
+      },
+      {
+        "id": "kubernetes",
+        "item": "Kubernetes/sharding/multi-region/HA",
+        "needs": "deployment scale and RTO/RPO requirements",
+        "evidenceStatus": "not-collected",
+        "evidenceCollected": [],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ],
+        "reason": "not measurable by an infrastructure capacity baseline"
+      },
+      {
+        "id": "channels",
+        "item": "MCP/IM/Widget and complex connectors",
+        "needs": "confirmed demand from a real channel",
+        "evidenceStatus": "not-collected",
+        "evidenceCollected": [],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ],
+        "reason": "not measurable by an infrastructure capacity baseline"
+      },
+      {
+        "id": "ocr",
+        "item": "Separate OCR milestone",
+        "needs": "product data confirming scanned documents",
+        "evidenceStatus": "not-collected",
+        "evidenceCollected": [],
+        "evidenceMissing": [],
+        "remainingArtifacts": [
+          "confirmedCapacityThresholdOrNeed",
+          "costAssessment",
+          "migrationRollbackPlan",
+          "acceptanceTests"
+        ],
+        "reason": "not measurable by an infrastructure capacity baseline"
+      }
+    ],
+    "startedCandidates": [],
+    "note": "The capacity baseline only supplies reproducible capacity data. No candidate starts here: MILESTONES additionally requires a confirmed product need or capacity threshold, a cost assessment, a migration/rollback plan and acceptance tests for each candidate."
+  },
+  "cleanup": {
+    "deleted": true,
+    "deleteMs": 42.0,
+    "verifiedAbsent": true,
+    "verifyStatus": 403,
+    "error": ""
+  },
+  "selfChecks": [
+    {
+      "id": "documents-ready",
+      "passed": true,
+      "detail": "40/40 documents reached EVIDENCE_READY"
+    },
+    {
+      "id": "chunk-count",
+      "passed": true,
+      "detail": "first document chunks=10 expected=10"
+    },
+    {
+      "id": "stage-timings",
+      "passed": true,
+      "detail": "stage timings captured for parse, normalize, chunk, embed, index"
+    },
+    {
+      "id": "search-non-empty",
+      "passed": true,
+      "detail": "0 empty result(s) across 60 search call(s)"
+    },
+    {
+      "id": "search-marker-document",
+      "passed": true,
+      "detail": "marker queries returned the source document 30 time(s)"
+    },
+    {
+      "id": "graph-known-seeds",
+      "passed": true,
+      "detail": "0 known-seed query(ies) returned zero nodes"
+    },
+    {
+      "id": "graph-unknown-seeds",
+      "passed": true,
+      "detail": "15/15 unknown seeds returned an empty graph with snapshot"
+    },
+    {
+      "id": "graph-relations",
+      "passed": true,
+      "detail": "snapshot relations=160"
+    },
+    {
+      "id": "cleanup",
+      "passed": true,
+      "detail": "GET after delete returned 403"
+    }
+  ],
+  "limitations": [
+    "Latency and throughput come from one sequential client against one freshly built index; HNSW construction and ingestion-time embedding variation can move results between rebuilds, so treat this report as one sample and repeat it under identical conditions before comparing runs.",
+    "All requests are sequential from a single dev user and paced at roughly 400/minute to stay below RATE_LIMIT_PER_MINUTE; no concurrent load, queue saturation, multi-tenant authorization fan-out or cache pressure is exercised.",
+    "Document readiness is observed through one list request per second, so ready and ingestion wall times carry up to one second of observation granularity.",
+    "Search timing starts only after a warmup sweep returned a non-empty result for every query; the settle time is reported as search.settleMs and excluded from the latency samples, because the BM25 index can briefly reference tuples under maintenance right after ingestion or deletion.",
+    "The local compose stack is the measurement target; absolute values do not transfer to production hardware. Compare runs only against each other on the same machine and configuration.",
+    "Generation and chat answers are out of scope: only search, graph query and ingestion are timed, so LLM answer latency and token cost are not part of this baseline.",
+    "Relation extraction ran with the deterministic local chat adapter, so projection time excludes provider latency and the graph holds the seeded triples; a remote extractor adds chat calls per evidence batch.",
+    "Database and table byte sizes cover the whole development database, while row counts are scoped to the throwaway knowledge base; other knowledge bases inflate the byte figures.",
+    "Default graph queries use limit 40 and depths 1-3; larger relation fans, deeper traversal or other seeds are not measured."
+  ]
+}

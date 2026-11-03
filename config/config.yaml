@@ -1,0 +1,47 @@
+# Retrieval parameter defaults (global tier).
+#
+# The override chain is: this file -> knowledge_bases.retrieval_config (database,
+# audited) -> session-level override in the query request. Values here ship with
+# the image; they are defaults, not hardcoded constants.
+#
+# Server-side range validation always applies regardless of tier:
+#   vector_threshold        0 .. 1
+#   keyword_threshold       >= 0 (BM25 scores are unbounded, not 0-1)
+#   rerank_threshold       -10 .. 10
+#   top_k / *_top_k         0 .. 200
+#   rrf_k                   1 .. 200
+#   expansion_score_factor  0 .. 1
+retrieval:
+  # Number of evidence chunks handed to the generation step.
+  top_k: 8
+  # Candidate depth for each recall channel before fusion.
+  embedding_top_k: 20
+  keyword_top_k: 20
+  # Minimum cosine similarity for a vector candidate (0-1).
+  vector_threshold: 0.2
+  # Minimum BM25 score for a keyword candidate.
+  keyword_threshold: 0
+  # Rerank is a configurable capability. `rerank_enabled` stays off by default
+  # until an offline evaluation over the M3 evaluation set justifies turning it
+  # on; the adapter itself is selected by RERANK_SOURCE (none | lexical |
+  # remote). `rerank_top_k` and `rerank_threshold` only apply while rerank is
+  # actually running: they bound how many reranked candidates survive and how
+  # low a rerank score may be (the offline lexical adapter scores the fraction
+  # of query terms it matched, remote models return their own relevance score).
+  rerank_enabled: false
+  rerank_top_k: 8
+  rerank_threshold: -10
+  # Upper bound on the assembled context, in approximate tokens.
+  context_token_limit: 3000
+  # Parent chunks are always pulled in for each selected chunk. `adjacent_expansion`
+  # is how many sibling neighbours are added per side, and `max_adjacent_chunks`
+  # caps how many neighbour chunks may be added in total (parents excluded).
+  adjacent_expansion: 1
+  max_adjacent_chunks: 2
+  # Reciprocal rank fusion constant. It damps the top ranks so neither channel
+  # dominates on score scale alone; with 60, a chunk ranked first by both
+  # channels fuses to 2/61 ~ 0.033, which is the band the API reports as `score`.
+  rrf_k: 60
+  # Expanded context (parents, neighbours) inherits a discounted anchor score so
+  # it never outranks the chunk that pulled it in.
+  expansion_score_factor: 0.5

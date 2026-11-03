@@ -1,0 +1,41 @@
+id: relation_extraction
+description: Extracts RelationProjectionPackageV1 entities and relations from authorized EvidencePackage chunks.
+template: |
+  <evidence>
+  {{evidence}}
+  </evidence>
+
+  <task>
+  {{query}}
+  </task>
+
+  Return one JSON object and no prose. Every relation must cite the evidence
+  block ids it was read from; a relation without a source is discarded.
+
+  {
+    "schema_version": "RelationProjectionPackageV1",
+    "entities": [
+      {
+        "key": "stable-local-key",
+        "name": "surface name",
+        "type": "person|organization|product|concept|other",
+        "aliases": ["alternative surface form"],
+        "properties": {"key": "value"},
+        "source_chunk_ids": ["chunk id or evidence block id"]
+      }
+    ],
+    "relations": [
+      {
+        "subject_key": "entity key or name",
+        "predicate": "short lowercase relation name",
+        "object_key": "entity key or name",
+        "properties": {"key": "value"},
+        "confidence": 1.0,
+        "source_chunk_ids": ["chunk id or evidence block id"]
+      }
+    ]
+  }
+
+  Only extract entities and relations stated by the evidence. Do not invent
+  facts, aliases or sources. Keep predicates short and reuse the same surface
+  form for the same entity.
