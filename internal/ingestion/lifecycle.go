@@ -219,6 +219,9 @@ func findPipelineByIdempotencyKey(db *gorm.DB, tenantID, key string) (models.Pip
 // activation flips them back instead of re-embedding content. A new version
 // would be a reparse, not a rollback.
 func (s *Service) ActivateVersion(ctx context.Context, principal authz.Principal, documentID, versionID string) (DocumentView, error) {
+	if err := requireSessionPrincipal(principal); err != nil {
+		return DocumentView{}, err
+	}
 	document, err := s.loadActiveDocument(ctx, principal, documentID, "write")
 	if err != nil {
 		return DocumentView{}, err
@@ -265,6 +268,9 @@ func (s *Service) ActivateVersion(ctx context.Context, principal authz.Principal
 	})
 	if err != nil {
 		return DocumentView{}, fmt.Errorf("activate document version: %w", err)
+	}
+	if err := s.recordDocumentAudit(ctx, principal, "rollback", document.ID); err != nil {
+		return DocumentView{}, err
 	}
 	return s.Get(ctx, principal, document.ID)
 }
@@ -386,6 +392,9 @@ func (s *Service) Restore(ctx context.Context, principal authz.Principal, docume
 // are already soft-deleted can be purged, so a stray id cannot destroy live
 // content.
 func (s *Service) Purge(ctx context.Context, principal authz.Principal, documentID string) error {
+	if err := requireSessionPrincipal(principal); err != nil {
+		return err
+	}
 	var document models.Document
 	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -399,7 +408,31 @@ func (s *Service) Purge(ctx context.Context, principal authz.Principal, document
 	if document.DeletedAt == nil {
 		return apperror.Invalidf("document must be deleted before it can be purged")
 	}
-	return s.purgeDocument(ctx, document.ID)
+	if err := s.purgeDocument(ctx, document.ID); err != nil {
+		return err
+	}
+	return s.recordDocumentAudit(ctx, principal, "purge", document.ID)
+}
+
+// requireSessionPrincipal keeps hard deletes and active-version changes
+// attributable to a person. API keys can ingest and read, but those two actions
+// change or destroy published content.
+func requireSessionPrincipal(principal authz.Principal) error {
+	if principal.CredentialType == "api_key" {
+		return apperror.ErrForbidden
+	}
+	return nil
+}
+
+func (s *Service) recordDocumentAudit(ctx context.Context, principal authz.Principal, action, documentID string) error {
+	if err := s.db.WithContext(ctx).Create(&models.AuditLog{
+		TenantID: principal.TenantID, ActorID: principal.SubjectID, Action: action,
+		ResourceType: "document", ResourceID: documentID, Allowed: true,
+		RequestID: principal.RequestID, IPAddress: principal.IPAddress, UserAgent: principal.UserAgent,
+	}).Error; err != nil {
+		return fmt.Errorf("record %s audit: %w", action, err)
+	}
+	return nil
 }
 
 // PurgeExpired is the retention job. It returns the number of documents purged

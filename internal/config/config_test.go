@@ -517,3 +517,41 @@ func TestLoadFromReadsRedisPasswordAndS3PathStyle(t *testing.T) {
 		t.Fatalf("path style must not be forced unless asked for")
 	}
 }
+
+func TestLoadFromReadsTrustedProxies(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{
+		"HTTP_TRUSTED_PROXIES": "10.0.0.0/8, 192.0.2.10",
+	}))
+	want := []string{"10.0.0.0/8", "192.0.2.10"}
+	if len(cfg.TrustedProxies) != len(want) {
+		t.Fatalf("HTTP_TRUSTED_PROXIES was not applied: %v", cfg.TrustedProxies)
+	}
+	for index := range want {
+		if cfg.TrustedProxies[index] != want[index] {
+			t.Fatalf("HTTP_TRUSTED_PROXIES[%d] = %q, want %q", index, cfg.TrustedProxies[index], want[index])
+		}
+	}
+
+	if unset := LoadFrom(lookupFrom(map[string]string{})); unset.TrustedProxies != nil {
+		t.Fatalf("no proxy may be trusted by default, got %v", unset.TrustedProxies)
+	}
+}
+
+func TestValidateRejectsMalformedTrustedProxies(t *testing.T) {
+	env := map[string]string{
+		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+	}
+	for _, proxy := range []string{"not-an-ip", "10.0.0.0/99", "0.0.0.0/0"} {
+		env["HTTP_TRUSTED_PROXIES"] = proxy
+		if err := LoadFrom(lookupFrom(env)).Validate("api"); err == nil {
+			t.Fatalf("expected HTTP_TRUSTED_PROXIES %q to be rejected", proxy)
+		}
+	}
+}

@@ -24,7 +24,13 @@ func NewRouterWithLogger(cfg config.Config, logger *slog.Logger) *gin.Engine {
 	}
 
 	r := gin.New()
-	r.Use(tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		// Validation rejects malformed entries at startup; a router built from a
+		// raw Config still fails closed instead of trusting every peer.
+		logger.Error("trusted_proxies_invalid", "error", err)
+		_ = r.SetTrustedProxies(nil)
+	}
+	r.Use(tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		logger.Error("http_panic", "path", c.Request.URL.Path, "panic", recovered)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_server_error"})
 	}))

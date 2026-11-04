@@ -181,7 +181,7 @@ func (s *Service) Publish(ctx context.Context, principal authz.Principal, pageID
 	if version.ReviewStatus != ReviewApproved {
 		return models.WikiPage{}, fmt.Errorf("%w: only approved versions can be published", apperror.ErrConflict)
 	}
-	return s.publishVersion(ctx, principal, page, version)
+	return s.publishVersion(ctx, principal, page, version, "wiki_publish")
 }
 
 func (s *Service) Rollback(ctx context.Context, principal authz.Principal, pageID string, input RollbackInput) (models.WikiPage, error) {
@@ -195,10 +195,10 @@ func (s *Service) Rollback(ctx context.Context, principal authz.Principal, pageI
 	if version.ReviewStatus != ReviewApproved {
 		return models.WikiPage{}, fmt.Errorf("%w: only approved versions can be restored", apperror.ErrConflict)
 	}
-	return s.publishVersion(ctx, principal, page, version)
+	return s.publishVersion(ctx, principal, page, version, "wiki_rollback")
 }
 
-func (s *Service) publishVersion(ctx context.Context, principal authz.Principal, page models.WikiPage, version models.WikiPageVersion) (models.WikiPage, error) {
+func (s *Service) publishVersion(ctx context.Context, principal authz.Principal, page models.WikiPage, version models.WikiPageVersion, auditAction string) (models.WikiPage, error) {
 	knowledgeBase, err := s.loadKnowledgeBase(ctx, page.TenantID, page.KnowledgeBaseID)
 	if err != nil {
 		return models.WikiPage{}, apperror.ErrNotFound
@@ -241,7 +241,7 @@ func (s *Service) publishVersion(ctx context.Context, principal authz.Principal,
 	page.PublishedVersionID = &version.ID
 	page.Status = PagePublished
 	page.ACLVersion = knowledgeBase.ACLVersion
-	s.recordAudit(ctx, principal, page.KnowledgeBaseID, page.ID, "wiki_publish")
+	s.recordAudit(ctx, principal, page.KnowledgeBaseID, page.ID, auditAction)
 	return page, nil
 }
 

@@ -76,7 +76,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 			redirectAuthError(c, cfg, providerError)
 			return
 		}
-		result, err := application.Identity.CompleteOIDC(c.Request.Context(), c.Query("code"), verifier, nonce, c.Request.UserAgent(), c.ClientIP())
+		result, err := application.Identity.CompleteOIDC(c.Request.Context(), c.Query("code"), verifier, nonce, c.Request.UserAgent(), clientIP(c))
 		if err != nil {
 			logger.Warn("oidc_callback_failed", "error", err)
 			redirectAuthError(c, cfg, "oidc_callback_failed")
@@ -104,7 +104,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		if strings.TrimSpace(input.TenantID) == "" {
 			input.TenantID = identity.DefaultDevTenantID
 		}
-		result, err := application.Identity.LoginDevelopment(c.Request.Context(), input.UserID, input.TenantID, c.Request.UserAgent(), c.ClientIP())
+		result, err := application.Identity.LoginDevelopment(c.Request.Context(), input.UserID, input.TenantID, c.Request.UserAgent(), clientIP(c))
 		if err != nil {
 			writeError(c, err)
 			return

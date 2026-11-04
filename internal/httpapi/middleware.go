@@ -76,7 +76,7 @@ func authenticationMiddleware(cfg config.Config, application *app.Application) g
 // principal so every audit row written below the HTTP layer carries them.
 func withRequestMetadata(c *gin.Context, principal authz.Principal, requestID string) authz.Principal {
 	principal.RequestID = requestID
-	principal.IPAddress = c.ClientIP()
+	principal.IPAddress = clientIP(c)
 	principal.UserAgent = c.Request.UserAgent()
 	return principal
 }

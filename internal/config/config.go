@@ -61,6 +61,10 @@ type Config struct {
 	Limits           LimitsConfig
 	Connector        ConnectorConfig
 	WebPublicURL     string
+	// TrustedProxies lists the IPs or CIDRs of reverse proxies whose forwarded
+	// client-IP headers may be trusted. Empty trusts no proxy: the audit IP is
+	// the TCP peer, so a caller cannot choose it with X-Forwarded-For.
+	TrustedProxies []string
 	// RetrievalConfigFile is the YAML file holding the global retrieval
 	// parameter defaults (the first tier of the override chain).
 	RetrievalConfigFile string
@@ -436,6 +440,28 @@ func (c ConnectorConfig) Validate(appEnv string) error {
 	return nil
 }
 
+// validateTrustedProxies accepts the same forms gin does: a bare IP or a CIDR.
+// Invalid entries fail startup rather than silently leaving forwarding headers
+// untrusted, which would attribute every request to the proxy.
+func validateTrustedProxies(entries []string) error {
+	for _, entry := range entries {
+		if strings.Contains(entry, "/") {
+			_, network, err := net.ParseCIDR(entry)
+			if err != nil {
+				return fmt.Errorf("HTTP_TRUSTED_PROXIES entry %q is not a valid CIDR", entry)
+			}
+			if ones, _ := network.Mask.Size(); ones == 0 {
+				return fmt.Errorf("HTTP_TRUSTED_PROXIES entry %q trusts every peer; list the proxy network instead", entry)
+			}
+			continue
+		}
+		if net.ParseIP(entry) == nil {
+			return fmt.Errorf("HTTP_TRUSTED_PROXIES entry %q is not a valid IP address", entry)
+		}
+	}
+	return nil
+}
+
 func (l LimitsConfig) Validate() error {
 	for name, value := range map[string]int{
 		"RATE_LIMIT_PER_MINUTE":        l.RateLimitPerMinute,
@@ -552,6 +578,7 @@ func LoadFrom(lookup Lookup) Config {
 		OTELServiceName:      value(lookup, "OTEL_SERVICE_NAME", "rag-platform"),
 		AppEnv:               appEnv,
 		WebPublicURL:         value(lookup, "WEB_PUBLIC_URL", "http://localhost:5173"),
+		TrustedProxies:       listValue(lookup, "HTTP_TRUSTED_PROXIES", nil),
 		Auth: AuthConfig{
 			SessionTTLSeconds: int(reader.positive("AUTH_SESSION_TTL_SECONDS", 43200)),
 			JWTIssuer:         value(lookup, "JWT_ISSUER", "rag-platform"),
@@ -744,6 +771,9 @@ func (c Config) Validate(component string) error {
 		}
 		if c.AppEnv == "production" && !c.ParserSandbox {
 			return fmt.Errorf("PARSER_SANDBOX_ENABLED must be true in production")
+		}
+		if err := validateTrustedProxies(c.TrustedProxies); err != nil {
+			return err
 		}
 		if err := c.Embedding.Validate(c.AppEnv); err != nil {
 			return err

@@ -164,6 +164,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键。
 - **API Key**：数据库只保存 `sha256(pepper + raw)`；明文只在创建响应返回一次。轮换 `API_KEY_PEPPER` 会让全部已签发 key 立即失效，需重新签发并通知调用方。
 - **OIDC**：`OIDC_ISSUER` 必须指向可发现（discovery）的 issuer；`OIDC_AUTO_PROVISION=false` 时只允许已存在的 membership 登录。登出会撤销 `auth_sessions` 行并清除 HttpOnly cookie；刷新沿用同一 `token_id`，不延长会话 TTL。
+- **反向代理与客户端 IP**：`HTTP_TRUSTED_PROXIES` 是逗号分隔的代理 IP/CIDR 列表，只有来自这些地址的 `X-Forwarded-For`/`X-Real-IP` 会被用于审计、限流和配额的客户端 IP。留空表示不信任任何代理，审计 IP 取 TCP 对端；`0.0.0.0/0` 与 `::/0` 会在启动校验被拒绝，避免把客户端 IP 重新交给调用方控制。部署在 Nginx/网关之后时，把实际的代理网段填入该变量，不要使用通配网段。
+- **CSRF**：会话 cookie 为 `HttpOnly` + `SameSite=Lax`；此外，携带会话 cookie 的写请求（POST/PUT/PATCH/DELETE）要求 `Origin`（缺失时回退 `Referer`）与请求 Host、`WEB_PUBLIC_URL` 或开发工作台源一致，否则返回 403。Bearer/API Key 请求不依赖 cookie，不受该检查影响。
 - **撤销**：删除知识库成员会同时提升 `knowledge_bases.acl_version` 与 `authorization_revisions`，后续检索按新 revision 重建 scope；不需要手工清 Redis。
 
 ## 10. 文档生命周期与保留
