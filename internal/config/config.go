@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -18,26 +19,31 @@ const DefaultParserVersion = "docreader-m2-v2"
 
 type Config struct {
 	APIAddr string
-	// MetricsAddr enables the dedicated Prometheus listener in the API process
-	// when non-empty. It serves only /metrics and is deliberately not tenant
-	// authenticated, so it must bind an internal or loopback address.
-	MetricsAddr        string
-	AppEnv             string
-	LogLevel           string
-	DatabaseURL        string
-	RedisAddr          string
-	RedisPassword      string
-	DocreaderAddr      string
-	S3Endpoint         string
-	S3Region           string
-	S3Bucket           string
-	S3AccessKey        string
-	S3SecretKey        string
-	S3UseTLS           bool
-	S3ForcePathStyle   bool
-	MaxFileBytes       int64
-	TaskTimeoutSeconds int
-	ParserSandbox      bool
+	// MetricsAddr enables the dedicated Prometheus listener in the api and worker
+	// processes when non-empty. It serves only /metrics and is deliberately not
+	// tenant authenticated, so it must bind an internal or loopback address.
+	MetricsAddr string
+	AppEnv      string
+	LogLevel    string
+	DatabaseURL string
+	// Pool limits bound one process's share of PostgreSQL connections. They are
+	// applied after opening the database, not through the DSN.
+	DatabaseMaxOpenConns           int
+	DatabaseMaxIdleConns           int
+	DatabaseConnMaxLifetimeSeconds int
+	RedisAddr                      string
+	RedisPassword                  string
+	DocreaderAddr                  string
+	S3Endpoint                     string
+	S3Region                       string
+	S3Bucket                       string
+	S3AccessKey                    string
+	S3SecretKey                    string
+	S3UseTLS                       bool
+	S3ForcePathStyle               bool
+	MaxFileBytes                   int64
+	TaskTimeoutSeconds             int
+	ParserSandbox                  bool
 	// ParserVersion identifies the bundled docreader parser. It is read-only
 	// configuration in the workbench and must match services/docreader.
 	ParserVersion    string
@@ -143,10 +149,13 @@ type ChatConfig struct {
 	MaxTokens  int
 }
 
-func (c ChatConfig) Validate() error {
+func (c ChatConfig) Validate(appEnv string) error {
 	switch c.Source {
 	case "local":
 		// Offline deterministic adapter, development and acceptance only.
+		if appEnv == "production" {
+			return fmt.Errorf("CHAT_SOURCE=local is a development adapter and must not run in production")
+		}
 	case "remote":
 		if strings.TrimSpace(c.BaseURL) == "" {
 			return fmt.Errorf("CHAT_BASE_URL is required when CHAT_SOURCE=remote")
@@ -242,10 +251,14 @@ type EmbeddingConfig struct {
 	TimeoutSec int
 }
 
-func (e EmbeddingConfig) Validate() error {
+func (e EmbeddingConfig) Validate(appEnv string) error {
 	switch e.Source {
 	case "local":
-		// Offline deterministic adapter, development and acceptance only.
+		// Offline deterministic adapter, development and acceptance only. A
+		// worker running it in production would write non-semantic vectors.
+		if appEnv == "production" {
+			return fmt.Errorf("EMBEDDING_SOURCE=local is a development adapter and must not run in production")
+		}
 	case "remote":
 		if strings.TrimSpace(e.BaseURL) == "" {
 			return fmt.Errorf("EMBEDDING_BASE_URL is required when EMBEDDING_SOURCE=remote")
@@ -440,7 +453,7 @@ type Lookup func(string) (string, bool)
 func Load() Config {
 	cfg := LoadFrom(os.LookupEnv)
 	if err := applyRetrievalDefaults(&cfg); err != nil {
-		cfg.ConfigError = err
+		cfg.ConfigError = errors.Join(cfg.ConfigError, err)
 	}
 	return cfg
 }
@@ -507,23 +520,24 @@ func LoadFrom(lookup Lookup) Config {
 			activeKeyID = firstKid
 		}
 	}
-	return Config{
+	reader := &envReader{lookup: lookup}
+	cfg := Config{
 		APIAddr:      value(lookup, "API_ADDR", ":8080"),
 		MetricsAddr:  value(lookup, "METRICS_ADDR", ""),
 		AppEnv:       appEnv,
 		WebPublicURL: value(lookup, "WEB_PUBLIC_URL", "http://localhost:5173"),
 		Auth: AuthConfig{
-			SessionTTLSeconds: int(int64Value(lookup, "AUTH_SESSION_TTL_SECONDS", 43200)),
+			SessionTTLSeconds: int(reader.positive("AUTH_SESSION_TTL_SECONDS", 43200)),
 			JWTIssuer:         value(lookup, "JWT_ISSUER", "rag-platform"),
 			JWTAudience:       value(lookup, "JWT_AUDIENCE", "rag-platform-api"),
 			SigningKeys:       signingKeys,
 			ActiveKeyID:       activeKeyID,
 			CookieName:        value(lookup, "AUTH_COOKIE_NAME", "rag_session"),
-			CookieSecure:      boolValue(lookup, "AUTH_COOKIE_SECURE", appEnv == "production"),
-			DevAuthEnabled:    boolValue(lookup, "DEV_AUTH_ENABLED", appEnv != "production"),
+			CookieSecure:      reader.boolean("AUTH_COOKIE_SECURE", appEnv == "production"),
+			DevAuthEnabled:    reader.boolean("DEV_AUTH_ENABLED", appEnv != "production"),
 			APIKeyPepper:      value(lookup, "API_KEY_PEPPER", "local-api-key-pepper-change-me"),
 			OIDC: OIDCConfig{
-				Enabled:       boolValue(lookup, "OIDC_ENABLED", false),
+				Enabled:       reader.boolean("OIDC_ENABLED", false),
 				Issuer:        strings.TrimSuffix(value(lookup, "OIDC_ISSUER", ""), "/"),
 				ClientID:      value(lookup, "OIDC_CLIENT_ID", ""),
 				ClientSecret:  value(lookup, "OIDC_CLIENT_SECRET", ""),
@@ -532,82 +546,90 @@ func LoadFrom(lookup Lookup) Config {
 				TenantClaim:   value(lookup, "OIDC_TENANT_CLAIM", "tenant_id"),
 				EmailClaim:    value(lookup, "OIDC_EMAIL_CLAIM", "email"),
 				NameClaim:     value(lookup, "OIDC_NAME_CLAIM", "name"),
-				AutoProvision: boolValue(lookup, "OIDC_AUTO_PROVISION", false),
+				AutoProvision: reader.boolean("OIDC_AUTO_PROVISION", false),
 				DefaultTenant: value(lookup, "OIDC_DEFAULT_TENANT", ""),
 			},
 		},
 		Limits: LimitsConfig{
-			RateLimitPerMinute:       int(int64Value(lookup, "RATE_LIMIT_PER_MINUTE", 600)),
-			TenantMaxDocuments:       int(nonNegativeValue(lookup, "TENANT_MAX_DOCUMENTS", 0)),
-			TenantMaxStorageBytes:    nonNegativeValue(lookup, "TENANT_MAX_STORAGE_MB", 0) * 1024 * 1024,
-			TenantChatRequestsPerDay: int(nonNegativeValue(lookup, "TENANT_CHAT_REQUESTS_PER_DAY", 0)),
-			DocumentRetentionDays:    int(int64Value(lookup, "DOCUMENT_RETENTION_DAYS", 30)),
-			AuditRetentionDays:       int(nonNegativeValue(lookup, "AUDIT_RETENTION_DAYS", 180)),
-			StreamEventRetentionDays: int(nonNegativeValue(lookup, "STREAM_EVENT_RETENTION_DAYS", 7)),
-			OutboxMaxAttempts:        int(int64Value(lookup, "OUTBOX_MAX_ATTEMPTS", 10)),
-			OutboxBatchSize:          int(int64Value(lookup, "OUTBOX_BATCH_SIZE", 64)),
-			ReconcileIntervalSeconds: int(int64Value(lookup, "RECONCILE_INTERVAL_SECONDS", 60)),
-			WorkerConcurrency:        int(int64Value(lookup, "WORKER_CONCURRENCY", 4)),
-			ShutdownTimeoutSeconds:   int(int64Value(lookup, "SHUTDOWN_TIMEOUT_SECONDS", 10)),
+			// Zero disables the in-process limiter, so this is non-negative
+			// rather than positive.
+			RateLimitPerMinute:       int(reader.nonNegative("RATE_LIMIT_PER_MINUTE", 600)),
+			TenantMaxDocuments:       int(reader.nonNegative("TENANT_MAX_DOCUMENTS", 0)),
+			TenantMaxStorageBytes:    reader.nonNegative("TENANT_MAX_STORAGE_MB", 0) * 1024 * 1024,
+			TenantChatRequestsPerDay: int(reader.nonNegative("TENANT_CHAT_REQUESTS_PER_DAY", 0)),
+			DocumentRetentionDays:    int(reader.positive("DOCUMENT_RETENTION_DAYS", 30)),
+			AuditRetentionDays:       int(reader.nonNegative("AUDIT_RETENTION_DAYS", 180)),
+			StreamEventRetentionDays: int(reader.nonNegative("STREAM_EVENT_RETENTION_DAYS", 7)),
+			OutboxMaxAttempts:        int(reader.positive("OUTBOX_MAX_ATTEMPTS", 10)),
+			OutboxBatchSize:          int(reader.positive("OUTBOX_BATCH_SIZE", 64)),
+			ReconcileIntervalSeconds: int(reader.positive("RECONCILE_INTERVAL_SECONDS", 60)),
+			WorkerConcurrency:        int(reader.positive("WORKER_CONCURRENCY", 4)),
+			ShutdownTimeoutSeconds:   int(reader.positive("SHUTDOWN_TIMEOUT_SECONDS", 10)),
 		},
 		Connector: ConnectorConfig{
 			EncryptionKey:        value(lookup, "CONNECTOR_ENCRYPTION_KEY", ""),
-			AllowPrivateNetworks: boolValue(lookup, "CONNECTOR_ALLOW_PRIVATE_NETWORKS", false),
-			RequestTimeoutSec:    int(int64Value(lookup, "CONNECTOR_REQUEST_TIMEOUT_SECONDS", 30)),
-			MaxManifestBytes:     int64Value(lookup, "CONNECTOR_MAX_MANIFEST_BYTES", 2*1024*1024),
-			DefaultRatePerSecond: floatValue(lookup, "CONNECTOR_REQUESTS_PER_SECOND", 2),
+			AllowPrivateNetworks: reader.boolean("CONNECTOR_ALLOW_PRIVATE_NETWORKS", false),
+			RequestTimeoutSec:    int(reader.positive("CONNECTOR_REQUEST_TIMEOUT_SECONDS", 30)),
+			MaxManifestBytes:     reader.positive("CONNECTOR_MAX_MANIFEST_BYTES", 2*1024*1024),
+			DefaultRatePerSecond: reader.rate("CONNECTOR_REQUESTS_PER_SECOND", 2),
 		},
-		LogLevel:            value(lookup, "APP_LOG_LEVEL", "info"),
-		DatabaseURL:         value(lookup, "DATABASE_URL", ""),
-		RedisAddr:           value(lookup, "REDIS_ADDR", "redis:6379"),
-		RedisPassword:       value(lookup, "REDIS_PASSWORD", ""),
-		DocreaderAddr:       value(lookup, "DOCREADER_GRPC_ADDR", "docreader:50051"),
-		S3Endpoint:          value(lookup, "S3_ENDPOINT", "minio:9000"),
-		S3Region:            value(lookup, "S3_REGION", "us-east-1"),
-		S3Bucket:            value(lookup, "S3_BUCKET", "rag-platform-local"),
-		S3AccessKey:         value(lookup, "S3_ACCESS_KEY", value(lookup, "MINIO_ROOT_USER", "rag-local")),
-		S3SecretKey:         value(lookup, "S3_SECRET_KEY", value(lookup, "MINIO_ROOT_PASSWORD", "change-me-local-only")),
-		S3UseTLS:            strings.EqualFold(value(lookup, "S3_USE_TLS", "false"), "true"),
-		S3ForcePathStyle:    strings.EqualFold(value(lookup, "S3_FORCE_PATH_STYLE", "false"), "true"),
-		MaxFileBytes:        int64Value(lookup, "DOCREADER_MAX_FILE_MB", 100) * 1024 * 1024,
-		TaskTimeoutSeconds:  int(int64Value(lookup, "DOCREADER_TASK_TIMEOUT_SECONDS", 120)),
-		ParserSandbox:       strings.EqualFold(value(lookup, "PARSER_SANDBOX_ENABLED", "true"), "true"),
-		ParserVersion:       value(lookup, "PARSER_VERSION", DefaultParserVersion),
-		SupportedFormats:    formats.Names(),
-		RetrievalConfigFile: value(lookup, "RETRIEVAL_CONFIG_FILE", "config/config.yaml"),
-		PromptTemplateDir:   value(lookup, "PROMPT_TEMPLATE_DIR", "config/prompt_templates"),
-		Retrieval:           defaultRetrievalConfig(),
+		LogLevel:    value(lookup, "APP_LOG_LEVEL", "info"),
+		DatabaseURL: value(lookup, "DATABASE_URL", ""),
+		// Pool limits keep one replica from exhausting PostgreSQL connections.
+		DatabaseMaxOpenConns:           int(reader.positive("DATABASE_MAX_OPEN_CONNS", 20)),
+		DatabaseMaxIdleConns:           int(reader.nonNegative("DATABASE_MAX_IDLE_CONNS", 10)),
+		DatabaseConnMaxLifetimeSeconds: int(reader.positive("DATABASE_CONN_MAX_LIFETIME_SECONDS", 1800)),
+		RedisAddr:                      value(lookup, "REDIS_ADDR", "redis:6379"),
+		RedisPassword:                  value(lookup, "REDIS_PASSWORD", ""),
+		DocreaderAddr:                  value(lookup, "DOCREADER_GRPC_ADDR", "docreader:50051"),
+		S3Endpoint:                     value(lookup, "S3_ENDPOINT", "minio:9000"),
+		S3Region:                       value(lookup, "S3_REGION", "us-east-1"),
+		S3Bucket:                       value(lookup, "S3_BUCKET", "rag-platform-local"),
+		S3AccessKey:                    value(lookup, "S3_ACCESS_KEY", value(lookup, "MINIO_ROOT_USER", "rag-local")),
+		S3SecretKey:                    value(lookup, "S3_SECRET_KEY", value(lookup, "MINIO_ROOT_PASSWORD", "change-me-local-only")),
+		S3UseTLS:                       reader.boolean("S3_USE_TLS", false),
+		S3ForcePathStyle:               reader.boolean("S3_FORCE_PATH_STYLE", false),
+		MaxFileBytes:                   reader.positive("DOCREADER_MAX_FILE_MB", 100) * 1024 * 1024,
+		TaskTimeoutSeconds:             int(reader.positive("DOCREADER_TASK_TIMEOUT_SECONDS", 120)),
+		ParserSandbox:                  reader.boolean("PARSER_SANDBOX_ENABLED", true),
+		ParserVersion:                  value(lookup, "PARSER_VERSION", DefaultParserVersion),
+		SupportedFormats:               formats.Names(),
+		RetrievalConfigFile:            value(lookup, "RETRIEVAL_CONFIG_FILE", "config/config.yaml"),
+		PromptTemplateDir:              value(lookup, "PROMPT_TEMPLATE_DIR", "config/prompt_templates"),
+		Retrieval:                      defaultRetrievalConfig(),
 		Chat: ChatConfig{
 			Source:     strings.ToLower(value(lookup, "CHAT_SOURCE", "local")),
 			BaseURL:    value(lookup, "CHAT_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
 			APIKey:     value(lookup, "CHAT_API_KEY", value(lookup, "LLM_API_KEY", "")),
 			Model:      value(lookup, "LLM_CHAT_MODEL", "local-extractive"),
-			TimeoutSec: int(int64Value(lookup, "CHAT_TIMEOUT_SECONDS", int64Value(lookup, "LLM_REQUEST_TIMEOUT_SECONDS", 60))),
-			MaxTokens:  int(int64Value(lookup, "CHAT_MAX_TOKENS", 1024)),
+			TimeoutSec: int(reader.positive("CHAT_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
+			MaxTokens:  int(reader.positive("CHAT_MAX_TOKENS", 1024)),
 		},
 		Rerank: RerankConfig{
 			Source:     strings.ToLower(value(lookup, "RERANK_SOURCE", "none")),
 			BaseURL:    value(lookup, "RERANK_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
 			APIKey:     value(lookup, "RERANK_API_KEY", value(lookup, "LLM_API_KEY", "")),
 			Model:      value(lookup, "LLM_RERANK_MODEL", ""),
-			TimeoutSec: int(int64Value(lookup, "RERANK_TIMEOUT_SECONDS", int64Value(lookup, "LLM_REQUEST_TIMEOUT_SECONDS", 60))),
+			TimeoutSec: int(reader.positive("RERANK_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
 		},
 		Embedding: EmbeddingConfig{
 			Source:     strings.ToLower(value(lookup, "EMBEDDING_SOURCE", "local")),
 			BaseURL:    value(lookup, "EMBEDDING_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
 			APIKey:     value(lookup, "EMBEDDING_API_KEY", value(lookup, "LLM_API_KEY", "")),
 			Model:      value(lookup, "LLM_EMBEDDING_MODEL", "local-deterministic"),
-			Dimension:  int(int64Value(lookup, "EMBEDDING_DIMENSION", 3)),
-			BatchSize:  int(int64Value(lookup, "EMBEDDING_BATCH_SIZE", 32)),
-			TimeoutSec: int(int64Value(lookup, "EMBEDDING_TIMEOUT_SECONDS", 60)),
+			Dimension:  int(reader.positive("EMBEDDING_DIMENSION", 3)),
+			BatchSize:  int(reader.positive("EMBEDDING_BATCH_SIZE", 32)),
+			TimeoutSec: int(reader.positive("EMBEDDING_TIMEOUT_SECONDS", 60)),
 		},
 		Chunk: ChunkConfig{
-			Size:    int(nonNegativeValue(lookup, "CHUNK_SIZE", 900)),
-			Overlap: int(nonNegativeValue(lookup, "CHUNK_OVERLAP", 120)),
+			Size:    int(reader.nonNegative("CHUNK_SIZE", 900)),
+			Overlap: int(reader.nonNegative("CHUNK_OVERLAP", 120)),
 			Markers: listValue(lookup, "CHUNK_SPLIT_MARKERS", []string{"\n\n", "\n", "。", ".", "！", "!", "？", "?"}),
-			MinSize: int(nonNegativeValue(lookup, "CHUNK_MIN_SIZE", 0)),
+			MinSize: int(reader.nonNegative("CHUNK_MIN_SIZE", 0)),
 		},
 	}
+	cfg.ConfigError = reader.err
+	return cfg
 }
 
 func (c Config) Validate(component string) error {
@@ -648,11 +670,20 @@ func (c Config) Validate(component string) error {
 	if c.ConfigError != nil {
 		return c.ConfigError
 	}
-	if component == "api" {
-		parsed, err := url.Parse(c.DatabaseURL)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return fmt.Errorf("DATABASE_URL must be a valid database URL")
-		}
+	// Pool limits apply to every process that opens the database, so validate
+	// them before the component split.
+	if c.DatabaseMaxOpenConns <= 0 {
+		return fmt.Errorf("DATABASE_MAX_OPEN_CONNS must be positive")
+	}
+	if c.DatabaseMaxIdleConns < 0 || c.DatabaseMaxIdleConns > c.DatabaseMaxOpenConns {
+		return fmt.Errorf("DATABASE_MAX_IDLE_CONNS must be between 0 and DATABASE_MAX_OPEN_CONNS")
+	}
+	if c.DatabaseConnMaxLifetimeSeconds <= 0 {
+		return fmt.Errorf("DATABASE_CONN_MAX_LIFETIME_SECONDS must be positive")
+	}
+	// Both the api and the worker can expose process metrics on a dedicated
+	// listener; the port must be a real host:port in either process.
+	if component == "api" || component == "worker" {
 		if metricsAddr := strings.TrimSpace(c.MetricsAddr); metricsAddr != "" {
 			_, port, err := net.SplitHostPort(metricsAddr)
 			if err != nil {
@@ -662,27 +693,30 @@ func (c Config) Validate(component string) error {
 			if err != nil || portNumber < 1 || portNumber > 65535 {
 				return fmt.Errorf("METRICS_ADDR port must be a number between 1 and 65535")
 			}
-			if metricsAddr == strings.TrimSpace(c.APIAddr) {
+			if component == "api" && metricsAddr == strings.TrimSpace(c.APIAddr) {
 				return fmt.Errorf("METRICS_ADDR must differ from API_ADDR")
 			}
+		}
+	}
+	if component == "api" {
+		parsed, err := url.Parse(c.DatabaseURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("DATABASE_URL must be a valid database URL")
 		}
 		if c.AppEnv == "production" && !c.ParserSandbox {
 			return fmt.Errorf("PARSER_SANDBOX_ENABLED must be true in production")
 		}
-		if c.AppEnv == "production" && c.Embedding.Source == "local" {
-			return fmt.Errorf("EMBEDDING_SOURCE=local is a development adapter and must not run in production")
+		if err := c.Embedding.Validate(c.AppEnv); err != nil {
+			return err
 		}
 		if err := c.Retrieval.Validate(); err != nil {
 			return err
 		}
-		if err := c.Chat.Validate(); err != nil {
+		if err := c.Chat.Validate(c.AppEnv); err != nil {
 			return err
 		}
 		if err := c.Rerank.Validate(); err != nil {
 			return err
-		}
-		if c.AppEnv == "production" && c.Chat.Source == "local" {
-			return fmt.Errorf("CHAT_SOURCE=local is a development adapter and must not run in production")
 		}
 		if strings.TrimSpace(c.PromptTemplateDir) == "" {
 			return fmt.Errorf("PROMPT_TEMPLATE_DIR is required")
@@ -698,7 +732,10 @@ func (c Config) Validate(component string) error {
 		}
 	}
 	if component == "worker" {
-		if err := c.Embedding.Validate(); err != nil {
+		if err := c.Embedding.Validate(c.AppEnv); err != nil {
+			return err
+		}
+		if err := c.Chat.Validate(c.AppEnv); err != nil {
 			return err
 		}
 		if err := c.Chunk.Validate(); err != nil {
@@ -712,7 +749,7 @@ func (c Config) Validate(component string) error {
 		}
 	}
 	if component == "embedctl" {
-		if err := c.Embedding.Validate(); err != nil {
+		if err := c.Embedding.Validate(c.AppEnv); err != nil {
 			return err
 		}
 	}
@@ -726,17 +763,39 @@ func value(lookup Lookup, key, fallback string) string {
 	return fallback
 }
 
-func boolValue(lookup Lookup, key string, fallback bool) bool {
-	current, ok := lookup(key)
-	if !ok || strings.TrimSpace(current) == "" {
+// envReader parses typed settings and records every malformed value. Falling
+// back silently would make a typo indistinguishable from an unset variable:
+// the operator would see the default in effect while believing the configured
+// value was applied.
+type envReader struct {
+	lookup Lookup
+	err    error
+}
+
+func (r *envReader) failf(format string, args ...any) {
+	r.err = errors.Join(r.err, fmt.Errorf(format, args...))
+}
+
+func (r *envReader) raw(key string) string {
+	current, ok := r.lookup(key)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(current)
+}
+
+func (r *envReader) boolean(key string, fallback bool) bool {
+	current := r.raw(key)
+	if current == "" {
 		return fallback
 	}
-	switch strings.ToLower(strings.TrimSpace(current)) {
+	switch strings.ToLower(current) {
 	case "true", "1", "yes", "on":
 		return true
 	case "false", "0", "no", "off":
 		return false
 	default:
+		r.failf("%s must be a boolean (true/false), got %q", key, current)
 		return fallback
 	}
 }
@@ -761,13 +820,15 @@ func splitValue(lookup Lookup, key string, fallback []string) []string {
 	return result
 }
 
-func int64Value(lookup Lookup, key string, fallback int64) int64 {
-	current := value(lookup, key, "")
+// positive reads an integer that must be strictly greater than zero.
+func (r *envReader) positive(key string, fallback int64) int64 {
+	current := r.raw(key)
 	if current == "" {
 		return fallback
 	}
-	var parsed int64
-	if _, err := fmt.Sscan(current, &parsed); err != nil || parsed <= 0 {
+	parsed, err := strconv.ParseInt(current, 10, 64)
+	if err != nil || parsed <= 0 {
+		r.failf("%s must be a positive integer, got %q", key, current)
 		return fallback
 	}
 	return parsed
@@ -795,28 +856,30 @@ func listValue(lookup Lookup, key string, fallback []string) []string {
 	return result
 }
 
-func floatValue(lookup Lookup, key string, fallback float64) float64 {
-	current := value(lookup, key, "")
+func (r *envReader) rate(key string, fallback float64) float64 {
+	current := r.raw(key)
 	if current == "" {
 		return fallback
 	}
-	var parsed float64
-	if _, err := fmt.Sscan(current, &parsed); err != nil || parsed <= 0 {
+	parsed, err := strconv.ParseFloat(current, 64)
+	if err != nil || parsed <= 0 {
+		r.failf("%s must be a positive number, got %q", key, current)
 		return fallback
 	}
 	return parsed
 }
 
-// nonNegativeValue reads an integer that is allowed to be zero, unlike
-// int64Value which treats zero as "unset". Overlap and minimum size are
-// meaningful at zero, so they need their own parser.
-func nonNegativeValue(lookup Lookup, key string, fallback int64) int64 {
-	current := value(lookup, key, "")
+// nonNegative reads an integer that is allowed to be zero. Overlap, minimum
+// size and retention windows are meaningful at zero, so they need their own
+// parser.
+func (r *envReader) nonNegative(key string, fallback int64) int64 {
+	current := r.raw(key)
 	if current == "" {
 		return fallback
 	}
-	var parsed int64
-	if _, err := fmt.Sscan(current, &parsed); err != nil || parsed < 0 {
+	parsed, err := strconv.ParseInt(current, 10, 64)
+	if err != nil || parsed < 0 {
+		r.failf("%s must be a non-negative integer, got %q", key, current)
 		return fallback
 	}
 	return parsed

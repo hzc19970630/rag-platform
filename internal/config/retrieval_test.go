@@ -138,16 +138,19 @@ func TestShippedRetrievalConfigIsValid(t *testing.T) {
 }
 
 func TestChatConfigValidation(t *testing.T) {
-	if err := (ChatConfig{Source: "local"}).Validate(); err != nil {
-		t.Fatalf("local adapter must validate: %v", err)
+	if err := (ChatConfig{Source: "local"}).Validate("development"); err != nil {
+		t.Fatalf("local adapter must validate in development: %v", err)
 	}
-	if err := (ChatConfig{Source: "remote"}).Validate(); err == nil {
+	if err := (ChatConfig{Source: "local"}).Validate("production"); err == nil {
+		t.Fatalf("local adapter must be rejected in production")
+	}
+	if err := (ChatConfig{Source: "remote"}).Validate("development"); err == nil {
 		t.Fatalf("remote adapter must require an endpoint and model")
 	}
-	if err := (ChatConfig{Source: "remote", BaseURL: "https://api.example.com/v1", Model: "gpt"}).Validate(); err != nil {
+	if err := (ChatConfig{Source: "remote", BaseURL: "https://api.example.com/v1", Model: "gpt"}).Validate("development"); err != nil {
 		t.Fatalf("valid remote config must pass: %v", err)
 	}
-	if err := (ChatConfig{Source: "other"}).Validate(); err == nil {
+	if err := (ChatConfig{Source: "other"}).Validate("development"); err == nil {
 		t.Fatalf("unknown source must be rejected")
 	}
 }

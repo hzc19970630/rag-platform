@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/example/rag-platform/internal/app"
 	"github.com/example/rag-platform/internal/config"
@@ -41,7 +42,11 @@ func main() {
 		logger.Error("configuration_invalid", "component", "embedctl", "error", err)
 		os.Exit(1)
 	}
-	db, err := persistence.Open(cfg.DatabaseURL)
+	db, err := persistence.Open(cfg.DatabaseURL, persistence.PoolOptions{
+		MaxOpenConns:    cfg.DatabaseMaxOpenConns,
+		MaxIdleConns:    cfg.DatabaseMaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.DatabaseConnMaxLifetimeSeconds) * time.Second,
+	})
 	if err != nil {
 		logger.Error("embedctl_database_open_failed", "error", err)
 		os.Exit(1)

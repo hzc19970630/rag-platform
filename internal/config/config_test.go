@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func lookupFrom(env map[string]string) Lookup {
 	return func(key string) (string, bool) {
@@ -371,6 +374,124 @@ func TestChunkConfigRejectsInvalidRanges(t *testing.T) {
 		if err := cfg.Chunk.Validate(); err == nil {
 			t.Fatalf("expected validation error for %v", env)
 		}
+	}
+}
+
+func TestWorkerRejectsLocalAdaptersInProduction(t *testing.T) {
+	base := map[string]string{
+		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"APP_ENV":                  "production",
+		"EMBEDDING_SOURCE":         "remote",
+		"LLM_EMBEDDING_MODEL":      "bge-m3",
+		"EMBEDDING_BASE_URL":       "https://api.example.com/v1",
+		"CHAT_SOURCE":              "remote",
+		"CHAT_BASE_URL":            "https://api.example.com/v1",
+		"LLM_CHAT_MODEL":           "gpt-4o-mini",
+	}
+	if err := LoadFrom(lookupFrom(base)).Validate("worker"); err != nil {
+		t.Fatalf("valid production worker config must pass: %v", err)
+	}
+	for _, key := range []string{"EMBEDDING_SOURCE", "CHAT_SOURCE"} {
+		env := make(map[string]string, len(base))
+		for name, value := range base {
+			env[name] = value
+		}
+		env[key] = "local"
+		if err := LoadFrom(lookupFrom(env)).Validate("worker"); err == nil {
+			t.Fatalf("production worker must reject %s=local", key)
+		}
+	}
+}
+
+func TestInvalidTypedSettingsSurfaceAsConfigError(t *testing.T) {
+	cases := map[string]string{
+		"OUTBOX_BATCH_SIZE":             "abc",
+		"AUDIT_RETENTION_DAYS":          "-1",
+		"OIDC_ENABLED":                  "ture",
+		"CONNECTOR_REQUESTS_PER_SECOND": "fast",
+		"DATABASE_MAX_OPEN_CONNS":       "0",
+	}
+	for key, raw := range cases {
+		cfg := LoadFrom(lookupFrom(map[string]string{key: raw}))
+		if cfg.ConfigError == nil {
+			t.Fatalf("%s=%q must be reported instead of silently using the default", key, raw)
+		}
+		if !strings.Contains(cfg.ConfigError.Error(), key) {
+			t.Fatalf("error %q must name %s", cfg.ConfigError, key)
+		}
+	}
+
+	// Explicit zero stays meaningful for settings where zero is documented.
+	zero := LoadFrom(lookupFrom(map[string]string{
+		"AUDIT_RETENTION_DAYS":        "0",
+		"STREAM_EVENT_RETENTION_DAYS": "0",
+		"CHUNK_OVERLAP":               "0",
+		"RATE_LIMIT_PER_MINUTE":       "0",
+	}))
+	if zero.ConfigError != nil {
+		t.Fatalf("documented zero values must be accepted: %v", zero.ConfigError)
+	}
+	if zero.Limits.AuditRetentionDays != 0 || zero.Limits.StreamEventRetentionDays != 0 ||
+		zero.Limits.RateLimitPerMinute != 0 || zero.Chunk.Overlap != 0 {
+		t.Fatalf("zero values were not preserved: %+v", zero)
+	}
+}
+
+func TestDatabasePoolDefaultsAndValidation(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{}))
+	if cfg.DatabaseMaxOpenConns != 20 || cfg.DatabaseMaxIdleConns != 10 || cfg.DatabaseConnMaxLifetimeSeconds != 1800 {
+		t.Fatalf("unexpected pool defaults: %d/%d/%d",
+			cfg.DatabaseMaxOpenConns, cfg.DatabaseMaxIdleConns, cfg.DatabaseConnMaxLifetimeSeconds)
+	}
+
+	base := map[string]string{"DATABASE_URL": "postgres://user:pass@localhost:5432/rag"}
+	withPool := func(open, idle string) Config {
+		env := map[string]string{
+			"DATABASE_URL":            base["DATABASE_URL"],
+			"DATABASE_MAX_OPEN_CONNS": open,
+			"DATABASE_MAX_IDLE_CONNS": idle,
+		}
+		return LoadFrom(lookupFrom(env))
+	}
+	if err := withPool("5", "5").Validate("migrate"); err != nil {
+		t.Fatalf("valid pool config rejected: %v", err)
+	}
+	if err := withPool("5", "6").Validate("migrate"); err == nil {
+		t.Fatalf("idle connections must not exceed open connections")
+	}
+}
+
+func TestValidateMetricsAddrForWorker(t *testing.T) {
+	base := map[string]string{
+		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+	}
+	withMetrics := func(address string) Config {
+		env := make(map[string]string, len(base)+1)
+		for key, value := range base {
+			env[key] = value
+		}
+		env["METRICS_ADDR"] = address
+		return LoadFrom(lookupFrom(env))
+	}
+	if err := withMetrics("0.0.0.0:9091").Validate("worker"); err != nil {
+		t.Fatalf("worker must accept a valid METRICS_ADDR: %v", err)
+	}
+	if err := withMetrics("9091").Validate("worker"); err == nil {
+		t.Fatalf("worker must reject a METRICS_ADDR without a host:port")
 	}
 }
 

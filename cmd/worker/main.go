@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -36,6 +38,31 @@ func main() {
 		os.Exit(1)
 	}
 	defer application.Close()
+	// The worker records ingestion, projection and connector metrics in this
+	// process. Without a listener those counters never reach Prometheus, so the
+	// same opt-in endpoint as the API is served here as well.
+	var metricsServer *http.Server
+	if metricsAddr := strings.TrimSpace(cfg.MetricsAddr); metricsAddr != "" {
+		metricsServer = &http.Server{
+			Addr:              metricsAddr,
+			Handler:           observability.Handler(),
+			ReadHeaderTimeout: 5 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+		go func() {
+			logger.Info("metrics_listening", "component", "worker", slog.String("address", metricsAddr))
+			if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				// Monitoring is auxiliary: a busy metrics port must not stop
+				// ingestion or projection work.
+				logger.Error("metrics_listener_stopped", "component", "worker", "error", err)
+			}
+		}()
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Limits.ShutdownTimeoutSeconds)*time.Second)
+			defer cancel()
+			_ = metricsServer.Shutdown(shutdownCtx)
+		}()
+	}
 	embedder, err := app.NewEmbedder(cfg)
 	if err != nil {
 		logger.Error("embedding_adapter_invalid", "component", "worker", "error", err)

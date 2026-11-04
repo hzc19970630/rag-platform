@@ -137,11 +137,11 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | `operations.outboxBacklog` | `published_at IS NULL AND attempts < OUTBOX_MAX_ATTEMPTS` | 持续 > 0 且不下降 |
 
 - `operations` 来自数据库，跨进程重启保留；`counters`/`timings`/`queues` 是进程级或实时 Redis 状态，API 重启后归零。
-- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（如 `0.0.0.0:9091`；留空则关闭）后，API 进程在该地址只暴露 `GET /metrics`，返回 `text/plain; version=0.0.4`，把进程内 counters 与 timings 转成 `_count`/`_sum`/`_max`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口，跨容器抓取用 `api:9091`，本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API。
+- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（如 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`，把进程内 counters 与 timings 转成 `_count`/`_sum`/`_max`。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target `api:9091` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
 - `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
-- 独立监听器只包含进程内指标，不包含数据库窗口内的 `operations`，抓取端仍需分别告警；Worker 进程的计数器不会出现在该端口。
+- 独立监听器只包含本进程的指标，不包含数据库窗口内的 `operations`；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
-- 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，Worker 的入库 Embedding 计数器不通过 `/ops/metrics` 暴露，入库失败请看 `operations.stages.embed.failed`。
+- 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 `/metrics` 暴露；`/ops/metrics` 是 API 路由，看不到 worker 进程计数，入库失败仍可看 `operations.stages.embed.failed`。
 
 ## 8. 模型网关故障演练
 
@@ -171,3 +171,9 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - 恢复（`POST /documents/:id/restore`）清空删除标记并按最新版本是否完整恢复为 `EVIDENCE_READY` 或 `STORED`；超过保留窗口返回冲突。
 - 硬清理（`POST /documents/:id/purge`）只允许针对已软删除文档，立即删除全部派生数据与 S3 对象，不可恢复。
 - 版本回滚（`POST /documents/:id/versions/:versionID/activate`）会复用被替换版本的 STALE 证据包与 Chunk，不重新 Embedding；前一版本标记 `CANCELLED`。
+
+## 11. 数据库连接池
+
+- API、worker、embedctl 共用同一组连接池参数：`DATABASE_MAX_OPEN_CONNS`（默认 20）、`DATABASE_MAX_IDLE_CONNS`（默认 10）、`DATABASE_CONN_MAX_LIFETIME_SECONDS`（默认 1800）。`0` 空闲连接合法，其余非法值会让配置校验失败。
+- 规划容量时按 `副本数 × DATABASE_MAX_OPEN_CONNS < PostgreSQL max_connections` 预留余量；迁移、备份和人工 psql 会话也要计入。
+- 连接寿命用于在 PostgreSQL 重启或主从切换后回收失效连接；不要设为 0（0 表示永不回收）。

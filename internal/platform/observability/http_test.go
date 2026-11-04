@@ -1,4 +1,4 @@
-package main
+package observability
 
 import (
 	"net/http"
@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func TestMetricsHandlerServesOnlyGetMetrics(t *testing.T) {
-	handler := newMetricsHandler()
+func TestHandlerServesOnlyGetMetrics(t *testing.T) {
+	handler := Handler()
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))

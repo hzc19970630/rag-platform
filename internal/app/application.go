@@ -52,7 +52,11 @@ type Application struct {
 }
 
 func Open(cfg config.Config) (*Application, error) {
-	database, err := persistence.Open(cfg.DatabaseURL)
+	database, err := persistence.Open(cfg.DatabaseURL, persistence.PoolOptions{
+		MaxOpenConns:    cfg.DatabaseMaxOpenConns,
+		MaxIdleConns:    cfg.DatabaseMaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.DatabaseConnMaxLifetimeSeconds) * time.Second,
+	})
 	if err != nil {
 		return nil, err
 	}

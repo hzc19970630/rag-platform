@@ -15,6 +15,7 @@ import (
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/httpapi"
 	"github.com/example/rag-platform/internal/logging"
+	"github.com/example/rag-platform/internal/platform/observability"
 )
 
 func main() {
@@ -40,14 +41,24 @@ func main() {
 	httpapi.RegisterM7Routes(r, cfg, application, logger)
 	httpapi.RegisterM9Routes(r, cfg, application, logger)
 
-	server := &http.Server{Addr: cfg.APIAddr, Handler: r}
+	// ReadHeaderTimeout blocks slowloris-style header trickling; IdleTimeout
+	// reclaims keep-alive connections. WriteTimeout stays unset because SSE
+	// answers stream for the duration of generation.
+	server := &http.Server{
+		Addr:              cfg.APIAddr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
 
 	var metricsServer *http.Server
 	if metricsAddr := strings.TrimSpace(cfg.MetricsAddr); metricsAddr != "" {
 		metricsServer = &http.Server{
 			Addr:              metricsAddr,
-			Handler:           newMetricsHandler(),
+			Handler:           observability.Handler(),
 			ReadHeaderTimeout: 5 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		}
 		go func() {
 			logger.Info("metrics_listening", slog.String("address", metricsAddr))
