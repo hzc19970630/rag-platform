@@ -546,7 +546,7 @@ request POST "/api/v1/knowledge-bases/$kb/wiki/rebuild" 403 "$tmp_dir/rebuild-ke
   -H "$(auth_header "$api_key_token")"
 
 # ---------------------------------------------------------------------------
-step "delete the raw source object: projection still rebuilds from EvidencePackage only"
+step "description-only update keeps ACL; member removal invalidates and rebuilds from EvidencePackage only"
 "${compose[@]}" exec -T minio mc alias set m6accept http://127.0.0.1:9000 \
   "${MINIO_ROOT_USER:-rag-local}" "${MINIO_ROOT_PASSWORD:-change-me-local-only}" >/dev/null
 alpha_object_key="$(psql_value "SELECT v.source_object_key FROM document_versions v JOIN documents d ON d.latest_version_id = v.id WHERE d.id = '$doc_alpha';")"
@@ -557,12 +557,20 @@ if "${compose[@]}" exec -T minio mc stat "m6accept/$bucket/$alpha_object_key" >/
 fi
 
 acl_before="$(current_acl)"
+index_before="$(index_row_count)"
 request PATCH "/api/v1/knowledge-bases/$kb" 200 "$tmp_dir/acl-patch.json" \
   -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' \
-  -d '{"description":"m6 acceptance acl change"}'
+  -d '{"description":"m6 acceptance description only"}'
+[[ "$(current_acl)" -eq "$acl_before" ]] || fail "description-only update must not advance the ACL version"
+[[ "$(index_row_count)" == "$index_before" ]] || fail "description-only update must not invalidate knowledge index rows"
+
+request DELETE "/api/v1/knowledge-bases/$kb/members/editor-a" 204 "$tmp_dir/acl-member-remove.json" \
+  -H "$(auth_header "$dev_token")"
 acl_after="$(current_acl)"
-[[ "$acl_after" -eq $((acl_before + 1)) ]] || fail "ACL version did not advance"
+[[ "$acl_after" -eq $((acl_before + 1)) ]] || fail "member removal did not advance the ACL version"
 [[ "$(index_row_count)" == "0" ]] || fail "ACL change did not invalidate knowledge index rows immediately"
+request POST "/api/v1/knowledge-bases/$kb/wiki/rebuild" 202 "$tmp_dir/acl-rebuild.json" \
+  -H "$(auth_header "$dev_token")"
 request GET "/api/v1/knowledge-bases/$kb/wiki/pages" 200 "$tmp_dir/pages-stale.json" \
   -H "$(auth_header "$dev_token")"
 python3 - "$tmp_dir/pages-stale.json" <<'PY'

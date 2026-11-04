@@ -17,6 +17,26 @@ import (
 	"gorm.io/gorm"
 )
 
+// ValidateRelationStageTransition is the relation state machine: COLLECT then
+// EXTRACT then FINALIZE. A retry may restart the failed stage only.
+func ValidateRelationStageTransition(runStatus, stage string) error {
+	switch stage {
+	case StageCollect:
+		if runStatus == RelationPending || runStatus == RelationRetrying || runStatus == RelationFailed {
+			return nil
+		}
+	case StageExtract:
+		if runStatus == RelationPending || runStatus == RelationExtracting || runStatus == RelationRetrying || runStatus == RelationFailed {
+			return nil
+		}
+	case StageFinalize:
+		if runStatus == RelationExtracting || runStatus == RelationRetrying {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid relation projection transition %s -> %s", runStatus, stage)
+}
+
 func (s *Service) processRelation(ctx context.Context, task Task) error {
 	if task.SchemaVersion != SchemaRelationTask || task.ProjectionRunID == "" || task.Stage == "" || task.ProjectionType != ProjectionTypeRelation {
 		return apperror.Terminalf("invalid_relation_projection_task_envelope", "invalid relation projection task envelope")

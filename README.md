@@ -128,7 +128,7 @@ M4 新增能力：
 - 授权：角色/成员关系是唯一事实源；删除成员或修改角色会提升 `authorization_revisions` 与 `acl_version`，Redis Pub/Sub 只做通知，缓存失效以数据库 revision 为准。撤权后下一次检索即返回 403，`/me` 的 scope 同步移除。
 - 文档生命周期：`GET /documents/:id/versions`、`POST /documents/:id/reparse`、`POST /documents/:id/versions/:versionID/activate`、`POST /documents/:id/restore`、`POST /documents/:id/purge`。重新解析会将被替换版本标为 `CANCELLED`、Chunk/证据包标为 `STALE`；回滚复用 STALE 证据包，不重新 Embedding。删除为软删除，`DOCUMENT_RETENTION_DAYS` 到期后由 Worker 硬清理并删除对象存储文件。
 - 运维接口（tenant owner/admin 且必须使用 session 凭据）：`GET /ops/tasks/:key`、`GET /ops/dead-letters`、`POST /ops/dead-letters/:id/retry`、`POST /ops/dead-letters/:id/discard`、`POST /ops/pipelines/:id/cancel`、`POST /ops/reconcile`、`GET /ops/metrics`、`GET /ops/metrics/prometheus`。队列按 `ingestion` / `interactive` / `maintenance` 隔离；死信重放走 `interactive`，不排队在批量入库之后。
-- 可观测性：`/ops/metrics` 同时返回进程内计数/耗时、三个 Worker 队列深度，以及 24 小时数据库窗口内的阶段计数、解析失败率、模型错误、死信和 Outbox 积压；`/ops/metrics/prometheus` 以 Prometheus 文本格式导出进程内 counters/timings。指标口径、备份恢复、故障演练与密钥轮换步骤见 [`docs/operations.md`](docs/operations.md)。
+- 可观测性：`/ops/metrics` 同时返回进程内计数/耗时、三个 Worker 队列深度，以及 24 小时数据库窗口内的阶段计数、解析失败率、模型错误、死信和 Outbox 积压。Prometheus 通过 `METRICS_ADDR` 启用的独立监听器抓取 `GET /metrics`（无租户鉴权，只能绑内网/回环）；`/ops/metrics/prometheus` 保留给带 session 的人工排查。指标口径、备份恢复、故障演练与密钥轮换步骤见 [`docs/operations.md`](docs/operations.md)。
 
 M4 的备份演练会把数据库恢复到一次性 ParadeDB 容器，并逐表比对行数、迁移校验和、授权 revision 与 `chunks_bm25_idx` / `chunks_vector_idx` 索引定义。`pg_dump` 不包含 MinIO/S3 对象，生产恢复必须同时备份对象存储桶。
 

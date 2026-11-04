@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/example/rag-platform/internal/platform/formats"
@@ -15,7 +17,11 @@ import (
 const DefaultParserVersion = "docreader-m2-v2"
 
 type Config struct {
-	APIAddr            string
+	APIAddr string
+	// MetricsAddr enables the dedicated Prometheus listener in the API process
+	// when non-empty. It serves only /metrics and is deliberately not tenant
+	// authenticated, so it must bind an internal or loopback address.
+	MetricsAddr        string
 	AppEnv             string
 	LogLevel           string
 	DatabaseURL        string
@@ -499,6 +505,7 @@ func LoadFrom(lookup Lookup) Config {
 	}
 	return Config{
 		APIAddr:      value(lookup, "API_ADDR", ":8080"),
+		MetricsAddr:  value(lookup, "METRICS_ADDR", ""),
 		AppEnv:       appEnv,
 		WebPublicURL: value(lookup, "WEB_PUBLIC_URL", "http://localhost:5173"),
 		Auth: AuthConfig{
@@ -639,6 +646,19 @@ func (c Config) Validate(component string) error {
 		parsed, err := url.Parse(c.DatabaseURL)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("DATABASE_URL must be a valid database URL")
+		}
+		if metricsAddr := strings.TrimSpace(c.MetricsAddr); metricsAddr != "" {
+			_, port, err := net.SplitHostPort(metricsAddr)
+			if err != nil {
+				return fmt.Errorf("METRICS_ADDR must be a host:port listen address: %w", err)
+			}
+			portNumber, err := strconv.Atoi(port)
+			if err != nil || portNumber < 1 || portNumber > 65535 {
+				return fmt.Errorf("METRICS_ADDR port must be a number between 1 and 65535")
+			}
+			if metricsAddr == strings.TrimSpace(c.APIAddr) {
+				return fmt.Errorf("METRICS_ADDR must differ from API_ADDR")
+			}
 		}
 		if c.AppEnv == "production" && !c.ParserSandbox {
 			return fmt.Errorf("PARSER_SANDBOX_ENABLED must be true in production")

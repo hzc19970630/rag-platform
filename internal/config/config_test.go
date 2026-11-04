@@ -14,6 +14,9 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	if cfg.APIAddr != ":8080" {
 		t.Fatalf("APIAddr default: %q", cfg.APIAddr)
 	}
+	if cfg.MetricsAddr != "" {
+		t.Fatalf("MetricsAddr must default to disabled, got %q", cfg.MetricsAddr)
+	}
 	if cfg.AppEnv != "development" {
 		t.Fatalf("AppEnv default: %q", cfg.AppEnv)
 	}
@@ -86,6 +89,47 @@ func TestValidateRequiresInfrastructureForAPI(t *testing.T) {
 	cfg = LoadFrom(lookupFrom(valid))
 	if err := cfg.Validate("api"); err != nil {
 		t.Fatalf("expected api validation to pass, got %v", err)
+	}
+}
+
+func TestValidateMetricsAddr(t *testing.T) {
+	valid := map[string]string{
+		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+	}
+
+	withMetrics := func(address string) Config {
+		env := make(map[string]string, len(valid)+1)
+		for key, value := range valid {
+			env[key] = value
+		}
+		env["METRICS_ADDR"] = address
+		return LoadFrom(lookupFrom(env))
+	}
+
+	if err := withMetrics("127.0.0.1:9091").Validate("api"); err != nil {
+		t.Fatalf("valid METRICS_ADDR rejected: %v", err)
+	}
+	for _, address := range []string{"9091", "127.0.0.1", "127.0.0.1:not-a-port"} {
+		if err := withMetrics(address).Validate("api"); err == nil {
+			t.Fatalf("expected METRICS_ADDR %q to be rejected", address)
+		}
+	}
+
+	env := make(map[string]string, len(valid)+2)
+	for key, value := range valid {
+		env[key] = value
+	}
+	env["API_ADDR"] = ":9091"
+	env["METRICS_ADDR"] = ":9091"
+	if err := LoadFrom(lookupFrom(env)).Validate("api"); err == nil {
+		t.Fatalf("METRICS_ADDR must not reuse API_ADDR")
 	}
 }
 

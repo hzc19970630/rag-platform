@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -40,6 +41,25 @@ func main() {
 	httpapi.RegisterM9Routes(r, cfg, application, logger)
 
 	server := &http.Server{Addr: cfg.APIAddr, Handler: r}
+
+	var metricsServer *http.Server
+	if metricsAddr := strings.TrimSpace(cfg.MetricsAddr); metricsAddr != "" {
+		metricsServer = &http.Server{
+			Addr:              metricsAddr,
+			Handler:           newMetricsHandler(),
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		go func() {
+			logger.Info("metrics_listening", slog.String("address", metricsAddr))
+			if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				// Monitoring is auxiliary: a busy or invalid metrics port must
+				// not take down the API data plane. Scrapes will report the
+				// target as down instead.
+				logger.Error("metrics_listener_stopped", "error", err)
+			}
+		}()
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -63,6 +83,12 @@ func main() {
 	logger.Info("api_shutdown_started", slog.Int("timeout_seconds", cfg.Limits.ShutdownTimeoutSeconds))
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.Limits.ShutdownTimeoutSeconds)*time.Second)
 	defer cancel()
+	if metricsServer != nil {
+		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("metrics_shutdown_incomplete", "error", err)
+			_ = metricsServer.Close()
+		}
+	}
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Error("api_shutdown_incomplete", "error", err)
 		_ = server.Close()

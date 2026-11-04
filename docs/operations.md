@@ -135,7 +135,9 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | `operations.outboxBacklog` | `published_at IS NULL AND attempts < OUTBOX_MAX_ATTEMPTS` | 持续 > 0 且不下降 |
 
 - `operations` 来自数据库，跨进程重启保留；`counters`/`timings`/`queues` 是进程级或实时 Redis 状态，API 重启后归零。
-- Prometheus 抓取：`GET /api/v1/ops/metrics/prometheus`（同样要求 tenant owner/admin session）返回 `text/plain; version=0.0.4`，把进程内 counters 与 timings 转成 `_count`/`_sum`/`_max`。它不包含数据库窗口内的 `operations`，抓取端仍需分别告警。
+- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（如 `0.0.0.0:9091`；留空则关闭）后，API 进程在该地址只暴露 `GET /metrics`，返回 `text/plain; version=0.0.4`，把进程内 counters 与 timings 转成 `_count`/`_sum`/`_max`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口，跨容器抓取用 `api:9091`，本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API。
+- `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
+- 独立监听器只包含进程内指标，不包含数据库窗口内的 `operations`，抓取端仍需分别告警；Worker 进程的计数器不会出现在该端口。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
 - 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，Worker 的入库 Embedding 计数器不通过 `/ops/metrics` 暴露，入库失败请看 `operations.stages.embed.failed`。
 
