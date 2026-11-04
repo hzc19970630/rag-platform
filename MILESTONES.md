@@ -28,6 +28,7 @@
 | M8  | 规模化、复杂查询和可选扩展                         | M4、M5、M6、M7 | P2 / 条件启动 |
 | M9  | 前端工作台与可视化配置                           | M1、M2、M3、M4 | P1        |
 | M10 | 架构收敛与多轮会话（P0）                         | M1–M9          | P0        |
+| M11 | P1 深化：授权缓存、OTel、多轮改写                 | M10            | P1        |
 
 
 M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线至少还要完成 M4 中的身份、审计、密钥和运营要求。M6 与 M7 相互独立，可以分开交付。M9 只重构前端工作台并开放数据库级热改配置，不依赖 M8，也不改变 M8 的条件启动门槛。
@@ -309,6 +310,28 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 
 **暂不做**：检索侧多轮指代改写、Wiki/Graph 进入默认 QueryPlan、授权作用域缓存、OTel 替换自研 metrics、Repository 全量拆分、OpenSearch/图数据库迁移。
 
+## M11：P1 深化（授权缓存、OTel、多轮改写）
+
+**目标**：在 M10 边界收敛的基础上补齐生产排障与多轮检索能力；不改变单轮默认行为，不引入外部检索引擎。
+
+**依赖**：M10。
+
+**范围**：
+
+- [x] 授权：Casbin 改为 per-tenant 策略投影，按租户独立重建；`BuildScope` 增加进程内 L1 与 Redis L2 scope 缓存（30s），revision 进入缓存 key；每次请求仍读取租户 revision，撤权不等待 TTL；`BumpRevision` 只失效该租户。
+- [x] OTel：新增 OTLP/HTTP 可选导出；HTTP 中间件续接 W3C `traceparent` 并返回 `X-Trace-ID`；检索、远程模型、worker task 增加 span；`http_request` 日志带 `trace_id`；空 endpoint 仍生成 trace id，供日志关联。
+- [x] 多轮改写：新增 `retrieval.Rewriter` 端口与 LLM 改写器；仅在存在历史且使用真实 chat 适配器时调用，失败/空输出/本地适配器回退原问题；新增 `query_rewrite` 与 `query_rewrite_system` 模板；`QueryPlan.rewrite` 记录实际检索问题。
+- [x] 配置与文档：`OTEL_EXPORTER_OTLP_ENDPOINT`、`OTEL_SERVICE_NAME`、`CHAT_QUERY_REWRITE_ENABLED`、`CHAT_QUERY_REWRITE_TIMEOUT_SECONDS`；运维手册新增 Tracing 章节。
+
+**验收门槛**：
+
+- `make test`、`make lint`、m3/m4 acceptance 通过；m4 的 ACL 撤权/缓存失效断言不回归。
+- 两轮实测：第一轮 `COMPLETED`，第二轮 `query_plan.historyTurns=2` 且 `query_plan.rewrite` 为独立问题，回答正确并带引用。
+- 授权撤销后 `BuildScope`/`Authorize` 立即拒绝；另一租户策略不被重建。
+- OTel 空 endpoint 下 `/healthz` 返回 `X-Trace-ID`；配置 OTLP 端点后 api/worker 可导出，不阻塞请求。
+
+**暂不做**：跨队列父子 trace（当前 worker span 用 `trace.id` 关联）、OpenFGA、Redis scope 主动删除（revision key + TTL 自然淘汰）。
+
 ## 里程碑状态记录
 
 实施时仅在对应验收门槛全部满足后更新状态：
@@ -327,6 +350,7 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 | M8  | 未开始 | -    | -       |
 | M9  | 已完成 | 2026-11-03 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test` 16/16）、`make lint`（gofmt/vet + `tsc -b` + `npm run build`）、`./scripts/m1_acceptance.sh`、`m2_acceptance.sh`、`m3_acceptance.sh`、`m4_acceptance.sh` 全部通过。m1/m2 在默认栈运行；m3 按脚本既有模式临时使用 `CHAT_SOURCE=local`（远程 chat 在生成阶段中断，SSE 停在 GENERATING），m4 使用 `OIDC_ENABLED=false`，运行后均已恢复 `.env` 并重建 api/worker。后端：`GET /api/v1/knowledge-bases/{id}/configuration`（`KnowledgeBaseConfigurationV1`）与 `PUT .../retrieval-config`（整体替换，`{}` 清除覆盖；PATCH 合并语义不变），读/写分别校验 read/write，越权 403、非法值 400、保存写审计；`retrieval_config` 不因 vector/keyword 开关变化而失效，仅 wiki/graph 开关触发 ACL 递增与投影失效/重建。前端：迁移到 React Router + Ant Design + TanStack Query + Zustand + i18next，建立设计令牌与 light/dark/system，左侧导航、知识库卡片网格、文档/成员/投影页签、文档详情 Chunk、独立问答工作台、分区设置抽屉、运维与登录重构；只读系统配置无编辑控件，危险区与成员按能力隐藏。`required_capabilities` 语义冲突按运行时事实收敛：默认仅 evidence，开启 wiki/graph 不自动追加为默认查询要求，关闭投影时前端剪除、服务端 400；DESIGN.md §4.6.5 已同步。真实浏览器逐断点检查 1280/1024/768/375：均无横向溢出，1280 展开侧栏 3 列卡片、1024 折叠侧栏 2 列、768 折叠/375 抽屉，Tab 顺序覆盖导航→操作→内容且焦点可见，抽屉可用 Enter 打开、Escape 关闭并归还焦点，system 跟随 `prefers-color-scheme`；抽样文字/按钮对比度 light 4.57–16.29、dark 5.10–12.98，主按钮 5.44/6.38。剩余提示：Vite 单个 chunk 约 1.42 MB 的性能告警，不阻塞本里程碑。 |
 | M10 | 已完成 | 2026-11-04 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test` 16/16）、`make lint`（gofmt/vet + `tsc -b` + `npm run build`）、`./scripts/m2_acceptance.sh`、`m3_acceptance.sh`、`m4_acceptance.sh` 通过。契约与边界：任务载荷上移 `contracts/tasks`（`Ingestion`/`Sync`/`Projection` + JSON golden），`internal/platform/queue` 只依赖契约；worker handler 抽到 `cmd/worker/handlers.go`；`EvidenceIndexWriter` 增加 `IndexChunks`（Postgres no-op，m2 入库与关键词检索通过）；维护循环改为 leader 持有 Postgres session lock，双 worker 复验为一个 `maintenance_lock_acquired` + 一个 `maintenance_lock_skipped`，锁连接失效时 `maintenance_lock_lost` 并重新竞选。在线链路：`retrieval.Planner`/`EvidencePlanner` 抽出计划构造，`QueryPlan.historyTurns` 记录历史轮数；多轮会话按 system → history → 当前问题发送，只回放完整的 user + COMPLETED assistant，`CHAT_HISTORY_TURNS=0` 可关闭。HTTP 按资源拆分（auth/knowledge_bases/documents/conversations/connectors/projection/operations/knowledge_base_config），`RegisterRoutes` 统一编排，87 条业务路由路径不变；`api/openapi/openapi.yaml` 覆盖 87/87，`openapi_test.go` 双向校验，`web/src/api/generated.ts` 由 spec 生成并在 CI 校验无漂移。单轮评估（`CHAT_HISTORY_TURNS=0`）：49 用例、0 排除，recallAtK 1.0、documentHitRate 0.8889、citationAccuracy/groundedness/refusalRate/permissionNegativeDenials/injectionFlagRate 均为 1.0，gates passed；`meanLatencyMs` 21454 仅诊断项，受本次 provider 延迟影响。 |
+| M11 | 已完成 | 2026-11-04 | `make test`（Go 全包 + 前端 16/16）、`make lint`、`./scripts/m3_acceptance.sh`、`./scripts/m4_acceptance.sh` 通过。授权：Casbin 改为 per-tenant 策略，新增 scope L1（30s）+ Redis L2（30s）缓存，revision 进入 key，每次请求仍读租户 revision；m4 ACL 撤权断言通过，单测覆盖撤权立即生效与只失效单租户。OTel：OTLP/HTTP 可选，HTTP 续接 `traceparent` 并返回 `X-Trace-ID`；检索、远程 chat、worker task 增加 span，日志带 `trace_id`；空 endpoint 下 `/healthz` 实测返回 `X-Trace-ID`。多轮改写：`retrieval.Rewriter` + LLM 改写器 + `query_rewrite`/`query_rewrite_system` 模板；两轮实测第二轮 `query_plan.rewrite` 为独立问题、`historyTurns=2`、回答 `COMPLETED` 且带引用；改写失败/本地适配器回退原问题有单测。文档同步 DESIGN、operations 与 .env.example。 |
 
 
 
