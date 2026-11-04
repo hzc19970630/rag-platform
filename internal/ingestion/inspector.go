@@ -51,20 +51,22 @@ func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, 
 	}
 	inspection := TaskInspection{Outbox: []models.OutboxEvent{}}
 	var inbox models.TaskInbox
+	inboxFound := false
 	if err := i.db.WithContext(ctx).First(&inbox, "idempotency_key = ?", idempotencyKey).Error; err == nil {
-		inspection.Inbox = &inbox
+		inboxFound = true
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return TaskInspection{}, fmt.Errorf("load task inbox: %w", err)
 	}
 	var stage models.StageRun
+	stageFound := false
 	if err := i.db.WithContext(ctx).First(&stage, "idempotency_key = ?", idempotencyKey).Error; err == nil {
-		inspection.Stage = &stage
+		stageFound = true
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return TaskInspection{}, fmt.Errorf("load task stage: %w", err)
 	}
-	if inspection.Stage != nil {
+	if stageFound {
 		var pipeline models.PipelineRun
-		if err := i.db.WithContext(ctx).First(&pipeline, "id = ?", inspection.Stage.PipelineRunID).Error; err == nil {
+		if err := i.db.WithContext(ctx).First(&pipeline, "id = ?", stage.PipelineRunID).Error; err == nil {
 			if pipeline.TenantID != principal.TenantID {
 				return TaskInspection{}, apperror.ErrNotFound
 			}
@@ -89,11 +91,19 @@ func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, 
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return TaskInspection{}, fmt.Errorf("load task dead letter: %w", err)
 	}
-	if inspection.Pipeline == nil && inspection.Inbox == nil && inspection.DeadLetter == nil {
+	// TaskInbox and StageRun have no tenant column. An inbox row is only
+	// evidence of this tenant's task when a tenant-owned pipeline, outbox event
+	// or dead letter carries the same idempotency key; otherwise the row belongs
+	// to another tenant and must not be returned.
+	owned := inspection.Pipeline != nil || inspection.DeadLetter != nil || len(inspection.Outbox) > 0
+	if !owned {
 		return TaskInspection{}, apperror.ErrNotFound
 	}
-	if inspection.Pipeline != nil && inspection.Pipeline.TenantID != principal.TenantID {
-		return TaskInspection{}, apperror.ErrNotFound
+	if stageFound {
+		inspection.Stage = &stage
+	}
+	if inboxFound {
+		inspection.Inbox = &inbox
 	}
 	payload := event.Payload
 	if payload == "" && inspection.DeadLetter != nil {
@@ -168,7 +178,7 @@ func (i *TaskInspector) RecordDeadLetter(ctx context.Context, task Task, taskErr
 	// retry can claim it again; PROCESSING would look like a live worker.
 	return i.db.WithContext(ctx).Model(&models.TaskInbox{}).
 		Where("idempotency_key = ? AND status = ?", task.IdempotencyKey, inboxProcessing).
-		Updates(map[string]any{"status": inboxFailed, "last_error": message, "updated_at": now}).Error
+		Updates(map[string]any{"status": inboxFailed, "last_error": message, "lease_owner": "", "lease_until": nil, "updated_at": now}).Error
 }
 
 func (i *TaskInspector) RetryDeadLetter(ctx context.Context, principal authz.Principal, id uint64) error {
@@ -210,7 +220,7 @@ func (i *TaskInspector) RetryDeadLetter(ctx context.Context, principal authz.Pri
 		return err
 	}
 	if err := i.db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", row.IdempotencyKey).Updates(map[string]any{
-		"status": inboxFailed, "last_error": "", "updated_at": now,
+		"status": inboxFailed, "last_error": "", "lease_owner": "", "lease_until": nil, "updated_at": now,
 	}).Error; err != nil {
 		return err
 	}

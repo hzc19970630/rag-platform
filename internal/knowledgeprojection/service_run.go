@@ -295,7 +295,7 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 		// completed task record. The next attempt number gives the enqueue a fresh
 		// task id, and a non-SUCCEEDED inbox lets the worker claim it again.
 		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", run.ID+":"+retryStage.Stage).Updates(map[string]any{
-			"status": inboxFailed, "processed_at": nil, "last_error": "", "updated_at": now,
+			"status": inboxFailed, "processed_at": nil, "last_error": "", "lease_owner": "", "lease_until": nil, "updated_at": now,
 		}).Error; err != nil {
 			return err
 		}

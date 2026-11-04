@@ -30,35 +30,50 @@ const reconcileMaxAttempts = 5
 // letter was retried successfully. It never invents chunks or vectors; it only
 // replays stages that already exist or corrects derived status.
 func (s *Service) Reconcile(ctx context.Context, staleAfter time.Duration) (ReconcileReport, error) {
+	return s.reconcile(ctx, "", staleAfter)
+}
+
+// ReconcileTenant is the operator-facing pass: it applies the same repairs but
+// only to rows owned by tenantID. StageRun and TaskInbox carry no tenant column,
+// so they are scoped through the pipeline run or projection run they belong to.
+func (s *Service) ReconcileTenant(ctx context.Context, tenantID string, staleAfter time.Duration) (ReconcileReport, error) {
+	if tenantID == "" {
+		return ReconcileReport{}, fmt.Errorf("tenant is required")
+	}
+	return s.reconcile(ctx, tenantID, staleAfter)
+}
+
+func (s *Service) reconcile(ctx context.Context, tenantID string, staleAfter time.Duration) (ReconcileReport, error) {
 	if staleAfter <= 0 {
 		staleAfter = 5 * time.Minute
 	}
 	report := ReconcileReport{}
-	cutoff := time.Now().Add(-staleAfter)
+	now := time.Now()
+	cutoff := now.Add(-staleAfter)
 
-	documents, err := s.repairDocumentStatuses(ctx)
+	documents, err := s.repairDocumentStatuses(ctx, tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.DocumentsRepaired = documents
-	versions, err := s.repairVersionStatuses(ctx)
+	versions, err := s.repairVersionStatuses(ctx, tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.VersionsRepaired = versions
 
-	inboxes, err := s.expireInboxLeases(ctx, cutoff)
+	inboxes, err := s.expireInboxLeases(ctx, tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.InboxesExpired = inboxes
-	deadLetters, err := s.resolveRecoveredDeadLetters(ctx)
+	deadLetters, err := s.resolveRecoveredDeadLetters(ctx, tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.DeadLettersResolved = deadLetters
 
-	requeued, cancelled, err := s.requeueStaleStages(ctx, cutoff)
+	requeued, cancelled, err := s.requeueStaleStages(ctx, tenantID, cutoff)
 	if err != nil {
 		return report, err
 	}
@@ -67,71 +82,110 @@ func (s *Service) Reconcile(ctx context.Context, staleAfter time.Duration) (Reco
 	return report, nil
 }
 
-func (s *Service) repairDocumentStatuses(ctx context.Context) (int64, error) {
+func (s *Service) repairDocumentStatuses(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+	tenantFilter := ""
+	args := []any{status.EvidenceReady, now}
+	if tenantID != "" {
+		tenantFilter = "AND documents.tenant_id = ?"
+		args = append(args, tenantID)
+	}
+	args = append(args, status.EvidenceReady, status.EvidenceReady)
 	result := s.db.WithContext(ctx).Exec(`
-UPDATE documents d
-SET status = ?, updated_at = NOW()
-WHERE d.deleted_at IS NULL
-  AND d.status <> ?
-  AND d.latest_version_id IS NOT NULL
+UPDATE documents
+SET status = ?, updated_at = ?
+WHERE documents.deleted_at IS NULL
+  `+tenantFilter+`
+  AND documents.status <> ?
+  AND documents.latest_version_id IS NOT NULL
   AND EXISTS (
       SELECT 1 FROM evidence_packages p
-      WHERE p.document_version_id = d.latest_version_id AND p.status = ?
-  )`, status.EvidenceReady, status.EvidenceReady, status.EvidenceReady)
+      WHERE p.document_version_id = documents.latest_version_id AND p.status = ?
+  )`, args...)
 	if result.Error != nil {
 		return 0, fmt.Errorf("repair document status: %w", result.Error)
 	}
 	return result.RowsAffected, nil
 }
 
-func (s *Service) repairVersionStatuses(ctx context.Context) (int64, error) {
+func (s *Service) repairVersionStatuses(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+	tenantFilter := ""
+	args := []any{status.EvidenceReady, now, status.EvidenceReady}
+	if tenantID != "" {
+		tenantFilter = "AND document_versions.tenant_id = ?"
+		args = append(args, tenantID)
+	}
+	args = append(args, status.EvidenceReady)
 	result := s.db.WithContext(ctx).Exec(`
-UPDATE document_versions v
-SET status = ?, error_code = '', error_message = '', updated_at = NOW()
-WHERE v.status <> ?
+UPDATE document_versions
+SET status = ?, error_code = '', error_message = '', updated_at = ?
+WHERE document_versions.status <> ? `+tenantFilter+`
   AND EXISTS (
       SELECT 1 FROM evidence_packages p
-      WHERE p.document_version_id = v.id AND p.status = ?
-  )`, status.EvidenceReady, status.EvidenceReady, status.EvidenceReady)
+      WHERE p.document_version_id = document_versions.id AND p.status = ?
+  )`, args...)
 	if result.Error != nil {
 		return 0, fmt.Errorf("repair version status: %w", result.Error)
 	}
 	return result.RowsAffected, nil
 }
 
-func (s *Service) expireInboxLeases(ctx context.Context, cutoff time.Time) (int64, error) {
-	now := time.Now()
-	result := s.db.WithContext(ctx).Model(&models.TaskInbox{}).
-		Where("status = ? AND updated_at < ?", inboxProcessing, cutoff).
-		Updates(map[string]any{"status": inboxFailed, "last_error": "reconcile: processing lease expired", "updated_at": now})
+// expireInboxLeases reclaims only rows whose lease actually expired. Row age
+// (updated_at) is not evidence of a dead worker: a live worker keeps renewing
+// lease_until, and a task with an old updated_at may still be heartbeating.
+func (s *Service) expireInboxLeases(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+	query := s.db.WithContext(ctx).Model(&models.TaskInbox{}).
+		Where("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", inboxProcessing, now)
+	if tenantID != "" {
+		query = query.Where(`(EXISTS (
+    SELECT 1 FROM stage_runs sr
+    JOIN pipeline_runs pr ON pr.id = sr.pipeline_run_id
+    WHERE sr.idempotency_key = task_inbox.idempotency_key AND pr.tenant_id = ?
+) OR EXISTS (
+    SELECT 1 FROM projection_stage_runs psr
+    JOIN projection_runs prj ON prj.id = psr.projection_run_id
+    WHERE psr.idempotency_key = task_inbox.idempotency_key AND prj.tenant_id = ?
+))`, tenantID, tenantID)
+	}
+	result := query.Updates(map[string]any{
+		"status": inboxFailed, "lease_owner": "", "lease_until": nil,
+		"last_error": "reconcile: processing lease expired", "updated_at": now,
+	})
 	if result.Error != nil {
 		return 0, fmt.Errorf("expire inbox leases: %w", result.Error)
 	}
 	return result.RowsAffected, nil
 }
 
-func (s *Service) resolveRecoveredDeadLetters(ctx context.Context) (int64, error) {
-	now := time.Now()
+func (s *Service) resolveRecoveredDeadLetters(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+	tenantFilter := ""
+	args := []any{now, now}
+	if tenantID != "" {
+		tenantFilter = "AND task_dead_letters.tenant_id = ?"
+		args = append(args, tenantID)
+	}
 	result := s.db.WithContext(ctx).Exec(`
-UPDATE task_dead_letters d
+UPDATE task_dead_letters
 SET status = 'RESOLVED', resolved_at = ?, updated_at = ?
-WHERE d.status IN ('PENDING', 'RETRYING')
+WHERE task_dead_letters.status IN ('PENDING', 'RETRYING') `+tenantFilter+`
   AND EXISTS (
       SELECT 1 FROM task_inbox i
-      WHERE i.idempotency_key = d.idempotency_key AND i.status = 'SUCCEEDED'
-  )`, now, now)
+      WHERE i.idempotency_key = task_dead_letters.idempotency_key AND i.status = 'SUCCEEDED'
+  )`, args...)
 	if result.Error != nil {
 		return 0, fmt.Errorf("resolve recovered dead letters: %w", result.Error)
 	}
 	return result.RowsAffected, nil
 }
 
-func (s *Service) requeueStaleStages(ctx context.Context, cutoff time.Time) (int, int, error) {
-	var stages []models.StageRun
-	if err := s.db.WithContext(ctx).
+func (s *Service) requeueStaleStages(ctx context.Context, tenantID string, cutoff time.Time) (int, int, error) {
+	query := s.db.WithContext(ctx).
 		Joins("JOIN pipeline_runs p ON p.id = stage_runs.pipeline_run_id").
-		Where("stage_runs.status IN ? AND stage_runs.updated_at < ? AND p.status NOT IN ?", []string{StagePending, StageProcessing}, cutoff, []string{StatusEvidenceReady, StatusFailed, StatusCancelled}).
-		Order("stage_runs.id").Limit(100).Find(&stages).Error; err != nil {
+		Where("stage_runs.status IN ? AND stage_runs.updated_at < ? AND p.status NOT IN ?", []string{StagePending, StageProcessing}, cutoff, []string{StatusEvidenceReady, StatusFailed, StatusCancelled})
+	if tenantID != "" {
+		query = query.Where("p.tenant_id = ?", tenantID)
+	}
+	var stages []models.StageRun
+	if err := query.Order("stage_runs.id").Limit(100).Find(&stages).Error; err != nil {
 		return 0, 0, fmt.Errorf("list stale stages: %w", err)
 	}
 	requeued, cancelled := 0, 0
@@ -192,7 +246,7 @@ func (s *Service) enqueueReconciledTask(ctx context.Context, task Task) (bool, e
 	queued := false
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var event models.OutboxEvent
-		lookupErr := tx.Where("idempotency_key = ?", task.IdempotencyKey).First(&event).Error
+		lookupErr := tx.Where("idempotency_key = ? AND tenant_id = ?", task.IdempotencyKey, task.TenantID).First(&event).Error
 		if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 			return lookupErr
 		}
@@ -227,11 +281,11 @@ func (s *Service) failReconciledStage(ctx context.Context, task Task, code, mess
 		}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status NOT IN ?", task.PipelineRunID, []string{StatusEvidenceReady, StatusCancelled}).
+		if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND tenant_id = ? AND status NOT IN ?", task.PipelineRunID, task.TenantID, []string{StatusEvidenceReady, StatusCancelled}).
 			Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.DocumentVersion{}).Where("id = ? AND status <> ?", task.DocumentVersionID, StatusCancelled).
+		if err := tx.Model(&models.DocumentVersion{}).Where("id = ? AND tenant_id = ? AND status <> ?", task.DocumentVersionID, task.TenantID, StatusCancelled).
 			Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
 			return err
 		}

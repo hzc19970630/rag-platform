@@ -7,11 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -91,7 +94,7 @@ func (s *Service) completeStage(ctx context.Context, task Task, run *models.Proj
 			return err
 		}
 		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{
-			"status": inboxSucceeded, "processed_at": &now, "updated_at": now,
+			"status": inboxSucceeded, "processed_at": &now, "lease_owner": "", "lease_until": nil, "updated_at": now,
 		}).Error; err != nil {
 			return err
 		}
@@ -149,32 +152,31 @@ func enqueueStage(tx *gorm.DB, run *models.ProjectionRun, stage string, attempt 
 }
 
 func (s *Service) claimInbox(ctx context.Context, task Task) (bool, error) {
-	now := time.Now()
-	claimed := false
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var row models.TaskInbox
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&row, "idempotency_key = ?", task.IdempotencyKey).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			row = models.TaskInbox{IdempotencyKey: task.IdempotencyKey, TaskType: "projection." + task.ProjectionType + "." + task.Stage, Status: inboxProcessing, CreatedAt: now, UpdatedAt: now}
-			if err := tx.Create(&row).Error; err != nil {
-				return err
-			}
-			claimed = true
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if row.Status == inboxSucceeded {
-			return nil
-		}
-		if err := tx.Model(&row).Updates(map[string]any{"status": inboxProcessing, "last_error": "", "updated_at": now}).Error; err != nil {
-			return err
-		}
-		claimed = true
-		return nil
+	taskType := "projection." + task.ProjectionType + "." + task.Stage
+	return inboxlease.Claim(ctx, s.db, task.IdempotencyKey, taskType, 0, s.lease())
+}
+
+// beginInboxLease keeps the inbox lease alive while the projection stage runs.
+// If the lease is lost, the returned context is canceled and the stage must not
+// persist its outcome: another worker owns the row.
+func (s *Service) beginInboxLease(ctx context.Context, key string) (context.Context, func(), func() bool) {
+	lease := s.lease()
+	leaseCtx, cancel := context.WithCancel(ctx)
+	var lost atomic.Bool
+	stop := inboxlease.Keep(leaseCtx, s.db, key, lease, func() {
+		lost.Store(true)
+		cancel()
 	})
-	return claimed, err
+	release := func() {
+		stop()
+		cancel()
+		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer releaseCancel()
+		if err := inboxlease.Release(releaseCtx, s.db, key, lease.Owner); err != nil {
+			slog.Warn("inbox_lease_release_failed", "idempotency_key", key, "error", err)
+		}
+	}
+	return leaseCtx, release, lost.Load
 }
 
 func (s *Service) markStageProcessing(ctx context.Context, task Task, run *models.ProjectionRun) (*models.ProjectionStageRun, error) {
@@ -217,7 +219,7 @@ func (s *Service) failStage(ctx context.Context, run *models.ProjectionRun, stag
 }
 
 func (s *Service) finishInbox(ctx context.Context, key, status string, processErr error) error {
-	values := map[string]any{"status": status, "updated_at": time.Now()}
+	values := map[string]any{"status": status, "lease_owner": "", "lease_until": nil, "updated_at": time.Now()}
 	if status == inboxSucceeded || status == inboxFailed {
 		values["processed_at"] = time.Now()
 	}

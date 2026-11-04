@@ -63,6 +63,8 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 	if err != nil || !claimed {
 		return err
 	}
+	processCtx, releaseLease, leaseLost := s.beginInboxLease(ctx, task.IdempotencyKey)
+	defer releaseLease()
 	run, err := s.loadRun(ctx, task.ProjectionRunID)
 	if err != nil {
 		return s.finishInbox(ctx, task.IdempotencyKey, inboxFailed, err)
@@ -80,10 +82,9 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 	if err != nil {
 		return err
 	}
-	processCtx := ctx
 	if s.timeout > 0 {
 		var cancel context.CancelFunc
-		processCtx, cancel = context.WithTimeout(ctx, s.timeout)
+		processCtx, cancel = context.WithTimeout(processCtx, s.timeout)
 		defer cancel()
 	}
 	var processErr error
@@ -94,6 +95,9 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 		processErr = s.generate(processCtx, run)
 	case StageFinalize:
 		processErr = s.finalize(processCtx, run)
+	}
+	if leaseLost() {
+		return fmt.Errorf("inbox lease lost for %s: %w", task.IdempotencyKey, context.Canceled)
 	}
 	if processErr != nil {
 		terminal := apperror.IsTerminal(processErr)

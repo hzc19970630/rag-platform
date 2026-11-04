@@ -29,7 +29,7 @@ compose run --rm --no-deps migrate -check
 - API 与 Worker 都监听 `SIGINT`/`SIGTERM`，停止接收新请求/任务，等待在途工作结束后退出；超时由 `SHUTDOWN_TIMEOUT_SECONDS` 控制（默认 10 秒）。
 - API 正常退出日志：`api_shutdown_complete`。Worker 正常退出日志：`worker_shutting_down`。
 - Worker 的 Asynq 队列在关闭时先停止拉取新任务，再由 `server.Shutdown()` 等待在途任务；超过超时时间后强制 `Stop()` 并记录 `worker_shutdown_timeout` 警告。
-- Compose 停止时给容器的宽限期应大于 `SHUTDOWN_TIMEOUT_SECONDS`，否则在途任务会被 SIGKILL 并在 Inbox 中留下 `PROCESSING` 租约，由 reconciliation 回收。
+- Compose 停止时给容器的宽限期应大于 `SHUTDOWN_TIMEOUT_SECONDS`，否则在途任务会被 SIGKILL 并留下 `PROCESSING` 租约，由 reconciliation 在租约过期后回收。
 
 验证：
 
@@ -84,6 +84,7 @@ compose logs --no-color worker | grep worker_shutting_down
 ## 5. 重复投递、Inbox 与死信
 
 - 每个阶段任务的 `TaskID` 等于 `idempotency_key`（`<pipeline_run_id>:<stage>`），Asynq 会拒绝重复入队；Worker 的 `task_inbox` 以同一键做二次幂等，`SUCCEEDED` 的任务直接跳过。
+- Inbox 认领是条件更新：只有空闲（`PENDING`/`FAILED`）或 `lease_until` 已过期的行才能被认领；执行期间 Worker 每 TTL/3 续租 `lease_until`，因此重复投递的第二个 Worker 无法并发执行同一阶段。执行结束或失败后租约立即释放，Asynq 重试可直接再次认领。
 - 重复发布同一 Outbox 事件不会产生重复 Chunk/Inbox 行，可用以下查询核对：
 
 ```sql
@@ -101,9 +102,10 @@ SELECT count(*) FROM task_inbox WHERE idempotency_key LIKE '<pipeline>:%';
 | POST | `/api/v1/ops/dead-letters/:id/retry` | 清理原队列 archived 后重新投递到 `interactive` 队列，Inbox/Stage 复位，写审计 |
 | POST | `/api/v1/ops/dead-letters/:id/discard` | 清理原队列 archived 并放弃死信（不重放），写审计 |
 | POST | `/api/v1/ops/pipelines/:id/cancel` | 取消流水线，阻止后续阶段 |
-| POST | `/api/v1/ops/reconcile?staleAfterSeconds=` | 手动触发 reconciliation |
+| POST | `/api/v1/ops/reconcile?staleAfterSeconds=` | 手动触发当前租户的 reconciliation（只修复该租户的文档状态、inbox 租约、死信与阶段） |
 | GET | `/api/v1/ops/metrics` | 指标快照（见第 7 节） |
 
+- 表内操作都以调用者租户为边界：`stage_runs` 与 `task_inbox` 没有租户列，通过所属 `pipeline_runs` 或 `projection_runs` 确认归属；无法确认归属的任务按 404 处理，不会返回其他租户的数据。
 - 人工重试/放弃会先删除该任务在 Asynq 原队列中的 archived 记录，再分别重投或关闭死信；成功后 `queues.*.archived` 应回到 0。`RETRYING` 状态的死信不能再次重放，避免并发重复投递。
 - 人工重试后若任务成功，死信状态变为 `RETRYING`；下一次 reconciliation 确认 Inbox 已 `SUCCEEDED` 后置为 `RESOLVED`。也可直接调用 reconcile 立即收敛。
 - 死信重放必须保持 payload 原样；不要手工修改 `idempotency_key`，否则会绕过 Inbox 幂等。
@@ -113,10 +115,11 @@ SELECT count(*) FROM task_inbox WHERE idempotency_key LIKE '<pipeline>:%';
 Worker 每个 `RECONCILE_INTERVAL_SECONDS`（默认 60 秒）执行一次，也可通过接口触发：
 
 - 修复 `pipeline_runs`/`document_versions`/`documents` 之间的状态漂移。
-- 回收超过 `staleAfterSeconds` 仍处于 `PROCESSING` 的 Stage/Inbox 租约。
+- 回收超过 `staleAfterSeconds` 仍处于 `PENDING`/`PROCESSING` 的 Stage；Inbox 只回收 `lease_until` 已过期的 `PROCESSING` 行，正在心跳续租的任务不会被误判为失败。
 - 对 Inbox 已 `SUCCEEDED` 的死信置为 `RESOLVED`。
 - 重新入队停滞阶段；若文档已删除、版本已被替换则取消，若 `attempts >= 5` 则标记失败并写死信。
 - reconciliation 是幂等的，可在任意时刻重复执行。
+- 通过 HTTP 触发时只处理当前租户的数据；全平台维护循环由持有 leader 锁的单个 Worker 执行，租户 owner/admin 没有全平台入口。
 
 ```bash
 curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \

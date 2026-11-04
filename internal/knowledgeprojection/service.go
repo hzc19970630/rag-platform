@@ -11,6 +11,7 @@ import (
 	"github.com/example/rag-platform/internal/contracts/evidence"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/platform/evidencestore"
+	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/relationstore"
 	"gorm.io/gorm"
@@ -42,15 +43,21 @@ type Options struct {
 }
 
 type Service struct {
-	db        *gorm.DB
-	authz     Authorizer
-	embedder  ingestion.Embedder
-	generator *Generator
-	relation  *Extractor
-	publisher Publisher
-	timeout   time.Duration
-	store     relationstore.RelationStore
-	evidence  evidence.Reader
+	db         *gorm.DB
+	authz      Authorizer
+	embedder   ingestion.Embedder
+	generator  *Generator
+	relation   *Extractor
+	publisher  Publisher
+	timeout    time.Duration
+	store      relationstore.RelationStore
+	evidence   evidence.Reader
+	leaseOwner inboxlease.Owner
+	leaseTTL   time.Duration
+}
+
+func (s *Service) lease() inboxlease.Lease {
+	return inboxlease.New(s.leaseOwner.Get(), s.leaseTTL)
 }
 
 func NewService(options Options) *Service {

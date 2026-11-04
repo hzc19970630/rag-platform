@@ -71,7 +71,7 @@ func RegisterOperationsRoutes(router *gin.Engine, cfg config.Config, application
 		if seconds := intQuery(c, "staleAfterSeconds"); seconds > 0 {
 			staleAfter = time.Duration(seconds) * time.Second
 		}
-		report, err := application.Ingestion.Reconcile(c.Request.Context(), staleAfter)
+		report, err := application.Ingestion.ReconcileTenant(c.Request.Context(), accessContext(c).Principal.TenantID, staleAfter)
 		if err != nil {
 			writeError(c, err)
 			return

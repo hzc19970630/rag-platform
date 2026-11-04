@@ -10,13 +10,14 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/formats"
+	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 const (
@@ -38,6 +39,12 @@ type PipelineWorker struct {
 	chunker     Chunker
 	timeout     time.Duration
 	projection  ProjectionTrigger
+	leaseOwner  inboxlease.Owner
+	leaseTTL    time.Duration
+}
+
+func (w *PipelineWorker) lease() inboxlease.Lease {
+	return inboxlease.New(w.leaseOwner.Get(), w.leaseTTL)
 }
 
 // ProjectionTrigger is the Pipeline B port. It is optional: when projection is
@@ -69,16 +76,31 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	if err != nil || !claimed {
 		return err
 	}
+	lease := w.lease()
+	processCtx, cancelProcess := context.WithCancel(ctx)
+	var leaseLost atomic.Bool
+	stopHeartbeat := inboxlease.Keep(processCtx, w.db, task.IdempotencyKey, lease, func() {
+		leaseLost.Store(true)
+		cancelProcess()
+	})
+	defer func() {
+		stopHeartbeat()
+		cancelProcess()
+		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := inboxlease.Release(releaseCtx, w.db, task.IdempotencyKey, lease.Owner); err != nil {
+			slog.Warn("inbox_lease_release_failed", "idempotency_key", task.IdempotencyKey, "error", err)
+		}
+	}()
 	if !w.isCurrent(ctx, task) {
 		return w.finishInbox(ctx, task.IdempotencyKey, inboxSucceeded, nil)
 	}
 	if err := w.markStageProcessing(ctx, task); err != nil {
 		return err
 	}
-	processCtx := ctx
-	var cancel context.CancelFunc
 	if w.timeout > 0 {
-		processCtx, cancel = context.WithTimeout(ctx, w.timeout)
+		var cancel context.CancelFunc
+		processCtx, cancel = context.WithTimeout(processCtx, w.timeout)
 		defer cancel()
 	}
 	var processErr error
@@ -95,6 +117,11 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 		processErr = w.index(processCtx, task)
 	default:
 		processErr = fmt.Errorf("unsupported stage %q", task.Stage)
+	}
+	// The lease can expire while a slow stage runs. Another worker then owns the
+	// row, so this attempt must not write stage or inbox outcomes over it.
+	if leaseLost.Load() {
+		return fmt.Errorf("inbox lease lost for %s: %w", task.IdempotencyKey, context.Canceled)
 	}
 	if processErr != nil {
 		terminal := apperror.IsTerminal(processErr)
@@ -413,32 +440,7 @@ func (w *PipelineWorker) triggerProjection(ctx context.Context, tenantID, knowle
 }
 
 func (w *PipelineWorker) claimInbox(ctx context.Context, task Task) (bool, error) {
-	now := time.Now()
-	claimed := false
-	err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var row models.TaskInbox
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&row, "idempotency_key = ?", task.IdempotencyKey).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			row = models.TaskInbox{IdempotencyKey: task.IdempotencyKey, TaskType: task.TaskType, Status: inboxProcessing, StageRunID: parseUint(task.StageRunID), CreatedAt: now, UpdatedAt: now}
-			if err := tx.Create(&row).Error; err != nil {
-				return err
-			}
-			claimed = true
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if row.Status == inboxSucceeded {
-			return nil
-		}
-		if err := tx.Model(&row).Updates(map[string]any{"status": inboxProcessing, "last_error": "", "updated_at": now}).Error; err != nil {
-			return err
-		}
-		claimed = true
-		return nil
-	})
-	return claimed, err
+	return inboxlease.Claim(ctx, w.db, task.IdempotencyKey, task.TaskType, parseUint(task.StageRunID), w.lease())
 }
 
 func (w *PipelineWorker) markStageProcessing(ctx context.Context, task Task) error {
@@ -477,7 +479,7 @@ func (w *PipelineWorker) completeStage(ctx context.Context, task Task) error {
 		if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status <> ?", task.PipelineRunID, StatusCancelled).Updates(statusFields(completedStatus, map[string]any{"updated_at": now})).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": inboxSucceeded, "processed_at": &now, "updated_at": now}).Error; err != nil {
+		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": inboxSucceeded, "processed_at": &now, "lease_owner": "", "lease_until": nil, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		if !hasNext {
@@ -546,7 +548,7 @@ func statusFields(status string, extra map[string]any) map[string]any {
 }
 
 func (w *PipelineWorker) finishInbox(ctx context.Context, key, status string, processErr error) error {
-	values := map[string]any{"status": status, "updated_at": time.Now()}
+	values := map[string]any{"status": status, "lease_owner": "", "lease_until": nil, "updated_at": time.Now()}
 	if status == inboxSucceeded || status == inboxFailed {
 		values["processed_at"] = time.Now()
 	}

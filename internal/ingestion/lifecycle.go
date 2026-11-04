@@ -615,7 +615,7 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 					}
 				}
 				if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", current.IdempotencyKey).Updates(map[string]any{
-					"status": inboxSucceeded, "last_error": "", "processed_at": &now, "updated_at": now,
+					"status": inboxSucceeded, "last_error": "", "processed_at": &now, "lease_owner": "", "lease_until": nil, "updated_at": now,
 				}).Error; err != nil {
 					return err
 				}
@@ -657,7 +657,7 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 			// recorded the inbox row as SUCCEEDED. The stage itself never ran, so
 			// the row must stop blocking the restarted task.
 			if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", current.IdempotencyKey).Updates(map[string]any{
-				"status": StagePending, "last_error": "", "processed_at": nil, "updated_at": now,
+				"status": StagePending, "last_error": "", "processed_at": nil, "lease_owner": "", "lease_until": nil, "updated_at": now,
 			}).Error; err != nil {
 				return err
 			}

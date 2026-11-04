@@ -292,14 +292,19 @@ type TaskDeadLetter struct {
 func (TaskDeadLetter) TableName() string { return "task_dead_letters" }
 
 type TaskInbox struct {
-	IdempotencyKey string     `gorm:"primaryKey;size:255" json:"idempotencyKey"`
-	TaskType       string     `gorm:"size:128;not null" json:"taskType"`
-	Status         string     `gorm:"size:32;not null" json:"status"`
-	StageRunID     uint64     `json:"stageRunId"`
-	ProcessedAt    *time.Time `json:"processedAt"`
-	LastError      string     `gorm:"type:text" json:"lastError"`
-	CreatedAt      time.Time  `gorm:"not null" json:"createdAt"`
-	UpdatedAt      time.Time  `gorm:"not null" json:"updatedAt"`
+	IdempotencyKey string `gorm:"primaryKey;size:255" json:"idempotencyKey"`
+	TaskType       string `gorm:"size:128;not null" json:"taskType"`
+	Status         string `gorm:"size:32;not null" json:"status"`
+	StageRunID     uint64 `json:"stageRunId"`
+	// LeaseOwner identifies the worker executing the task. A row with a live
+	// lease must never be claimed by a second worker; only the owner may renew
+	// or release it.
+	LeaseOwner  string     `gorm:"size:128;not null;default:''" json:"leaseOwner"`
+	LeaseUntil  *time.Time `json:"leaseUntil"`
+	ProcessedAt *time.Time `json:"processedAt"`
+	LastError   string     `gorm:"type:text" json:"lastError"`
+	CreatedAt   time.Time  `gorm:"not null" json:"createdAt"`
+	UpdatedAt   time.Time  `gorm:"not null" json:"updatedAt"`
 }
 
 func (TaskInbox) TableName() string { return "task_inbox" }
