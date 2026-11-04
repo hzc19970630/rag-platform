@@ -46,6 +46,9 @@ type QueryPlan struct {
 	RerankEnabled             bool     `json:"rerankEnabled"`
 	RequiredCapabilities      []string `json:"requiredCapabilities"`
 	Params                    Params   `json:"params"`
+	// HistoryTurns records how much conversation context was supplied. The
+	// content is never persisted in the plan.
+	HistoryTurns int `json:"historyTurns,omitempty"`
 }
 
 // Params is the resolved retrieval parameter set after the three-tier override.

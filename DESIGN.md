@@ -87,7 +87,7 @@ graph LR
 | `worker` | 文档解析、切分、Embedding、索引、摘要、同步等后台任务 | 按队列独立扩展 |
 | `docreader` | 文件解析、OCR、页面图片和结构化内容提取 | 按解析耗时和文件量扩展 |
 | `frontend` | React SPA 静态资源和反向代理 | CDN/Nginx 扩展 |
-| `scheduler` | 定时同步、清理和补偿任务；可先与 worker 同镜像 | 单实例或分布式锁 |
+| `scheduler` | 定时同步、清理和补偿任务；当前内置于 worker，由 Postgres advisory lock 保证单实例，无需独立进程 | worker 副本共享锁，持有者崩溃后下一 tick 自动接管 |
 
 `api` 和 `worker` 共用领域应用服务与端口定义，但运行入口、资源配额和生命周期独立。这样可以让大批量导入不会挤占在线问答资源。
 
@@ -113,11 +113,11 @@ graph LR
 | 模型路由 | Model Registry；规模较大时可接 LiteLLM | 模型配置、密钥、限流、降级和按租户选择 |
 | 认证 | OIDC / SSO + JWT；API Key 用哈希存储 | 对接企业身份系统，同时支持程序化访问 |
 | 授权 | Go Casbin Domain RBAC（进程内策略投影） | Owner / Admin / Editor / Viewer，加租户和知识库级访问控制 |
-| 可观测性 | OpenTelemetry + Prometheus + 结构化日志；Grafana/Loki/Langfuse 按部署档位启用 | 关联请求、任务、模型调用和检索指标 |
-| 部署 | Docker Compose + Helm/Kubernetes | 本地开发、私有化和生产集群统一交付方式 |
-| API 契约 | OpenAPI 3；gRPC 使用 Protobuf；内部任务使用版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
+| 可观测性 | 目标：OpenTelemetry + Prometheus + 结构化日志；当前：进程内 counters/summaries + 独立 `/metrics` 监听 | 关联请求、任务、模型调用和检索指标；trace 全链路仍待 M10 之后的 P1 |
+| 部署 | 目标：Docker Compose + Helm/Kubernetes；当前：仅 Docker Compose | 本地开发、私有化和生产集群统一交付方式 |
+| API 契约 | REST 使用 OpenAPI 3（`api/openapi/openapi.yaml`）；gRPC 使用 Protobuf；异步任务使用 `contracts/tasks` 的版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
 
-上表的前端选型是目标形态，不是当前实现现状：`web/` 目前仍是单文件 React + 原生 CSS。M9 按 4.6 节迁移到 React Router + Ant Design + TanStack Query + Zustand + i18next，迁移完成前不得在文档或验收中声称这些组件已经接入。
+`web/` 已完成 M9 迁移：React Router + Ant Design + TanStack Query + Zustand + i18next 已接入。`web/src/api/generated.ts` 由 OpenAPI spec 生成，`types.ts` 仍是前端使用的收敛视图；扩充 schema 后再逐步替换。
 
 ### 4.2 检索存储策略
 
@@ -127,7 +127,7 @@ graph LR
 - ParadeDB 提供 BM25 关键词检索。
 - pgvector 提供向量检索，使用 HNSW 索引。
 - 应用层做过滤、混合召回、RRF 融合和 Rerank。
-- 召回侧通过 `KeywordSearcher` / `VectorSearcher` 端口隔离实现（`internal/retrieval/ports.go`）；**索引写入目前仍是 PostgreSQL 专用路径**，不存在独立的写入端口。
+- 召回侧通过 `KeywordSearcher` / `VectorSearcher` 端口隔离实现（`internal/retrieval/ports.go`）；写侧通过 `EvidenceIndexWriter` 暴露 `IndexChunks`、`WriteEmbeddings`、`IndexVersion` 与 `DeleteVersion`。PostgreSQL 适配器把向量存回 chunk 行、关键词索引随行写入（`IndexChunks` 为 no-op）；外部检索引擎适配器接收同一批文档并在 `DeleteVersion` 中清理。
 
 当单库规模、写入压力或检索延迟超过容量目标时，按租户或知识库切换到独立检索集群。接入 OpenSearch、Milvus、Qdrant 必须同时改造召回与索引写入两段适配器，不能只替换查询实现；切换不得改变领域层和 API 契约。
 
@@ -623,7 +623,9 @@ PUT /api/v1/knowledge-bases/{id}/retrieval-config
 
 首期建议实现 `identity`、`knowledgebase`、`document`、`ingestion`、`retrieval`、`conversation`、`governance` 七个模块；`knowledgeprojection` 在第二阶段通过稳定端口接入，`agent` 延后到第三阶段。
 
-## 6. 项目结构
+## 6. 项目结构（目标态）
+
+> 当前实现使用 `internal/<domain>` 扁平包（无 `modules/*/domain|application|ports|adapters` 子目录），领域服务直接持有 GORM；端口只覆盖检索、投影、任务、对象存储等真实多实现边界。本节保留目标态用于后续演进，不得据此声称当前已经分层。
 
 ```text
 rag-platform/
@@ -1044,7 +1046,7 @@ Schema 规则：
 - 每个阶段只能写入自己的输出 Schema，不能修改上游已发布数据。
 - 阶段重试使用相同 `pipeline_run_id` 和幂等键；重新解析创建新的 `document_version_id`。
 - 消费者拒绝不支持的 Schema 版本，并把任务置为 `schema_incompatible`，禁止静默降级。
-- gRPC 使用 Protobuf 定义跨进程契约；REST 使用 OpenAPI；内部 Worker 任务和领域事件使用版本化 Go Schema 与 JSON 序列化，统一放在 `contracts/`。
+- gRPC 使用 Protobuf 定义跨进程契约；REST 使用 OpenAPI；异步 Worker 任务使用 `contracts/tasks` 的版本化 Go Schema 与 JSON 序列化；领域事件仍由各领域包定义，新增跨进程事件时应上移到 `contracts/`。
 - 队列消息默认只携带 `package_id`、版本号、对象存储地址和幂等键，不携带整份正文或全部 Chunk；消费者按授权范围加载 Package。
 - Schema 中只放业务数据和引用，不放数据库连接、HTTP Request、Gin Context 或供应商 SDK 对象。
 - `DocumentPreviewV1` 和 `ChunkPageV1` 是只读展示 Schema，不是新的事实源；它们只能投影 `NormalizedDocumentV1`、`EvidencePackageV1` 和已授权的 Chunk，不能写回上游数据。

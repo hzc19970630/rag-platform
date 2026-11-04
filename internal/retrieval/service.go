@@ -24,6 +24,16 @@ type QueryInput struct {
 	KnowledgeBaseID string
 	// SessionOverride is the third parameter tier, supplied per request.
 	SessionOverride string
+	// History is the recent conversation context. The default planner records
+	// only its size; a future planner can use it for follow-up rewriting.
+	History []HistoryTurn
+}
+
+// HistoryTurn is one prior user or assistant message. Only completed answers
+// are supplied by the conversation service.
+type HistoryTurn struct {
+	Role    string
+	Content string
 }
 
 type Service struct {
@@ -36,6 +46,7 @@ type Service struct {
 	authz    Authorizer
 	join     KnowledgeJoin
 	defaults Params
+	planner  Planner
 }
 
 type Options struct {
@@ -48,12 +59,17 @@ type Options struct {
 	Authz    Authorizer
 	Join     KnowledgeJoin
 	Defaults Params
+	Planner  Planner
 }
 
 func NewService(options Options) *Service {
 	reranker := options.Reranker
 	if reranker == nil {
 		reranker = NoopReranker{}
+	}
+	planner := options.Planner
+	if planner == nil {
+		planner = EvidencePlanner{}
 	}
 	return &Service{
 		db:       options.DB,
@@ -65,6 +81,7 @@ func NewService(options Options) *Service {
 		authz:    options.Authz,
 		join:     options.Join,
 		defaults: options.Defaults,
+		planner:  planner,
 	}
 }
 
@@ -102,21 +119,14 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 	}
 
 	recall := RecallRequest{TenantID: scope.TenantID, KnowledgeBaseIDs: targetIDs, Query: query}
-	plan := QueryPlan{
-		SchemaVersion:             SchemaQueryPlan,
-		RequestID:                 input.RequestID,
-		TenantID:                  scope.TenantID,
-		KnowledgeBaseIDs:          targetIDs,
-		AuthorizationScopeVersion: scope.ACLVersion,
-		Intent:                    IntentFact,
-		Mode:                      ModeEvidence,
-		Rewrite:                   query,
-		TopK:                      params.TopK,
-		VectorEnabled:             strategy.VectorEnabled,
-		KeywordEnabled:            strategy.KeywordEnabled,
-		RerankEnabled:             params.RerankEnabled,
-		RequiredCapabilities:      strategy.RequiredCapabilities,
-		Params:                    params,
+	planQuery := input
+	planQuery.Query = query
+	plan, err := s.planner.Plan(ctx, PlanInput{
+		Scope: scope, Query: planQuery, TargetKnowledgeBaseIDs: targetIDs,
+		Strategy: strategy, Params: params, History: input.History,
+	})
+	if err != nil {
+		return EvidenceSet{}, fmt.Errorf("build query plan: %w", err)
 	}
 
 	vectorHits, keywordHits, err := s.recall(ctx, plan, params, recall)

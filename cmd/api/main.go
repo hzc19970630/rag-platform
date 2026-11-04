@@ -32,14 +32,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer application.Close()
-	httpapi.RegisterM1Routes(r, cfg, application, logger)
-	httpapi.RegisterM2Routes(r, cfg, application, logger)
-	httpapi.RegisterM3Routes(r, cfg, application, logger)
-	httpapi.RegisterM4Routes(r, cfg, application, logger)
-	httpapi.RegisterM5Routes(r, cfg, application, logger)
-	httpapi.RegisterM6Routes(r, cfg, application, logger)
-	httpapi.RegisterM7Routes(r, cfg, application, logger)
-	httpapi.RegisterM9Routes(r, cfg, application, logger)
+	httpapi.RegisterRoutes(r, cfg, application, logger)
 
 	// ReadHeaderTimeout blocks slowloris-style header trickling; ReadTimeout
 	// bounds body reads without touching response writes, so it is compatible

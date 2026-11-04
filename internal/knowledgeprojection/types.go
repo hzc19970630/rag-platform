@@ -7,13 +7,14 @@ package knowledgeprojection
 import (
 	"context"
 
+	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/status"
 )
 
 const (
-	SchemaWikiTask     = "WikiProjectionTaskV1"
-	SchemaRelationTask = "RelationProjectionTaskV1"
+	SchemaWikiTask     = tasks.SchemaWiki
+	SchemaRelationTask = tasks.SchemaRelation
 	// SchemaTask is kept as the wiki task alias used by the M6 code paths.
 	SchemaTask = SchemaWikiTask
 
@@ -65,23 +66,7 @@ const (
 
 // Task is one projection stage message. It carries only ids and a stage, never
 // page content or object keys; the worker loads the EvidencePackage by id.
-type Task struct {
-	SchemaVersion     string `json:"schema_version"`
-	TenantID          string `json:"tenant_id"`
-	KnowledgeBaseID   string `json:"knowledge_base_id"`
-	EvidencePackageID string `json:"evidence_package_id"`
-	ProjectionRunID   string `json:"projection_run_id"`
-	ProjectionType    string `json:"projection_type"`
-	Stage             string `json:"stage"`
-	IdempotencyKey    string `json:"idempotency_key"`
-	// Attempt distinguishes queue task ids across independent retries while the
-	// stage row keeps the same idempotency key.
-	Attempt int `json:"attempt"`
-}
-
-func (t Task) QueueID() string {
-	return t.IdempotencyKey + ":" + itoa(t.Attempt)
-}
+type Task = tasks.Projection
 
 // Publisher is implemented by the queue adapter; this package does not import
 // transport code.

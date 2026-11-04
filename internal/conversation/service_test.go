@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/authz"
+	"github.com/example/rag-platform/internal/platform/llm"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -211,4 +212,97 @@ func TestFinishAnswerPersistsAfterClientCancellation(t *testing.T) {
 	if events[0].EventType != EventAnswer || events[1].EventType != EventComplete {
 		t.Fatalf("unexpected replay events: %+v", events)
 	}
+}
+
+func TestPairHistoryDropsIncompleteTurns(t *testing.T) {
+	rows := []models.Message{
+		{ID: "u1", Role: MessageRoleUser, Content: "q1", Status: MessageStatusCompleted},
+		{ID: "a1", Role: MessageRoleAssistant, Content: "a1", Status: MessageStatusCompleted},
+		{ID: "u2", Role: MessageRoleUser, Content: "q2", Status: MessageStatusCompleted},
+		{ID: "a2", Role: MessageRoleAssistant, Content: "refused", Status: AnswerRefused},
+		{ID: "u3", Role: MessageRoleUser, Content: "q3", Status: MessageStatusCompleted},
+		{ID: "a3", Role: MessageRoleAssistant, Content: "a3", Status: MessageStatusCompleted},
+		{ID: "u4", Role: MessageRoleUser, Content: "dangling", Status: MessageStatusCompleted},
+	}
+	turns := pairHistory(rows)
+	if len(turns) != 4 {
+		t.Fatalf("turns = %d, want 4: %+v", len(turns), turns)
+	}
+	if turns[0].Content != "q1" || turns[1].Content != "a1" || turns[2].Content != "q3" || turns[3].Content != "a3" {
+		t.Fatalf("unexpected turns: %+v", turns)
+	}
+}
+
+func TestTrimHistoryKeepsNewestTurns(t *testing.T) {
+	long := make([]byte, 100)
+	for index := range long {
+		long[index] = 'x'
+	}
+	text := string(long)
+	turns := []llm.Turn{
+		{Role: MessageRoleUser, Content: text}, {Role: MessageRoleAssistant, Content: text},
+		{Role: MessageRoleUser, Content: text}, {Role: MessageRoleAssistant, Content: text},
+		{Role: MessageRoleUser, Content: text}, {Role: MessageRoleAssistant, Content: text},
+	}
+	if got := trimHistory(turns, 150); len(got) != 2 {
+		t.Fatalf("budget 150 kept %d turns, want newest pair", len(got))
+	}
+	if got := trimHistory(turns, 250); len(got) != 4 {
+		t.Fatalf("budget 250 kept %d turns, want two newest pairs", len(got))
+	}
+	if got := trimHistory(turns, 1); len(got) != 0 {
+		t.Fatalf("budget 1 kept %d turns, want none", len(got))
+	}
+}
+
+func TestLoadHistoryScopedAndChronological(t *testing.T) {
+	db := openConversationTestDB(t)
+	base := time.Date(2026, 11, 4, 10, 0, 0, 0, time.UTC)
+	rows := []models.Message{
+		{ID: "u1", ConversationID: "conv-a", TenantID: "tenant-a", UserID: "user-a", Role: MessageRoleUser, Content: "q1", Status: MessageStatusCompleted, CreatedAt: base},
+		{ID: "a1", ConversationID: "conv-a", TenantID: "tenant-a", UserID: "user-a", Role: MessageRoleAssistant, Content: "a1", Status: MessageStatusCompleted, CreatedAt: base.Add(time.Second)},
+		{ID: "u2", ConversationID: "conv-a", TenantID: "tenant-a", UserID: "user-a", Role: MessageRoleUser, Content: "q2", Status: MessageStatusCompleted, CreatedAt: base.Add(2 * time.Second)},
+		{ID: "a2", ConversationID: "conv-a", TenantID: "tenant-a", UserID: "user-a", Role: MessageRoleAssistant, Content: "a2", Status: MessageStatusCompleted, CreatedAt: base.Add(3 * time.Second)},
+		{ID: "other-conv", ConversationID: "conv-b", TenantID: "tenant-a", UserID: "user-a", Role: MessageRoleUser, Content: "leak", Status: MessageStatusCompleted, CreatedAt: base.Add(4 * time.Second)},
+		{ID: "other-user", ConversationID: "conv-a", TenantID: "tenant-a", UserID: "user-b", Role: MessageRoleUser, Content: "leak", Status: MessageStatusCompleted, CreatedAt: base.Add(5 * time.Second)},
+	}
+	if err := db.Create(&rows).Error; err != nil {
+		t.Fatalf("seed messages: %v", err)
+	}
+	service := NewService(Options{DB: db, HistoryTurns: 3, HistoryTokenLimit: 10000})
+	turns, err := service.loadHistory(context.Background(), authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "conv-a")
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+	if len(turns) != 4 {
+		t.Fatalf("turns = %d, want 2 pairs: %+v", len(turns), turns)
+	}
+	if turns[0].Content != "q1" || turns[1].Content != "a1" || turns[2].Content != "q2" || turns[3].Content != "a2" {
+		t.Fatalf("unexpected history: %+v", turns)
+	}
+}
+
+func TestLoadHistoryDisabled(t *testing.T) {
+	service := NewService(Options{})
+	turns, err := service.loadHistory(context.Background(), authz.Principal{}, "conv-a")
+	if err != nil || turns != nil {
+		t.Fatalf("disabled history must be empty: turns=%v err=%v", turns, err)
+	}
+}
+
+func openConversationTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("test db handle: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(&models.Message{}); err != nil {
+		t.Fatalf("migrate messages: %v", err)
+	}
+	return db
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/llm"
 	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/token"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
@@ -32,13 +33,15 @@ const localChatName = "local-extractive"
 const terminalPersistTimeout = 15 * time.Second
 
 type Service struct {
-	db        *gorm.DB
-	authz     *authz.Service
-	retrieval *retrieval.Service
-	chat      llm.Chatter
-	prompts   *prompts.Registry
-	timeout   time.Duration
-	dailyCap  int
+	db          *gorm.DB
+	authz       *authz.Service
+	retrieval   *retrieval.Service
+	chat        llm.Chatter
+	prompts     *prompts.Registry
+	timeout     time.Duration
+	dailyCap    int
+	historyTurn int
+	historyMax  int
 }
 
 type Options struct {
@@ -51,6 +54,11 @@ type Options struct {
 	// ChatRequestsPerDay is the tenant-level daily question budget. Zero
 	// disables the limit.
 	ChatRequestsPerDay int
+	// HistoryTurns is the number of completed user/assistant turns replayed to
+	// generation. Zero disables history.
+	HistoryTurns int
+	// HistoryTokenLimit bounds the replayed history.
+	HistoryTokenLimit int
 }
 
 func NewService(options Options) *Service {
@@ -59,13 +67,15 @@ func NewService(options Options) *Service {
 		timeout = 60 * time.Second
 	}
 	return &Service{
-		db:        options.DB,
-		authz:     options.Authz,
-		retrieval: options.Retrieval,
-		chat:      options.Chat,
-		prompts:   options.Prompts,
-		timeout:   timeout,
-		dailyCap:  options.ChatRequestsPerDay,
+		db:          options.DB,
+		authz:       options.Authz,
+		retrieval:   options.Retrieval,
+		chat:        options.Chat,
+		prompts:     options.Prompts,
+		timeout:     timeout,
+		dailyCap:    options.ChatRequestsPerDay,
+		historyTurn: options.HistoryTurns,
+		historyMax:  options.HistoryTokenLimit,
 	}
 }
 
@@ -210,6 +220,13 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 	if err := s.checkDailyQuota(ctx, principal.TenantID); err != nil {
 		return AnswerResult{}, err
 	}
+	// Load history before persisting the current question so it contains only
+	// prior turns. A history read failure is not worth losing the answer over,
+	// so it degrades to a single-turn prompt.
+	history, err := s.loadHistory(ctx, principal, conversation.ID)
+	if err != nil {
+		history = nil
+	}
 
 	sequence := 0
 	emitEvent := func(eventType string, data map[string]any) error {
@@ -237,6 +254,7 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 
 	evidence, err := s.retrieval.Retrieve(ctx, scope, retrieval.QueryInput{
 		RequestID: requestID, Query: query, KnowledgeBaseID: conversation.KnowledgeBaseID, SessionOverride: input.SessionOverride,
+		History: retrievalHistory(history),
 	})
 	if err != nil {
 		return s.failAnswer(ctx, emitEvent, conversation, principal, requestID, scope, query, started, CodeModelError, err)
@@ -270,7 +288,7 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 		return AnswerResult{}, err
 	}
 	generateCtx, cancel := context.WithTimeout(ctx, s.timeout)
-	response, generateErr := s.generate(generateCtx, query, registry, evidence)
+	response, generateErr := s.generate(generateCtx, query, registry, evidence, history)
 	cancel()
 	if generateErr != nil {
 		code := CodeModelError
@@ -447,7 +465,7 @@ func statusForCode(code string) string {
 }
 
 // generate calls the generation adapter with the registered evidence only.
-func (s *Service) generate(ctx context.Context, query string, registry *Registry, evidence retrieval.EvidenceSet) (llm.ChatResponse, error) {
+func (s *Service) generate(ctx context.Context, query string, registry *Registry, evidence retrieval.EvidenceSet, history []llm.Turn) (llm.ChatResponse, error) {
 	if s.chat == nil {
 		return llm.ChatResponse{}, fmt.Errorf("no generation adapter is configured")
 	}
@@ -464,7 +482,7 @@ func (s *Service) generate(ctx context.Context, query string, registry *Registry
 	if !ok {
 		return llm.ChatResponse{}, fmt.Errorf("context template is not configured")
 	}
-	return s.chat.Complete(ctx, llm.ChatRequest{SystemInstruction: systemInstruction, ContextTemplate: contextTemplate, Query: query, Evidence: items})
+	return s.chat.Complete(ctx, llm.ChatRequest{SystemInstruction: systemInstruction, ContextTemplate: contextTemplate, Query: query, Evidence: items, History: history})
 }
 
 // resolveCitations expands cited indexes into full citations and re-checks each
@@ -733,6 +751,88 @@ func (s *Service) loadAnswer(ctx context.Context, principal authz.Principal, con
 		LatencyMS: message.LatencyMS, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
 		ErrorCode: message.ErrorCode, ErrorMessage: message.ErrorMessage,
 	}, true, nil
+}
+
+const historyMessageMaxRunes = 2000
+
+// loadHistory returns the most recent completed turns in chronological order.
+// It reads before the current user message is persisted, so the current
+// question never appears twice.
+func (s *Service) loadHistory(ctx context.Context, principal authz.Principal, conversationID string) ([]llm.Turn, error) {
+	if s.historyTurn <= 0 || s.historyMax <= 0 {
+		return nil, nil
+	}
+	// Refused or failed answers are filtered out after loading, so fetch a few
+	// extra rows to still fill the requested number of completed turns.
+	limit := s.historyTurn*2 + 4
+	var rows []models.Message
+	if err := s.db.WithContext(ctx).
+		Where("conversation_id = ? AND tenant_id = ? AND user_id = ?", conversationID, principal.TenantID, principal.SubjectID).
+		Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("load conversation history: %w", err)
+	}
+	for left, right := 0, len(rows)-1; left < right; left, right = left+1, right-1 {
+		rows[left], rows[right] = rows[right], rows[left]
+	}
+	return trimHistory(pairHistory(rows), s.historyMax), nil
+}
+
+// pairHistory keeps only complete turns: a user message followed by a
+// completed assistant answer. A dangling question or a refusal is not replayed,
+// because it would teach the model the wrong precedent.
+func pairHistory(rows []models.Message) []llm.Turn {
+	turns := make([]llm.Turn, 0, len(rows))
+	var pending *models.Message
+	for index := range rows {
+		message := rows[index]
+		switch message.Role {
+		case MessageRoleUser:
+			pending = &rows[index]
+		case MessageRoleAssistant:
+			if pending == nil {
+				continue
+			}
+			if message.Status != MessageStatusCompleted {
+				pending = nil
+				continue
+			}
+			turns = append(turns,
+				llm.Turn{Role: MessageRoleUser, Content: truncateRunes(pending.Content, historyMessageMaxRunes)},
+				llm.Turn{Role: MessageRoleAssistant, Content: truncateRunes(message.Content, historyMessageMaxRunes)},
+			)
+			pending = nil
+		}
+	}
+	return turns
+}
+
+// trimHistory keeps the newest complete turns that fit the history budget.
+func trimHistory(turns []llm.Turn, tokenLimit int) []llm.Turn {
+	if tokenLimit <= 0 || len(turns) == 0 {
+		return nil
+	}
+	start := len(turns)
+	used := 0
+	for index := len(turns) - 2; index >= 0; index -= 2 {
+		cost := token.Estimate(turns[index].Content) + token.Estimate(turns[index+1].Content)
+		if used+cost > tokenLimit {
+			break
+		}
+		used += cost
+		start = index
+	}
+	return turns[start:]
+}
+
+func retrievalHistory(turns []llm.Turn) []retrieval.HistoryTurn {
+	if len(turns) == 0 {
+		return nil
+	}
+	history := make([]retrieval.HistoryTurn, len(turns))
+	for index, turn := range turns {
+		history[index] = retrieval.HistoryTurn{Role: turn.Role, Content: turn.Content}
+	}
+	return history
 }
 
 func truncateRunes(value string, limit int) string {

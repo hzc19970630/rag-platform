@@ -2,6 +2,9 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -94,5 +97,47 @@ func TestNewRemoteCharterValidatesOptions(t *testing.T) {
 	}
 	if chatter.Name() != "gpt-4o-mini" {
 		t.Fatalf("unexpected adapter name %q", chatter.Name())
+	}
+}
+
+func TestRemoteChatterSendsHistoryBeforeCurrentQuestion(t *testing.T) {
+	var received chatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&received); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"model":"test","choices":[{"message":{"role":"assistant","content":"answer [1]"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	chatter, err := NewRemoteChatter(RemoteChatterOptions{BaseURL: server.URL, Model: "test", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("construct adapter: %v", err)
+	}
+	_, err = chatter.Complete(context.Background(), ChatRequest{
+		SystemInstruction: "system",
+		ContextTemplate:   "<evidence>{{evidence}}</evidence><q>{{query}}</q>",
+		Query:             "and then?",
+		Evidence:          []EvidenceItem{{Index: 1, Text: "body"}},
+		History: []Turn{
+			{Role: "user", Content: "first question"},
+			{Role: "assistant", Content: "first answer"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if len(received.Messages) != 4 {
+		t.Fatalf("messages = %d, want system + 2 history + current", len(received.Messages))
+	}
+	wantRoles := []string{"system", "user", "assistant", "user"}
+	for index, role := range wantRoles {
+		if received.Messages[index].Role != role {
+			t.Fatalf("message %d role = %q, want %q", index, received.Messages[index].Role, role)
+		}
+	}
+	if !strings.Contains(received.Messages[3].Content, "and then?") {
+		t.Fatalf("current message must carry the question: %q", received.Messages[3].Content)
 	}
 }

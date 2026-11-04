@@ -185,6 +185,25 @@ type chunkRow struct {
 	Ordinal, PageNumber, StartOffset, EndOffset                 int
 }
 
+// chunkDocuments maps the rows just written into the searchable documents an
+// external keyword/hybrid adapter receives. Chunk persistence stays in this
+// package; only the derived index is handed to the port.
+func chunkDocuments(rows []chunkRow) []ChunkDocument {
+	documents := make([]ChunkDocument, 0, len(rows))
+	for _, row := range rows {
+		status := StatusParent
+		if row.ParentID != "" {
+			status = StatusChunked
+		}
+		documents = append(documents, ChunkDocument{
+			ID: row.ID, ParentID: row.ParentID, Ordinal: row.Ordinal, Content: row.Content,
+			ContentHash: row.ContentHash, HeadingPath: row.HeadingPath, PageNumber: row.PageNumber,
+			SourcePath: row.SourcePath, StartOffset: row.StartOffset, EndOffset: row.EndOffset, Status: status,
+		})
+	}
+	return documents
+}
+
 func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	var version models.DocumentVersion
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
@@ -223,7 +242,7 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 			return fmt.Errorf("delete previous index: %w", err)
 		}
 	}
-	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.Chunk{}).Error; err != nil {
 			return err
 		}
@@ -238,7 +257,18 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 			}
 		}
 		return tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusChunked, nil)).Error
-	})
+	}); err != nil {
+		return err
+	}
+	if w.indexWriter == nil {
+		return fmt.Errorf("keyword_index_error: evidence index writer is not configured")
+	}
+	// The rows are committed before the derived index is notified, so a failed
+	// external write is retried against the same version id.
+	if err := w.indexWriter.IndexChunks(ctx, version.ID, chunkDocuments(rows)); err != nil {
+		return fmt.Errorf("keyword_index_error: %w", err)
+	}
+	return nil
 }
 
 func (w *PipelineWorker) embed(ctx context.Context, task Task) error {

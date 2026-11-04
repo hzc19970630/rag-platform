@@ -10,10 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterM5Routes wires external-source connectors. Connector management is a
-// tenant-operator surface; reading a connector follows knowledge-base read
-// scope, and every synced document is governed by the knowledge-base ACL.
-func RegisterM5Routes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
+func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
 	protected := router.Group("/api/v1")
 	protected.Use(authenticationMiddleware(cfg, application))
 
@@ -133,5 +130,4 @@ func RegisterM5Routes(router *gin.Engine, cfg config.Config, application *app.Ap
 		}
 		c.JSON(http.StatusAccepted, run)
 	})
-	_ = logger
 }

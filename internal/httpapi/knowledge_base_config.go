@@ -11,11 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterM9Routes exposes the safe hot-config surface used by the workbench.
-// Reading needs knowledge-base read; saving needs write. The response is built
-// from the same validators and stored values the query path uses, so the UI
-// cannot invent a second range set.
-func RegisterM9Routes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
+func RegisterKnowledgeBaseConfigRoutes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
 	protected := router.Group("/api/v1")
 	protected.Use(authenticationMiddleware(cfg, application))
 
@@ -53,5 +49,4 @@ func RegisterM9Routes(router *gin.Engine, cfg config.Config, application *app.Ap
 		}
 		c.JSON(http.StatusOK, view)
 	})
-	_ = logger
 }

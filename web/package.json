@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "api:types": "openapi-typescript ../api/openapi/openapi.yaml -o src/api/generated.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
@@ -31,6 +32,7 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "jsdom": "^29.1.1",
+    "openapi-typescript": "^7.13.0",
     "vitest": "latest"
   }
 }

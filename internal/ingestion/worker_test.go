@@ -33,3 +33,24 @@ func TestTerminalParserCode(t *testing.T) {
 		}
 	}
 }
+
+func TestChunkDocumentsPreservesSearchMetadata(t *testing.T) {
+	rows := []chunkRow{
+		{ID: "parent-1", Content: "section body", ContentHash: "h1", HeadingPath: "H1", PageNumber: 2, SourcePath: "a.md", Ordinal: 0},
+		{ID: "chunk-1", ParentID: "parent-1", Content: "child body", ContentHash: "h2", HeadingPath: "H1", PageNumber: 2, SourcePath: "a.md", Ordinal: 0},
+	}
+	documents := chunkDocuments(rows)
+	if len(documents) != 2 {
+		t.Fatalf("documents = %d, want 2", len(documents))
+	}
+	if documents[0].Status != StatusParent || documents[0].ParentID != "" {
+		t.Fatalf("parent document = %+v", documents[0])
+	}
+	child := documents[1]
+	if child.Status != StatusChunked || child.ParentID != "parent-1" || child.Content != "child body" || child.ContentHash != "h2" {
+		t.Fatalf("child document = %+v", child)
+	}
+	if child.HeadingPath != "H1" || child.PageNumber != 2 || child.SourcePath != "a.md" {
+		t.Fatalf("child metadata = %+v", child)
+	}
+}

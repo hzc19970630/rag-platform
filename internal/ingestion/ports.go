@@ -27,10 +27,30 @@ type EmbeddingRecord struct {
 	Vector  []float32
 }
 
+// ChunkDocument is one searchable document as written by the chunk stage.
+// Chunk rows themselves remain owned by the Evidence Store; this record is the
+// hand-off to a keyword or hybrid index adapter.
+type ChunkDocument struct {
+	ID          string
+	ParentID    string
+	Ordinal     int
+	Content     string
+	ContentHash string
+	HeadingPath string
+	PageNumber  int
+	SourcePath  string
+	StartOffset int
+	EndOffset   int
+	Status      string
+}
+
 // EvidenceIndexWriter is the write side of the Evidence Index. The PostgreSQL
 // adapter stores vectors on the chunk row and lets BM25 follow the row write;
 // an external adapter can index the same records in a search engine.
 type EvidenceIndexWriter interface {
+	// IndexChunks mirrors chunk documents into the keyword/hybrid index. The
+	// PostgreSQL adapter is a no-op because BM25 follows the chunk row.
+	IndexChunks(ctx context.Context, versionID string, chunks []ChunkDocument) error
 	// WriteEmbeddings persists chunk vectors. A non-empty versionID also marks
 	// that DocumentVersion EMBEDDED; rebuild passes an empty versionID to update
 	// vectors without changing the published status.

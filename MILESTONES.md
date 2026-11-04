@@ -27,6 +27,7 @@
 | M7  | Knowledge Graph / Relation Projection | M3、M4       | P1        |
 | M8  | 规模化、复杂查询和可选扩展                         | M4、M5、M6、M7 | P2 / 条件启动 |
 | M9  | 前端工作台与可视化配置                           | M1、M2、M3、M4 | P1        |
+| M10 | 架构收敛与多轮会话（P0）                         | M1–M9          | P0        |
 
 
 M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线至少还要完成 M4 中的身份、审计、密钥和运营要求。M6 与 M7 相互独立，可以分开交付。M9 只重构前端工作台并开放数据库级热改配置，不依赖 M8，也不改变 M8 的条件启动门槛。
@@ -241,6 +242,8 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 - [ ] 按真实渠道需求增加 MCP、IM、Widget 和复杂连接器。
 - [ ] 若产品数据确认需要扫描件，再增加独立 OCR 里程碑：按页分类、混合 PDF 策略、OCR Adapter/引擎选择、版面与坐标 Schema、置信度和失败/人工复核状态、权限与保留策略、OCR 评估集。未满足这些验收前不得默认接收扫描 PDF。
 
+**前置**：M10（架构收敛与多轮会话）完成后再启动任何候选扩展；没有 M10 的契约与写端口，容量结论无法直接用于迁移决策。
+
 **启动门槛**：每项候选扩展都要附带可复现的容量数据或已确认的产品需求、成本评估、迁移回滚方案和验收测试。没有证据时不启动。
 
 **容量基线工具（2026-10-28）**：`make m8-capacity` / `make m8-capacity-validate` 提供启动门槛所需的容量证据：在本地栈按固定种子写入确定性语料，记录上传/入库吞吐、各阶段耗时、检索 P50/P95、关系投影与 depth 1–3 图查询延迟、未知种子负例与 PostgreSQL 表体积/行数，产出 `tests/eval/m8_capacity_report.json`（`M8CapacityReportV1`）。报告附 7 项候选的证据登记，`startedCandidates` 恒为空；该工具只收集证据、不启动任何候选扩展，M8 状态保持未开始。成本评估、迁移回滚方案与验收测试仍须在候选扩展立项时逐项补齐。
@@ -278,6 +281,34 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 
 **暂不做**：按知识库配置切分粒度；Embedding 模型/维度热切换；统一配置中心；Agent/MCP/IM/OCR 前端；自定义主题编辑器；WeKnora 的会话列表、分享和活动流完整复刻。
 
+## M10：架构收敛与多轮会话（P0）
+
+**目标**：在 M8 条件扩展前收敛模块边界与契约，并把多轮会话上下文纳入默认问答；不改变单轮行为，不引入外部检索引擎或微服务拆分。
+
+**依赖**：M1–M9。M8 的任何候选扩展以本里程碑完成为前置。
+
+**范围**：
+
+- [x] 任务契约上移到 `contracts/tasks`（`Ingestion`/`Sync`/`Projection`），领域包用类型别名；`internal/platform/queue` 只依赖契约，不再 import `ingestion`/`datasource`/`knowledgeprojection`。
+- [x] Worker handler 从 `main.go` 抽到 `cmd/worker/handlers.go`，按 task type 注册。
+- [x] Evidence Index 写端口补齐 `IndexChunks`：chunk 行仍由 Evidence Store 持久化，关键词/混合索引适配器通过端口接收同一批文档；PostgreSQL 实现为 no-op。
+- [x] 维护任务单实例化：一个 worker 副本持有 Postgres session advisory lock 并在整个生命周期内执行每个 tick，其余副本记录 `maintenance_lock_skipped`；leader 退出时锁随连接释放，下一 tick 自动接管。
+- [x] `retrieval.Planner` 端口与 `EvidencePlanner`：计划构造从 `Retrieve` 抽出，`QueryPlan` 记录 `historyTurns`；默认执行器仍是 Evidence-only。
+- [x] 多轮会话上下文：`remote` 适配器按 system → history → 当前问题的顺序发送；只回放“user + COMPLETED assistant”完整轮次，拒绝/失败/悬空问题不进历史；`CHAT_HISTORY_TURNS=0` 可关闭。
+- [x] HTTP 按资源拆分：`auth`/`knowledge_bases`/`documents`/`conversations`/`connectors`/`projection`/`operations`/`knowledge_base_config`，`RegisterRoutes` 统一编排；87 条业务路由路径不变。
+- [x] OpenAPI 契约 `api/openapi/openapi.yaml` 覆盖全部业务路由；`openapi_test.go` 双向校验路由与 spec，前端 `generated.ts` 由 spec 生成并在 CI 校验无漂移。
+- [x] 验收回归：`make test`、`make lint`、m2/m3/m4 acceptance、双 worker 维护锁冒烟、单轮 m3 评估指标不下降。
+
+**验收门槛**：
+
+- `gofmt`/`go vet`/`go test ./...`/`npm test`/`npm run build` 通过；OpenAPI 覆盖测试 87/87。
+- m2：上传 → `EVIDENCE_READY` → 关键词检索仍命中（验证 `IndexChunks` 不改变 Postgres 行为）。
+- m3：单轮问答、引用、拒答、权限负向不回归；同一会话第二轮请求体包含上一轮 user/assistant；`CHAT_HISTORY_TURNS=0` 时与旧行为一致。
+- m4：双 worker 下每个维护周期只有一个实例执行 purge/reconcile/schedule；单实例验收行为不变。
+- m1–m4 路由路径与状态码不变；OpenAPI 与前端生成类型无 diff。
+
+**暂不做**：检索侧多轮指代改写、Wiki/Graph 进入默认 QueryPlan、授权作用域缓存、OTel 替换自研 metrics、Repository 全量拆分、OpenSearch/图数据库迁移。
+
 ## 里程碑状态记录
 
 实施时仅在对应验收门槛全部满足后更新状态：
@@ -295,6 +326,7 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 | M7  | 已完成 | 2026-10-27 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test -- --passWithNoTests`）、`make lint`（gofmt/vet + `npm run build`）、`./scripts/m7_acceptance.sh`、`make m7-eval`、`make m7-eval-validate` 通过。范围：`graph_enabled` 开关、`RelationProjectionPackageV1`、关系投影运行 COLLECT → EXTRACT → FINALIZE 与独立重试；五张关系表（`graph_snapshots`/`graph_entities`/`graph_entity_aliases`/`graph_relations`/`graph_relation_sources`）及级联；实体归一/合并规则 `declared_alias`/`normalized_merge`；有界图查询 depth 默认 2/上限 3、节点默认 30/上限 50 与显式截断；快照 `PENDING_REVIEW` → 审核批准（重校验每条来源、旧 `ACTIVE` 置 `SUPERSEDED`）/拒绝，ACL 变更置 `STALE` 且不可查询；按能力粒度的 ProjectionJoin（聚合状态仅展示，wiki 失败不阻塞 relation/evidence，反之亦然），修复原聚合门槛导致 wiki/evidence 查询 409 的缺陷（`internal/retrieval/ports.go` 新增 `CapabilityStatus`、`capabilities.go` 按声明能力逐项判断、`internal/knowledgeprojection/join.go` 实现，新增 `capabilities_gate_test.go`）。验收覆盖：每条关系回指文档版本与 Chunk，FINALIZE 拒绝无来源/不可回指关系（`terminal:untraceable_relation`、`terminal:unsourced_relations`）；隐藏文档、隐藏边、共享实体与多跳路径无侧信道泄漏（含跨租户 403 与边级可见性）；幂等重建、源版本替换/重新解析后快照正确失效或重建；关闭开关后图查询与知识索引分别清理，删除知识库级联 0 残留。评估（`tests/eval/m7_eval_report.json`）：V1（9 文档 / 10 用例）为 graph 100% vs RAG 100%、rescue 0，建议 `simplify`；V2 扩为 30 篇 fixtures / 135 子块 / 34 用例（28 可答、20 多跳、6 负例，含三条关系链、别名/归一化种子、分叉、近名干扰与 depth-bound 负例），`make m7-eval-validate` 通过（30 fixtures / 34 cases / 135 chunks）。远程 chat 抽取连续两轮 `context deadline exceeded`，改用确定性 local-extractive 抽取器实跑：多跳 graph 100% vs strict RAG 70%（loose 70%）、graph-only rescue 6、RAG-only 0、hop exact 100%（20 项）、种子解析 100%、负例 100%（unknown-seed 4/4、depth-bound 2/2）、RAG 干扰误报 0/2、RAG 文档命中 92.9%、均值延迟 graph 20.3ms vs RAG 187.9ms，delta +30%，harness 建议 `keep-bounded-graph-query`。同一集合在四次独立索引构建下多跳 strict RAG 为 85%/60%/80%/70%（graph 恒 100%），报告 limitations 已注明单次索引样本与重建敏感性、发布前应重复运行；是否裁剪复杂图查询由产品依据报告决定。回归 m1–m6 全部通过：m3 在 remote chat 下通过；m4 在 `OIDC_ENABLED=false` override 下通过并已恢复 `OIDC_ENABLED=true`；m5 在正常栈通过；m6 需 `CHAT_SOURCE=local` 确定性适配器（remote 适配器下重建必然产生新内容并正确进入 `REVIEW_REQUIRED`，脚本“全部 PUBLISHED”断言不适用），运行后已恢复 `CHAT_SOURCE=remote`。边界：未引入外部图数据库、实体消歧模型或图驱动查询扩展；图查询为显式调用，不进入默认问答计划。 |
 | M8  | 未开始 | -    | -       |
 | M9  | 已完成 | 2026-11-03 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test` 16/16）、`make lint`（gofmt/vet + `tsc -b` + `npm run build`）、`./scripts/m1_acceptance.sh`、`m2_acceptance.sh`、`m3_acceptance.sh`、`m4_acceptance.sh` 全部通过。m1/m2 在默认栈运行；m3 按脚本既有模式临时使用 `CHAT_SOURCE=local`（远程 chat 在生成阶段中断，SSE 停在 GENERATING），m4 使用 `OIDC_ENABLED=false`，运行后均已恢复 `.env` 并重建 api/worker。后端：`GET /api/v1/knowledge-bases/{id}/configuration`（`KnowledgeBaseConfigurationV1`）与 `PUT .../retrieval-config`（整体替换，`{}` 清除覆盖；PATCH 合并语义不变），读/写分别校验 read/write，越权 403、非法值 400、保存写审计；`retrieval_config` 不因 vector/keyword 开关变化而失效，仅 wiki/graph 开关触发 ACL 递增与投影失效/重建。前端：迁移到 React Router + Ant Design + TanStack Query + Zustand + i18next，建立设计令牌与 light/dark/system，左侧导航、知识库卡片网格、文档/成员/投影页签、文档详情 Chunk、独立问答工作台、分区设置抽屉、运维与登录重构；只读系统配置无编辑控件，危险区与成员按能力隐藏。`required_capabilities` 语义冲突按运行时事实收敛：默认仅 evidence，开启 wiki/graph 不自动追加为默认查询要求，关闭投影时前端剪除、服务端 400；DESIGN.md §4.6.5 已同步。真实浏览器逐断点检查 1280/1024/768/375：均无横向溢出，1280 展开侧栏 3 列卡片、1024 折叠侧栏 2 列、768 折叠/375 抽屉，Tab 顺序覆盖导航→操作→内容且焦点可见，抽屉可用 Enter 打开、Escape 关闭并归还焦点，system 跟随 `prefers-color-scheme`；抽样文字/按钮对比度 light 4.57–16.29、dark 5.10–12.98，主按钮 5.44/6.38。剩余提示：Vite 单个 chunk 约 1.42 MB 的性能告警，不阻塞本里程碑。 |
+| M10 | 已完成 | 2026-11-04 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test` 16/16）、`make lint`（gofmt/vet + `tsc -b` + `npm run build`）、`./scripts/m2_acceptance.sh`、`m3_acceptance.sh`、`m4_acceptance.sh` 通过。契约与边界：任务载荷上移 `contracts/tasks`（`Ingestion`/`Sync`/`Projection` + JSON golden），`internal/platform/queue` 只依赖契约；worker handler 抽到 `cmd/worker/handlers.go`；`EvidenceIndexWriter` 增加 `IndexChunks`（Postgres no-op，m2 入库与关键词检索通过）；维护循环改为 leader 持有 Postgres session lock，双 worker 复验为一个 `maintenance_lock_acquired` + 一个 `maintenance_lock_skipped`，锁连接失效时 `maintenance_lock_lost` 并重新竞选。在线链路：`retrieval.Planner`/`EvidencePlanner` 抽出计划构造，`QueryPlan.historyTurns` 记录历史轮数；多轮会话按 system → history → 当前问题发送，只回放完整的 user + COMPLETED assistant，`CHAT_HISTORY_TURNS=0` 可关闭。HTTP 按资源拆分（auth/knowledge_bases/documents/conversations/connectors/projection/operations/knowledge_base_config），`RegisterRoutes` 统一编排，87 条业务路由路径不变；`api/openapi/openapi.yaml` 覆盖 87/87，`openapi_test.go` 双向校验，`web/src/api/generated.ts` 由 spec 生成并在 CI 校验无漂移。单轮评估（`CHAT_HISTORY_TURNS=0`）：49 用例、0 排除，recallAtK 1.0、documentHitRate 0.8889、citationAccuracy/groundedness/refusalRate/permissionNegativeDenials/injectionFlagRate 均为 1.0，gates passed；`meanLatencyMs` 21454 仅诊断项，受本次 provider 延迟影响。 |
 
 
 

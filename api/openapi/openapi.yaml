@@ -1,0 +1,1884 @@
+openapi: 3.0.3
+info:
+  title: RAG Platform API
+  version: 0.10.0
+  description: |
+    Resource-oriented contract for the RAG platform. Route ownership follows the
+    domain resource, not the delivery milestone. Every Gin business route must
+    have a matching path and method here (see openapi_test.go).
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+tags:
+  - name: auth
+  - name: identity
+  - name: knowledge-bases
+  - name: documents
+  - name: conversations
+  - name: connectors
+  - name: projections
+  - name: operations
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: rag_session
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: The caller may not access this resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+    GenericObject:
+      type: object
+      additionalProperties: true
+    MeResponse:
+      type: object
+      properties:
+        principal:
+          type: object
+          properties:
+            subjectId: {type: string}
+            tenantId: {type: string}
+        scope:
+          type: object
+          properties:
+            subjectId: {type: string}
+            tenantId: {type: string}
+            knowledgeBaseIds:
+              type: array
+              items: {type: string}
+            capabilities:
+              type: array
+              items: {type: string}
+            aclVersion: {type: string}
+        developmentIdentity: {type: boolean}
+    KnowledgeBase:
+      type: object
+      properties:
+        id: {type: string}
+        tenantId: {type: string}
+        ownerId: {type: string}
+        name: {type: string}
+        description: {type: string}
+        aclVersion: {type: integer, format: int64}
+        retrievalConfig: {type: string}
+        indexingStrategy: {type: string}
+        embeddingModel: {type: string}
+        embeddingDimension: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    KnowledgeBaseList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/KnowledgeBase'}
+    KnowledgeBaseConfiguration:
+      type: object
+      additionalProperties: true
+      properties:
+        knowledgeBaseId: {type: string}
+        indexingStrategy: {type: object, additionalProperties: true}
+        retrieval: {type: object, additionalProperties: true}
+        embedding: {type: object, additionalProperties: true}
+        chunking: {type: object, additionalProperties: true}
+        chat: {type: object, additionalProperties: true}
+        rerank: {type: object, additionalProperties: true}
+        parser: {type: object, additionalProperties: true}
+    DocumentView:
+      type: object
+      properties:
+        document: {type: object, additionalProperties: true}
+        version: {type: object, additionalProperties: true}
+        pipeline: {type: object, additionalProperties: true}
+    DocumentPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DocumentView'}
+        nextCursor: {type: string}
+    Chunk:
+      type: object
+      additionalProperties: true
+      properties:
+        id: {type: string}
+        documentId: {type: string}
+        content: {type: string}
+        headingPath: {type: string}
+        pageNumber: {type: integer}
+    ChunkPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Chunk'}
+        nextCursor: {type: string}
+    EvidenceSet:
+      type: object
+      additionalProperties: true
+      properties:
+        schemaVersion: {type: string}
+        requestId: {type: string}
+        query: {type: string}
+        items:
+          type: array
+          items: {type: object, additionalProperties: true}
+        tokenEstimate: {type: integer}
+        recallLatencyMs: {type: integer, format: int64}
+        rerankApplied: {type: boolean}
+        droppedByAuthorization: {type: integer}
+    Conversation:
+      type: object
+      additionalProperties: true
+      properties:
+        id: {type: string}
+        knowledgeBaseId: {type: string}
+        userId: {type: string}
+        title: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    ConversationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Conversation'}
+    MessageView:
+      type: object
+      additionalProperties: true
+      properties:
+        message: {type: object, additionalProperties: true}
+        citations:
+          type: array
+          items: {type: object, additionalProperties: true}
+    MessageList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/MessageView'}
+    OpsMetrics:
+      type: object
+      additionalProperties: true
+paths:
+
+  /api/v1/api-keys:
+    get:
+      tags: [identity]
+      summary: "GET /api/v1/api-keys"
+      operationId: get_api_keys
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [identity]
+      summary: "POST /api/v1/api-keys"
+      operationId: post_api_keys
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/api-keys/{id}:
+    delete:
+      tags: [identity]
+      summary: "DELETE /api/v1/api-keys/{id}"
+      operationId: delete_api_keys_id
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/audit:
+    get:
+      tags: [identity]
+      summary: "GET /api/v1/audit"
+      operationId: get_audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/audit/authorization:
+    get:
+      tags: [identity]
+      summary: "GET /api/v1/audit/authorization"
+      operationId: get_audit_authorization
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/callback:
+    get:
+      tags: [auth]
+      summary: "GET /api/v1/auth/callback"
+      operationId: get_auth_callback
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/config:
+    get:
+      tags: [auth]
+      summary: "GET /api/v1/auth/config"
+      operationId: get_auth_config
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/dev-login:
+    post:
+      tags: [auth]
+      summary: "POST /api/v1/auth/dev-login"
+      operationId: post_auth_dev_login
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: "POST /api/v1/auth/logout"
+      operationId: post_auth_logout
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/oidc/login:
+    get:
+      tags: [auth]
+      summary: "GET /api/v1/auth/oidc/login"
+      operationId: get_auth_oidc_login
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      summary: "POST /api/v1/auth/refresh"
+      operationId: post_auth_refresh
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/chunks/{chunkID}:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/chunks/{chunkID}"
+      operationId: get_chunks_chunkID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}:
+    get:
+      tags: [connectors]
+      summary: "GET /api/v1/connectors/{id}"
+      operationId: get_connectors_id
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [connectors]
+      summary: "PATCH /api/v1/connectors/{id}"
+      operationId: patch_connectors_id
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [connectors]
+      summary: "DELETE /api/v1/connectors/{id}"
+      operationId: delete_connectors_id
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/connectors/{id}/cancel:
+    post:
+      tags: [connectors]
+      summary: "POST /api/v1/connectors/{id}/cancel"
+      operationId: post_connectors_id_cancel
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}/permissions:
+    get:
+      tags: [connectors]
+      summary: "GET /api/v1/connectors/{id}/permissions"
+      operationId: get_connectors_id_permissions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}/runs:
+    get:
+      tags: [connectors]
+      summary: "GET /api/v1/connectors/{id}/runs"
+      operationId: get_connectors_id_runs
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}/runs/{runId}:
+    get:
+      tags: [connectors]
+      summary: "GET /api/v1/connectors/{id}/runs/{runId}"
+      operationId: get_connectors_id_runs_runId
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}/runs/{runId}/cancel:
+    post:
+      tags: [connectors]
+      summary: "POST /api/v1/connectors/{id}/runs/{runId}/cancel"
+      operationId: post_connectors_id_runs_runId_cancel
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}/runs/{runId}/retry:
+    post:
+      tags: [connectors]
+      summary: "POST /api/v1/connectors/{id}/runs/{runId}/retry"
+      operationId: post_connectors_id_runs_runId_retry
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/connectors/{id}/sync:
+    post:
+      tags: [connectors]
+      summary: "POST /api/v1/connectors/{id}/sync"
+      operationId: post_connectors_id_sync
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/documents/{id}"
+      operationId: get_documents_id
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [documents]
+      summary: "DELETE /api/v1/documents/{id}"
+      operationId: delete_documents_id
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/documents/{id}/chunks:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/documents/{id}/chunks"
+      operationId: get_documents_id_chunks
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChunkPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/content:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/documents/{id}/content"
+      operationId: get_documents_id_content
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/preview:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/documents/{id}/preview"
+      operationId: get_documents_id_preview
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/purge:
+    post:
+      tags: [documents]
+      summary: "POST /api/v1/documents/{id}/purge"
+      operationId: post_documents_id_purge
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/reparse:
+    post:
+      tags: [documents]
+      summary: "POST /api/v1/documents/{id}/reparse"
+      operationId: post_documents_id_reparse
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/restore:
+    post:
+      tags: [documents]
+      summary: "POST /api/v1/documents/{id}/restore"
+      operationId: post_documents_id_restore
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/status:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/documents/{id}/status"
+      operationId: get_documents_id_status
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/versions:
+    get:
+      tags: [documents]
+      summary: "GET /api/v1/documents/{id}/versions"
+      operationId: get_documents_id_versions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/documents/{id}/versions/{versionID}/activate:
+    post:
+      tags: [documents]
+      summary: "POST /api/v1/documents/{id}/versions/{versionID}/activate"
+      operationId: post_documents_id_versions_versionID_activate
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/graph/runs/{runId}:
+    get:
+      tags: [projections]
+      summary: "GET /api/v1/graph/runs/{runId}"
+      operationId: get_graph_runs_runId
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/graph/runs/{runId}/retry:
+    post:
+      tags: [projections]
+      summary: "POST /api/v1/graph/runs/{runId}/retry"
+      operationId: post_graph_runs_runId_retry
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/graph/snapshots/{snapshotId}:
+    get:
+      tags: [projections]
+      summary: "GET /api/v1/graph/snapshots/{snapshotId}"
+      operationId: get_graph_snapshots_snapshotId
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/graph/snapshots/{snapshotId}/review:
+    post:
+      tags: [projections]
+      summary: "POST /api/v1/graph/snapshots/{snapshotId}/review"
+      operationId: post_graph_snapshots_snapshotId_review
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases"
+      operationId: get_knowledge_bases
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases"
+      operationId: post_knowledge_bases
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}"
+      operationId: get_knowledge_bases_id
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [knowledge-bases]
+      summary: "PATCH /api/v1/knowledge-bases/{id}"
+      operationId: patch_knowledge_bases_id
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [knowledge-bases]
+      summary: "DELETE /api/v1/knowledge-bases/{id}"
+      operationId: delete_knowledge_bases_id
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/knowledge-bases/{id}/configuration:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/configuration"
+      operationId: get_knowledge_bases_id_configuration
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseConfiguration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/connectors:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/connectors"
+      operationId: get_knowledge_bases_id_connectors
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases/{id}/connectors"
+      operationId: post_knowledge_bases_id_connectors
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/documents:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/documents"
+      operationId: get_knowledge_bases_id_documents
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases/{id}/documents"
+      operationId: post_knowledge_bases_id_documents
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/graph/query:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/graph/query"
+      operationId: get_knowledge_bases_id_graph_query
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/graph/rebuild:
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases/{id}/graph/rebuild"
+      operationId: post_knowledge_bases_id_graph_rebuild
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/graph/runs:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/graph/runs"
+      operationId: get_knowledge_bases_id_graph_runs
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/graph/snapshots:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/graph/snapshots"
+      operationId: get_knowledge_bases_id_graph_snapshots
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/knowledge/search:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/knowledge/search"
+      operationId: get_knowledge_bases_id_knowledge_search
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/members:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/members"
+      operationId: get_knowledge_bases_id_members
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases/{id}/members"
+      operationId: post_knowledge_bases_id_members
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/members/{userID}:
+    delete:
+      tags: [knowledge-bases]
+      summary: "DELETE /api/v1/knowledge-bases/{id}/members/{userID}"
+      operationId: delete_knowledge_bases_id_members_userID
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/knowledge-bases/{id}/projection:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/projection"
+      operationId: get_knowledge_bases_id_projection
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/retrieval-config:
+    put:
+      tags: [knowledge-bases]
+      summary: "PUT /api/v1/knowledge-bases/{id}/retrieval-config"
+      operationId: put_knowledge_bases_id_retrieval_config
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/sync/cancel:
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases/{id}/sync/cancel"
+      operationId: post_knowledge_bases_id_sync_cancel
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/wiki/pages:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/wiki/pages"
+      operationId: get_knowledge_bases_id_wiki_pages
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/wiki/rebuild:
+    post:
+      tags: [knowledge-bases]
+      summary: "POST /api/v1/knowledge-bases/{id}/wiki/rebuild"
+      operationId: post_knowledge_bases_id_wiki_rebuild
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/knowledge-bases/{id}/wiki/runs:
+    get:
+      tags: [knowledge-bases]
+      summary: "GET /api/v1/knowledge-bases/{id}/wiki/runs"
+      operationId: get_knowledge_bases_id_wiki_runs
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me:
+    get:
+      tags: [identity]
+      summary: "GET /api/v1/me"
+      operationId: get_me
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/dead-letters:
+    get:
+      tags: [operations]
+      summary: "GET /api/v1/ops/dead-letters"
+      operationId: get_ops_dead_letters
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/dead-letters/{id}/discard:
+    post:
+      tags: [operations]
+      summary: "POST /api/v1/ops/dead-letters/{id}/discard"
+      operationId: post_ops_dead_letters_id_discard
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/dead-letters/{id}/retry:
+    post:
+      tags: [operations]
+      summary: "POST /api/v1/ops/dead-letters/{id}/retry"
+      operationId: post_ops_dead_letters_id_retry
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/metrics:
+    get:
+      tags: [operations]
+      summary: "GET /api/v1/ops/metrics"
+      operationId: get_ops_metrics
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsMetrics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/metrics/prometheus:
+    get:
+      tags: [operations]
+      summary: "GET /api/v1/ops/metrics/prometheus"
+      operationId: get_ops_metrics_prometheus
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/pipelines/{id}/cancel:
+    post:
+      tags: [operations]
+      summary: "POST /api/v1/ops/pipelines/{id}/cancel"
+      operationId: post_ops_pipelines_id_cancel
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/reconcile:
+    post:
+      tags: [operations]
+      summary: "POST /api/v1/ops/reconcile"
+      operationId: post_ops_reconcile
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ops/tasks/{key}:
+    get:
+      tags: [operations]
+      summary: "GET /api/v1/ops/tasks/{key}"
+      operationId: get_ops_tasks_key
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/requests/{requestID}/events:
+    get:
+      tags: [conversations]
+      summary: "GET /api/v1/requests/{requestID}/events"
+      operationId: get_requests_requestID_events
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/search:
+    post:
+      tags: [conversations]
+      summary: "POST /api/v1/search"
+      operationId: post_search
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceSet'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/sessions:
+    get:
+      tags: [conversations]
+      summary: "GET /api/v1/sessions"
+      operationId: get_sessions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [conversations]
+      summary: "POST /api/v1/sessions"
+      operationId: post_sessions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/sessions/{id}/messages:
+    get:
+      tags: [conversations]
+      summary: "GET /api/v1/sessions/{id}/messages"
+      operationId: get_sessions_id_messages
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [conversations]
+      summary: "POST /api/v1/sessions/{id}/messages"
+      operationId: post_sessions_id_messages
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/tenant/members:
+    get:
+      tags: [identity]
+      summary: "GET /api/v1/tenant/members"
+      operationId: get_tenant_members
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [identity]
+      summary: "POST /api/v1/tenant/members"
+      operationId: post_tenant_members
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/tenant/members/{userID}:
+    patch:
+      tags: [identity]
+      summary: "PATCH /api/v1/tenant/members/{userID}"
+      operationId: patch_tenant_members_userID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [identity]
+      summary: "DELETE /api/v1/tenant/members/{userID}"
+      operationId: delete_tenant_members_userID
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/wiki/pages/{pageId}:
+    get:
+      tags: [projections]
+      summary: "GET /api/v1/wiki/pages/{pageId}"
+      operationId: get_wiki_pages_pageId
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/wiki/pages/{pageId}/rollback:
+    post:
+      tags: [projections]
+      summary: "POST /api/v1/wiki/pages/{pageId}/rollback"
+      operationId: post_wiki_pages_pageId_rollback
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/wiki/pages/{pageId}/versions:
+    get:
+      tags: [projections]
+      summary: "GET /api/v1/wiki/pages/{pageId}/versions"
+      operationId: get_wiki_pages_pageId_versions
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/wiki/pages/{pageId}/versions/{versionId}/publish:
+    post:
+      tags: [projections]
+      summary: "POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/publish"
+      operationId: post_wiki_pages_pageId_versions_versionId_publish
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/wiki/pages/{pageId}/versions/{versionId}/review:
+    post:
+      tags: [projections]
+      summary: "POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review"
+      operationId: post_wiki_pages_pageId_versions_versionId_review
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/wiki/runs/{runId}:
+    get:
+      tags: [projections]
+      summary: "GET /api/v1/wiki/runs/{runId}"
+      operationId: get_wiki_runs_runId
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/wiki/runs/{runId}/retry:
+    post:
+      tags: [projections]
+      summary: "POST /api/v1/wiki/runs/{runId}/retry"
+      operationId: post_wiki_runs_runId_retry
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenericObject'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'

@@ -84,12 +84,15 @@ func (c *RemoteChatter) Complete(ctx context.Context, request ChatRequest) (Chat
 	if maxTokens <= 0 {
 		maxTokens = c.maxTokens
 	}
+	messages := make([]chatMessage, 0, len(request.History)+2)
+	messages = append(messages, chatMessage{Role: "system", Content: request.SystemInstruction})
+	for _, turn := range request.History {
+		messages = append(messages, chatMessage{Role: turn.Role, Content: turn.Content})
+	}
+	messages = append(messages, chatMessage{Role: "user", Content: ApplyContextTemplate(request.ContextTemplate, request.Query, request.Evidence)})
 	body, err := json.Marshal(chatRequest{
-		Model: c.model,
-		Messages: []chatMessage{
-			{Role: "system", Content: request.SystemInstruction},
-			{Role: "user", Content: ApplyContextTemplate(request.ContextTemplate, request.Query, request.Evidence)},
-		},
+		Model:       c.model,
+		Messages:    messages,
 		MaxTokens:   maxTokens,
 		Temperature: 0,
 	})

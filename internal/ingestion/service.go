@@ -451,7 +451,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 }
 
 func (s *Service) taskFor(principal authz.Principal, document models.Document, version models.DocumentVersion, pipeline models.PipelineRun, stage models.StageRun, stageName string) Task {
-	return Task{Envelope: Envelope{SchemaVersion: SchemaTask, TenantID: principal.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: pipeline.ID, StageRunID: fmt.Sprint(stage.ID), TraceID: pipeline.TraceID, RequestID: pipeline.RequestID, ActorID: principal.SubjectID, IdempotencyKey: stage.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, TaskType: "document.ingestion.v1", Stage: stageName, ObjectKey: version.SourceObjectKey, PackageID: stableID("pkg", version.ID)}
+	return Task{Envelope: Envelope{SchemaVersion: SchemaTask, TenantID: principal.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: pipeline.ID, StageRunID: fmt.Sprint(stage.ID), TraceID: pipeline.TraceID, RequestID: pipeline.RequestID, ActorID: principal.SubjectID, IdempotencyKey: stage.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, TaskType: TypeTask, Stage: stageName, ObjectKey: version.SourceObjectKey, PackageID: stableID("pkg", version.ID)}
 }
 
 func (s *Service) loadResult(ctx context.Context, documentID, versionID, pipelineID string) (UploadResult, error) {

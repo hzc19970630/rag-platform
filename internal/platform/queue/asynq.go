@@ -7,23 +7,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/rag-platform/internal/datasource"
-	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/knowledgeprojection"
+	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/hibiken/asynq"
 )
 
 const (
-	TaskTypeIngestion = "document.ingestion.v1"
-	// TaskTypeSync mirrors datasource.TaskTypeSync. The queue package owns the
+	TaskTypeIngestion = tasks.TypeIngestion
+	// TaskTypeSync mirrors tasks.TypeSync. The contract package owns the
 	// transport name so the worker mux and the outbox publisher cannot drift.
-	TaskTypeSync = "connector.sync.v1"
+	TaskTypeSync = tasks.TypeSync
 	// TaskTypeWiki carries one Wiki projection stage.
-	TaskTypeWiki = "knowledge.projection.wiki.v1"
+	TaskTypeWiki = tasks.TypeWiki
 	// TaskTypeRelation carries one relation projection stage. It shares the
 	// projection queue with Wiki but is an independent task type so one
 	// pipeline's failures cannot be retried as the other.
-	TaskTypeRelation = "knowledge.projection.relation.v1"
+	TaskTypeRelation = tasks.TypeRelation
 
 	QueueIngestion   = "ingestion"
 	QueueInteractive = "interactive"
@@ -48,7 +46,7 @@ func (p *Publisher) Close() error {
 	return p.client.Close()
 }
 
-func (p *Publisher) Publish(ctx context.Context, task ingestion.Task) error {
+func (p *Publisher) Publish(ctx context.Context, task tasks.Ingestion) error {
 	payload, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("marshal ingestion task: %w", err)
@@ -63,7 +61,7 @@ func (p *Publisher) Publish(ctx context.Context, task ingestion.Task) error {
 // PublishSync enqueues one connector sync attempt. Sync work runs in the
 // maintenance pool so a bulk upload backlog cannot delay an operator retry of a
 // failed connector.
-func (p *Publisher) PublishSync(ctx context.Context, task datasource.SyncTask) error {
+func (p *Publisher) PublishSync(ctx context.Context, task tasks.Sync) error {
 	payload, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("marshal connector sync task: %w", err)
@@ -78,7 +76,7 @@ func (p *Publisher) PublishSync(ctx context.Context, task datasource.SyncTask) e
 // PublishWiki enqueues one Wiki projection stage in its own pool. The task id
 // includes the attempt so an independent retry is not suppressed by Asynq's
 // retained completed-task record.
-func (p *Publisher) PublishWiki(ctx context.Context, task knowledgeprojection.Task) error {
+func (p *Publisher) PublishWiki(ctx context.Context, task tasks.Projection) error {
 	payload, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("marshal wiki projection task: %w", err)
@@ -93,7 +91,7 @@ func (p *Publisher) PublishWiki(ctx context.Context, task knowledgeprojection.Ta
 // PublishRelation enqueues one relation projection stage. It uses a distinct
 // Asynq task type from Wiki so retries and dead-letter inspection stay
 // attributable to the projection that failed.
-func (p *Publisher) PublishRelation(ctx context.Context, task knowledgeprojection.Task) error {
+func (p *Publisher) PublishRelation(ctx context.Context, task tasks.Projection) error {
 	payload, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("marshal relation projection task: %w", err)
@@ -108,7 +106,7 @@ func (p *Publisher) PublishRelation(ctx context.Context, task knowledgeprojectio
 // RemoveArchived deletes the archived record left behind when the retry budget
 // is exhausted. It is idempotent: a missing task or queue means there is
 // nothing left to clean.
-func (p *Publisher) RemoveArchived(_ context.Context, task ingestion.Task) error {
+func (p *Publisher) RemoveArchived(_ context.Context, task tasks.Ingestion) error {
 	if strings.TrimSpace(task.IdempotencyKey) == "" {
 		return nil
 	}
@@ -153,7 +151,7 @@ func isUncreatedQueue(err error) bool {
 	return strings.HasPrefix(message, "NOT_FOUND: queue ") && strings.HasSuffix(message, " does not exist")
 }
 
-func poolFor(task ingestion.Task) string {
+func poolFor(task tasks.Ingestion) string {
 	switch task.Queue {
 	case QueueInteractive, QueueMaintenance:
 		return task.Queue

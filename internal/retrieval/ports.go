@@ -21,6 +21,24 @@ type RecallRequest struct {
 	Threshold      float64
 }
 
+// Planner turns a resolved query into an executable plan. The default planner
+// builds the evidence-only plan; a future planner can add Wiki/relation steps
+// without changing the recall and authorization stages.
+type Planner interface {
+	Plan(ctx context.Context, input PlanInput) (QueryPlan, error)
+}
+
+// PlanInput is everything the planner may consider. Strategy and Params are
+// already resolved by the caller, so the planner does not re-read configuration.
+type PlanInput struct {
+	Scope                  authz.AuthorizationScope
+	Query                  QueryInput
+	TargetKnowledgeBaseIDs []string
+	Strategy               IndexingStrategy
+	Params                 Params
+	History                []HistoryTurn
+}
+
 // KeywordSearcher performs BM25 recall over the Evidence Index.
 type KeywordSearcher interface {
 	SearchKeyword(ctx context.Context, request RecallRequest) ([]Hit, error)

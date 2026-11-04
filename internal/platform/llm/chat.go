@@ -17,6 +17,13 @@ type EvidenceItem struct {
 	Text        string
 }
 
+// Turn is one prior conversation message. History is untrusted context: the
+// remote adapter sends it as chat messages, never as instructions.
+type Turn struct {
+	Role    string
+	Content string
+}
+
 // ChatRequest is the generation input. ContextTemplate is injected from
 // configuration, so no prompt wording lives in Go code.
 type ChatRequest struct {
@@ -24,6 +31,7 @@ type ChatRequest struct {
 	ContextTemplate   string
 	Query             string
 	Evidence          []EvidenceItem
+	History           []Turn
 	MaxTokens         int
 }
 

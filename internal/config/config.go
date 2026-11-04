@@ -147,9 +147,21 @@ type ChatConfig struct {
 	Model      string
 	TimeoutSec int
 	MaxTokens  int
+	// HistoryTurns is how many completed user/assistant turns are replayed to
+	// the model. Zero disables multi-turn context.
+	HistoryTurns int
+	// HistoryTokenLimit bounds the replayed history independently of the
+	// evidence context budget.
+	HistoryTokenLimit int
 }
 
 func (c ChatConfig) Validate(appEnv string) error {
+	if c.HistoryTurns < 0 {
+		return fmt.Errorf("CHAT_HISTORY_TURNS must be zero or positive")
+	}
+	if c.HistoryTokenLimit < 0 {
+		return fmt.Errorf("CHAT_HISTORY_TOKEN_LIMIT must be zero or positive")
+	}
 	switch c.Source {
 	case "local":
 		// Offline deterministic adapter, development and acceptance only.
@@ -598,12 +610,14 @@ func LoadFrom(lookup Lookup) Config {
 		PromptTemplateDir:              value(lookup, "PROMPT_TEMPLATE_DIR", "config/prompt_templates"),
 		Retrieval:                      defaultRetrievalConfig(),
 		Chat: ChatConfig{
-			Source:     strings.ToLower(value(lookup, "CHAT_SOURCE", "local")),
-			BaseURL:    value(lookup, "CHAT_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
-			APIKey:     value(lookup, "CHAT_API_KEY", value(lookup, "LLM_API_KEY", "")),
-			Model:      value(lookup, "LLM_CHAT_MODEL", "local-extractive"),
-			TimeoutSec: int(reader.positive("CHAT_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
-			MaxTokens:  int(reader.positive("CHAT_MAX_TOKENS", 1024)),
+			Source:            strings.ToLower(value(lookup, "CHAT_SOURCE", "local")),
+			BaseURL:           value(lookup, "CHAT_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
+			APIKey:            value(lookup, "CHAT_API_KEY", value(lookup, "LLM_API_KEY", "")),
+			Model:             value(lookup, "LLM_CHAT_MODEL", "local-extractive"),
+			TimeoutSec:        int(reader.positive("CHAT_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
+			MaxTokens:         int(reader.positive("CHAT_MAX_TOKENS", 1024)),
+			HistoryTurns:      int(reader.nonNegative("CHAT_HISTORY_TURNS", 3)),
+			HistoryTokenLimit: int(reader.nonNegative("CHAT_HISTORY_TOKEN_LIMIT", 1200)),
 		},
 		Rerank: RerankConfig{
 			Source:     strings.ToLower(value(lookup, "RERANK_SOURCE", "none")),

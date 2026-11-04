@@ -75,6 +75,12 @@ func (w *Writer) IndexVersion(ctx context.Context, versionID string) error {
 	return nil
 }
 
+// IndexChunks is a no-op for PostgreSQL: BM25 is maintained by the chunk row
+// itself. An external keyword/hybrid adapter receives the same documents here.
+func (w *Writer) IndexChunks(context.Context, string, []ingestion.ChunkDocument) error {
+	return nil
+}
+
 // DeleteVersion is a no-op for PostgreSQL: chunks and their BM25 rows are
 // deleted by the pipeline itself. External index adapters must implement it.
 func (w *Writer) DeleteVersion(context.Context, string) error { return nil }

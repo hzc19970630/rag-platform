@@ -176,6 +176,8 @@ func Open(cfg config.Config) (*Application, error) {
 		DB: database, Authz: authorization, Retrieval: retrievalService, Chat: chatter,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
 		ChatRequestsPerDay: cfg.Limits.TenantChatRequestsPerDay,
+		HistoryTurns:       cfg.Chat.HistoryTurns,
+		HistoryTokenLimit:  cfg.Chat.HistoryTokenLimit,
 	})
 	return &Application{DB: database, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }

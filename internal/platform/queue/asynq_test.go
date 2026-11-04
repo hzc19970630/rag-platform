@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/hibiken/asynq"
 )
 
@@ -18,7 +18,7 @@ func TestPoolForIsolatesOperatorAndBulkWork(t *testing.T) {
 		"maintenance": QueueMaintenance,
 	}
 	for declared, want := range tests {
-		if got := poolFor(ingestion.Task{Queue: declared}); got != want {
+		if got := poolFor(tasks.Ingestion{Queue: declared}); got != want {
 			t.Fatalf("poolFor(%q) = %q, want %q", declared, got, want)
 		}
 	}

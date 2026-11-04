@@ -257,7 +257,7 @@ func taskFromRecords(pipeline models.PipelineRun, version models.DocumentVersion
 			StageRunID: fmt.Sprint(stage.ID), TraceID: pipeline.TraceID, RequestID: pipeline.RequestID,
 			IdempotencyKey: stage.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC(),
 		},
-		TaskType: "document.ingestion.v1", Stage: stage.Stage, ObjectKey: version.SourceObjectKey,
+		TaskType: TypeTask, Stage: stage.Stage, ObjectKey: version.SourceObjectKey,
 		PackageID: stableID("pkg", version.ID),
 	}
 }

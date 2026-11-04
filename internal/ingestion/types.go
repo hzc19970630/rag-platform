@@ -1,6 +1,7 @@
 package ingestion
 
 import (
+	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/example/rag-platform/internal/contracts/evidence"
 	"github.com/example/rag-platform/internal/status"
 )
@@ -9,7 +10,9 @@ const (
 	SchemaSourceObject       = "SourceObjectV1"
 	SchemaNormalizedDocument = "NormalizedDocumentV1"
 	SchemaEvidencePackage    = evidence.Schema
-	SchemaTask               = "IngestionTaskV1"
+	SchemaTask               = tasks.SchemaIngestion
+
+	TypeTask = tasks.TypeIngestion
 
 	PipelineTypeEvidence = "evidence"
 
@@ -45,16 +48,7 @@ const (
 
 type Envelope = evidence.Envelope
 
-type Task struct {
-	Envelope
-	TaskType  string `json:"task_type"`
-	Stage     string `json:"stage"`
-	ObjectKey string `json:"object_key,omitempty"`
-	PackageID string `json:"package_id,omitempty"`
-	// Queue selects the worker pool. Empty means the ingestion pool; operator
-	// retries use the interactive pool so they are not stuck behind bulk work.
-	Queue string `json:"queue,omitempty"`
-}
+type Task = tasks.Ingestion
 
 type SourceObject struct {
 	SchemaVersion string `json:"schema_version"`
