@@ -129,7 +129,7 @@ func (s *Service) ListVersions(ctx context.Context, principal authz.Principal, p
 func (s *Service) Review(ctx context.Context, principal authz.Principal, pageID, versionID string, input ReviewInput) (models.WikiPageVersion, error) {
 	action := strings.ToLower(strings.TrimSpace(input.Action))
 	if action != "approve" && action != "reject" {
-		return models.WikiPageVersion{}, fmt.Errorf("unsupported review action %q", input.Action)
+		return models.WikiPageVersion{}, apperror.Invalidf("unsupported review action %q", input.Action)
 	}
 	page, version, err := s.loadPageVersion(ctx, principal.TenantID, pageID, versionID)
 	if err != nil {

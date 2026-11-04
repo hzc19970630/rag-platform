@@ -314,11 +314,11 @@ func encodeDocumentCursor(createdAt time.Time, id string) string {
 func decodeDocumentCursor(raw string) (documentCursor, error) {
 	separator := strings.IndexByte(raw, '-')
 	if separator <= 0 || separator == len(raw)-1 {
-		return documentCursor{}, fmt.Errorf("cursor must be a valid document pagination cursor")
+		return documentCursor{}, apperror.Invalidf("cursor must be a valid document pagination cursor")
 	}
 	nanos, err := strconv.ParseInt(raw[:separator], 10, 64)
 	if err != nil {
-		return documentCursor{}, fmt.Errorf("cursor must be a valid document pagination cursor")
+		return documentCursor{}, apperror.Invalidf("cursor must be a valid document pagination cursor")
 	}
 	return documentCursor{CreatedAt: time.Unix(0, nanos).UTC(), ID: raw[separator+1:]}, nil
 }

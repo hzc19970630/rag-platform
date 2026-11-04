@@ -1,6 +1,9 @@
 package apperror
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	ErrUnauthenticated = errors.New("unauthenticated")
@@ -21,3 +24,29 @@ var (
 	// keys are deliberately not part of this error.
 	ErrContentUnavailable = errors.New("content_unavailable")
 )
+
+// ValidationError marks caller-supplied input that violates a documented
+// constraint. The message is safe to echo to the client; nothing classifies it
+// by text.
+type ValidationError struct{ Err error }
+
+func (e *ValidationError) Error() string { return e.Err.Error() }
+
+func (e *ValidationError) Unwrap() error { return e.Err }
+
+// Invalidf builds a validation error from a format string.
+func Invalidf(format string, args ...any) error {
+	return &ValidationError{Err: fmt.Errorf(format, args...)}
+}
+
+// Invalid wraps an existing error as a validation error.
+func Invalid(err error) error { return &ValidationError{Err: err} }
+
+// AsValidation reports whether err carries a validation error.
+func AsValidation(err error) (*ValidationError, bool) {
+	var validation *ValidationError
+	if errors.As(err, &validation) {
+		return validation, true
+	}
+	return nil, false
+}

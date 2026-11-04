@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/example/rag-platform/internal/apperror"
 )
 
 const (
@@ -155,16 +157,16 @@ func NewFetcher(options FetchOptions) *Fetcher {
 func ParseManifestURL(raw string) (*url.URL, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return nil, fmt.Errorf("manifest URL is invalid: unsupported URL")
+		return nil, apperror.Invalidf("manifest URL is invalid: unsupported URL")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, fmt.Errorf("unsupported manifest URL scheme")
+		return nil, apperror.Invalidf("unsupported manifest URL scheme")
 	}
 	if parsed.Host == "" {
-		return nil, fmt.Errorf("manifest URL host is required")
+		return nil, apperror.Invalidf("manifest URL host is required")
 	}
 	if parsed.User != nil {
-		return nil, fmt.Errorf("manifest URL credentials are unsupported")
+		return nil, apperror.Invalidf("manifest URL credentials are unsupported")
 	}
 	return parsed, nil
 }

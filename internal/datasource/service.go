@@ -172,24 +172,24 @@ func (s *Service) Create(ctx context.Context, principal authz.Principal, knowled
 	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return ConnectorView{}, fmt.Errorf("connector name is required")
+		return ConnectorView{}, apperror.Invalidf("connector name is required")
 	}
 	if len(name) > 255 {
-		return ConnectorView{}, fmt.Errorf("connector name must be at most 255 characters")
+		return ConnectorView{}, apperror.Invalidf("connector name must be at most 255 characters")
 	}
 	connectorType := strings.TrimSpace(input.Type)
 	if connectorType == "" {
 		connectorType = TypeHTTPManifest
 	}
 	if connectorType != TypeHTTPManifest {
-		return ConnectorView{}, fmt.Errorf("unsupported connector type")
+		return ConnectorView{}, apperror.Invalidf("unsupported connector type")
 	}
 	config, err := s.normalizeConfig(input.Config)
 	if err != nil {
 		return ConnectorView{}, err
 	}
 	if input.SyncIntervalSeconds < 0 || input.SyncIntervalSeconds > 30*24*60*60 {
-		return ConnectorView{}, fmt.Errorf("sync interval must be between 0 and 30 days")
+		return ConnectorView{}, apperror.Invalidf("sync interval must be between 0 and 30 days")
 	}
 	credentialRef, err := s.sealCredential(input.Credential)
 	if err != nil {
@@ -264,10 +264,10 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, connect
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)
 		if name == "" {
-			return ConnectorView{}, fmt.Errorf("connector name cannot be empty")
+			return ConnectorView{}, apperror.Invalidf("connector name cannot be empty")
 		}
 		if len(name) > 255 {
-			return ConnectorView{}, fmt.Errorf("connector name must be at most 255 characters")
+			return ConnectorView{}, apperror.Invalidf("connector name must be at most 255 characters")
 		}
 		updates["name"] = name
 	}
@@ -292,7 +292,7 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, connect
 	if input.SyncIntervalSeconds != nil {
 		interval := *input.SyncIntervalSeconds
 		if interval < 0 || interval > 30*24*60*60 {
-			return ConnectorView{}, fmt.Errorf("sync interval must be between 0 and 30 days")
+			return ConnectorView{}, apperror.Invalidf("sync interval must be between 0 and 30 days")
 		}
 		updates["sync_interval_seconds"] = interval
 		if interval == 0 {
@@ -354,7 +354,7 @@ func (s *Service) TriggerSync(ctx context.Context, principal authz.Principal, co
 		return RunView{}, err
 	}
 	if !connector.Enabled {
-		return RunView{}, fmt.Errorf("connector must be enabled before syncing")
+		return RunView{}, apperror.Invalidf("connector must be enabled before syncing")
 	}
 	run, err := s.createRun(ctx, connector, ModeManual, "", "{}", principal.SubjectID)
 	if err != nil {
@@ -681,21 +681,21 @@ func (s *Service) normalizeConfig(input ConnectorConfig) (ConnectorConfig, error
 	}
 	_ = parsed
 	if input.RequestsPerSecond < 0 || input.RequestsPerSecond > 50 {
-		return ConnectorConfig{}, fmt.Errorf("requests per second must be between 0 and 50")
+		return ConnectorConfig{}, apperror.Invalidf("requests per second must be between 0 and 50")
 	}
 	maxItems := input.MaxItemsPerRun
 	if maxItems == 0 {
 		maxItems = min(s.maxItemsLimit, defaultMaxItemsPerRun)
 	}
 	if maxItems < 1 || maxItems > s.maxItemsLimit {
-		return ConnectorConfig{}, fmt.Errorf("max items per run must be between 1 and %d", s.maxItemsLimit)
+		return ConnectorConfig{}, apperror.Invalidf("max items per run must be between 1 and %d", s.maxItemsLimit)
 	}
 	aclMode := strings.TrimSpace(input.ACLMode)
 	if aclMode == "" {
 		aclMode = ACLModeKnowledgeBase
 	}
 	if aclMode != ACLModeKnowledgeBase {
-		return ConnectorConfig{}, fmt.Errorf("unsupported ACL mode")
+		return ConnectorConfig{}, apperror.Invalidf("unsupported ACL mode")
 	}
 	return ConnectorConfig{
 		ManifestURL: strings.TrimSpace(input.ManifestURL), RequestsPerSecond: input.RequestsPerSecond,
@@ -714,16 +714,16 @@ func (s *Service) sealCredential(input *CredentialInput) (string, error) {
 	case "bearer":
 		credential.Token = strings.TrimSpace(input.Token)
 		if credential.Token == "" {
-			return "", fmt.Errorf("bearer credential token is required")
+			return "", apperror.Invalidf("bearer credential token is required")
 		}
 	case "basic":
 		credential.Username = strings.TrimSpace(input.Username)
 		if credential.Username == "" || input.Password == "" {
-			return "", fmt.Errorf("basic credential username and password are required")
+			return "", apperror.Invalidf("basic credential username and password are required")
 		}
 		credential.Password = input.Password
 	default:
-		return "", fmt.Errorf("unsupported credential type")
+		return "", apperror.Invalidf("unsupported credential type")
 	}
 	encoded, err := json.Marshal(credential)
 	if err != nil {

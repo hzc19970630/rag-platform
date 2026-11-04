@@ -668,7 +668,7 @@ func (s *Service) AddTenantMember(ctx context.Context, principal Principal, user
 		return TenantMemberView{}, err
 	}
 	if !validTenantRole(role) {
-		return TenantMemberView{}, fmt.Errorf("unsupported tenant role")
+		return TenantMemberView{}, apperror.Invalidf("unsupported tenant role")
 	}
 	if role == "owner" && !s.isOwner(ctx, principal) {
 		return TenantMemberView{}, apperror.ErrForbidden
@@ -693,7 +693,7 @@ func (s *Service) UpdateTenantMember(ctx context.Context, principal Principal, u
 		return err
 	}
 	if !validTenantRole(role) {
-		return fmt.Errorf("unsupported tenant role")
+		return apperror.Invalidf("unsupported tenant role")
 	}
 	if role == "owner" && !s.isOwner(ctx, principal) {
 		return apperror.ErrForbidden

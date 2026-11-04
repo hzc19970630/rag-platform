@@ -86,7 +86,7 @@ type CreateConversationInput struct {
 
 func (s *Service) CreateConversation(ctx context.Context, principal authz.Principal, input CreateConversationInput) (models.Conversation, error) {
 	if strings.TrimSpace(input.KnowledgeBaseID) == "" {
-		return models.Conversation{}, fmt.Errorf("knowledge_base_id is required")
+		return models.Conversation{}, apperror.Invalidf("knowledge_base_id is required")
 	}
 	if _, err := s.authorizedKnowledgeBase(ctx, principal, input.KnowledgeBaseID); err != nil {
 		return models.Conversation{}, err
@@ -141,7 +141,7 @@ func (s *Service) ListMessages(ctx context.Context, principal authz.Principal, c
 // client that dropped the connection can resume without re-running the answer.
 func (s *Service) ReplayEvents(ctx context.Context, principal authz.Principal, requestID string, afterSequence int) ([]Event, error) {
 	if strings.TrimSpace(requestID) == "" {
-		return nil, fmt.Errorf("request id is required")
+		return nil, apperror.Invalidf("request id is required")
 	}
 	var message models.Message
 	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND request_id = ?", principal.TenantID, principal.SubjectID, requestID).First(&message).Error; err != nil {
@@ -190,7 +190,7 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 	started := time.Now()
 	query := strings.Join(strings.Fields(strings.TrimSpace(input.Query)), " ")
 	if query == "" {
-		return AnswerResult{}, fmt.Errorf("query is required")
+		return AnswerResult{}, apperror.Invalidf("query is required")
 	}
 	conversation, err := s.loadConversation(ctx, principal, input.ConversationID)
 	if err != nil {

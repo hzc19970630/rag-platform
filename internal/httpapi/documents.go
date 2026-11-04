@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/example/rag-platform/internal/app"
+	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/gin-gonic/gin"
@@ -32,7 +33,7 @@ func RegisterDocumentRoutes(router *gin.Engine, cfg config.Config, application *
 			return
 		}
 		if int64(len(content)) > cfg.MaxFileBytes {
-			writeError(c, ginError("file exceeds maximum size"))
+			writeError(c, apperror.Invalidf("file exceeds maximum size"))
 			return
 		}
 		idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))

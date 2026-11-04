@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/param"
 )
 
@@ -185,7 +186,7 @@ func ParseOverride(raw string) (ParamsOverride, error) {
 	}
 	var override ParamsOverride
 	if err := json.Unmarshal([]byte(raw), &override); err != nil {
-		return ParamsOverride{}, fmt.Errorf("decode retrieval parameters: %w", err)
+		return ParamsOverride{}, apperror.Invalidf("decode retrieval parameters: %w", err)
 	}
 	return override, nil
 }

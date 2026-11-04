@@ -47,7 +47,7 @@ func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, 
 		return TaskInspection{}, err
 	}
 	if strings.TrimSpace(idempotencyKey) == "" {
-		return TaskInspection{}, fmt.Errorf("idempotency key is required")
+		return TaskInspection{}, apperror.Invalidf("idempotency key is required")
 	}
 	inspection := TaskInspection{Outbox: []models.OutboxEvent{}}
 	var inbox models.TaskInbox

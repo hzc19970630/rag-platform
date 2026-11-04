@@ -106,10 +106,10 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 	defer span.End()
 	query := normalizeQuery(input.Query)
 	if query == "" {
-		return EvidenceSet{}, fmt.Errorf("query is required")
+		return EvidenceSet{}, apperror.Invalidf("query is required")
 	}
 	if strings.TrimSpace(scope.TenantID) == "" {
-		return EvidenceSet{}, fmt.Errorf("authorization scope is required")
+		return EvidenceSet{}, apperror.Invalidf("authorization scope is required")
 	}
 	retrievalQuery := query
 	if len(input.History) > 0 {

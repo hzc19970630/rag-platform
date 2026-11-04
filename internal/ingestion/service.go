@@ -153,7 +153,7 @@ func (s *Service) Upload(ctx context.Context, principal authz.Principal, input U
 
 func (s *Service) IngestExternal(ctx context.Context, input ExternalUploadInput) (UploadResult, error) {
 	if strings.TrimSpace(input.TenantID) == "" || strings.TrimSpace(input.KnowledgeBaseID) == "" || strings.TrimSpace(input.DocumentID) == "" || strings.TrimSpace(input.ActorID) == "" {
-		return UploadResult{}, fmt.Errorf("connector tenant, knowledge base, document and actor are required")
+		return UploadResult{}, apperror.Invalidf("connector tenant, knowledge base, document and actor are required")
 	}
 	upload := UploadInput{
 		KnowledgeBaseID: input.KnowledgeBaseID, DocumentID: input.DocumentID, Filename: input.Filename,
@@ -179,16 +179,16 @@ func (s *Service) IngestExternal(ctx context.Context, input ExternalUploadInput)
 
 func (s *Service) validateUpload(input UploadInput) error {
 	if len(input.Content) == 0 {
-		return fmt.Errorf("file is required")
+		return apperror.Invalidf("file is required")
 	}
 	if s.maxBytes > 0 && int64(len(input.Content)) > s.maxBytes {
-		return fmt.Errorf("file exceeds maximum size")
+		return apperror.Invalidf("file exceeds maximum size")
 	}
 	if strings.TrimSpace(input.Filename) == "" {
-		return fmt.Errorf("filename is required")
+		return apperror.Invalidf("filename is required")
 	}
 	if _, ok := supportedMime(input.Filename, input.MimeType); !ok {
-		return fmt.Errorf("unsupported mime type")
+		return apperror.Invalidf("unsupported mime type")
 	}
 	return nil
 }

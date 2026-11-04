@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/example/rag-platform/internal/apperror"
+	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/gin-gonic/gin"
 )
 
@@ -23,10 +24,14 @@ func TestWriteErrorMapsDomainAndValidationErrors(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"range violation", fmt.Errorf("top_k must be between 0 and 200, got 900"), http.StatusBadRequest, "invalid_request"},
-		{"threshold violation", fmt.Errorf("vector_threshold must be between 0 and 1, got 1.5"), http.StatusBadRequest, "invalid_request"},
-		{"negative bound", fmt.Errorf("adjacent_expansion must not be negative"), http.StatusBadRequest, "invalid_request"},
-		{"missing field", fmt.Errorf("query is required"), http.StatusBadRequest, "invalid_request"},
+		{"range violation", apperror.Invalidf("top_k must be between 0 and 200, got 900"), http.StatusBadRequest, "invalid_request"},
+		{"threshold violation", apperror.Invalidf("vector_threshold must be between 0 and 1, got 1.5"), http.StatusBadRequest, "invalid_request"},
+		{"negative bound", apperror.Invalidf("adjacent_expansion must not be negative"), http.StatusBadRequest, "invalid_request"},
+		{"missing field", apperror.Invalidf("query is required"), http.StatusBadRequest, "invalid_request"},
+		{"session override", invalidSessionOverride(t), http.StatusBadRequest, "invalid_request"},
+		// A downstream failure may contain words that look like validation
+		// prose. Only the error type may decide the response.
+		{"internal message with required", errors.New("bucket policy is required"), http.StatusInternalServerError, "internal_error"},
 		{"not ready", apperror.ErrNotReady, http.StatusConflict, "not_ready"},
 		{"forbidden", apperror.ErrForbidden, http.StatusForbidden, "forbidden"},
 		{"not found", apperror.ErrNotFound, http.StatusNotFound, "not_found"},
@@ -68,6 +73,22 @@ func TestWriteErrorMapsDomainAndValidationErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+// invalidSessionOverride runs the same resolution path a handler uses, so the
+// contract test covers the error type handlers actually receive.
+func invalidSessionOverride(t *testing.T) error {
+	t.Helper()
+	defaults := retrieval.Params{
+		TopK: 10, EmbeddingTopK: 10, KeywordTopK: 10,
+		VectorThreshold: 0.5, RerankTopK: 10, RerankThreshold: 0.5,
+		ContextTokenLimit: 4000, RRFK: 60, ExpansionScoreFactor: 0.5,
+	}
+	_, err := retrieval.ResolveParams(defaults, "", `{"top_k":900}`)
+	if err == nil {
+		t.Fatal("expected an out-of-range session override to fail")
+	}
+	return err
 }
 
 // A wrapped content_unavailable error still carries the storage key, but the

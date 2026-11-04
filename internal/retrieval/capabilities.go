@@ -28,15 +28,15 @@ func ValidateIndexingStrategy(strategy IndexingStrategy) error {
 		case CapabilityEvidence:
 		case CapabilityWiki:
 			if !strategy.WikiEnabled {
-				return fmt.Errorf("required capability wiki must enable wiki_enabled")
+				return apperror.Invalidf("required capability wiki must enable wiki_enabled")
 			}
 		case CapabilityRelation, CapabilityGraph:
 			if !strategy.GraphEnabled {
-				return fmt.Errorf("required capability %q must enable graph_enabled", capability)
+				return apperror.Invalidf("required capability %q must enable graph_enabled", capability)
 			}
 		case "":
 		default:
-			return fmt.Errorf("unsupported required capability %q", capability)
+			return apperror.Invalidf("unsupported required capability %q", capability)
 		}
 	}
 	return nil

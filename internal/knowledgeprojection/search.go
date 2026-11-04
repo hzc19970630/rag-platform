@@ -78,11 +78,11 @@ LIMIT ?`
 func (s *Service) Search(ctx context.Context, principal authz.Principal, options SearchOptions) (SearchResult, error) {
 	query := normalizeSearchQuery(options.Query)
 	if query == "" {
-		return SearchResult{}, fmt.Errorf("query is required")
+		return SearchResult{}, apperror.Invalidf("query is required")
 	}
 	knowledgeBaseID := options.KnowledgeBaseID
 	if knowledgeBaseID == "" {
-		return SearchResult{}, fmt.Errorf("knowledge base id is required")
+		return SearchResult{}, apperror.Invalidf("knowledge base id is required")
 	}
 	scope, err := s.authorize(ctx, principal, knowledgeBaseID, "read")
 	if err != nil {

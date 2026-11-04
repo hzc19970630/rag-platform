@@ -81,7 +81,7 @@ func (s *Service) SetProjectionLifecycle(lifecycle ProjectionLifecycle) {
 
 func (s *Service) Create(ctx context.Context, principal authz.Principal, input CreateInput) (models.KnowledgeBase, error) {
 	if strings.TrimSpace(input.Name) == "" {
-		return models.KnowledgeBase{}, fmt.Errorf("name is required")
+		return models.KnowledgeBase{}, apperror.Invalidf("name is required")
 	}
 	allowed, err := s.authz.Authorize(ctx, principal, "write", "/knowledge-bases")
 	if err != nil {
@@ -172,7 +172,7 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 	}
 	if input.Name != nil {
 		if strings.TrimSpace(*input.Name) == "" {
-			return models.KnowledgeBase{}, fmt.Errorf("name cannot be empty")
+			return models.KnowledgeBase{}, apperror.Invalidf("name cannot be empty")
 		}
 		row.Name = *input.Name
 	}
@@ -189,7 +189,7 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 		}
 		if next != (EmbeddingBinding{Model: row.EmbeddingModel, Dimension: row.EmbeddingDimension}) {
 			if next != s.embedding {
-				return models.KnowledgeBase{}, fmt.Errorf("unsupported embedding binding %q/%d: this deployment serves %q/%d", next.Model, next.Dimension, s.embedding.Model, s.embedding.Dimension)
+				return models.KnowledgeBase{}, apperror.Invalidf("unsupported embedding binding %q/%d: this deployment serves %q/%d", next.Model, next.Dimension, s.embedding.Model, s.embedding.Dimension)
 			}
 			// An empty binding is a pre-upgrade row, not a contract; adopting the
 			// deployment binding is safe even when documents already exist.
@@ -354,7 +354,7 @@ func (s *Service) AddMember(ctx context.Context, principal authz.Principal, id s
 		return models.KnowledgeBaseMember{}, err
 	}
 	if input.Role != "admin" && input.Role != "editor" && input.Role != "viewer" {
-		return models.KnowledgeBaseMember{}, fmt.Errorf("unsupported knowledge base role")
+		return models.KnowledgeBaseMember{}, apperror.Invalidf("unsupported knowledge base role")
 	}
 	var knowledgeBase models.KnowledgeBase
 	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&knowledgeBase).Error; err != nil {

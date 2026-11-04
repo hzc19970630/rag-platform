@@ -32,10 +32,10 @@ const (
 func (s *Service) QueryGraph(ctx context.Context, principal authz.Principal, options GraphQueryOptions) (GraphQueryResult, error) {
 	query := normalizeSearchQuery(options.Query)
 	if query == "" {
-		return GraphQueryResult{}, fmt.Errorf("query is required")
+		return GraphQueryResult{}, apperror.Invalidf("query is required")
 	}
 	if strings.TrimSpace(options.KnowledgeBaseID) == "" {
-		return GraphQueryResult{}, fmt.Errorf("knowledge base id is required")
+		return GraphQueryResult{}, apperror.Invalidf("knowledge base id is required")
 	}
 	depth := options.Depth
 	if depth <= 0 {
@@ -591,7 +591,7 @@ func (s *Service) GetGraphSnapshot(ctx context.Context, principal authz.Principa
 func (s *Service) ReviewGraphSnapshot(ctx context.Context, principal authz.Principal, snapshotID string, input GraphReviewInput) (models.GraphSnapshot, error) {
 	action := strings.ToLower(strings.TrimSpace(input.Action))
 	if action != "approve" && action != "reject" {
-		return models.GraphSnapshot{}, fmt.Errorf("unsupported review action %q", input.Action)
+		return models.GraphSnapshot{}, apperror.Invalidf("unsupported review action %q", input.Action)
 	}
 	if s.store == nil {
 		return models.GraphSnapshot{}, fmt.Errorf("relation store is not configured")

@@ -397,7 +397,7 @@ func (s *Service) Purge(ctx context.Context, principal authz.Principal, document
 		return err
 	}
 	if document.DeletedAt == nil {
-		return fmt.Errorf("document must be deleted before it can be purged")
+		return apperror.Invalidf("document must be deleted before it can be purged")
 	}
 	return s.purgeDocument(ctx, document.ID)
 }

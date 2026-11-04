@@ -304,7 +304,7 @@ func (s *Service) RevokeSession(ctx context.Context, rawToken string) error {
 
 func (s *Service) CreateAPIKey(ctx context.Context, principal authz.Principal, input CreateAPIKeyInput) (APIKeyView, string, error) {
 	if strings.TrimSpace(input.Name) == "" {
-		return APIKeyView{}, "", fmt.Errorf("name is required")
+		return APIKeyView{}, "", apperror.Invalidf("name is required")
 	}
 	var membership models.Membership
 	if err := s.db.WithContext(ctx).First(&membership, "tenant_id = ? AND user_id = ?", principal.TenantID, principal.SubjectID).Error; err != nil {
@@ -319,11 +319,11 @@ func (s *Service) CreateAPIKey(ctx context.Context, principal authz.Principal, i
 	}
 	for _, capability := range capabilities {
 		if !authz.KnownCapability(capability) {
-			return APIKeyView{}, "", fmt.Errorf("unsupported capability %q", capability)
+			return APIKeyView{}, "", apperror.Invalidf("unsupported capability %q", capability)
 		}
 	}
 	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
-		return APIKeyView{}, "", fmt.Errorf("expiresAt must be in the future")
+		return APIKeyView{}, "", apperror.Invalidf("expiresAt must be in the future")
 	}
 	if len(input.KnowledgeBaseIDs) > 0 {
 		var count int64
@@ -331,7 +331,7 @@ func (s *Service) CreateAPIKey(ctx context.Context, principal authz.Principal, i
 			return APIKeyView{}, "", fmt.Errorf("validate knowledge base scope: %w", err)
 		}
 		if int(count) != len(input.KnowledgeBaseIDs) {
-			return APIKeyView{}, "", fmt.Errorf("knowledge base scope contains an unsupported knowledge base")
+			return APIKeyView{}, "", apperror.Invalidf("knowledge base scope contains an unsupported knowledge base")
 		}
 	}
 	prefix, secret, err := generateAPIKey()
