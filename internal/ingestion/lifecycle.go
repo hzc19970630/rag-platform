@@ -16,6 +16,8 @@ import (
 
 const SchemaDocumentVersionPage = "DocumentVersionPageV1"
 
+var errReparseReused = errors.New("reparse target already exists")
+
 // DocumentVersionView is one immutable version in the history. It never
 // exposes the source or normalized object keys, because those stay server side
 // like the current-version projections in preview.go.
@@ -70,6 +72,11 @@ func (s *Service) ListVersions(ctx context.Context, principal authz.Principal, d
 // Reparse creates a new version from the current version's original bytes. It is
 // not an in-place re-run: processing history, chunks and the evidence package
 // stay tied to their immutable version.
+//
+// Retried requests are idempotent. Reparse always reads the same bytes, so the
+// target version is derived from the document and the content hash instead of a
+// random id. The pipeline key is "document + target version + stage"; a retry
+// finds that run and returns it instead of superseding the version again.
 func (s *Service) Reparse(ctx context.Context, principal authz.Principal, documentID string) (UploadResult, error) {
 	document, err := s.loadActiveDocument(ctx, principal, documentID, "write")
 	if err != nil {
@@ -92,14 +99,18 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 	if len(content) == 0 {
 		return UploadResult{}, apperror.ErrNotReady
 	}
+	hash := contentHash(content)
+	versionID := stableID("ver", document.ID, hash)
+	idempotencyKey := "reparse:" + document.ID + ":" + versionID + ":" + StageParse
+	if existing, found, err := findPipelineByIdempotencyKey(s.db.WithContext(ctx), principal.TenantID, idempotencyKey); err != nil {
+		return UploadResult{}, err
+	} else if found {
+		return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+	}
 	if err := s.checkQuota(ctx, s.db, principal.TenantID, int64(len(content))); err != nil {
 		return UploadResult{}, err
 	}
 	knowledgeBase, err := s.authorizedKnowledgeBase(ctx, principal, document.KnowledgeBaseID, "write")
-	if err != nil {
-		return UploadResult{}, err
-	}
-	versionID, err := newID("ver")
 	if err != nil {
 		return UploadResult{}, err
 	}
@@ -118,12 +129,19 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 		}
 	}()
 	stageKey := pipelineID + ":" + StageParse
-	pipeline := models.PipelineRun{ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, DocumentID: document.ID, DocumentVersionID: versionID, RequestID: "reparse:" + versionID, TraceID: "reparse:" + versionID, IdempotencyKey: "reparse:" + stageKey, Status: StatusStored}
+	pipeline := models.PipelineRun{ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, DocumentID: document.ID, DocumentVersionID: versionID, RequestID: "reparse:" + versionID, TraceID: "reparse:" + versionID, IdempotencyKey: idempotencyKey, Status: StatusStored}
 	stage := models.StageRun{PipelineRunID: pipelineID, Stage: StageParse, Status: StagePending, IdempotencyKey: stageKey}
-	version := models.DocumentVersion{ID: versionID, DocumentID: document.ID, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, ContentHash: current.ContentHash, SizeBytes: int64(len(content)), SourceObjectKey: objectKey, Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion}
+	version := models.DocumentVersion{ID: versionID, DocumentID: document.ID, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, ContentHash: hash, SizeBytes: int64(len(content)), SourceObjectKey: objectKey, Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := lockTenantQuota(tx, principal.TenantID); err != nil {
 			return err
+		}
+		// A concurrent retry may have committed while this request waited for
+		// the lock. Reusing its run keeps a single target version and pipeline.
+		if _, found, err := findPipelineByIdempotencyKey(tx, principal.TenantID, idempotencyKey); err != nil {
+			return err
+		} else if found {
+			return errReparseReused
 		}
 		if err := s.checkQuota(ctx, tx, principal.TenantID, int64(len(content))); err != nil {
 			return err
@@ -158,11 +176,42 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 		}
 		return tx.Create(&models.OutboxEvent{TenantID: principal.TenantID, AggregateType: "document_version", AggregateID: versionID, EventType: "document.parse", IdempotencyKey: stageKey, Payload: string(payload)}).Error
 	})
+	if errors.Is(err, errReparseReused) {
+		// The object key is deterministic per target version, so the committed
+		// run owns the bytes we just wrote; deleting them would break it.
+		cleanupObject = false
+		existing, found, lookupErr := findPipelineByIdempotencyKey(s.db.WithContext(ctx), principal.TenantID, idempotencyKey)
+		if lookupErr != nil {
+			return UploadResult{}, lookupErr
+		}
+		if found {
+			return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+		}
+		return UploadResult{}, fmt.Errorf("reparse document: reused run disappeared")
+	}
 	if err != nil {
+		if existing, found, lookupErr := findPipelineByIdempotencyKey(s.db.WithContext(ctx), principal.TenantID, idempotencyKey); lookupErr == nil && found {
+			cleanupObject = false
+			return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+		}
 		return UploadResult{}, fmt.Errorf("reparse document: %w", err)
 	}
 	cleanupObject = false
 	return s.loadResult(ctx, document.ID, versionID, pipelineID)
+}
+
+// findPipelineByIdempotencyKey loads the run a prior request created under the
+// same document + target version + stage key, so a retry can reuse it.
+func findPipelineByIdempotencyKey(db *gorm.DB, tenantID, key string) (models.PipelineRun, bool, error) {
+	var pipeline models.PipelineRun
+	err := db.Where("tenant_id = ? AND idempotency_key = ?", tenantID, key).First(&pipeline).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.PipelineRun{}, false, nil
+	}
+	if err != nil {
+		return models.PipelineRun{}, false, fmt.Errorf("load reparse pipeline: %w", err)
+	}
+	return pipeline, true, nil
 }
 
 // ActivateVersion rolls the document back to an already processed version. A
