@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/logging"
+	"github.com/example/rag-platform/internal/platform/evidenceindex"
 	"github.com/example/rag-platform/internal/platform/persistence"
 	"github.com/example/rag-platform/internal/platform/vector"
 	"gorm.io/gorm"
@@ -60,7 +61,7 @@ func main() {
 		if err != nil {
 			fatal(logger, "embedding_adapter_invalid", err)
 		}
-		result, err := ingestion.RebuildEmbeddings(ctx, db, embedder, cfg.Embedding.BatchSize)
+		result, err := ingestion.RebuildEmbeddings(ctx, db, evidenceindex.New(db), embedder, cfg.Embedding.BatchSize)
 		if err != nil {
 			fatal(logger, "reembed_failed", err)
 		}

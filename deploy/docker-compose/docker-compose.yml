@@ -82,6 +82,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
     env_file:
       - path: ../../.env
         required: false
@@ -113,6 +115,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
     entrypoint: ["/usr/local/bin/migrate"]
     env_file:
       - path: ../../.env
@@ -129,6 +133,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
     entrypoint: ["/usr/local/bin/seed"]
     env_file:
       - path: ../../.env
@@ -145,6 +151,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
     entrypoint: ["/usr/local/bin/worker"]
     env_file:
       - path: ../../.env

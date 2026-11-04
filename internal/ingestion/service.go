@@ -30,6 +30,14 @@ type Service struct {
 	maxBytes  int64
 	retention time.Duration
 	quota     Quota
+	index     EvidenceIndexWriter
+}
+
+// SetIndexWriter wires the Evidence Index write port. It is optional at
+// construction because the API process only needs it for purge; the worker
+// injects it before processing stages.
+func (s *Service) SetIndexWriter(writer EvidenceIndexWriter) {
+	s.index = writer
 }
 
 // Quota is the tenant-level ceiling for durable content. Zero disables a limit.
@@ -313,10 +321,10 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 				if err := tx.Model(&currentVersion).Updates(map[string]any{"status": StatusCancelled, "error_code": "superseded", "error_message": "superseded by a newer document version"}).Error; err != nil {
 					return err
 				}
-				if err := tx.Model(&models.Chunk{}).Where("document_version_id = ?", currentVersion.ID).Update("status", "STALE").Error; err != nil {
+				if err := tx.Model(&models.Chunk{}).Where("document_version_id = ?", currentVersion.ID).Update("status", StatusStale).Error; err != nil {
 					return err
 				}
-				if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", currentVersion.ID).Update("status", "STALE").Error; err != nil {
+				if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", currentVersion.ID).Update("status", StatusStale).Error; err != nil {
 					return err
 				}
 			}

@@ -173,7 +173,7 @@ M6 在知识库的 `IndexingStrategy` 上使用 `wiki_enabled`（默认 false）
 
 页面由按标题组织的文档页和跨文档概览页组成。每个内容块保存 `sourceChunkIds`，页面版本保存来源文档版本、生成模型、Prompt 版本、内容哈希和 ACL 版本；页面状态为 `DRAFT` / `PUBLISHED` / `REVIEW_REQUIRED` / `STALE` / `ARCHIVED`，审核状态为 `PENDING` / `APPROVED` / `REJECTED`。读取沿用知识库读权限；重建/重试要求写权限且拒绝 API Key；审核、发布和回滚要求 `manage_members` 且拒绝 API Key，发布只接受已审核版本。
 
-Knowledge Index 是页面级投影（halfvec + BM25），只索引已发布且 ACL 与知识库当前版本一致的页面。成员变更或 `PATCH` 知识库会推进 ACL 版本并立即删除索引行、把派生页面置为 `STALE`；手动重建按新 ACL 生成待审核版本。检索时对每个来源 Chunk 重新校验当前文档版本、`EVIDENCE_READY` 和访问权限，任一来源不可见即不返回该页面。`ProjectionJoin` 在 `wiki_enabled=false` 时为 `EVIDENCE_READY`，最新运行就绪且来源哈希一致时为 `KNOWLEDGE_READY`，运行未完成、失败、来源过期或 ACL 不一致时为 `KNOWLEDGE_PARTIAL`；Wiki 失败不影响 Evidence RAG。
+Knowledge Index 是页面级投影（halfvec + BM25），只索引已发布且 ACL 与知识库当前版本一致的页面。成员变更或 `PATCH` 知识库会推进 ACL 版本并立即删除索引行、把派生页面置为 `STALE`；手动重建按新 ACL 生成待审核版本。检索时对每个来源 Chunk 重新校验当前文档版本、`EVIDENCE_READY` 和访问权限，任一来源不可见即不返回该页面。`ProjectionJoin` 在 `wiki_enabled=false` 时为 `EVIDENCE_READY`，最新运行就绪且来源哈希一致时为 `KNOWLEDGE_READY`，运行未完成、失败、来源过期或 ACL 不一致时为 `KNOWLEDGE_PARTIAL`；Wiki 失败不影响 Evidence RAG。期望来源哈希物化在 `knowledge_projection_states`，证据发布、投影触发或 ACL/prompt/model 变化时更新，查询只读状态行，不再每次扫描全部 EvidencePackage。
 
 当前边界：Wiki 生成复用平台 Chat 适配器（`CHAT_SOURCE` / `CHAT_MODEL`），本地 `local-extractive` 只用于确定性的离线验收；不提供页面编辑器、自动发布、Wiki 驱动的查询扩展或页面链接图；关系投影在 M7 提供，不在 M6 中实现。
 

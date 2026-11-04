@@ -437,6 +437,7 @@ type StreamEvent struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"-"`
 	RequestID string    `gorm:"size:128;not null;index" json:"requestId"`
 	TenantID  string    `gorm:"size:64;not null;index" json:"tenantId"`
+	UserID    string    `gorm:"size:64;not null;default:''" json:"userId"`
 	Sequence  int       `gorm:"not null" json:"sequence"`
 	EventType string    `gorm:"size:32;not null" json:"eventType"`
 	Payload   string    `gorm:"type:jsonb;not null" json:"-"`

@@ -13,10 +13,11 @@ import (
 // share one retry policy.
 type OutboxPublisher = outbox.Publisher
 
-func NewOutboxPublisher(db *gorm.DB, publisher TaskPublisher, maxAttempts int) *OutboxPublisher {
+func NewOutboxPublisher(db *gorm.DB, publisher TaskPublisher, maxAttempts, batchSize int) *OutboxPublisher {
 	return outbox.New(outbox.Options{
 		DB:          db,
 		MaxAttempts: maxAttempts,
+		BatchSize:   batchSize,
 		Label:       "publish outbox event",
 		// Connector sync events share the outbox table but are dispatched by the
 		// datasource publisher; claiming them here would deserialize a sync

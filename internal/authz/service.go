@@ -11,7 +11,6 @@ import (
 
 	"github.com/casbin/casbin/v3"
 	"github.com/casbin/casbin/v3/model"
-	"github.com/casbin/gorm-adapter/v3"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/redis/go-redis/v9"
@@ -37,15 +36,17 @@ const authorizationChangedChannel = "authorization.policy_changed"
 
 type Service struct {
 	db       *gorm.DB
-	adapter  *gormadapter.Adapter
 	enforcer *casbin.Enforcer
-	mu       sync.Mutex
-	// revision caches the tenant revision that the in-process Casbin projection
-	// reflects. Every authorize/scope check compares the database revision, so a
-	// missed Pub/Sub message cannot keep serving stale policy.
-	revision int64
-	tenant   string
-	redis    *redis.Client
+	// mu guards the enforcer swap and the per-tenant revision cache. Enforce is
+	// safe for concurrent readers, so requests take RLock while a refresh takes
+	// the write lock only for the pointer swap.
+	mu sync.RWMutex
+	// revisionByTenant records the authorization revision each cached policy set
+	// reflects. Caching per tenant prevents two active tenants from evicting each
+	// other on every request.
+	revisionByTenant map[string]int64
+	refreshMu        sync.Mutex
+	redis            *redis.Client
 }
 
 type TenantMemberView struct {
@@ -65,24 +66,28 @@ type AuditQuery struct {
 }
 
 func NewService(db *gorm.DB) (*Service, error) {
-	adapter, err := gormadapter.NewAdapterByDB(db)
+	enforcer, err := newEnforcer()
 	if err != nil {
-		return nil, fmt.Errorf("create casbin adapter: %w", err)
+		return nil, err
 	}
-	accessModel, err := model.NewModelFromString(casbinModel)
-	if err != nil {
-		return nil, fmt.Errorf("create casbin model: %w", err)
-	}
-	enforcer, err := casbin.NewEnforcer(accessModel, adapter)
-	if err != nil {
-		return nil, fmt.Errorf("create casbin enforcer: %w", err)
-	}
-	enforcer.EnableAutoSave(false)
-	service := &Service{db: db, adapter: adapter, enforcer: enforcer}
+	service := &Service{db: db, enforcer: enforcer, revisionByTenant: map[string]int64{}}
 	if err := service.RefreshPolicies(context.Background()); err != nil {
 		return nil, err
 	}
 	return service, nil
+}
+
+func newEnforcer() (*casbin.Enforcer, error) {
+	accessModel, err := model.NewModelFromString(casbinModel)
+	if err != nil {
+		return nil, fmt.Errorf("create casbin model: %w", err)
+	}
+	enforcer, err := casbin.NewEnforcer(accessModel)
+	if err != nil {
+		return nil, fmt.Errorf("create casbin enforcer: %w", err)
+	}
+	enforcer.EnableAutoSave(false)
+	return enforcer, nil
 }
 
 // StartInvalidation subscribes to the policy-change channel so every API/worker
@@ -103,12 +108,20 @@ func (s *Service) StartInvalidation(ctx context.Context, redisAddr, redisPasswor
 	go func() {
 		pubsub := client.Subscribe(context.Background(), authorizationChangedChannel)
 		defer pubsub.Close()
-		for range pubsub.Channel() {
-			_ = s.RefreshPolicies(context.Background())
-			s.mu.Lock()
-			s.revision = 0
-			s.tenant = ""
-			s.mu.Unlock()
+		for message := range pubsub.Channel() {
+			var payload struct {
+				TenantID string `json:"tenantId"`
+				Revision int64  `json:"revision"`
+			}
+			_ = json.Unmarshal([]byte(message.Payload), &payload)
+			if err := s.RefreshPolicies(context.Background()); err != nil {
+				continue
+			}
+			if payload.TenantID != "" {
+				s.mu.Lock()
+				s.revisionByTenant[payload.TenantID] = payload.Revision
+				s.mu.Unlock()
+			}
 		}
 	}()
 	return nil
@@ -126,8 +139,20 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) RefreshPolicies(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	return s.rebuildPolicies(ctx)
+}
+
+// rebuildPolicies builds a complete enforcer off to the side and swaps it in.
+// The policy is a projection of the membership tables, not a second source of
+// truth, so it is rebuilt in memory instead of being persisted to casbin_rule.
+// Callers must hold refreshMu.
+func (s *Service) rebuildPolicies(ctx context.Context) error {
+	next, err := newEnforcer()
+	if err != nil {
+		return err
+	}
 
 	var memberships []models.Membership
 	if err := s.db.WithContext(ctx).Find(&memberships).Error; err != nil {
@@ -141,35 +166,35 @@ func (s *Service) RefreshPolicies(ctx context.Context) error {
 	if err := s.db.WithContext(ctx).Find(&kbMembers).Error; err != nil {
 		return fmt.Errorf("load knowledge base memberships: %w", err)
 	}
-
-	if err := s.db.WithContext(ctx).Where("ptype IN ?", []string{"p", "g"}).Delete(&gormadapter.CasbinRule{}).Error; err != nil {
-		return fmt.Errorf("clear casbin policy projection: %w", err)
+	kbByID := make(map[string]models.KnowledgeBase, len(knowledgeBases))
+	for _, knowledgeBase := range knowledgeBases {
+		kbByID[knowledgeBase.ID] = knowledgeBase
 	}
-	s.enforcer.ClearPolicy()
+
 	for _, membership := range memberships {
-		if _, err := s.enforcer.AddGroupingPolicy(membership.UserID, tenantRole(membership.Role), membership.TenantID); err != nil {
+		if _, err := next.AddGroupingPolicy(membership.UserID, tenantRole(membership.Role), membership.TenantID); err != nil {
 			return fmt.Errorf("add tenant policy: %w", err)
 		}
 		if membership.Role == "owner" || membership.Role == "admin" {
-			if _, err := s.enforcer.AddPolicy(tenantRole(membership.Role), membership.TenantID, "/knowledge-bases", "read|write|delete|manage_members", "allow"); err != nil {
+			if _, err := next.AddPolicy(tenantRole(membership.Role), membership.TenantID, "/knowledge-bases", "read|write|delete|manage_members", "allow"); err != nil {
 				return fmt.Errorf("add tenant collection policy: %w", err)
 			}
 		}
 	}
 	for _, knowledgeBase := range knowledgeBases {
 		for _, role := range []string{"owner", "admin"} {
-			if _, err := s.enforcer.AddPolicy(tenantRole(role), knowledgeBase.TenantID, "/knowledge-bases/:id", "read|write|delete|manage_members", "allow"); err != nil {
+			if _, err := next.AddPolicy(tenantRole(role), knowledgeBase.TenantID, "/knowledge-bases/:id", "read|write|delete|manage_members", "allow"); err != nil {
 				return fmt.Errorf("add tenant resource policy: %w", err)
 			}
 		}
 	}
 	for _, member := range kbMembers {
-		var knowledgeBase models.KnowledgeBase
-		if err := s.db.WithContext(ctx).First(&knowledgeBase, "id = ?", member.KnowledgeBaseID).Error; err != nil {
-			return fmt.Errorf("load member knowledge base: %w", err)
+		knowledgeBase, ok := kbByID[member.KnowledgeBaseID]
+		if !ok {
+			continue
 		}
 		role := kbRole(member.Role, member.KnowledgeBaseID)
-		if _, err := s.enforcer.AddGroupingPolicy(member.UserID, role, knowledgeBase.TenantID); err != nil {
+		if _, err := next.AddGroupingPolicy(member.UserID, role, knowledgeBase.TenantID); err != nil {
 			return fmt.Errorf("add knowledge base grouping policy: %w", err)
 		}
 		object := resourcePath(member.KnowledgeBaseID)
@@ -179,18 +204,19 @@ func (s *Service) RefreshPolicies(ctx context.Context) error {
 		} else if member.Role == "editor" {
 			actions = "read|write"
 		}
-		if _, err := s.enforcer.AddPolicy(role, knowledgeBase.TenantID, object, actions, "allow"); err != nil {
+		if _, err := next.AddPolicy(role, knowledgeBase.TenantID, object, actions, "allow"); err != nil {
 			return fmt.Errorf("add knowledge base policy: %w", err)
 		}
 		if member.Role == "owner" || member.Role == "admin" {
-			if _, err := s.enforcer.AddPolicy(role, knowledgeBase.TenantID, object+"/members", "read|manage_members", "allow"); err != nil {
+			if _, err := next.AddPolicy(role, knowledgeBase.TenantID, object+"/members", "read|manage_members", "allow"); err != nil {
 				return fmt.Errorf("add member management policy: %w", err)
 			}
 		}
 	}
-	if err := s.enforcer.SavePolicy(); err != nil {
-		return fmt.Errorf("save casbin policy projection: %w", err)
-	}
+
+	s.mu.Lock()
+	s.enforcer = next
+	s.mu.Unlock()
 	return nil
 }
 
@@ -218,18 +244,32 @@ func (s *Service) ensureFresh(ctx context.Context, tenantID string) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	s.mu.Lock()
-	fresh := s.revision == revision && s.tenant == tenantID
-	s.mu.Unlock()
-	if fresh {
+	s.mu.RLock()
+	cached, ok := s.revisionByTenant[tenantID]
+	s.mu.RUnlock()
+	if ok && cached == revision {
 		return revision, nil
 	}
-	if err := s.RefreshPolicies(ctx); err != nil {
+
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	// Re-read after waiting for another refresh: the revision may have moved
+	// again while this request was blocked.
+	revision, err = s.currentRevision(ctx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	s.mu.RLock()
+	cached, ok = s.revisionByTenant[tenantID]
+	s.mu.RUnlock()
+	if ok && cached == revision {
+		return revision, nil
+	}
+	if err := s.rebuildPolicies(ctx); err != nil {
 		return 0, err
 	}
 	s.mu.Lock()
-	s.revision = revision
-	s.tenant = tenantID
+	s.revisionByTenant[tenantID] = revision
 	s.mu.Unlock()
 	return revision, nil
 }
@@ -262,12 +302,11 @@ func (s *Service) BumpRevision(ctx context.Context, tenantID string) error {
 	if err != nil {
 		return fmt.Errorf("bump authorization revision: %w", err)
 	}
-	if err := s.RefreshPolicies(ctx); err != nil {
-		return err
-	}
+	// Drop this tenant's cached revision instead of rebuilding synchronously.
+	// The next authorization check rebuilds once, which keeps the write path
+	// fast and avoids blocking other tenants behind a full policy rebuild.
 	s.mu.Lock()
-	s.revision = revision
-	s.tenant = tenantID
+	delete(s.revisionByTenant, tenantID)
 	client := s.redis
 	s.mu.Unlock()
 	if client != nil {
@@ -290,19 +329,32 @@ func (s *Service) Authorize(ctx context.Context, principal Principal, action, ob
 		}
 		return false, nil
 	}
-	s.mu.Lock()
+	s.mu.RLock()
 	allowed, err := s.enforcer.Enforce(principal.SubjectID, principal.TenantID, object, action)
-	s.mu.Unlock()
+	s.mu.RUnlock()
 	reason := "allowed"
 	if err != nil {
 		reason = err.Error()
 	} else if !allowed {
 		reason = "policy_denied"
 	}
-	if auditErr := s.recordAudit(ctx, principal, action, object, allowed, reason); auditErr != nil && err == nil {
-		return false, auditErr
+	if auditRequired(action, allowed) {
+		if auditErr := s.recordAudit(ctx, principal, action, object, allowed, reason); auditErr != nil && err == nil {
+			return false, auditErr
+		}
 	}
 	return allowed, err
+}
+
+// auditRequired keeps the audit trail focused on security-relevant events:
+// every denial is recorded, while allowed read checks (graph/snapshot reads)
+// do not append a row per request. State-changing actions still record both
+// allowed and denied outcomes.
+func auditRequired(action string, allowed bool) bool {
+	if !allowed {
+		return true
+	}
+	return !strings.EqualFold(strings.TrimSpace(action), "read")
 }
 
 func (s *Service) BuildScope(ctx context.Context, principal Principal, target QueryTarget) (AuthorizationScope, error) {
@@ -429,6 +481,27 @@ func (s *Service) QueryAudit(ctx context.Context, principal Principal, query Aud
 		return nil, fmt.Errorf("query audit: %w", err)
 	}
 	return rows, nil
+}
+
+// PurgeAuditLogs deletes at most one batch of audit rows older than the cutoff.
+// The worker maintenance loop drains several batches per run so a backlog does
+// not grow without bound while each statement stays short.
+func (s *Service) PurgeAuditLogs(ctx context.Context, before time.Time, limit int) (int64, error) {
+	if before.IsZero() {
+		return 0, nil
+	}
+	if limit <= 0 {
+		limit = 1000
+	}
+	result := s.db.WithContext(ctx).Exec(`
+		DELETE FROM audit_logs
+		WHERE id IN (
+			SELECT id FROM audit_logs WHERE created_at < ? ORDER BY created_at, id LIMIT ?
+		)`, before, limit)
+	if result.Error != nil {
+		return 0, fmt.Errorf("purge audit logs: %w", result.Error)
+	}
+	return result.RowsAffected, nil
 }
 
 func (s *Service) ListTenantMembers(ctx context.Context, principal Principal) ([]TenantMemberView, error) {

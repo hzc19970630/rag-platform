@@ -49,7 +49,7 @@ const (
 	PageDraft          = "DRAFT"
 	PagePublished      = "PUBLISHED"
 	PageReviewRequired = "REVIEW_REQUIRED"
-	PageStale          = "STALE"
+	PageStale          = status.Stale
 	PageArchived       = "ARCHIVED"
 
 	PageTypeOverview = "overview"
@@ -60,7 +60,7 @@ const (
 	JoinKnowledgePartial = "KNOWLEDGE_PARTIAL"
 
 	IndexActive = "ACTIVE"
-	IndexStale  = "STALE"
+	IndexStale  = status.Stale
 )
 
 // Task is one projection stage message. It carries only ids and a stage, never

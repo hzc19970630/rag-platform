@@ -14,26 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// BM25Indexer is the PostgreSQL/ParadeDB adapter. The BM25 index is maintained
-// by PostgreSQL on row writes; this adapter validates the projection before the
-// Evidence stage publishes its package.
-type BM25Indexer struct {
-	db *gorm.DB
-}
-
-func NewBM25Indexer(db *gorm.DB) *BM25Indexer { return &BM25Indexer{db: db} }
-
-func (i *BM25Indexer) Index(ctx context.Context, documentVersionID string) error {
-	var count int64
-	if err := i.db.WithContext(ctx).Table("chunks").Where("document_version_id = ? AND parent_id IS NOT NULL AND status = ?", documentVersionID, "EMBEDDED").Count(&count).Error; err != nil {
-		return err
-	}
-	if count == 0 {
-		return fmt.Errorf("no embedded chunks for document version %s", documentVersionID)
-	}
-	return nil
-}
-
 // BM25Searcher runs keyword recall against the Evidence Index. Scope filters
 // (tenant, knowledge base, current version, evidence-ready) are part of the
 // query, so recall never returns rows the caller may not read.

@@ -360,10 +360,12 @@ type LimitsConfig struct {
 	TenantMaxStorageBytes    int64
 	TenantChatRequestsPerDay int
 	DocumentRetentionDays    int
+	AuditRetentionDays       int
+	StreamEventRetentionDays int
 	OutboxMaxAttempts        int
+	OutboxBatchSize          int
 	ReconcileIntervalSeconds int
 	WorkerConcurrency        int
-	MaintenanceConcurrency   int
 	ShutdownTimeoutSeconds   int
 }
 
@@ -401,10 +403,12 @@ func (l LimitsConfig) Validate() error {
 	for name, value := range map[string]int{
 		"RATE_LIMIT_PER_MINUTE":        l.RateLimitPerMinute,
 		"DOCUMENT_RETENTION_DAYS":      l.DocumentRetentionDays,
+		"AUDIT_RETENTION_DAYS":         l.AuditRetentionDays,
+		"STREAM_EVENT_RETENTION_DAYS":  l.StreamEventRetentionDays,
 		"OUTBOX_MAX_ATTEMPTS":          l.OutboxMaxAttempts,
+		"OUTBOX_BATCH_SIZE":            l.OutboxBatchSize,
 		"RECONCILE_INTERVAL_SECONDS":   l.ReconcileIntervalSeconds,
 		"WORKER_CONCURRENCY":           l.WorkerConcurrency,
-		"MAINTENANCE_CONCURRENCY":      l.MaintenanceConcurrency,
 		"SHUTDOWN_TIMEOUT_SECONDS":     l.ShutdownTimeoutSeconds,
 		"TENANT_MAX_DOCUMENTS":         l.TenantMaxDocuments,
 		"TENANT_CHAT_REQUESTS_PER_DAY": l.TenantChatRequestsPerDay,
@@ -419,11 +423,11 @@ func (l LimitsConfig) Validate() error {
 	if l.OutboxMaxAttempts == 0 {
 		return fmt.Errorf("OUTBOX_MAX_ATTEMPTS must be positive")
 	}
+	if l.OutboxBatchSize == 0 {
+		return fmt.Errorf("OUTBOX_BATCH_SIZE must be positive")
+	}
 	if l.WorkerConcurrency == 0 {
 		return fmt.Errorf("WORKER_CONCURRENCY must be positive")
-	}
-	if l.MaintenanceConcurrency == 0 {
-		return fmt.Errorf("MAINTENANCE_CONCURRENCY must be positive")
 	}
 	if l.ShutdownTimeoutSeconds == 0 {
 		return fmt.Errorf("SHUTDOWN_TIMEOUT_SECONDS must be positive")
@@ -538,10 +542,12 @@ func LoadFrom(lookup Lookup) Config {
 			TenantMaxStorageBytes:    nonNegativeValue(lookup, "TENANT_MAX_STORAGE_MB", 0) * 1024 * 1024,
 			TenantChatRequestsPerDay: int(nonNegativeValue(lookup, "TENANT_CHAT_REQUESTS_PER_DAY", 0)),
 			DocumentRetentionDays:    int(int64Value(lookup, "DOCUMENT_RETENTION_DAYS", 30)),
+			AuditRetentionDays:       int(nonNegativeValue(lookup, "AUDIT_RETENTION_DAYS", 180)),
+			StreamEventRetentionDays: int(nonNegativeValue(lookup, "STREAM_EVENT_RETENTION_DAYS", 7)),
 			OutboxMaxAttempts:        int(int64Value(lookup, "OUTBOX_MAX_ATTEMPTS", 10)),
+			OutboxBatchSize:          int(int64Value(lookup, "OUTBOX_BATCH_SIZE", 64)),
 			ReconcileIntervalSeconds: int(int64Value(lookup, "RECONCILE_INTERVAL_SECONDS", 60)),
 			WorkerConcurrency:        int(int64Value(lookup, "WORKER_CONCURRENCY", 4)),
-			MaintenanceConcurrency:   int(int64Value(lookup, "MAINTENANCE_CONCURRENCY", 1)),
 			ShutdownTimeoutSeconds:   int(int64Value(lookup, "SHUTDOWN_TIMEOUT_SECONDS", 10)),
 		},
 		Connector: ConnectorConfig{

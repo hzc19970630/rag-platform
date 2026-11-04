@@ -18,10 +18,11 @@ type SyncPublisher interface {
 // OutboxPublisher drains connector.sync events into the maintenance queue.
 type OutboxPublisher = outbox.Publisher
 
-func NewOutboxPublisher(db *gorm.DB, publisher SyncPublisher, maxAttempts int) *OutboxPublisher {
+func NewOutboxPublisher(db *gorm.DB, publisher SyncPublisher, maxAttempts, batchSize int) *OutboxPublisher {
 	return outbox.New(outbox.Options{
 		DB:          db,
 		MaxAttempts: maxAttempts,
+		BatchSize:   batchSize,
 		Label:       "publish connector sync event",
 		Filter:      "event_type = ?",
 		FilterArgs:  []any{"connector.sync"},

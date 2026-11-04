@@ -12,10 +12,11 @@ import (
 // the projection queue pool.
 type OutboxPublisher = outbox.Publisher
 
-func NewOutboxPublisher(db *gorm.DB, publisher Publisher, maxAttempts int) *OutboxPublisher {
+func NewOutboxPublisher(db *gorm.DB, publisher Publisher, maxAttempts, batchSize int) *OutboxPublisher {
 	return outbox.New(outbox.Options{
 		DB:          db,
 		MaxAttempts: maxAttempts,
+		BatchSize:   batchSize,
 		Label:       "publish projection event",
 		Filter:      "event_type IN ?",
 		FilterArgs:  []any{[]string{"projection.wiki", "projection.relation"}},

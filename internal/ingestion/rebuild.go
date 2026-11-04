@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/vecutil"
 	"gorm.io/gorm"
 )
 
@@ -40,9 +39,12 @@ type chunkToEmbed struct {
 // Chunk status is preserved so a rebuilt chunk stays part of the same published
 // set; the affected evidence packages are refreshed in place so their
 // embedding_dimension metadata matches the new vectors.
-func RebuildEmbeddings(ctx context.Context, db *gorm.DB, embedder Embedder, batchSize int) (RebuildResult, error) {
+func RebuildEmbeddings(ctx context.Context, db *gorm.DB, writer EvidenceIndexWriter, embedder Embedder, batchSize int) (RebuildResult, error) {
 	if embedder == nil {
 		return RebuildResult{}, fmt.Errorf("embedder is required")
+	}
+	if writer == nil {
+		return RebuildResult{}, fmt.Errorf("evidence index writer is required")
 	}
 	if batchSize <= 0 {
 		batchSize = 32
@@ -80,19 +82,17 @@ func RebuildEmbeddings(ctx context.Context, db *gorm.DB, embedder Embedder, batc
 		if len(vectors) != len(chunks) {
 			return result, fmt.Errorf("embedding_error: vector count mismatch")
 		}
-		err = db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			for i := range chunks {
-				if len(vectors[i]) != dimension {
-					return fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunks[i].ID, len(vectors[i]), dimension)
-				}
-				if err := tx.Exec("UPDATE chunks SET embedding = ?::halfvec, embedding_dimension = ?, embedding_model = ?, updated_at = NOW() WHERE id = ?", vecutil.Literal(vectors[i]), len(vectors[i]), model, chunks[i].ID).Error; err != nil {
-					return err
-				}
-				affected[chunks[i].DocumentVersionID] = struct{}{}
+		records := make([]EmbeddingRecord, len(chunks))
+		for i := range chunks {
+			if len(vectors[i]) != dimension {
+				return result, fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunks[i].ID, len(vectors[i]), dimension)
 			}
-			return nil
-		})
-		if err != nil {
+			records[i] = EmbeddingRecord{ChunkID: chunks[i].ID, Vector: vectors[i]}
+			affected[chunks[i].DocumentVersionID] = struct{}{}
+		}
+		// An empty version id tells the writer to update vectors without changing
+		// the published status of each version.
+		if err := writer.WriteEmbeddings(ctx, "", model, records); err != nil {
 			return result, err
 		}
 		result.Reembedded += int64(len(chunks))
@@ -165,7 +165,7 @@ func refreshEvidencePackages(ctx context.Context, db *gorm.DB, versions map[stri
 func loadPackageChunks(ctx context.Context, db *gorm.DB, documentVersionID string) ([]Chunk, error) {
 	var rows []models.Chunk
 	if err := db.WithContext(ctx).
-		Where("document_version_id = ? AND status IN ?", documentVersionID, []string{"PARENT", StatusEmbedded, StatusEvidenceReady}).
+		Where("document_version_id = ? AND status IN ?", documentVersionID, []string{StatusParent, StatusEmbedded, StatusEvidenceReady}).
 		Order("ordinal, id").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load package chunks: %w", err)
 	}

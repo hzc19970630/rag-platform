@@ -20,7 +20,6 @@ import (
 	"github.com/example/rag-platform/internal/logging"
 	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/example/rag-platform/internal/platform/queue"
-	"github.com/example/rag-platform/internal/platform/search"
 	"github.com/hibiken/asynq"
 )
 
@@ -45,7 +44,7 @@ func main() {
 	logger.Info("embedding_adapter_ready", "source", cfg.Embedding.Source, "model", cfg.Embedding.Model, "dimension", cfg.Embedding.Dimension)
 	chunker := ingestion.NewRuneChunker(ingestion.RuneChunkerOptions{Size: cfg.Chunk.Size, Overlap: cfg.Chunk.Overlap, Markers: cfg.Chunk.Markers, MinSize: cfg.Chunk.MinSize})
 	logger.Info("chunking_policy_ready", "strategy", chunker.Strategy(), "size", cfg.Chunk.Size, "overlap", cfg.Chunk.Overlap, "min_size", cfg.Chunk.MinSize, "markers", len(cfg.Chunk.Markers))
-	pipeline := ingestion.NewPipelineWorker(application.DB, application.Objects, application.Docreader, embedder, search.NewBM25Indexer(application.DB), chunker, time.Duration(cfg.TaskTimeoutSeconds)*time.Second)
+	pipeline := ingestion.NewPipelineWorker(application.DB, application.Objects, application.Docreader, embedder, application.Index, chunker, time.Duration(cfg.TaskTimeoutSeconds)*time.Second)
 	pipeline.SetProjectionTrigger(application.Projection)
 
 	rootCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -53,9 +52,9 @@ func main() {
 
 	outboxContext, cancelOutbox := context.WithCancel(context.Background())
 	defer cancelOutbox()
-	go ingestion.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts).Run(outboxContext)
-	go datasource.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts).Run(outboxContext)
-	go knowledgeprojection.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts).Run(outboxContext)
+	go ingestion.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts, cfg.Limits.OutboxBatchSize).Run(outboxContext)
+	go datasource.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts, cfg.Limits.OutboxBatchSize).Run(outboxContext)
+	go knowledgeprojection.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts, cfg.Limits.OutboxBatchSize).Run(outboxContext)
 	go runMaintenance(rootCtx, application, cfg, logger)
 
 	server := asynq.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword}, asynq.Config{
@@ -179,6 +178,29 @@ func main() {
 	logger.Info("worker_shutting_down")
 }
 
+const (
+	retentionPurgeInterval   = time.Hour
+	retentionPurgeBatchSize  = 1000
+	retentionPurgeMaxBatches = 10
+)
+
+// purgeInBatches drains at most retentionPurgeMaxBatches batches so a backlog
+// shrinks without one long transaction per table.
+func purgeInBatches(ctx context.Context, before time.Time, purge func(context.Context, time.Time, int) (int64, error)) (int64, error) {
+	var total int64
+	for batch := 0; batch < retentionPurgeMaxBatches; batch++ {
+		count, err := purge(ctx, before, retentionPurgeBatchSize)
+		if err != nil {
+			return total, err
+		}
+		total += count
+		if count < int64(retentionPurgeBatchSize) {
+			break
+		}
+	}
+	return total, nil
+}
+
 // runMaintenance performs retention purge and reconciliation on the worker so
 // the API request path never pays for it. The operations are idempotent, so a
 // restart simply repeats the last pass.
@@ -193,6 +215,7 @@ func runMaintenance(ctx context.Context, application *app.Application, cfg confi
 	if interval > staleAfter/2 {
 		staleAfter = interval
 	}
+	var lastAuditPurge, lastStreamEventPurge time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -203,6 +226,28 @@ func runMaintenance(ctx context.Context, application *app.Application, cfg confi
 				logger.Error("maintenance_purge_failed", "error", err)
 			} else if purged > 0 {
 				logger.Info("maintenance_purge_complete", "purged", purged)
+			}
+			if cfg.Limits.AuditRetentionDays > 0 && time.Since(lastAuditPurge) >= retentionPurgeInterval {
+				lastAuditPurge = time.Now()
+				cutoff := lastAuditPurge.Add(-time.Duration(cfg.Limits.AuditRetentionDays) * 24 * time.Hour)
+				auditPurged, err := purgeInBatches(ctx, cutoff, application.Authorization.PurgeAuditLogs)
+				if err != nil {
+					logger.Error("audit_purge_failed", "error", err)
+				}
+				if auditPurged > 0 {
+					logger.Info("audit_purge_complete", "rows", auditPurged, "retention_days", cfg.Limits.AuditRetentionDays)
+				}
+			}
+			if cfg.Limits.StreamEventRetentionDays > 0 && time.Since(lastStreamEventPurge) >= retentionPurgeInterval {
+				lastStreamEventPurge = time.Now()
+				cutoff := lastStreamEventPurge.Add(-time.Duration(cfg.Limits.StreamEventRetentionDays) * 24 * time.Hour)
+				streamPurged, err := purgeInBatches(ctx, cutoff, application.Conversation.PurgeStreamEvents)
+				if err != nil {
+					logger.Error("stream_event_purge_failed", "error", err)
+				}
+				if streamPurged > 0 {
+					logger.Info("stream_event_purge_complete", "rows", streamPurged, "retention_days", cfg.Limits.StreamEventRetentionDays)
+				}
 			}
 			triggered, err := application.DataSources.ScheduleDue(ctx, 20)
 			if err != nil {

@@ -15,7 +15,6 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/formats"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/vecutil"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -31,14 +30,14 @@ const (
 var DefaultChunking = NewRuneChunker(RuneChunkerOptions{Size: 900, Overlap: 120})
 
 type PipelineWorker struct {
-	db         *gorm.DB
-	objects    ObjectStore
-	reader     DocumentReader
-	embedder   Embedder
-	indexer    KeywordIndexer
-	chunker    Chunker
-	timeout    time.Duration
-	projection ProjectionTrigger
+	db          *gorm.DB
+	objects     ObjectStore
+	reader      DocumentReader
+	embedder    Embedder
+	indexWriter EvidenceIndexWriter
+	chunker     Chunker
+	timeout     time.Duration
+	projection  ProjectionTrigger
 }
 
 // ProjectionTrigger is the Pipeline B port. It is optional: when projection is
@@ -46,17 +45,20 @@ type PipelineWorker struct {
 type ProjectionTrigger interface {
 	TriggerWiki(ctx context.Context, tenantID, knowledgeBaseID, evidencePackageID string, aclVersion int64) error
 	TriggerRelation(ctx context.Context, tenantID, knowledgeBaseID, evidencePackageID string, aclVersion int64) error
+	// InvalidateProjectionState drops cached expected hashes before the triggers
+	// run, so a failed trigger cannot leave ProjectionJoin trusting stale state.
+	InvalidateProjectionState(ctx context.Context, tenantID, knowledgeBaseID string) error
 }
 
 func (w *PipelineWorker) SetProjectionTrigger(trigger ProjectionTrigger) {
 	w.projection = trigger
 }
 
-func NewPipelineWorker(db *gorm.DB, objects ObjectStore, reader DocumentReader, embedder Embedder, indexer KeywordIndexer, chunker Chunker, timeout time.Duration) *PipelineWorker {
+func NewPipelineWorker(db *gorm.DB, objects ObjectStore, reader DocumentReader, embedder Embedder, indexWriter EvidenceIndexWriter, chunker Chunker, timeout time.Duration) *PipelineWorker {
 	if chunker == nil {
 		chunker = DefaultChunking
 	}
-	return &PipelineWorker{db: db, objects: objects, reader: reader, embedder: embedder, indexer: indexer, chunker: chunker, timeout: timeout}
+	return &PipelineWorker{db: db, objects: objects, reader: reader, embedder: embedder, indexWriter: indexWriter, chunker: chunker, timeout: timeout}
 }
 
 func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
@@ -213,17 +215,25 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	if len(rows) == 0 {
 		return apperror.Terminalf("empty_document", "chunker returned no chunks")
 	}
+	// A reprocessed version reuses its id, so the old index entries must be
+	// removed before the new chunks are written. PostgreSQL is a no-op; an
+	// external index adapter performs the delete.
+	if w.indexWriter != nil {
+		if err := w.indexWriter.DeleteVersion(ctx, version.ID); err != nil {
+			return fmt.Errorf("delete previous index: %w", err)
+		}
+	}
 	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.Chunk{}).Error; err != nil {
 			return err
 		}
 		for _, item := range rows {
-			status := "PARENT"
+			chunkStatus := StatusParent
 			if item.ParentID != "" {
-				status = StatusChunked
+				chunkStatus = StatusChunked
 			}
 			query := `INSERT INTO chunks (id, tenant_id, knowledge_base_id, document_version_id, parent_id, ordinal, content, content_hash, heading_path, page_number, source_path, start_offset, end_offset, embedding_dimension, status) VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
-			if err := tx.Exec(query, item.ID, version.TenantID, version.KnowledgeBaseID, version.ID, item.ParentID, item.Ordinal, item.Content, item.ContentHash, item.HeadingPath, item.PageNumber, item.SourcePath, item.StartOffset, item.EndOffset, status).Error; err != nil {
+			if err := tx.Exec(query, item.ID, version.TenantID, version.KnowledgeBaseID, version.ID, item.ParentID, item.Ordinal, item.Content, item.ContentHash, item.HeadingPath, item.PageNumber, item.SourcePath, item.StartOffset, item.EndOffset, chunkStatus).Error; err != nil {
 				return err
 			}
 		}
@@ -272,18 +282,20 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 	if len(vectors) != len(chunks) {
 		return fmt.Errorf("embedding_error: vector count mismatch")
 	}
-	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for index, chunk := range chunks {
-			if len(vectors[index]) != w.embedder.Dimension() {
-				return fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunk.ID, len(vectors[index]), w.embedder.Dimension())
-			}
-			literal := vecutil.Literal(vectors[index])
-			if err := tx.Exec("UPDATE chunks SET embedding = ?::halfvec, embedding_dimension = ?, embedding_model = ?, status = ?, updated_at = NOW() WHERE id = ? AND document_version_id = ?", literal, len(vectors[index]), w.embedder.Name(), StatusEmbedded, chunk.ID, version.ID).Error; err != nil {
-				return err
-			}
+	if w.indexWriter == nil {
+		return fmt.Errorf("embedding_error: evidence index writer is not configured")
+	}
+	records := make([]EmbeddingRecord, len(chunks))
+	for index, chunk := range chunks {
+		if len(vectors[index]) != w.embedder.Dimension() {
+			return fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunk.ID, len(vectors[index]), w.embedder.Dimension())
 		}
-		return tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusEmbedded, nil)).Error
-	})
+		records[index] = EmbeddingRecord{ChunkID: chunk.ID, Vector: vectors[index]}
+	}
+	if err := w.indexWriter.WriteEmbeddings(ctx, version.ID, w.embedder.Name(), records); err != nil {
+		return fmt.Errorf("embedding_error: %w", err)
+	}
+	return nil
 }
 
 func (w *PipelineWorker) index(ctx context.Context, task Task) error {
@@ -300,17 +312,18 @@ func (w *PipelineWorker) index(ctx context.Context, task Task) error {
 	if len(chunks) == 0 {
 		return apperror.Terminalf("empty_document", "no embedded chunks to index")
 	}
-	if w.indexer != nil {
-		if err := w.indexer.Index(ctx, version.ID); err != nil {
-			return fmt.Errorf("keyword_index_error: %w", err)
-		}
+	if w.indexWriter == nil {
+		return fmt.Errorf("evidence index writer is not configured")
+	}
+	if err := w.indexWriter.IndexVersion(ctx, version.ID); err != nil {
+		return fmt.Errorf("keyword_index_error: %w", err)
 	}
 	var knowledgeBase struct{ ACLVersion int64 }
 	if err := w.db.WithContext(ctx).Table("knowledge_bases").Select("acl_version").Where("id = ?", version.KnowledgeBaseID).Scan(&knowledgeBase).Error; err != nil {
 		return fmt.Errorf("load knowledge base acl: %w", err)
 	}
 	var allChunks []models.Chunk
-	if err := w.db.WithContext(ctx).Where("document_version_id = ? AND status IN ?", version.ID, []string{"PARENT", StatusEmbedded, StatusEvidenceReady}).Order("ordinal, id").Find(&allChunks).Error; err != nil {
+	if err := w.db.WithContext(ctx).Where("document_version_id = ? AND status IN ?", version.ID, []string{StatusParent, StatusEmbedded, StatusEvidenceReady}).Order("ordinal, id").Find(&allChunks).Error; err != nil {
 		return fmt.Errorf("load package chunks: %w", err)
 	}
 	packageChunks := projectChunks(allChunks)
@@ -358,6 +371,9 @@ func (w *PipelineWorker) triggerProjection(ctx context.Context, tenantID, knowle
 	}
 	triggerCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	if err := w.projection.InvalidateProjectionState(triggerCtx, tenantID, knowledgeBaseID); err != nil {
+		slog.Warn("projection_state_invalidate_failed", "knowledge_base_id", knowledgeBaseID, "error", err)
+	}
 	if err := w.projection.TriggerWiki(triggerCtx, tenantID, knowledgeBaseID, packageID, aclVersion); err != nil {
 		slog.Warn("wiki_projection_trigger_failed", "knowledge_base_id", knowledgeBaseID, "package_id", packageID, "error", err)
 	}

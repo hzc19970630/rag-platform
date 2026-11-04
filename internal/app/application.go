@@ -15,6 +15,7 @@ import (
 	"github.com/example/rag-platform/internal/knowledgeprojection"
 	"github.com/example/rag-platform/internal/ops"
 	"github.com/example/rag-platform/internal/platform/docreader"
+	"github.com/example/rag-platform/internal/platform/evidenceindex"
 	"github.com/example/rag-platform/internal/platform/evidencestore"
 	"github.com/example/rag-platform/internal/platform/persistence"
 	"github.com/example/rag-platform/internal/platform/queue"
@@ -35,6 +36,7 @@ type Application struct {
 	Authorization *authz.Service
 	KnowledgeBase *knowledgebase.Service
 	Ingestion     *ingestion.Service
+	Index         ingestion.EvidenceIndexWriter
 	DataSources   *datasource.Service
 	Projection    *knowledgeprojection.Service
 	Secrets       *secrets.Cipher
@@ -99,7 +101,9 @@ func Open(cfg config.Config) (*Application, error) {
 		closeDatabase(database)
 		return nil, err
 	}
+	indexWriter := evidenceindex.New(database)
 	ingestionService := ingestion.NewService(database, authorization, objects, publisher, cfg.MaxFileBytes, cfg.Limits.DocumentRetentionDays, ingestion.Quota{MaxDocuments: cfg.Limits.TenantMaxDocuments, MaxStorageBytes: cfg.Limits.TenantMaxStorageBytes})
+	ingestionService.SetIndexWriter(indexWriter)
 	credentialCipher, err := secrets.NewCipher(cfg.Connector.EncryptionKey)
 	if err != nil {
 		_ = reader.Close()
@@ -169,7 +173,7 @@ func Open(cfg config.Config) (*Application, error) {
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
 		ChatRequestsPerDay: cfg.Limits.TenantChatRequestsPerDay,
 	})
-	return &Application{DB: database, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

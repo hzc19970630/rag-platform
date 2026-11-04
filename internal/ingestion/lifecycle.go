@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
@@ -199,7 +200,7 @@ func (s *Service) ActivateVersion(ctx context.Context, principal authz.Principal
 		if err := tx.Model(&models.DocumentVersion{}).Where("id = ?", target.ID).Updates(map[string]any{"status": StatusEvidenceReady, "error_code": "", "error_message": "", "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Chunk{}).Where("document_version_id = ? AND parent_id IS NULL", target.ID).Update("status", "PARENT").Error; err != nil {
+		if err := tx.Model(&models.Chunk{}).Where("document_version_id = ? AND parent_id IS NULL", target.ID).Update("status", StatusParent).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&models.Chunk{}).Where("document_version_id = ? AND parent_id IS NOT NULL", target.ID).Update("status", StatusEvidenceReady).Error; err != nil {
@@ -441,6 +442,16 @@ func (s *Service) purgeDocument(ctx context.Context, documentID string) error {
 	if err != nil {
 		return fmt.Errorf("purge document: %w", err)
 	}
+	// PostgreSQL needs no external cleanup, but an external index adapter must
+	// remove the version. A failure here is logged rather than resurrecting a
+	// document whose database rows are already gone.
+	if s.index != nil {
+		for _, versionID := range versionIDs {
+			if err := s.index.DeleteVersion(ctx, versionID); err != nil {
+				slog.Warn("index_delete_failed", "document_id", documentID, "document_version_id", versionID, "error", err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -503,10 +514,10 @@ func supersedeVersion(tx *gorm.DB, versionID, reason string) error {
 	}).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&models.Chunk{}).Where("document_version_id = ?", versionID).Update("status", "STALE").Error; err != nil {
+	if err := tx.Model(&models.Chunk{}).Where("document_version_id = ?", versionID).Update("status", StatusStale).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", versionID).Update("status", "STALE").Error; err != nil {
+	if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", versionID).Update("status", StatusStale).Error; err != nil {
 		return err
 	}
 	return cancelPendingOutbox(tx, []string{versionID})

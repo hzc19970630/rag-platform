@@ -359,7 +359,7 @@ func (s *Service) ChunkDetail(ctx context.Context, principal authz.Principal, ch
 	if document.LatestVersionID != version.ID || version.Status != StatusEvidenceReady {
 		return ChunkView{}, apperror.ErrNotReady
 	}
-	if chunk.Status != "PARENT" && chunk.Status != StatusEvidenceReady {
+	if chunk.Status != StatusParent && chunk.Status != StatusEvidenceReady {
 		return ChunkView{}, apperror.ErrNotReady
 	}
 	return chunkView(chunk, document.ID), nil

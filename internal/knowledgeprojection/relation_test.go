@@ -212,6 +212,7 @@ func openGraphTestDB(t *testing.T) *gorm.DB {
 		&models.EvidencePackage{}, &models.ProjectionRun{}, &models.ProjectionStageRun{},
 		&models.GraphSnapshot{}, &models.GraphEntity{}, &models.GraphEntityAlias{},
 		&models.GraphRelation{}, &models.GraphRelationSource{}, &models.AuditLog{},
+		&models.KnowledgeProjectionState{},
 	); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}

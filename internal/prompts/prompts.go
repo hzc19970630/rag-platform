@@ -15,13 +15,10 @@ import (
 )
 
 const (
-	SystemPrompt             = "system_prompt"
-	ContextTemplate          = "context_template"
-	Fallback                 = "fallback"
-	QueryRewrite             = "query_rewrite"
-	Summary                  = "summary"
-	KnowledgeBaseDescription = "knowledge_base_description"
-	ConversationTitle        = "conversation_title"
+	SystemPrompt      = "system_prompt"
+	ContextTemplate   = "context_template"
+	Fallback          = "fallback"
+	ConversationTitle = "conversation_title"
 	// WikiGeneration drives Pipeline B page generation. It is a separate
 	// template from the answer prompt so page wording and citation rules do not
 	// constrain online generation.
@@ -38,9 +35,6 @@ var Required = []string{
 	SystemPrompt,
 	ContextTemplate,
 	Fallback,
-	QueryRewrite,
-	Summary,
-	KnowledgeBaseDescription,
 	ConversationTitle,
 	WikiGeneration,
 	RelationExtraction,

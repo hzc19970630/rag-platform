@@ -135,7 +135,7 @@ func (s *Service) ReplayEvents(ctx context.Context, principal authz.Principal, r
 		return nil, fmt.Errorf("load request messages: %w", err)
 	}
 	var rows []models.StreamEvent
-	if err := s.db.WithContext(ctx).Where("request_id = ? AND sequence > ?", requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND request_id = ? AND sequence > ?", principal.TenantID, principal.SubjectID, requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load stream events: %w", err)
 	}
 	events := make([]Event, 0, len(rows))
@@ -145,6 +145,27 @@ func (s *Service) ReplayEvents(ctx context.Context, principal authz.Principal, r
 		events = append(events, Event{EventID: eventID(row.RequestID, row.Sequence), RequestID: row.RequestID, Sequence: row.Sequence, Type: row.EventType, Data: data})
 	}
 	return events, nil
+}
+
+// PurgeStreamEvents deletes at most one batch of replay buffers older than the
+// cutoff. Answers and citations live in messages/message_citations, so an
+// expired request simply replays no events; it does not lose the answer.
+func (s *Service) PurgeStreamEvents(ctx context.Context, before time.Time, limit int) (int64, error) {
+	if before.IsZero() {
+		return 0, nil
+	}
+	if limit <= 0 {
+		limit = 1000
+	}
+	result := s.db.WithContext(ctx).Exec(`
+		DELETE FROM stream_events
+		WHERE id IN (
+			SELECT id FROM stream_events WHERE created_at < ? ORDER BY created_at, id LIMIT ?
+		)`, before, limit)
+	if result.Error != nil {
+		return 0, fmt.Errorf("purge stream events: %w", result.Error)
+	}
+	return result.RowsAffected, nil
 }
 
 // Ask answers one question. Events are persisted before they are emitted, so a
@@ -172,8 +193,10 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 		requestID = generated
 	}
 	// Idempotent retry: a repeated request id returns the recorded answer rather
-	// than generating and persisting a second one.
-	if existing, ok, err := s.loadAnswer(ctx, requestID); err != nil {
+	// than generating and persisting a second one. The lookup is scoped to this
+	// tenant, user and conversation so a leaked request id cannot disclose
+	// another caller's answer.
+	if existing, ok, err := s.loadAnswer(ctx, principal, conversation.ID, requestID); err != nil {
 		return AnswerResult{}, err
 	} else if ok {
 		return existing, nil
@@ -184,7 +207,7 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 
 	sequence := 0
 	emitEvent := func(eventType string, data map[string]any) error {
-		return s.appendEvent(ctx, requestID, principal.TenantID, &sequence, eventType, data, emit)
+		return s.appendEvent(ctx, requestID, principal.TenantID, principal.SubjectID, &sequence, eventType, data, emit)
 	}
 	if _, err := s.persistMessage(ctx, models.Message{
 		ConversationID: conversation.ID, TenantID: principal.TenantID, KnowledgeBaseID: conversation.KnowledgeBaseID,
@@ -590,13 +613,13 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 	return scope, nil
 }
 
-func (s *Service) appendEvent(ctx context.Context, requestID, tenantID string, sequence *int, eventType string, data map[string]any, emit Emitter) error {
+func (s *Service) appendEvent(ctx context.Context, requestID, tenantID, userID string, sequence *int, eventType string, data map[string]any, emit Emitter) error {
 	*sequence++
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal stream event: %w", err)
 	}
-	row := models.StreamEvent{RequestID: requestID, TenantID: tenantID, Sequence: *sequence, EventType: eventType, Payload: string(payload)}
+	row := models.StreamEvent{RequestID: requestID, TenantID: tenantID, UserID: userID, Sequence: *sequence, EventType: eventType, Payload: string(payload)}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return fmt.Errorf("persist stream event: %w", err)
 	}
@@ -657,9 +680,14 @@ func (s *Service) loadCitations(ctx context.Context, messageID string) ([]Citati
 }
 
 // loadAnswer returns a recorded assistant answer for an idempotent retry.
-func (s *Service) loadAnswer(ctx context.Context, requestID string) (AnswerResult, bool, error) {
+// Request ids are client-supplied, so the lookup must be scoped exactly like
+// ReplayEvents: tenant + user + conversation, not the global request id alone.
+func (s *Service) loadAnswer(ctx context.Context, principal authz.Principal, conversationID, requestID string) (AnswerResult, bool, error) {
 	var message models.Message
-	if err := s.db.WithContext(ctx).Where("request_id = ? AND role = ?", requestID, MessageRoleAssistant).First(&message).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("tenant_id = ? AND user_id = ? AND conversation_id = ? AND request_id = ? AND role = ?",
+			principal.TenantID, principal.SubjectID, conversationID, requestID, MessageRoleAssistant).
+		First(&message).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return AnswerResult{}, false, nil
 		}

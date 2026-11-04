@@ -39,6 +39,7 @@ func (s *Service) TriggerWiki(ctx context.Context, tenantID, knowledgeBaseID, ev
 		return err
 	}
 	sourceHash, _ := packagesSourceHash(packages, knowledgeBase.ACLVersion, s.generator.PromptVersion(), s.generator.Model())
+	_ = s.upsertWikiExpectedHash(ctx, knowledgeBase, sourceHash)
 	var latest models.ProjectionRun
 	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
 		Order("created_at DESC, id DESC").First(&latest).Error
@@ -93,6 +94,7 @@ func (s *Service) RebuildKnowledgeBase(ctx context.Context, tenantID, knowledgeB
 		return 0, lookupErr
 	}
 	sourceHash, _ := packagesSourceHash(packages, knowledgeBase.ACLVersion, s.generator.PromptVersion(), s.generator.Model())
+	_ = s.upsertWikiExpectedHash(ctx, knowledgeBase, sourceHash)
 	last := packages[len(packages)-1]
 	if err := s.createRun(ctx, knowledgeBase, last.ID, sourceHash); err != nil {
 		return 0, err
@@ -135,7 +137,9 @@ func (s *Service) RebuildRelations(ctx context.Context, tenantID, knowledgeBaseI
 		return 0, lookupErr
 	}
 	last := packages[len(packages)-1]
-	if err := s.createRunFor(ctx, knowledgeBase, ProjectionTypeRelation, last.ID, s.relationSourceHash(packages, knowledgeBase.ACLVersion)); err != nil {
+	relationHash := s.relationSourceHash(packages, knowledgeBase.ACLVersion)
+	_ = s.upsertRelationExpectedHash(ctx, knowledgeBase, relationHash)
+	if err := s.createRunFor(ctx, knowledgeBase, ProjectionTypeRelation, last.ID, relationHash); err != nil {
 		return 0, err
 	}
 	return 1, nil
@@ -167,6 +171,7 @@ func (s *Service) TriggerRelation(ctx context.Context, tenantID, knowledgeBaseID
 		return err
 	}
 	sourceHash := s.relationSourceHash(packages, knowledgeBase.ACLVersion)
+	_ = s.upsertRelationExpectedHash(ctx, knowledgeBase, sourceHash)
 	var latest models.ProjectionRun
 	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeRelation).
 		Order("created_at DESC, id DESC").First(&latest).Error
@@ -324,6 +329,9 @@ func (s *Service) InvalidateKnowledgeBase(ctx context.Context, tenantID, knowled
 		if err := tx.Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, knowledgeBaseID).Delete(&models.KnowledgeIndexRecord{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, knowledgeBaseID).Delete(&models.KnowledgeProjectionState{}).Error; err != nil {
+			return err
+		}
 		message := strings.TrimSpace(reason)
 		if message == "" {
 			message = "knowledge_base_changed"
@@ -385,6 +393,11 @@ func (s *Service) scheduleProjection(ctx context.Context, knowledgeBase models.K
 	sourceHash, err := packagesSourceHash(packages, knowledgeBase.ACLVersion, promptVersion, model)
 	if err != nil {
 		return false, nil
+	}
+	if projectionType == ProjectionTypeRelation {
+		_ = s.upsertRelationExpectedHash(ctx, knowledgeBase, sourceHash)
+	} else {
+		_ = s.upsertWikiExpectedHash(ctx, knowledgeBase, sourceHash)
 	}
 	var latest models.ProjectionRun
 	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBase.ID, projectionType).

@@ -112,7 +112,7 @@ graph LR
 | LLM 接入 | 内部统一协议 + OpenAI Compatible Adapter | 统一 Chat、Embedding、Rerank、VLM 接口，支持多供应商 |
 | 模型路由 | Model Registry；规模较大时可接 LiteLLM | 模型配置、密钥、限流、降级和按租户选择 |
 | 认证 | OIDC / SSO + JWT；API Key 用哈希存储 | 对接企业身份系统，同时支持程序化访问 |
-| 授权 | Go Casbin Domain RBAC + `github.com/casbin/gorm-adapter/v3` | Owner / Admin / Editor / Viewer，加租户和知识库级访问控制 |
+| 授权 | Go Casbin Domain RBAC（进程内策略投影） | Owner / Admin / Editor / Viewer，加租户和知识库级访问控制 |
 | 可观测性 | OpenTelemetry + Prometheus + 结构化日志；Grafana/Loki/Langfuse 按部署档位启用 | 关联请求、任务、模型调用和检索指标 |
 | 部署 | Docker Compose + Helm/Kubernetes | 本地开发、私有化和生产集群统一交付方式 |
 | API 契约 | OpenAPI 3；gRPC 使用 Protobuf；内部任务使用版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
@@ -316,7 +316,7 @@ Wiki 页面和图谱关系都必须记录来源、生成模型、生成时间、
 | 基础设施连接 | 环境变量 | `DATABASE_URL`、`S3_ENDPOINT`、`REDIS_ADDR`、`DOCREADER_GRPC_ADDR` | 进程级 | 组合根 `config.Load()` 启动时读取 |
 | 模型定义 | YAML/JSON 文件 + 环境变量插值 | `EMBEDDING_SOURCE`、`LLM_EMBEDDING_MODEL`、`EMBEDDING_DIMENSION`、`EMBEDDING_BATCH_SIZE`、`RERANK_SOURCE`、`LLM_RERANK_MODEL` | 进程级 | 启动时构造适配器并校验 |
 | 切分策略 | YAML 或环境变量 | `CHUNK_SIZE`、`CHUNK_OVERLAP`、`CHUNK_SPLIT_MARKERS`、`PARSER_SANDBOX_ENABLED` | 进程级，可按知识库覆盖 | 切分阶段读取 |
-| Prompt 模板 | `config/prompt_templates/*.yaml` | 系统提示、上下文模板、fallback、查询改写、实体/关系抽取、摘要生成 | 进程级，可按租户覆盖 | 启动时加载并校验模板 ID 引用 |
+| Prompt 模板 | `config/prompt_templates/*.yaml` | 系统提示、上下文模板、fallback、会话标题、Wiki 生成、关系抽取 | 进程级，可按租户覆盖 | 启动时加载并校验模板 ID 引用 |
 | 检索参数 | YAML + 数据库三级覆盖 | `embedding_top_k`、`vector_threshold`、`keyword_threshold`、`rerank_threshold`、`rerank_top_k`、`rrf_k`、`expansion_score_factor` | 全局默认 → 知识库 → 会话 | 检索请求组装时解析 |
 | 索引开关 | 数据库中的 `IndexingStrategy` | `vector_enabled`、`keyword_enabled`、`wiki_enabled`、`graph_enabled` | 知识库级 | 流水线和检索器读取 |
 
@@ -369,7 +369,7 @@ CHUNK_MIN_SIZE       小于该长度的块与相邻块合并
 
 已实现：`Chunker` 是端口，默认实现 `RuneChunker` 采用「标记优先 + 定长窗口」策略。窗口内存在可用标记时，在最后一个标记处切分并放弃重叠（否则整段重复）；没有标记时回退为带重叠的定长切分。尾部不足 `CHUNK_MIN_SIZE` 的块并入前一块。`CHUNK_OVERLAP` 和 `CHUNK_MIN_SIZE` 允许显式取 0，`CHUNK_SPLIT_MARKERS` 支持 `\n`、`\t` 转义，便于在 `.env` 中表达换行标记。启动时校验 `Size > 0`、`0 <= Overlap < Size`、`0 <= MinSize < Size`，不满足则启动失败。
 
-Prompt 模板在 M3 生成层落地时外置为 `config/prompt_templates/*.yaml`，配置中只保存模板 ID 引用，与 WeKnora 的 `xxx_prompt_id` 方式一致。首批模板：系统提示、上下文模板、fallback、查询改写、实体抽取、关系抽取、图谱抽取、生成摘要、生成知识库描述、生成会话标题。约束：
+Prompt 模板在 M3 生成层落地时外置为 `config/prompt_templates/*.yaml`，配置中只保存模板 ID 引用，与 WeKnora 的 `xxx_prompt_id` 方式一致。首批模板：系统提示、上下文模板、fallback、会话标题、Wiki 生成、关系抽取。约束：
 
 - Go 代码不出现中文字符串拼接的 Prompt 字面量。
 - 模板 ID 引用在启动时校验，缺失或重复的模板 ID 导致启动失败。
@@ -1229,9 +1229,9 @@ RECEIVED
 
 #### 第三方框架选择
 
-后端采用 **Casbin**（Go 包：`github.com/casbin/casbin/v3`）实现通用的角色、权限、角色继承和多租户 Domain 匹配，使用 `github.com/casbin/gorm-adapter/v3` 将策略持久化到 PostgreSQL。Casbin 的 Domain RBAC 可以表达“用户在某个租户或空间内属于某个角色”的关系，适合作为平台的策略匹配引擎。
+后端采用 **Casbin**（Go 包：`github.com/casbin/casbin/v3`）实现通用的角色、权限、角色继承和多租户 Domain 匹配。Casbin 的 Domain RBAC 可以表达“用户在某个租户或空间内属于某个角色”的关系，适合作为平台的策略匹配引擎。策略不落 `casbin_rule` 表：启动和 revision 变化时从 `memberships`、`knowledge_bases`、`knowledge_base_members` 在进程内重建，构建完成后原子替换 enforcer。
 
-Casbin 只负责策略评估，不负责完整的用户、角色、成员和资源管理。用户、成员关系、业务角色、知识库共享和审计仍由 `identity`、`knowledgebase` 和 `governance` 模块维护。PostgreSQL 中的业务关系是权限事实源，Casbin 策略是可刷新、可审计的策略投影，不能让业务角色表和 `casbin_rule` 长期独立演化。
+Casbin 只负责策略评估，不负责完整的用户、角色、成员和资源管理。用户、成员关系、业务角色、知识库共享和审计仍由 `identity`、`knowledgebase` 和 `governance` 模块维护。PostgreSQL 中的业务关系是唯一事实源，Casbin 策略是可重建、可丢弃的派生投影；按 tenant 缓存 revision，只有该租户的 revision 变化时才重建，避免多租户交替请求互相触发全量刷新。
 
 前端不作为最终授权来源。React 端只消费后端返回的权限快照，用于菜单、路由、按钮和批量操作的体验控制。首期使用自研的轻量权限适配层：`PermissionGate`、`ProtectedRoute` 和 `usePermission()`。如果后续出现复杂的前端资源规则，再引入 `CASL` / `@casl/react`；它只负责前端能力判断，不与 Casbin 争夺权限事实源。
 
@@ -1361,9 +1361,9 @@ React 端只根据快照处理界面状态：
 - `memberships`：用户、租户和角色关系。
 - `resource_shares`：知识库或文档的显式共享关系。
 - `api_keys`：密钥哈希、能力集合和知识库范围。
-- `audit_logs`：授权拒绝和权限变更记录。
+- `audit_logs`：授权拒绝、权限变更与写操作记录；允许的只读检查不逐次落库。
 
-业务权限关系通过 Outbox 写入 `authorization.policy_changed` 事件；Casbin 的 GORM Adapter 从 PostgreSQL 加载策略投影，多实例使用 Redis Pub/Sub 通知刷新并显式调用 `LoadPolicy()`。权限变更采用 `acl_version` 或短缓存校验，检索器发现版本过期时拒绝使用旧的派生结果，不能假设多实例会自动同步。
+业务权限关系通过 Outbox 写入 `authorization.policy_changed` 事件；多实例使用 Redis Pub/Sub 通知刷新，刷新时从成员表重建进程内 Casbin 投影。权限变更采用 `acl_version` 与按租户的 revision 缓存校验，检索器发现版本过期时拒绝使用旧的派生结果，不能假设多实例会自动同步。
 
 不建议首期引入 OPA、Keycloak Authorization Services 等第二套策略引擎。OIDC 服务负责身份认证，Casbin 负责应用授权，应用服务负责资源归属和数据范围，边界清晰且部署成本可控。只有跨多个独立服务共享复杂 ABAC 策略时，才评估把策略下沉到 OPA。
 

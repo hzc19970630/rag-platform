@@ -46,7 +46,7 @@ compose logs --no-color worker | grep worker_shutting_down
 1. 用 `pg_dump --format=custom --no-owner --no-privileges` 导出当前开发库。
 2. 启动一个一次性 `paradedb/paradedb:v0.22.6-pg17` 容器（随机容器名，不映射宿主机端口），等待镜像完成 initdb 的“初始化→重启”两阶段。
 3. 过滤掉目标镜像已内置的 `paradedb` schema 与 `pg_search`/`vector` 扩展条目后 `pg_restore --exit-on-error`。
-4. 对比全部 27 张 public 表的行数、`schema_migrations` 的版本与校验和、`authorization_revisions`、`kb-dev` 及其 owner 成员关系。
+4. 对比全部 42 张 public 表的行数、`schema_migrations` 的版本与校验和、`authorization_revisions`、`kb-dev` 及其 owner 成员关系。
 5. 对比 `chunks` 的全部索引定义，确认 `chunks_bm25_idx` 与 `chunks_vector_idx`（`halfvec(1024)` HNSW）随备份恢复。
 6. 结束时删除一次性容器和临时文件；源栈只读。
 
@@ -67,7 +67,8 @@ compose logs --no-color worker | grep worker_shutting_down
 
 ### Redis 重启
 
-- 授权缓存的唯一事实源是数据库中的 `authorization_revisions` 与 Casbin 投影；每次 `Authorize`/`BuildScope` 都会 `ensureFresh` 比对数据库 revision，因此 Redis 丢失不会让撤权回退。
+- 授权缓存的唯一事实源是数据库中的 `authorization_revisions` 与成员关系表；Casbin 策略是进程内可重建投影，每次 `Authorize`/`BuildScope` 都会 `ensureFresh` 比对数据库 revision，因此 Redis 丢失不会让撤权回退。
+- revision 按 tenant 缓存，只有该租户的 revision 变化时才重建策略；`BumpRevision` 只删除本实例的缓存并发布通知，不再同步全量重建。
 - 队列、Asynq 调度和 Pub/Sub 通知属于可丢失状态：在途任务由 Outbox 重新投递；已撤销角色的缓存会在下一次请求按 revision 重建。
 - Redis 恢复后 API/Worker 会自动重连，无需重启进程；`/readyz` 的 `redis` 检查恢复为 `ok` 即可。
 - 演练：`compose restart redis`，确认 `/readyz` 恢复，重复执行一次“撤销成员→检索 403→重新添加→检索 200”。
@@ -75,7 +76,8 @@ compose logs --no-color worker | grep worker_shutting_down
 ### Worker 停止
 
 - API 只写业务表与 `outbox_events`，不直接投递 Asynq；Outbox Publisher 运行在 Worker 中。Worker 停止期间上传照常返回 202，事件保持 `published_at IS NULL`。
-- Worker 恢复后按 `FOR UPDATE SKIP LOCKED` 批量拉取未发布事件；`attempts` 与 `next_attempt_at` 支持退避重试。
+- Worker 每个 tick 按 `FOR UPDATE SKIP LOCKED` claim 最多 `OUTBOX_BATCH_SIZE` 条事件，写入 lease 后在事务外发布；发布成功批量标记，失败按 `attempts`/`next_attempt_at` 退避。
+- 发布是 at-least-once：进程在发布后、标记前崩溃会重投，由 Asynq `TaskID` 与 `task_inbox` 去重。
 - 超过 `OUTBOX_MAX_ATTEMPTS` 的事件不再计入 `outboxBacklog`，其对应任务由错误处理或 reconciliation 记录为死信。
 
 ## 5. 重复投递、Inbox 与死信
@@ -164,6 +166,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 - 删除为软删除：`documents.deleted_at/deleted_by/purge_after` 写入，Chunk 与证据包保留以便恢复；检索、列表、详情和预览全部过滤已删除文档。
 - `DOCUMENT_RETENTION_DAYS`（默认 30）决定 `purge_after`。到期后 Worker 维护循环硬删除版本、Chunk、证据包、流水线、Outbox/Inbox 行、死信和对象存储文件。
+- `AUDIT_RETENTION_DAYS`（默认 180，0 表示永久保留）只作用于 `audit_logs`。Worker 每小时按 `created_at` 批量删除过期行（每批 1000 条，每轮最多 10 批），并由 `audit_logs_created_at_idx` 支撑。
+- `STREAM_EVENT_RETENTION_DAYS`（默认 7，0 表示永久保留）只作用于 `stream_events`。它保存的是 SSE 断线续传缓冲，不是问答历史；回答正文、引用和证据集都在 `messages` / `message_citations` / `evidence_set` 中。Worker 用同一套每小时批量清理（每批 1000 条，每轮最多 10 批），索引为 `stream_events_created_at_idx`。超过保留期后，旧请求的 `ReplayEvents` 返回空事件列表，但消息历史仍可正常读取；不建议从 `messages` 反向重建事件。
 - 恢复（`POST /documents/:id/restore`）清空删除标记并按最新版本是否完整恢复为 `EVIDENCE_READY` 或 `STORED`；超过保留窗口返回冲突。
 - 硬清理（`POST /documents/:id/purge`）只允许针对已软删除文档，立即删除全部派生数据与 S3 对象，不可恢复。
 - 版本回滚（`POST /documents/:id/versions/:versionID/activate`）会复用被替换版本的 STALE 证据包与 Chunk，不重新 Embedding；前一版本标记 `CANCELLED`。

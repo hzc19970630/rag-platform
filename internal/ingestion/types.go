@@ -34,6 +34,7 @@ const (
 	StatusFailed        = "FAILED"
 	StatusCancelled     = "CANCELLED"
 	StatusStale         = status.Stale
+	StatusParent        = status.Parent
 
 	StagePending    = "PENDING"
 	StageProcessing = "PROCESSING"

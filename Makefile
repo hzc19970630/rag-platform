@@ -5,6 +5,8 @@
 # not behind the default network.
 GO_IMAGE ?= golang:1.26-alpine
 GO_PROXY ?= https://goproxy.cn,direct
+# Compose reads GO_PROXY as the Docker build arg for the Go image.
+export GO_PROXY
 GO_RUN = docker run --rm \
 	-v "$$(pwd)":/src -w /src \
 	-v rag-go-modcache:/go/pkg/mod \

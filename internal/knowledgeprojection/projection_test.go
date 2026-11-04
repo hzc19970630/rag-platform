@@ -121,7 +121,7 @@ func TestResetRunForRetryUsesAFreshQueueAttempt(t *testing.T) {
 		t.Fatalf("test db handle: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.ProjectionRun{}, &models.ProjectionStageRun{}, &models.TaskInbox{}, &models.OutboxEvent{}); err != nil {
+	if err := db.AutoMigrate(&models.ProjectionRun{}, &models.ProjectionStageRun{}, &models.TaskInbox{}, &models.OutboxEvent{}, &models.KnowledgeProjectionState{}); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
 
