@@ -41,7 +41,7 @@ func TestNonPositiveLimitDisablesLimiting(t *testing.T) {
 	}
 }
 
-func TestSweepDropsExpiredWindows(t *testing.T) {
+func TestAllowSweepsExpiredWindows(t *testing.T) {
 	now := time.Unix(1000, 0)
 	limiter := New(1)
 	limiter.now = func() time.Time { return now }
@@ -49,13 +49,18 @@ func TestSweepDropsExpiredWindows(t *testing.T) {
 	now = now.Add(30 * time.Second)
 	limiter.Allow("current")
 
+	// The next request after a full window triggers the sweep without any
+	// owner or background goroutine calling it explicitly.
 	now = now.Add(31 * time.Second)
-	limiter.Sweep()
+	limiter.Allow("new")
 	if _, ok := limiter.states["expired"]; ok {
-		t.Fatal("sweep must drop expired windows")
+		t.Fatal("the sweep must drop expired windows")
 	}
 	if _, ok := limiter.states["current"]; !ok {
-		t.Fatal("sweep must keep windows still inside the current window")
+		t.Fatal("the sweep must keep windows still inside the current window")
+	}
+	if _, ok := limiter.states["new"]; !ok {
+		t.Fatal("the triggering request must still be tracked")
 	}
 	if limiter.RetryAfter() != time.Minute {
 		t.Fatalf("RetryAfter = %s, want 1m", limiter.RetryAfter())

@@ -141,12 +141,21 @@ func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		started := time.Now()
 		c.Next()
-		logger.Info("http_request",
+		fields := []any{
 			"method", c.Request.Method,
 			"path", c.Request.URL.Path,
 			"status", c.Writer.Status(),
 			"duration_ms", time.Since(started).Milliseconds(),
-		)
+		}
+		// Correlation fields are read after c.Next() because authentication
+		// resolves the principal; unauthenticated requests carry no tenant.
+		if requestID := strings.TrimSpace(c.GetHeader("X-Request-ID")); requestID != "" {
+			fields = append(fields, "request_id", requestID)
+		}
+		if access := accessContext(c); access.Principal.TenantID != "" {
+			fields = append(fields, "tenant_id", access.Principal.TenantID)
+		}
+		logger.Info("http_request", fields...)
 	}
 }
 

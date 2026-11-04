@@ -15,6 +15,9 @@ type Limiter struct {
 	window time.Duration
 	now    func() time.Time
 	states map[string]*windowState
+	// lastSweep bounds the sweep cost: expired windows are dropped at most once
+	// per window, on the first request after the previous sweep.
+	lastSweep time.Time
 }
 
 type windowState struct {
@@ -35,6 +38,10 @@ func (l *Limiter) Allow(key string) bool {
 	now := l.now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.lastSweep.IsZero() || now.Sub(l.lastSweep) >= l.window {
+		l.sweepLocked(now)
+		l.lastSweep = now
+	}
 	state, ok := l.states[key]
 	if !ok || now.Sub(state.start) >= l.window {
 		l.states[key] = &windowState{start: now, count: 1}
@@ -55,18 +62,13 @@ func (l *Limiter) RetryAfter() time.Duration {
 	return l.window
 }
 
-// Sweep drops expired windows so a long-lived process does not retain one entry
-// per tenant forever. It is called opportunistically by the limiter's owner.
-func (l *Limiter) Sweep() {
-	if l == nil {
-		return
-	}
-	now := l.now()
-	l.mu.Lock()
+// sweepLocked drops expired windows so a long-lived process does not retain one
+// entry per tenant forever. Allow calls it at most once per window, so the cost
+// is amortized and the limiter needs no background goroutine to stop.
+func (l *Limiter) sweepLocked(now time.Time) {
 	for key, state := range l.states {
 		if now.Sub(state.start) >= l.window {
 			delete(l.states, key)
 		}
 	}
-	l.mu.Unlock()
 }

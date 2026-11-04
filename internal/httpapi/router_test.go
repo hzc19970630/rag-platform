@@ -1,12 +1,15 @@
 package httpapi
 
 import (
+	"bytes"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/gin-gonic/gin"
 )
@@ -109,6 +112,31 @@ func TestRequestBodyLimitIgnoresSpoofedMultipartHeader(t *testing.T) {
 
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413 for a spoofed multipart header, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRequestLoggerIncludesCorrelationFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+
+	router := gin.New()
+	router.Use(requestLogger(logger))
+	router.Use(func(c *gin.Context) {
+		c.Set(accessContextKey, authz.AccessContext{Principal: authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}})
+		c.Next()
+	})
+	router.GET("/api/v1/me", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	request.Header.Set("X-Request-ID", "req-1")
+	router.ServeHTTP(httptest.NewRecorder(), request)
+
+	line := output.String()
+	for _, want := range []string{`"request_id":"req-1"`, `"tenant_id":"tenant-a"`} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("access log must contain %s, got %s", want, line)
+		}
 	}
 }
 
