@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
@@ -245,22 +246,14 @@ func (s *Service) enqueueReconciledTask(ctx context.Context, task Task) (bool, e
 	now := time.Now()
 	queued := false
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var event models.OutboxEvent
-		lookupErr := tx.Where("idempotency_key = ? AND tenant_id = ?", task.IdempotencyKey, task.TenantID).First(&event).Error
-		if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-			return lookupErr
+		requeued, err := pipeline.RequeueEvent(tx, models.OutboxEvent{
+			TenantID: task.TenantID, AggregateType: "pipeline_run", AggregateID: task.PipelineRunID,
+			EventType: "document." + task.Stage, IdempotencyKey: task.IdempotencyKey, Payload: string(payload),
+		})
+		if err != nil {
+			return err
 		}
-		if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-			if err := tx.Create(&models.OutboxEvent{TenantID: task.TenantID, AggregateType: "pipeline_run", AggregateID: task.PipelineRunID, EventType: "document." + task.Stage, IdempotencyKey: task.IdempotencyKey, Payload: string(payload)}).Error; err != nil {
-				return err
-			}
-			queued = true
-		} else if event.PublishedAt != nil {
-			if err := tx.Model(&event).Updates(map[string]any{"published_at": nil, "attempts": 0, "next_attempt_at": nil, "last_error": ""}).Error; err != nil {
-				return err
-			}
-			queued = true
-		}
+		queued = requeued
 		if !queued {
 			return nil
 		}
@@ -290,16 +283,11 @@ func (s *Service) failReconciledStage(ctx context.Context, task Task, code, mess
 			return err
 		}
 		payload, _ := json.Marshal(task)
-		var existing models.TaskDeadLetter
-		err := tx.Where("idempotency_key = ?", task.IdempotencyKey).First(&existing).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return tx.Create(&models.TaskDeadLetter{
-				IdempotencyKey: task.IdempotencyKey, TenantID: task.TenantID, KnowledgeBaseID: task.KnowledgeBaseID,
-				DocumentVersionID: task.DocumentVersionID, TaskType: task.TaskType, Stage: task.Stage,
-				Attempts: reconcileMaxAttempts, LastError: message, Payload: string(payload), Status: deadLetterPending,
-			}).Error
-		}
-		return err
+		return pipeline.UpsertDeadLetter(tx, models.TaskDeadLetter{
+			IdempotencyKey: task.IdempotencyKey, TenantID: task.TenantID, KnowledgeBaseID: task.KnowledgeBaseID,
+			DocumentVersionID: task.DocumentVersionID, TaskType: task.TaskType, Stage: task.Stage,
+			Attempts: reconcileMaxAttempts, LastError: message, Payload: string(payload), Status: pipeline.DeadLetterPending,
+		})
 	})
 }
 

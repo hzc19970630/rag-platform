@@ -10,15 +10,16 @@ import (
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
 
 const (
-	deadLetterPending   = "PENDING"
-	deadLetterRetrying  = "RETRYING"
-	deadLetterResolved  = "RESOLVED"
-	deadLetterDiscarded = "DISCARDED"
+	deadLetterPending   = pipeline.DeadLetterPending
+	deadLetterRetrying  = pipeline.DeadLetterRetrying
+	deadLetterResolved  = pipeline.DeadLetterResolved
+	deadLetterDiscarded = pipeline.DeadLetterDiscarded
 )
 
 // TaskInspector is the operator view over one ingestion task: the inbox lease,
@@ -158,27 +159,12 @@ func (i *TaskInspector) RecordDeadLetter(ctx context.Context, task Task, taskErr
 		Attempts: attempts, LastError: message, Payload: string(payload), Status: deadLetterPending,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	var existing models.TaskDeadLetter
-	err = i.db.WithContext(ctx).Where("idempotency_key = ?", task.IdempotencyKey).First(&existing).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		err = i.db.WithContext(ctx).Create(&row).Error
-	} else if err != nil {
-		return err
-	} else if existing.Status == deadLetterResolved {
-		return nil
-	} else {
-		err = i.db.WithContext(ctx).Model(&existing).Updates(map[string]any{
-			"attempts": attempts, "last_error": message, "payload": string(payload), "status": deadLetterPending, "updated_at": now,
-		}).Error
-	}
-	if err != nil {
+	if err := pipeline.UpsertDeadLetter(i.db.WithContext(ctx), row); err != nil {
 		return err
 	}
 	// The retry budget is spent. Release the inbox lease as FAILED so an operator
 	// retry can claim it again; PROCESSING would look like a live worker.
-	return i.db.WithContext(ctx).Model(&models.TaskInbox{}).
-		Where("idempotency_key = ? AND status = ?", task.IdempotencyKey, inboxProcessing).
-		Updates(map[string]any{"status": inboxFailed, "last_error": message, "lease_owner": "", "lease_until": nil, "updated_at": now}).Error
+	return pipeline.FailProcessingInbox(ctx, i.db, task.IdempotencyKey, message)
 }
 
 func (i *TaskInspector) RetryDeadLetter(ctx context.Context, principal authz.Principal, id uint64) error {

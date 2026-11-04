@@ -10,6 +10,7 @@ import (
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
+	pipelineruntime "github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
@@ -767,20 +768,10 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 		if err != nil {
 			return fmt.Errorf("marshal restarted task: %w", err)
 		}
-		var event models.OutboxEvent
-		findErr := tx.Where("idempotency_key = ?", targetStage.IdempotencyKey).First(&event).Error
-		if errors.Is(findErr, gorm.ErrRecordNotFound) {
-			return tx.Create(&models.OutboxEvent{
-				TenantID: pipeline.TenantID, AggregateType: "pipeline_run", AggregateID: pipeline.ID,
-				EventType: "document." + target, IdempotencyKey: targetStage.IdempotencyKey, Payload: string(payload),
-			}).Error
-		}
-		if findErr != nil {
-			return findErr
-		}
-		return tx.Model(&event).Updates(map[string]any{
-			"payload": string(payload), "published_at": nil, "attempts": 0, "next_attempt_at": nil, "last_error": "",
-		}).Error
+		return pipelineruntime.ReopenEvent(tx, models.OutboxEvent{
+			TenantID: pipeline.TenantID, AggregateType: "pipeline_run", AggregateID: pipeline.ID,
+			EventType: "document." + target, IdempotencyKey: targetStage.IdempotencyKey, Payload: string(payload),
+		})
 	})
 	if err != nil {
 		return false, fmt.Errorf("restart cancelled pipeline: %w", err)

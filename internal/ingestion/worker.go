@@ -10,10 +10,10 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/formats"
 	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	inboxProcessing = "PROCESSING"
-	inboxSucceeded  = "SUCCEEDED"
-	inboxFailed     = "FAILED"
+	inboxProcessing = pipeline.InboxProcessing
+	inboxSucceeded  = pipeline.InboxSucceeded
+	inboxFailed     = pipeline.InboxFailed
 )
 
 // DefaultChunking is used only when a caller constructs a worker without an
@@ -43,8 +43,8 @@ type PipelineWorker struct {
 	leaseTTL    time.Duration
 }
 
-func (w *PipelineWorker) lease() inboxlease.Lease {
-	return inboxlease.New(w.leaseOwner.Get(), w.leaseTTL)
+func (w *PipelineWorker) runtime() *pipeline.Runtime {
+	return pipeline.NewRuntime(w.db, &w.leaseOwner, w.leaseTTL)
 }
 
 // ProjectionTrigger is the Pipeline B port. It is optional: when projection is
@@ -76,22 +76,8 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	if err != nil || !claimed {
 		return err
 	}
-	lease := w.lease()
-	processCtx, cancelProcess := context.WithCancel(ctx)
-	var leaseLost atomic.Bool
-	stopHeartbeat := inboxlease.Keep(processCtx, w.db, task.IdempotencyKey, lease, func() {
-		leaseLost.Store(true)
-		cancelProcess()
-	})
-	defer func() {
-		stopHeartbeat()
-		cancelProcess()
-		releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if err := inboxlease.Release(releaseCtx, w.db, task.IdempotencyKey, lease.Owner); err != nil {
-			slog.Warn("inbox_lease_release_failed", "idempotency_key", task.IdempotencyKey, "error", err)
-		}
-	}()
+	processCtx, releaseLease, leaseLost := w.runtime().Heartbeat(ctx, task.IdempotencyKey)
+	defer releaseLease()
 	if !w.isCurrent(ctx, task) {
 		return w.finishInbox(ctx, task.IdempotencyKey, inboxSucceeded, nil)
 	}
@@ -120,7 +106,7 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	}
 	// The lease can expire while a slow stage runs. Another worker then owns the
 	// row, so this attempt must not write stage or inbox outcomes over it.
-	if leaseLost.Load() {
+	if leaseLost() {
 		return fmt.Errorf("inbox lease lost for %s: %w", task.IdempotencyKey, context.Canceled)
 	}
 	if processErr != nil {
@@ -440,96 +426,95 @@ func (w *PipelineWorker) triggerProjection(ctx context.Context, tenantID, knowle
 }
 
 func (w *PipelineWorker) claimInbox(ctx context.Context, task Task) (bool, error) {
-	return inboxlease.Claim(ctx, w.db, task.IdempotencyKey, task.TaskType, parseUint(task.StageRunID), w.lease())
+	return w.runtime().Claim(ctx, task.IdempotencyKey, task.TaskType, parseUint(task.StageRunID))
 }
 
 func (w *PipelineWorker) markStageProcessing(ctx context.Context, task Task) error {
-	now := time.Now()
-	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var pipeline models.PipelineRun
-		if err := tx.First(&pipeline, "id = ?", task.PipelineRunID).Error; err != nil {
-			return err
-		}
-		target := StatusForStage(task.Stage)
-		if err := ValidateTransition(pipeline.Status, target); err != nil {
-			return err
-		}
-		if err := tx.Model(&pipeline).Updates(map[string]any{"status": target, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": StageProcessing, "attempts": gorm.Expr("attempts + 1"), "started_at": &now, "updated_at": now}).Error
-	})
+	return w.runtime().Start(ctx, workerStage{task: task})
 }
 
 func (w *PipelineWorker) completeStage(ctx context.Context, task Task) error {
-	next, hasNext := NextStage(task.Stage)
-	now := time.Now()
-	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var pipeline models.PipelineRun
-		if err := tx.First(&pipeline, "id = ?", task.PipelineRunID).Error; err != nil {
-			return err
-		}
-		completedStatus := CompletedStatusForStage(task.Stage)
-		if err := ValidateTransition(pipeline.Status, completedStatus); err != nil {
-			return err
-		}
-		if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(statusFields(StageSucceeded, map[string]any{"completed_at": &now, "updated_at": now})).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status <> ?", task.PipelineRunID, StatusCancelled).Updates(statusFields(completedStatus, map[string]any{"updated_at": now})).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": inboxSucceeded, "processed_at": &now, "lease_owner": "", "lease_until": nil, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		if !hasNext {
-			return nil
-		}
-		stageKey := task.PipelineRunID + ":" + next
-		var nextStage models.StageRun
-		if err := tx.Where("idempotency_key = ?", stageKey).First(&nextStage).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-			nextStage = models.StageRun{PipelineRunID: task.PipelineRunID, Stage: next, Status: StagePending, IdempotencyKey: stageKey}
-			if err := tx.Create(&nextStage).Error; err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		}
-		nextTask := task
-		nextTask.Stage = next
-		nextTask.StageRunID = fmt.Sprint(nextStage.ID)
-		nextTask.IdempotencyKey = stageKey
-		payload, err := json.Marshal(nextTask)
-		if err != nil {
-			return err
-		}
-		var event models.OutboxEvent
-		lookupErr := tx.Where("idempotency_key = ?", stageKey).First(&event).Error
-		if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-			return tx.Create(&models.OutboxEvent{TenantID: task.TenantID, AggregateType: "pipeline_run", AggregateID: task.PipelineRunID, EventType: "document." + next, IdempotencyKey: stageKey, Payload: string(payload)}).Error
-		}
-		if lookupErr != nil {
-			return lookupErr
-		}
-		// A restarted pipeline walks over already published stage events. Re-open
-		// the next event so the chain continues instead of stopping silently.
-		return tx.Model(&event).Updates(map[string]any{
-			"payload": string(payload), "published_at": nil, "attempts": 0, "next_attempt_at": nil, "last_error": "",
-		}).Error
-	})
+	return w.runtime().Complete(ctx, task.IdempotencyKey, workerStage{task: task})
 }
 
 func (w *PipelineWorker) failStage(ctx context.Context, task Task, code, message string) error {
-	now := time.Now()
-	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
-			return err
+	return w.runtime().Fail(ctx, workerStage{task: task}, code, message)
+}
+
+// workerStage adapts one ingestion stage to the shared pipeline runtime. It
+// keeps the ingestion state machine and row layout inside this package.
+type workerStage struct {
+	task Task
+}
+
+func (s workerStage) Start(tx *gorm.DB, now time.Time) error {
+	var pipelineRun models.PipelineRun
+	if err := tx.First(&pipelineRun, "id = ?", s.task.PipelineRunID).Error; err != nil {
+		return err
+	}
+	target := StatusForStage(s.task.Stage)
+	if err := ValidateTransition(pipelineRun.Status, target); err != nil {
+		return err
+	}
+	if err := tx.Model(&pipelineRun).Updates(map[string]any{"status": target, "updated_at": now}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&models.StageRun{}).Where("idempotency_key = ?", s.task.IdempotencyKey).Updates(map[string]any{"status": StageProcessing, "attempts": gorm.Expr("attempts + 1"), "started_at": &now, "updated_at": now}).Error
+}
+
+func (s workerStage) Succeed(tx *gorm.DB, now time.Time) (*models.OutboxEvent, error) {
+	task := s.task
+	var pipelineRun models.PipelineRun
+	if err := tx.First(&pipelineRun, "id = ?", task.PipelineRunID).Error; err != nil {
+		return nil, err
+	}
+	completedStatus := CompletedStatusForStage(task.Stage)
+	if err := ValidateTransition(pipelineRun.Status, completedStatus); err != nil {
+		return nil, err
+	}
+	if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(statusFields(StageSucceeded, map[string]any{"completed_at": &now, "updated_at": now})).Error; err != nil {
+		return nil, err
+	}
+	if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status <> ?", task.PipelineRunID, StatusCancelled).Updates(statusFields(completedStatus, map[string]any{"updated_at": now})).Error; err != nil {
+		return nil, err
+	}
+	next, hasNext := NextStage(task.Stage)
+	if !hasNext {
+		return nil, nil
+	}
+	stageKey := task.PipelineRunID + ":" + next
+	var nextStage models.StageRun
+	if err := tx.Where("idempotency_key = ?", stageKey).First(&nextStage).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		nextStage = models.StageRun{PipelineRunID: task.PipelineRunID, Stage: next, Status: StagePending, IdempotencyKey: stageKey}
+		if err := tx.Create(&nextStage).Error; err != nil {
+			return nil, err
 		}
-		if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status <> ?", task.PipelineRunID, StatusCancelled).Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&models.DocumentVersion{}).Where("id = ? AND status <> ?", task.DocumentVersionID, StatusCancelled).Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error
-	})
+	} else if err != nil {
+		return nil, err
+	}
+	nextTask := task
+	nextTask.Stage = next
+	nextTask.StageRunID = fmt.Sprint(nextStage.ID)
+	nextTask.IdempotencyKey = stageKey
+	payload, err := json.Marshal(nextTask)
+	if err != nil {
+		return nil, err
+	}
+	return &models.OutboxEvent{
+		TenantID: task.TenantID, AggregateType: "pipeline_run", AggregateID: task.PipelineRunID,
+		EventType: "document." + next, IdempotencyKey: stageKey, Payload: string(payload),
+	}, nil
+}
+
+func (s workerStage) Fail(tx *gorm.DB, code, message string, now time.Time) error {
+	task := s.task
+	if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status <> ?", task.PipelineRunID, StatusCancelled).Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&models.DocumentVersion{}).Where("id = ? AND status <> ?", task.DocumentVersionID, StatusCancelled).Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error
 }
 
 // statusFields builds the field set for a status change that is not a failure.
@@ -548,14 +533,7 @@ func statusFields(status string, extra map[string]any) map[string]any {
 }
 
 func (w *PipelineWorker) finishInbox(ctx context.Context, key, status string, processErr error) error {
-	values := map[string]any{"status": status, "lease_owner": "", "lease_until": nil, "updated_at": time.Now()}
-	if status == inboxSucceeded || status == inboxFailed {
-		values["processed_at"] = time.Now()
-	}
-	if processErr != nil {
-		values["last_error"] = processErr.Error()
-	}
-	return w.db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Updates(values).Error
+	return w.runtime().FinishInbox(ctx, key, status, processErr)
 }
 
 func (w *PipelineWorker) isCurrent(ctx context.Context, task Task) bool {

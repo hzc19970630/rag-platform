@@ -1,0 +1,145 @@
+package ingestion
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+	"time"
+
+	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"gorm.io/gorm"
+)
+
+func seedWorkerStage(t *testing.T, db *gorm.DB, pipelineID, stage, status string) Task {
+	t.Helper()
+	now := time.Now()
+	key := pipelineID + ":" + stage
+	if err := db.Create(&models.PipelineRun{
+		ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: "tenant-a", KnowledgeBaseID: "kb-1",
+		DocumentID: "doc-1", DocumentVersionID: "ver-1", RequestID: "req-1", TraceID: "trace-1",
+		IdempotencyKey: "doc-1:ver-1:" + stage, Status: status, CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed pipeline: %v", err)
+	}
+	stageRow := models.StageRun{PipelineRunID: pipelineID, Stage: stage, Status: StageProcessing, IdempotencyKey: key, CreatedAt: now, UpdatedAt: now}
+	if err := db.Create(&stageRow).Error; err != nil {
+		t.Fatalf("seed stage: %v", err)
+	}
+	if err := db.Create(&models.TaskInbox{
+		IdempotencyKey: key, TaskType: TypeTask, Status: inboxProcessing, StageRunID: stageRow.ID,
+		LeaseOwner: "worker-a", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed inbox: %v", err)
+	}
+	return Task{
+		Envelope: Envelope{
+			TenantID: "tenant-a", KnowledgeBaseID: "kb-1", DocumentID: "doc-1", DocumentVersionID: "ver-1",
+			PipelineRunID: pipelineID, StageRunID: "1", IdempotencyKey: key,
+		},
+		TaskType: TypeTask, Stage: stage,
+	}
+}
+
+func TestCompleteStageChainsNextStageThroughPipelineRuntime(t *testing.T) {
+	db := newTestDB(t)
+	task := seedWorkerStage(t, db, "run-1", StageParse, StatusParsing)
+	if err := (&PipelineWorker{db: db}).completeStage(context.Background(), task); err != nil {
+		t.Fatalf("complete stage: %v", err)
+	}
+	var pipelineRun models.PipelineRun
+	if err := db.First(&pipelineRun, "id = ?", "run-1").Error; err != nil {
+		t.Fatalf("load pipeline: %v", err)
+	}
+	if pipelineRun.Status != StatusParsed {
+		t.Fatalf("pipeline status = %q, want %q", pipelineRun.Status, StatusParsed)
+	}
+	var stage models.StageRun
+	if err := db.First(&stage, "idempotency_key = ?", "run-1:parse").Error; err != nil {
+		t.Fatalf("load parse stage: %v", err)
+	}
+	if stage.Status != StageSucceeded || stage.CompletedAt == nil {
+		t.Fatalf("parse stage = %+v", stage)
+	}
+	if inbox := loadInbox(t, &PipelineWorker{db: db}, "run-1:parse"); inbox.Status != inboxSucceeded || inbox.LeaseOwner != "" {
+		t.Fatalf("parse inbox = %+v", inbox)
+	}
+	var next models.StageRun
+	if err := db.First(&next, "idempotency_key = ?", "run-1:normalize").Error; err != nil {
+		t.Fatalf("load next stage: %v", err)
+	}
+	if next.Stage != StageNormalize || next.Status != StagePending {
+		t.Fatalf("next stage = %+v", next)
+	}
+	var event models.OutboxEvent
+	if err := db.First(&event, "idempotency_key = ?", "run-1:normalize").Error; err != nil {
+		t.Fatalf("load outbox event: %v", err)
+	}
+	if event.EventType != "document.normalize" || event.AggregateType != "pipeline_run" || event.AggregateID != "run-1" {
+		t.Fatalf("outbox event = %+v", event)
+	}
+	var payload Task
+	if err := json.Unmarshal([]byte(event.Payload), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload.Stage != StageNormalize || payload.PipelineRunID != "run-1" || payload.IdempotencyKey != "run-1:normalize" {
+		t.Fatalf("next task payload = %+v", payload)
+	}
+}
+
+func TestCompleteFinalStageEndsChain(t *testing.T) {
+	db := newTestDB(t)
+	task := seedWorkerStage(t, db, "run-1", StageIndex, StatusIndexing)
+	if err := (&PipelineWorker{db: db}).completeStage(context.Background(), task); err != nil {
+		t.Fatalf("complete stage: %v", err)
+	}
+	var pipelineRun models.PipelineRun
+	if err := db.First(&pipelineRun, "id = ?", "run-1").Error; err != nil {
+		t.Fatalf("load pipeline: %v", err)
+	}
+	if pipelineRun.Status != StatusEvidenceReady {
+		t.Fatalf("pipeline status = %q, want %q", pipelineRun.Status, StatusEvidenceReady)
+	}
+	var count int64
+	if err := db.Model(&models.OutboxEvent{}).Count(&count).Error; err != nil {
+		t.Fatalf("count outbox: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("final stage must not enqueue another event, found %d", count)
+	}
+}
+
+func TestFailStageMarksPipelineFailed(t *testing.T) {
+	db := newTestDB(t)
+	task := seedWorkerStage(t, db, "run-1", StageParse, StatusParsing)
+	now := time.Now()
+	if err := db.Create(&models.DocumentVersion{
+		ID: "ver-1", TenantID: "tenant-a", KnowledgeBaseID: "kb-1", DocumentID: "doc-1",
+		Status: StatusParsing, CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed version: %v", err)
+	}
+	if err := (&PipelineWorker{db: db}).failStage(context.Background(), task, "parser_error", "bad bytes"); err != nil {
+		t.Fatalf("fail stage: %v", err)
+	}
+	var stage models.StageRun
+	if err := db.First(&stage, "idempotency_key = ?", "run-1:parse").Error; err != nil {
+		t.Fatalf("load stage: %v", err)
+	}
+	if stage.Status != StageFailed || stage.ErrorCode != "parser_error" || stage.ErrorMessage != "bad bytes" {
+		t.Fatalf("failed stage = %+v", stage)
+	}
+	var pipelineRun models.PipelineRun
+	if err := db.First(&pipelineRun, "id = ?", "run-1").Error; err != nil {
+		t.Fatalf("load pipeline: %v", err)
+	}
+	if pipelineRun.Status != StatusFailed || pipelineRun.ErrorCode != "parser_error" {
+		t.Fatalf("failed pipeline = %+v", pipelineRun)
+	}
+	var version models.DocumentVersion
+	if err := db.First(&version, "id = ?", "ver-1").Error; err != nil {
+		t.Fatalf("load version: %v", err)
+	}
+	if version.Status != StatusFailed {
+		t.Fatalf("version status = %q", version.Status)
+	}
+}
