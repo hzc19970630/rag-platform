@@ -24,7 +24,7 @@ func NewRouterWithLogger(cfg config.Config, logger *slog.Logger) *gin.Engine {
 	}
 
 	r := gin.New()
-	r.Use(corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
+	r.Use(tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		logger.Error("http_panic", "path", c.Request.URL.Path, "panic", recovered)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_server_error"})
 	}))
@@ -154,6 +154,9 @@ func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 		}
 		if access := accessContext(c); access.Principal.TenantID != "" {
 			fields = append(fields, "tenant_id", access.Principal.TenantID)
+		}
+		if traceID := observability.TraceID(c.Request.Context()); traceID != "" {
+			fields = append(fields, "trace_id", traceID)
 		}
 		logger.Info("http_request", fields...)
 	}

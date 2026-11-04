@@ -21,6 +21,21 @@ type RecallRequest struct {
 	Threshold      float64
 }
 
+// Rewriter turns a follow-up question into a standalone retrieval query using
+// prior conversation turns. An error or empty result means the caller keeps the
+// original question.
+type Rewriter interface {
+	Rewrite(ctx context.Context, query string, history []HistoryTurn) (string, error)
+}
+
+// IdentityRewriter keeps the original query. It is the default so retrieval
+// never depends on a model unless a rewriter is explicitly wired.
+type IdentityRewriter struct{}
+
+func (IdentityRewriter) Rewrite(_ context.Context, query string, _ []HistoryTurn) (string, error) {
+	return query, nil
+}
+
 // Planner turns a resolved query into an executable plan. The default planner
 // builds the evidence-only plan; a future planner can add Wiki/relation steps
 // without changing the recall and authorization stages.

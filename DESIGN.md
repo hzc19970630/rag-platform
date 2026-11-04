@@ -113,7 +113,7 @@ graph LR
 | 模型路由 | Model Registry；规模较大时可接 LiteLLM | 模型配置、密钥、限流、降级和按租户选择 |
 | 认证 | OIDC / SSO + JWT；API Key 用哈希存储 | 对接企业身份系统，同时支持程序化访问 |
 | 授权 | Go Casbin Domain RBAC（进程内策略投影） | Owner / Admin / Editor / Viewer，加租户和知识库级访问控制 |
-| 可观测性 | 目标：OpenTelemetry + Prometheus + 结构化日志；当前：进程内 counters/summaries + 独立 `/metrics` 监听 | 关联请求、任务、模型调用和检索指标；trace 全链路仍待 M10 之后的 P1 |
+| 可观测性 | OpenTelemetry traces（OTLP/HTTP 可选）+ 进程内 counters/summaries + 独立 `/metrics` 监听 | HTTP → 检索 → 模型调用共享同一 trace；异步 worker span 以 `trace.id` 关联，跨队列父子链仍待补 |
 | 部署 | 目标：Docker Compose + Helm/Kubernetes；当前：仅 Docker Compose | 本地开发、私有化和生产集群统一交付方式 |
 | API 契约 | REST 使用 OpenAPI 3（`api/openapi/openapi.yaml`）；gRPC 使用 Protobuf；异步任务使用 `contracts/tasks` 的版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
 
@@ -863,7 +863,7 @@ flowchart LR
 建议的默认检索链路：
 
 1. 校验调用者对租户、知识库、文档和标签的访问权限。
-2. 对问题做语言归一化、历史上下文拼接和必要的查询改写。
+2. 对问题做语言归一化；有历史时先由可选的查询改写器生成独立检索问题（LLM 失败或本地适配器时回退原问题），再进入召回。
 3. 并行执行 BM25 和向量召回；按元数据、状态和权限过滤。
 4. 使用 RRF 融合，避免不同检索器分数尺度不一致。
 5. 使用 Rerank 模型重新排序，执行去重、父块扩展、相邻块补全和 Top-K 截断。

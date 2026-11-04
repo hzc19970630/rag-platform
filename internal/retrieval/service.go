@@ -13,6 +13,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/token"
+	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
 )
 
@@ -47,6 +48,7 @@ type Service struct {
 	join     KnowledgeJoin
 	defaults Params
 	planner  Planner
+	rewriter Rewriter
 }
 
 type Options struct {
@@ -60,6 +62,7 @@ type Options struct {
 	Join     KnowledgeJoin
 	Defaults Params
 	Planner  Planner
+	Rewriter Rewriter
 }
 
 func NewService(options Options) *Service {
@@ -70,6 +73,10 @@ func NewService(options Options) *Service {
 	planner := options.Planner
 	if planner == nil {
 		planner = EvidencePlanner{}
+	}
+	rewriter := options.Rewriter
+	if rewriter == nil {
+		rewriter = IdentityRewriter{}
 	}
 	return &Service{
 		db:       options.DB,
@@ -82,6 +89,7 @@ func NewService(options Options) *Service {
 		join:     options.Join,
 		defaults: options.Defaults,
 		planner:  planner,
+		rewriter: rewriter,
 	}
 }
 
@@ -91,12 +99,28 @@ func NewService(options Options) *Service {
 func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, input QueryInput) (EvidenceSet, error) {
 	started := time.Now()
 	defer func() { observability.Default().Observe("retrieval_duration_ms", time.Since(started), nil) }()
+	ctx, span := observability.StartSpan(ctx, "retrieval.retrieve",
+		attribute.String("request.id", input.RequestID),
+		attribute.String("tenant.id", scope.TenantID),
+	)
+	defer span.End()
 	query := normalizeQuery(input.Query)
 	if query == "" {
 		return EvidenceSet{}, fmt.Errorf("query is required")
 	}
 	if strings.TrimSpace(scope.TenantID) == "" {
 		return EvidenceSet{}, fmt.Errorf("authorization scope is required")
+	}
+	retrievalQuery := query
+	if len(input.History) > 0 {
+		rewritten, err := s.rewriter.Rewrite(ctx, query, input.History)
+		switch {
+		case err != nil:
+			span.SetAttributes(attribute.String("query.rewrite_error", err.Error()))
+		case strings.TrimSpace(rewritten) != "":
+			retrievalQuery = normalizeQuery(rewritten)
+			span.SetAttributes(attribute.Bool("query.rewrite_applied", retrievalQuery != query))
+		}
 	}
 
 	targetIDs := scope.KnowledgeBaseIDs
@@ -118,9 +142,9 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		return EvidenceSet{}, err
 	}
 
-	recall := RecallRequest{TenantID: scope.TenantID, KnowledgeBaseIDs: targetIDs, Query: query}
+	recall := RecallRequest{TenantID: scope.TenantID, KnowledgeBaseIDs: targetIDs, Query: retrievalQuery}
 	planQuery := input
-	planQuery.Query = query
+	planQuery.Query = retrievalQuery
 	plan, err := s.planner.Plan(ctx, PlanInput{
 		Scope: scope, Query: planQuery, TargetKnowledgeBaseIDs: targetIDs,
 		Strategy: strategy, Params: params, History: input.History,
@@ -180,6 +204,12 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		return EvidenceSet{}, err
 	}
 
+	span.SetAttributes(
+		attribute.Int("evidence.count", len(authorized)),
+		attribute.Int("evidence.dropped_by_authorization", dropped),
+		attribute.Bool("rerank.applied", rerankApplied),
+		attribute.Int("context.token_estimate", tokens),
+	)
 	return EvidenceSet{
 		SchemaVersion:             SchemaEvidenceSet,
 		RequestID:                 input.RequestID,

@@ -23,9 +23,13 @@ type Config struct {
 	// processes when non-empty. It serves only /metrics and is deliberately not
 	// tenant authenticated, so it must bind an internal or loopback address.
 	MetricsAddr string
-	AppEnv      string
-	LogLevel    string
-	DatabaseURL string
+	// OTELExporterEndpoint enables OTLP/HTTP trace export when non-empty, for
+	// example http://otel-collector:4318. Empty keeps tracing local/no-op.
+	OTELExporterEndpoint string
+	OTELServiceName      string
+	AppEnv               string
+	LogLevel             string
+	DatabaseURL          string
 	// Pool limits bound one process's share of PostgreSQL connections. They are
 	// applied after opening the database, not through the DSN.
 	DatabaseMaxOpenConns           int
@@ -153,6 +157,11 @@ type ChatConfig struct {
 	// HistoryTokenLimit bounds the replayed history independently of the
 	// evidence context budget.
 	HistoryTokenLimit int
+	// QueryRewriteEnabled enables the retrieval-side follow-up rewriter. It is a
+	// separate model call only when history exists and the chat adapter is real.
+	QueryRewriteEnabled bool
+	// QueryRewriteTimeoutSec bounds one rewrite call.
+	QueryRewriteTimeoutSec int
 }
 
 func (c ChatConfig) Validate(appEnv string) error {
@@ -161,6 +170,9 @@ func (c ChatConfig) Validate(appEnv string) error {
 	}
 	if c.HistoryTokenLimit < 0 {
 		return fmt.Errorf("CHAT_HISTORY_TOKEN_LIMIT must be zero or positive")
+	}
+	if c.QueryRewriteTimeoutSec < 0 {
+		return fmt.Errorf("CHAT_QUERY_REWRITE_TIMEOUT_SECONDS must be zero or positive")
 	}
 	switch c.Source {
 	case "local":
@@ -534,10 +546,12 @@ func LoadFrom(lookup Lookup) Config {
 	}
 	reader := &envReader{lookup: lookup}
 	cfg := Config{
-		APIAddr:      value(lookup, "API_ADDR", ":8080"),
-		MetricsAddr:  value(lookup, "METRICS_ADDR", ""),
-		AppEnv:       appEnv,
-		WebPublicURL: value(lookup, "WEB_PUBLIC_URL", "http://localhost:5173"),
+		APIAddr:              value(lookup, "API_ADDR", ":8080"),
+		MetricsAddr:          value(lookup, "METRICS_ADDR", ""),
+		OTELExporterEndpoint: value(lookup, "OTEL_EXPORTER_OTLP_ENDPOINT", ""),
+		OTELServiceName:      value(lookup, "OTEL_SERVICE_NAME", "rag-platform"),
+		AppEnv:               appEnv,
+		WebPublicURL:         value(lookup, "WEB_PUBLIC_URL", "http://localhost:5173"),
 		Auth: AuthConfig{
 			SessionTTLSeconds: int(reader.positive("AUTH_SESSION_TTL_SECONDS", 43200)),
 			JWTIssuer:         value(lookup, "JWT_ISSUER", "rag-platform"),
@@ -610,14 +624,16 @@ func LoadFrom(lookup Lookup) Config {
 		PromptTemplateDir:              value(lookup, "PROMPT_TEMPLATE_DIR", "config/prompt_templates"),
 		Retrieval:                      defaultRetrievalConfig(),
 		Chat: ChatConfig{
-			Source:            strings.ToLower(value(lookup, "CHAT_SOURCE", "local")),
-			BaseURL:           value(lookup, "CHAT_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
-			APIKey:            value(lookup, "CHAT_API_KEY", value(lookup, "LLM_API_KEY", "")),
-			Model:             value(lookup, "LLM_CHAT_MODEL", "local-extractive"),
-			TimeoutSec:        int(reader.positive("CHAT_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
-			MaxTokens:         int(reader.positive("CHAT_MAX_TOKENS", 1024)),
-			HistoryTurns:      int(reader.nonNegative("CHAT_HISTORY_TURNS", 3)),
-			HistoryTokenLimit: int(reader.nonNegative("CHAT_HISTORY_TOKEN_LIMIT", 1200)),
+			Source:                 strings.ToLower(value(lookup, "CHAT_SOURCE", "local")),
+			BaseURL:                value(lookup, "CHAT_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
+			APIKey:                 value(lookup, "CHAT_API_KEY", value(lookup, "LLM_API_KEY", "")),
+			Model:                  value(lookup, "LLM_CHAT_MODEL", "local-extractive"),
+			TimeoutSec:             int(reader.positive("CHAT_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
+			MaxTokens:              int(reader.positive("CHAT_MAX_TOKENS", 1024)),
+			HistoryTurns:           int(reader.nonNegative("CHAT_HISTORY_TURNS", 3)),
+			HistoryTokenLimit:      int(reader.nonNegative("CHAT_HISTORY_TOKEN_LIMIT", 1200)),
+			QueryRewriteEnabled:    reader.boolean("CHAT_QUERY_REWRITE_ENABLED", true),
+			QueryRewriteTimeoutSec: int(reader.positive("CHAT_QUERY_REWRITE_TIMEOUT_SECONDS", 8)),
 		},
 		Rerank: RerankConfig{
 			Source:     strings.ToLower(value(lookup, "RERANK_SOURCE", "none")),
@@ -647,6 +663,15 @@ func LoadFrom(lookup Lookup) Config {
 }
 
 func (c Config) Validate(component string) error {
+	if endpoint := strings.TrimSpace(c.OTELExporterEndpoint); endpoint != "" {
+		parsed, err := url.Parse(endpoint)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("OTEL_EXPORTER_OTLP_ENDPOINT must be a valid URL")
+		}
+	}
+	if (component == "api" || component == "worker") && strings.TrimSpace(c.OTELServiceName) == "" {
+		return fmt.Errorf("OTEL_SERVICE_NAME must not be empty")
+	}
 	required := map[string]string{}
 	switch component {
 	case "api":

@@ -30,6 +30,16 @@ func main() {
 		logger.Error("configuration_invalid", "component", "worker", "error", err)
 		os.Exit(1)
 	}
+	shutdownTracing, err := observability.InitTracing(context.Background(), cfg.OTELExporterEndpoint, cfg.OTELServiceName)
+	if err != nil {
+		logger.Error("tracing_bootstrap_failed", "component", "worker", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownTracing(shutdownCtx)
+	}()
 	application, err := app.Open(cfg)
 	if err != nil {
 		logger.Error("application_bootstrap_failed", "component", "worker", "error", err)

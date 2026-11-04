@@ -9,6 +9,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/example/rag-platform/internal/platform/observability"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // RemoteChatter calls an OpenAI-compatible /chat/completions endpoint, which
@@ -79,11 +83,23 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
-func (c *RemoteChatter) Complete(ctx context.Context, request ChatRequest) (ChatResponse, error) {
+func (c *RemoteChatter) Complete(ctx context.Context, request ChatRequest) (response ChatResponse, err error) {
 	maxTokens := request.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = c.maxTokens
 	}
+	ctx, span := observability.StartSpan(ctx, "llm.chat",
+		attribute.String("gen_ai.operation.name", "chat"),
+		attribute.String("gen_ai.request.model", c.model),
+		attribute.Int("gen_ai.request.max_tokens", maxTokens),
+	)
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
 	messages := make([]chatMessage, 0, len(request.History)+2)
 	messages = append(messages, chatMessage{Role: "system", Content: request.SystemInstruction})
 	for _, turn := range request.History {
@@ -107,17 +123,17 @@ func (c *RemoteChatter) Complete(ctx context.Context, request ChatRequest) (Chat
 	if c.apiKey != "" {
 		httpRequest.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
-	response, err := c.client.Do(httpRequest)
+	httpResponse, err := c.client.Do(httpRequest)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("call chat provider: %w", err)
 	}
-	defer response.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
+	defer httpResponse.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(httpResponse.Body, 16<<20))
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("read chat response: %w", err)
 	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return ChatResponse{}, fmt.Errorf("chat provider returned %d: %s", response.StatusCode, strings.TrimSpace(string(raw)))
+	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
+		return ChatResponse{}, fmt.Errorf("chat provider returned %d: %s", httpResponse.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	var decoded chatResponse
 	if err := json.Unmarshal(raw, &decoded); err != nil {
@@ -133,6 +149,11 @@ func (c *RemoteChatter) Complete(ctx context.Context, request ChatRequest) (Chat
 	if model == "" {
 		model = c.model
 	}
+	span.SetAttributes(
+		attribute.Int("gen_ai.usage.input_tokens", decoded.Usage.PromptTokens),
+		attribute.Int("gen_ai.usage.output_tokens", decoded.Usage.CompletionTokens),
+		attribute.String("gen_ai.response.model", model),
+	)
 	return ChatResponse{
 		Text:             decoded.Choices[0].Message.Content,
 		Model:            model,

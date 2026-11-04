@@ -1,0 +1,12 @@
+id: query_rewrite
+description: Rewrites a follow-up question into a standalone retrieval query.
+template: |
+  Rewrite the latest user question as one standalone search query. Keep names,
+  numbers and the language of the conversation. Do not answer the question and
+  do not add commentary.
+
+  <question>
+  {{query}}
+  </question>
+
+  Return only the rewritten query.

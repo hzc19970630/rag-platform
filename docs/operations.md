@@ -178,3 +178,11 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - API、worker、embedctl 共用同一组连接池参数：`DATABASE_MAX_OPEN_CONNS`（默认 20）、`DATABASE_MAX_IDLE_CONNS`（默认 10）、`DATABASE_CONN_MAX_LIFETIME_SECONDS`（默认 1800）。`0` 空闲连接合法，其余非法值会让配置校验失败。
 - 规划容量时按 `副本数 × DATABASE_MAX_OPEN_CONNS < PostgreSQL max_connections` 预留余量；迁移、备份和人工 psql 会话也要计入。
 - 连接寿命用于在 PostgreSQL 重启或主从切换后回收失效连接；不要设为 0（0 表示永不回收）。
+
+## 12. Tracing（OTel）
+
+- `OTEL_EXPORTER_OTLP_ENDPOINT` 为空时，api/worker 仍生成 trace 并在响应头 `X-Trace-ID` 与 `http_request` 日志的 `trace_id` 中输出，但不导出；设置 OTLP/HTTP 端点（例如 `http://otel-collector:4318`）后按批导出到 collector，重启进程生效。
+- `OTEL_SERVICE_NAME` 默认 `rag-platform`，api 与 worker 共用；需要区分进程时可分别设置。
+- HTTP 请求会继续上游 W3C `traceparent`；检索、远程模型调用是同一 trace 的子 span，模型 span 记录 `gen_ai.request.model` 与 token 用量。
+- 异步 worker 的 span 记录任务 envelope 的 `trace.id`、`pipeline_run.id`、`stage`，但当前尚未把 HTTP span 作为父 span 跨队列串联；排障时用 `trace_id` 关联 API 日志与 worker 日志。
+- 导出器故障只影响 tracing，不阻塞请求；collector 不可用时检查进程日志中的 `tracing_bootstrap_failed`（启动期）与 OTLP 导出错误。

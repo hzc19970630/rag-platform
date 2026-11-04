@@ -167,10 +167,14 @@ func Open(cfg config.Config) (*Application, error) {
 		Evidence: evidencestore.New(database),
 	})
 	knowledgeBaseService.SetProjectionLifecycle(projectionService)
+	var queryRewriter retrieval.Rewriter
+	if cfg.Chat.QueryRewriteEnabled {
+		queryRewriter = conversation.NewQueryRewriter(chatter, registry, time.Duration(cfg.Chat.QueryRewriteTimeoutSec)*time.Second)
+	}
 	retrievalService := retrieval.NewService(retrieval.Options{
 		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcher(database),
 		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: reranker,
-		Authz: authorization, Defaults: cfg.Retrieval, Join: projectionService,
+		Authz: authorization, Defaults: cfg.Retrieval, Join: projectionService, Rewriter: queryRewriter,
 	})
 	conversationService := conversation.NewService(conversation.Options{
 		DB: database, Authz: authorization, Retrieval: retrievalService, Chat: chatter,

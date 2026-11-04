@@ -16,6 +16,8 @@ import (
 	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/example/rag-platform/internal/platform/queue"
 	"github.com/hibiken/asynq"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // taskHandlers owns the mapping from a transport task type to the domain
@@ -38,13 +40,26 @@ func (h *taskHandlers) register(mux *asynq.ServeMux) {
 	mux.HandleFunc(queue.TaskTypeRelation, h.relation)
 }
 
-func (h *taskHandlers) ingest(ctx context.Context, task *asynq.Task) error {
+func (h *taskHandlers) ingest(ctx context.Context, task *asynq.Task) (err error) {
 	var message ingestion.Task
 	if err := json.Unmarshal(task.Payload(), &message); err != nil {
 		return fmt.Errorf("decode ingestion task: %w", err)
 	}
+	ctx, span := observability.StartSpan(ctx, "ingestion.stage",
+		attribute.String("stage", message.Stage),
+		attribute.String("pipeline_run.id", message.PipelineRunID),
+		attribute.String("document_version.id", message.DocumentVersionID),
+		attribute.String("trace.id", message.TraceID),
+	)
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
 	started := time.Now()
-	err := h.pipeline.Process(ctx, message)
+	err = h.pipeline.Process(ctx, message)
 	result := "success"
 	if err != nil {
 		result = "failure"
@@ -62,13 +77,24 @@ func (h *taskHandlers) ingest(ctx context.Context, task *asynq.Task) error {
 	return err
 }
 
-func (h *taskHandlers) sync(ctx context.Context, task *asynq.Task) error {
+func (h *taskHandlers) sync(ctx context.Context, task *asynq.Task) (err error) {
 	var message datasource.SyncTask
 	if err := json.Unmarshal(task.Payload(), &message); err != nil {
 		return fmt.Errorf("decode connector sync task: %w", err)
 	}
+	ctx, span := observability.StartSpan(ctx, "connector.sync",
+		attribute.String("connector.id", message.ConnectorID),
+		attribute.String("sync_run.id", message.SyncRunID),
+	)
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
 	started := time.Now()
-	err := h.application.DataSources.ProcessSync(ctx, message)
+	err = h.application.DataSources.ProcessSync(ctx, message)
 	result := "success"
 	if err != nil {
 		result = "failure"
@@ -86,13 +112,26 @@ func (h *taskHandlers) relation(ctx context.Context, task *asynq.Task) error {
 	return h.projection(ctx, task, queue.TaskTypeRelation, "relation_projection")
 }
 
-func (h *taskHandlers) projection(ctx context.Context, task *asynq.Task, decodeLabel, metricPrefix string) error {
+func (h *taskHandlers) projection(ctx context.Context, task *asynq.Task, decodeLabel, metricPrefix string) (err error) {
 	var message knowledgeprojection.Task
 	if err := json.Unmarshal(task.Payload(), &message); err != nil {
 		return fmt.Errorf("decode %s task: %w", decodeLabel, err)
 	}
+	ctx, span := observability.StartSpan(ctx, metricPrefix+".stage",
+		attribute.String("stage", message.Stage),
+		attribute.String("projection_type", message.ProjectionType),
+		attribute.String("projection_run.id", message.ProjectionRunID),
+		attribute.String("evidence_package.id", message.EvidencePackageID),
+	)
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
 	started := time.Now()
-	err := h.application.Projection.Process(ctx, message)
+	err = h.application.Projection.Process(ctx, message)
 	result := "success"
 	if err != nil {
 		result = "failure"

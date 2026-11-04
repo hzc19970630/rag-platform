@@ -19,6 +19,10 @@ const (
 	ContextTemplate   = "context_template"
 	Fallback          = "fallback"
 	ConversationTitle = "conversation_title"
+	// QueryRewrite turns a follow-up question into a standalone retrieval query.
+	QueryRewrite = "query_rewrite"
+	// QueryRewriteSystem is the system instruction for the rewriter.
+	QueryRewriteSystem = "query_rewrite_system"
 	// WikiGeneration drives Pipeline B page generation. It is a separate
 	// template from the answer prompt so page wording and citation rules do not
 	// constrain online generation.
@@ -36,6 +40,8 @@ var Required = []string{
 	ContextTemplate,
 	Fallback,
 	ConversationTitle,
+	QueryRewrite,
+	QueryRewriteSystem,
 	WikiGeneration,
 	RelationExtraction,
 }
