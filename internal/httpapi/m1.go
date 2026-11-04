@@ -171,8 +171,14 @@ func writeError(c *gin.Context, err error) {
 	code := "internal_error"
 	var syntaxError *json.SyntaxError
 	var typeError *json.UnmarshalTypeError
+	var maxBytesError *http.MaxBytesError
 	invalidJSON := errors.As(err, &syntaxError) || errors.As(err, &typeError)
 	switch {
+	case errors.As(err, &maxBytesError):
+		// Both the JSON cap and the multipart envelope cap surface through
+		// MaxBytesReader; report a stable code instead of a 500.
+		status = http.StatusRequestEntityTooLarge
+		code = "payload_too_large"
 	case errors.Is(err, apperror.ErrUnauthenticated):
 		status = http.StatusUnauthorized
 		code = "unauthenticated"

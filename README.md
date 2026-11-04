@@ -74,7 +74,8 @@ M3 新增的只读与问答接口：
 - `POST /api/v1/search`：只检索不生成。返回 `EvidenceSetV1`，包含 `QueryPlanV1`、融合分数和各通道排名。
 - `POST /api/v1/sessions`、`GET /api/v1/sessions`、`GET /api/v1/sessions/:id/messages`：会话与消息历史。
 - `POST /api/v1/sessions/:id/messages`：在线问答，SSE 输出 `status`、`references`、`thinking`、`answer`、`complete`、`error` 事件，每条事件带 `event_id`/`request_id`/`sequence`。
-- `GET /api/v1/requests/:request_id/events?after=N`（或 `Last-Event-ID`）：断线后按 sequence 续传已持久化的事件。
+- `GET /api/v1/requests/:request_id/events?after=N`（或 `Last-Event-ID`）：断线后按 sequence 续传已持久化的事件。客户端在生成中断开时，服务端仍会落库终止答案（状态 `cancelled`）及 `answer`/`complete` 事件，续传不会停在半截。
+- 请求体上限：除文档上传外的请求 1 MiB，超限返回 `413 payload_too_large`；文档上传按 `DOCREADER_MAX_FILE_MB`（默认 100 MiB）限制，multipart 封装另留 1 MiB 开销。API 的 `ReadTimeout` 为 5 分钟，用于约束慢速 body；SSE 响应不受影响。
 
 检索链路为 BM25 与向量并行召回 → RRF 融合（常数 `rrf_k`，默认 60）→ 去重 → 可配置 Rerank → 父块/邻块扩展 → Top-K 与上下文 Token 限制 → 最终权限二次校验。所有召回查询在 SQL 层就带 `tenant_id`、知识库和"当前版本 + `EVIDENCE_READY`"过滤。Rerank 默认关闭，需离线评估后再开启；开启后由 `RERANK_SOURCE` 选择适配器（`none` 直通 / `lexical` 离线词面重叠 / `remote` OpenAI 兼容 `/rerank`），`rerank_threshold` 与 `rerank_top_k` 只在 Rerank 实际运行时生效。父块始终补齐，两个相邻块计数只约束邻居块。接口里返回的 `score` 是 RRF 融合分（量级由 `rrf_k` 决定，默认 60 时靠前的条目落在 0.016-0.033），向量余弦在 `vectorScore`、关键词分在 `keywordScore`。
 

@@ -41,13 +41,16 @@ func main() {
 	httpapi.RegisterM7Routes(r, cfg, application, logger)
 	httpapi.RegisterM9Routes(r, cfg, application, logger)
 
-	// ReadHeaderTimeout blocks slowloris-style header trickling; IdleTimeout
-	// reclaims keep-alive connections. WriteTimeout stays unset because SSE
-	// answers stream for the duration of generation.
+	// ReadHeaderTimeout blocks slowloris-style header trickling; ReadTimeout
+	// bounds body reads without touching response writes, so it is compatible
+	// with SSE; the five-minute window leaves room for a 100 MiB upload on a
+	// slow link. IdleTimeout reclaims keep-alive connections. WriteTimeout stays
+	// unset because SSE answers stream for the duration of generation.
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       5 * time.Minute,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}

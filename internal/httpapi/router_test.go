@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/example/rag-platform/internal/config"
+	"github.com/gin-gonic/gin"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -35,6 +37,78 @@ func TestReadinessReportsUnavailableDependencies(t *testing.T) {
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", recorder.Code)
+	}
+}
+
+func TestRequestBodyLimitRejectsOversizedJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(requestBodyLimit(8))
+	router.POST("/echo", func(c *gin.Context) {
+		if _, err := io.ReadAll(c.Request.Body); err != nil {
+			writeError(c, err)
+			return
+		}
+		c.Status(http.StatusOK)
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(`{"query":"too large"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "payload_too_large") {
+		t.Fatalf("expected payload_too_large, got %s", recorder.Body.String())
+	}
+}
+
+func TestRequestBodyLimitSkipsOnlyUploadRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(requestBodyLimit(8))
+	router.POST("/api/v1"+documentUploadPath, func(c *gin.Context) {
+		if _, err := io.ReadAll(c.Request.Body); err != nil {
+			writeError(c, err)
+			return
+		}
+		c.Status(http.StatusOK)
+	})
+
+	body := "--boundary\r\nmore than eight bytes\r\n--boundary--\r\n"
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/knowledge-bases/kb-1/documents", strings.NewReader(body))
+	request.Header.Set("Content-Type", "multipart/form-data; boundary=boundary")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("the upload route must enforce its own cap, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// The multipart header is caller-controlled. Only the matched upload route may
+// opt out of the JSON cap; a forged header on a JSON endpoint must not.
+func TestRequestBodyLimitIgnoresSpoofedMultipartHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(requestBodyLimit(8))
+	router.POST("/api/v1/search", func(c *gin.Context) {
+		if _, err := io.ReadAll(c.Request.Body); err != nil {
+			writeError(c, err)
+			return
+		}
+		c.Status(http.StatusOK)
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/search", strings.NewReader("more than eight bytes"))
+	request.Header.Set("Content-Type", "multipart/form-data; boundary=boundary")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for a spoofed multipart header, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 

@@ -146,3 +146,69 @@ func TestPurgeStreamEventsDeletesOnlyExpiredRowsInBatches(t *testing.T) {
 		t.Fatalf("expired request must replay no events, got %+v", replayed)
 	}
 }
+
+// A dropped SSE client cancels the request context. The terminal answer and
+// its replay events must still be durable, otherwise a reconnect through
+// /requests/:id/events returns a stream that never terminates.
+func TestFinishAnswerPersistsAfterClientCancellation(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("test db handle: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(&models.Conversation{}, &models.Message{}, &models.MessageCitation{}, &models.StreamEvent{}); err != nil {
+		t.Fatalf("migrate conversation tables: %v", err)
+	}
+
+	service := NewService(Options{DB: db})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	sequence := 0
+	emit := func(eventType string, data map[string]any) error {
+		return service.appendEvent(ctx, "req-drop", "tenant-a", "user-a", &sequence, eventType, data, nil)
+	}
+	result, err := service.finishAnswer(ctx, emit, finishInput{
+		conversation: models.Conversation{ID: "conv-a", TenantID: "tenant-a", UserID: "user-a", KnowledgeBaseID: "kb-a"},
+		principal:    authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"},
+		requestID:    "req-drop",
+		scope:        authz.AuthorizationScope{TenantID: "tenant-a", ACLVersion: "tenant-a:1"},
+		query:        "question",
+		started:      time.Now(),
+		validation:   Validation{Valid: false, Reason: CodeClientDisconnected},
+		content:      "cannot answer",
+		status:       AnswerCancelled,
+		code:         CodeClientDisconnected,
+		model:        "test-model",
+		message:      "client disconnected",
+	})
+	if err != nil {
+		t.Fatalf("finishAnswer must persist after cancellation: %v", err)
+	}
+	if result.Status != AnswerCancelled {
+		t.Fatalf("status = %q, want %q", result.Status, AnswerCancelled)
+	}
+
+	var message models.Message
+	if err := db.First(&message, "request_id = ? AND role = ?", "req-drop", MessageRoleAssistant).Error; err != nil {
+		t.Fatalf("terminal answer must be persisted: %v", err)
+	}
+	if message.Status != AnswerCancelled || message.ErrorCode != CodeClientDisconnected {
+		t.Fatalf("persisted answer = %+v", message)
+	}
+
+	var events []models.StreamEvent
+	if err := db.Where("request_id = ?", "req-drop").Order("sequence").Find(&events).Error; err != nil {
+		t.Fatalf("load replay events: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected answer and complete events, got %d", len(events))
+	}
+	if events[0].EventType != EventAnswer || events[1].EventType != EventComplete {
+		t.Fatalf("unexpected replay events: %+v", events)
+	}
+}

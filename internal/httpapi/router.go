@@ -24,7 +24,7 @@ func NewRouterWithLogger(cfg config.Config, logger *slog.Logger) *gin.Engine {
 	}
 
 	r := gin.New()
-	r.Use(corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), gin.CustomRecovery(func(c *gin.Context, recovered any) {
+	r.Use(corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		logger.Error("http_panic", "path", c.Request.URL.Path, "panic", recovered)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_server_error"})
 	}))
@@ -87,6 +87,35 @@ func corsMiddleware(cfg config.Config) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		c.Next()
+	}
+}
+
+// maxJSONRequestBodyBytes bounds every non-multipart request body. JSON
+// payloads (queries, overrides, membership changes) are small; without a cap an
+// authenticated client can make the server buffer or decode an arbitrary body.
+// Uploads are multipart and enforce their own limit against MaxFileBytes.
+const maxJSONRequestBodyBytes = 1 << 20
+
+// maxMultipartEnvelopeBytes is the allowance for multipart boundaries and small
+// text fields on top of the configured file-size cap.
+const maxMultipartEnvelopeBytes = 1 << 20
+
+// documentUploadPath is the only route that accepts multipart bodies. The
+// global JSON cap skips it by matched route, not by Content-Type: the header is
+// caller-controlled, so trusting it would let a forged multipart request bypass
+// the cap on any JSON endpoint.
+const documentUploadPath = "/knowledge-bases/:id/documents"
+
+// requestBodyLimit replaces the body with a MaxBytesReader so over-limit reads
+// fail with *http.MaxBytesError, which writeError maps to 413.
+func requestBodyLimit(limit int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Body == nil || (c.Request.Method == http.MethodPost && c.FullPath() == "/api/v1"+documentUploadPath) {
+			c.Next()
+			return
+		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	}
 }

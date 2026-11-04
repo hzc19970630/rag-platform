@@ -14,6 +14,7 @@ docker compose --env-file ../../.env -f docker-compose.yml <command>
 ## 1. 迁移兼容检查
 
 - 迁移版本与校验和记录在 `schema_migrations(version, checksum)`。
+- 迁移进程在独立连接上持有 PostgreSQL session 级 advisory lock（`pg_advisory_lock`），多副本同时启动时串行执行；等待期间日志停在 `migration_lock_acquired` 之前，拿到锁后记录该行。进程退出会释放锁，不会留下需要人工清理的锁记录。
 - 部署前执行只读检查；`-check` 不修改数据库，发现缺失/漂移的迁移或校验和不一致时以非零退出：
 
 ```bash

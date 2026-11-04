@@ -16,7 +16,10 @@ func RegisterM2Routes(router *gin.Engine, cfg config.Config, application *app.Ap
 	protected := router.Group("/api/v1")
 	protected.Use(authenticationMiddleware(cfg, application))
 
-	protected.POST("/knowledge-bases/:id/documents", func(c *gin.Context) {
+	protected.POST(documentUploadPath, func(c *gin.Context) {
+		// The global JSON cap skips multipart, so the upload route bounds the
+		// envelope itself before FormFile parses it into memory or temp files.
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, cfg.MaxFileBytes+maxMultipartEnvelopeBytes)
 		file, header, err := c.Request.FormFile("file")
 		if err != nil {
 			writeError(c, err)

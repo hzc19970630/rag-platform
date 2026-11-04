@@ -22,6 +22,10 @@ import (
 
 const defaultMigrationDir = "migrations/postgres"
 
+// migrationAdvisoryLockKey is an arbitrary stable key ("rag_mig") shared by
+// every migrator process. PostgreSQL scopes advisory locks to the database.
+const migrationAdvisoryLockKey int64 = 0x7261675F6D6967
+
 func main() {
 	checkOnly := flag.Bool("check", false, "verify applied migrations match the SQL files without applying anything")
 	flag.Parse()
@@ -67,10 +71,42 @@ type migrationFile struct {
 	checksum string
 }
 
+// lockMigrations takes a session-level advisory lock on a dedicated
+// connection. It must not use the pool: advisory locks belong to one session,
+// and the pool could hand later statements to a different connection, which
+// would leave the lock held by an idle session instead of the migration.
+func lockMigrations(ctx context.Context, database *sql.DB, logger *slog.Logger) (func(), error) {
+	connection, err := database.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquire migration connection: %w", err)
+	}
+	if _, err := connection.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationAdvisoryLockKey); err != nil {
+		_ = connection.Close()
+		return nil, fmt.Errorf("acquire migration advisory lock: %w", err)
+	}
+	logger.Info("migration_lock_acquired")
+	return func() {
+		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		// Closing the session releases the lock too, so a failed explicit
+		// unlock cannot leak it past this process.
+		_, _ = connection.ExecContext(unlockCtx, "SELECT pg_advisory_unlock($1)", migrationAdvisoryLockKey)
+		_ = connection.Close()
+	}, nil
+}
+
 // runMigrations applies pending files and records a sha256 of each. In check
 // mode it only verifies that every local file is applied and unmodified, which
 // is what a deployment gate needs before rolling new code onto an old schema.
+// A session-level advisory lock serializes concurrent migrators: without it two
+// replicas can both decide the same file is pending and race on schema_migrations.
 func runMigrations(ctx context.Context, database *sql.DB, directory string, logger *slog.Logger, checkOnly bool) error {
+	releaseLock, err := lockMigrations(ctx, database, logger)
+	if err != nil {
+		return err
+	}
+	defer releaseLock()
+
 	if _, err := database.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
         version VARCHAR(128) PRIMARY KEY,
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -25,6 +25,12 @@ import (
 // decide whether a model call is worth making for a conversation title.
 const localChatName = "local-extractive"
 
+// terminalPersistTimeout bounds the database writes that record a terminal
+// answer and its stream events after the client is gone. The HTTP request
+// context is already canceled in that case, so these writes must not inherit
+// its cancellation; they still need a bound of their own.
+const terminalPersistTimeout = 15 * time.Second
+
 type Service struct {
 	db        *gorm.DB
 	authz     *authz.Service
@@ -366,6 +372,13 @@ func (s *Service) finishAnswer(ctx context.Context, emitEvent func(string, map[s
 	validationJSON, _ := json.Marshal(input.validation)
 	usageJSON, _ := json.Marshal(TokenUsage{PromptTokens: input.promptTokens, CompletionTokens: input.completionTokens})
 
+	// A dropped SSE client cancels ctx, but the terminal answer still has to be
+	// durable: /requests/:id/events replays the message and its events after a
+	// reconnect. Only the optional conversation title stays on the request
+	// context, so a disconnect does not spend a model call on it.
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+	defer cancel()
+
 	assistant := models.Message{
 		ConversationID: input.conversation.ID, TenantID: input.principal.TenantID, KnowledgeBaseID: input.conversation.KnowledgeBaseID,
 		UserID: input.principal.SubjectID, RequestID: input.requestID, Role: MessageRoleAssistant,
@@ -374,14 +387,14 @@ func (s *Service) finishAnswer(ctx context.Context, emitEvent func(string, map[s
 		Model: input.model, TokenUsage: jsonField(string(usageJSON)), LatencyMS: latency,
 		ErrorCode: input.code, ErrorMessage: input.message,
 	}
-	messageID, err := s.persistMessage(ctx, assistant)
+	messageID, err := s.persistMessage(writeCtx, assistant)
 	if err != nil {
 		return AnswerResult{}, err
 	}
-	if err := s.persistCitations(ctx, messageID, input.principal, input.conversation, input.citations); err != nil {
+	if err := s.persistCitations(writeCtx, messageID, input.principal, input.conversation, input.citations); err != nil {
 		return AnswerResult{}, err
 	}
-	if err := s.touchConversation(ctx, input.conversation, input.query); err != nil {
+	if err := s.touchConversation(ctx, input.conversation, input.query); err != nil && ctx.Err() == nil {
 		return AnswerResult{}, err
 	}
 	// Emit an allocated list so a refusal is "citations": [] rather than null.
@@ -620,7 +633,12 @@ func (s *Service) appendEvent(ctx context.Context, requestID, tenantID, userID s
 		return fmt.Errorf("marshal stream event: %w", err)
 	}
 	row := models.StreamEvent{RequestID: requestID, TenantID: tenantID, UserID: userID, Sequence: *sequence, EventType: eventType, Payload: string(payload)}
-	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
+	// Events are persisted before they are emitted so a reconnect can replay
+	// them. The client may already be gone (ctx canceled); that must not stop
+	// the terminal events from being recorded.
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+	defer cancel()
+	if err := s.db.WithContext(writeCtx).Create(&row).Error; err != nil {
 		return fmt.Errorf("persist stream event: %w", err)
 	}
 	if emit == nil {
