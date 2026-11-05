@@ -3,6 +3,7 @@ package retrieval
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/platform/circuitbreaker"
 	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/token"
@@ -38,20 +40,21 @@ type HistoryTurn struct {
 }
 
 type Service struct {
-	db           *gorm.DB
-	keyword      KeywordSearcher
-	vector       VectorSearcher
-	embedder     Embedder
-	expander     ChunkExpander
-	reranker     Reranker
-	rerankModels RerankModelResolver
-	authz        Authorizer
-	join         KnowledgeJoin
-	defaults     Params
-	planner      Planner
-	rewriter     Rewriter
-	executor     *PlanExecutor
-	metrics      metrics.Recorder
+	db            *gorm.DB
+	keyword       KeywordSearcher
+	vector        VectorSearcher
+	embedder      Embedder
+	expander      ChunkExpander
+	reranker      Reranker
+	rerankModels  RerankModelResolver
+	rerankBreaker *circuitbreaker.Breaker
+	authz         Authorizer
+	join          KnowledgeJoin
+	defaults      Params
+	planner       Planner
+	rewriter      Rewriter
+	executor      *PlanExecutor
+	metrics       metrics.Recorder
 }
 
 type Options struct {
@@ -64,12 +67,15 @@ type Options struct {
 	// RerankModels resolves the knowledge-base rerank binding. Nil keeps the
 	// adapter's configured model.
 	RerankModels RerankModelResolver
-	Authz        Authorizer
-	Join         KnowledgeJoin
-	Defaults     Params
-	Planner      Planner
-	Rewriter     Rewriter
-	Metrics      metrics.Recorder
+	// RerankBreaker guards the rerank provider call. Nil uses the default
+	// 5-failure / 30s breaker.
+	RerankBreaker *circuitbreaker.Breaker
+	Authz         Authorizer
+	Join          KnowledgeJoin
+	Defaults      Params
+	Planner       Planner
+	Rewriter      Rewriter
+	Metrics       metrics.Recorder
 	// Channels and Fusions extend the default keyword/vector + RRF setup. The
 	// retrieval service only registers them; the plan chooses what runs.
 	Channels []RecallChannel
@@ -93,20 +99,25 @@ func NewService(options Options) *Service {
 	if recorder == nil {
 		recorder = metrics.Nop{}
 	}
+	breaker := options.RerankBreaker
+	if breaker == nil {
+		breaker = circuitbreaker.New(circuitbreaker.Config{})
+	}
 	service := &Service{
-		db:           options.DB,
-		keyword:      options.Keyword,
-		vector:       options.Vector,
-		embedder:     options.Embedder,
-		expander:     options.Expander,
-		reranker:     reranker,
-		rerankModels: options.RerankModels,
-		authz:        options.Authz,
-		join:         options.Join,
-		defaults:     options.Defaults,
-		planner:      planner,
-		rewriter:     rewriter,
-		metrics:      recorder,
+		db:            options.DB,
+		keyword:       options.Keyword,
+		vector:        options.Vector,
+		embedder:      options.Embedder,
+		expander:      options.Expander,
+		reranker:      reranker,
+		rerankModels:  options.RerankModels,
+		rerankBreaker: breaker,
+		authz:         options.Authz,
+		join:          options.Join,
+		defaults:      options.Defaults,
+		planner:       planner,
+		rewriter:      rewriter,
+		metrics:       recorder,
 	}
 	channels := append([]RecallChannel{}, options.Channels...)
 	if options.Keyword != nil {
@@ -195,30 +206,53 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		// budget on a provider call that never happens.
 		_, perRequestModel := s.reranker.(ModelReranker)
 		rerankModel := ""
+		degradeReason := ""
 		if perRequestModel && s.rerankModels != nil && input.KnowledgeBaseID != "" {
 			resolved, err := s.rerankModels.RerankModel(ctx, scope.TenantID, input.KnowledgeBaseID)
 			if err != nil {
+				degradeReason = "resolve"
 				s.metrics.Inc("model_errors_total", metrics.Labels("model", "rerank", "stage", "resolve"))
-				return EvidenceSet{}, err
+				slog.Warn("rerank_degraded", "reason", degradeReason, "knowledge_base_id", input.KnowledgeBaseID, "error", err)
+			} else {
+				rerankModel = resolved
 			}
-			rerankModel = resolved
 		}
-		reranked, err := s.rerank(ctx, rerankModel, query, deduped)
-		if err != nil {
-			modelLabel := rerankModel
-			if modelLabel == "" {
-				modelLabel = s.reranker.Name()
+		// Rerank never fails the query: recall and fusion already produced a
+		// usable evidence set, so an outage only loses the reordering.
+		if degradeReason == "" && !s.rerankBreaker.Allow() {
+			degradeReason = "breaker_open"
+			slog.Warn("rerank_degraded", "reason", degradeReason, "knowledge_base_id", input.KnowledgeBaseID)
+		}
+		if degradeReason == "" {
+			reranked, err := s.rerank(ctx, rerankModel, query, deduped)
+			if err != nil {
+				modelLabel := rerankModel
+				if modelLabel == "" {
+					modelLabel = s.reranker.Name()
+				}
+				degradeReason = "error"
+				s.metrics.Inc("model_errors_total", metrics.Labels("model", modelLabel, "stage", "rerank"))
+				if ctx.Err() != nil {
+					s.rerankBreaker.Release()
+				} else {
+					s.rerankBreaker.Failure()
+				}
+				slog.Warn("rerank_degraded", "reason", degradeReason, "model", modelLabel, "knowledge_base_id", input.KnowledgeBaseID, "error", err)
+			} else {
+				s.rerankBreaker.Success()
+				// rerank_threshold and rerank_top_k bound the reranked candidate set that
+				// goes on to context expansion. They only apply while rerank is actually
+				// running; top_k still bounds the final evidence list below.
+				reranked = aboveRerankThreshold(reranked, params.RerankThreshold)
+				reranked = truncateReranked(reranked, params.RerankTopK)
+				deduped = reranked
+				rerankApplied = true
 			}
-			s.metrics.Inc("model_errors_total", metrics.Labels("model", modelLabel, "stage", "rerank"))
-			return EvidenceSet{}, fmt.Errorf("rerank: %w", err)
 		}
-		// rerank_threshold and rerank_top_k bound the reranked candidate set that
-		// goes on to context expansion. They only apply while rerank is actually
-		// running; top_k still bounds the final evidence list below.
-		reranked = aboveRerankThreshold(reranked, params.RerankThreshold)
-		reranked = truncateReranked(reranked, params.RerankTopK)
-		deduped = reranked
-		rerankApplied = true
+		if degradeReason != "" {
+			s.metrics.Inc("rerank_degraded_total", metrics.Labels("reason", degradeReason))
+			span.SetAttributes(attribute.String("rerank.degraded_reason", degradeReason))
+		}
 	}
 
 	expanded := deduped

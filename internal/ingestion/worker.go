@@ -78,7 +78,11 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	}
 	processCtx, releaseLease, leaseLost := w.runtime().Heartbeat(ctx, task.IdempotencyKey)
 	defer releaseLease()
-	if !w.isCurrent(ctx, task) {
+	current, err := w.isCurrent(ctx, task)
+	if err != nil {
+		return err
+	}
+	if !current {
 		return w.finishInbox(ctx, task.IdempotencyKey, inboxSucceeded, nil)
 	}
 	if err := w.markStageProcessing(ctx, task); err != nil {
@@ -549,10 +553,12 @@ func (w *PipelineWorker) finishInbox(ctx context.Context, key, status string, pr
 	return w.runtime().FinishInbox(ctx, key, status, processErr)
 }
 
-func (w *PipelineWorker) isCurrent(ctx context.Context, task Task) bool {
+func (w *PipelineWorker) isCurrent(ctx context.Context, task Task) (bool, error) {
 	var count int64
-	w.db.WithContext(ctx).Table("documents d").Joins("JOIN document_versions v ON v.document_id = d.id").Where("d.tenant_id = ? AND d.knowledge_base_id = ? AND d.id = ? AND d.latest_version_id = ? AND v.id = ? AND d.status <> ?", task.TenantID, task.KnowledgeBaseID, task.DocumentID, task.DocumentVersionID, task.DocumentVersionID, StatusCancelled).Count(&count)
-	return count == 1
+	if err := w.db.WithContext(ctx).Table("documents d").Joins("JOIN document_versions v ON v.document_id = d.id").Where("d.tenant_id = ? AND d.knowledge_base_id = ? AND d.id = ? AND d.latest_version_id = ? AND v.id = ? AND d.status <> ?", task.TenantID, task.KnowledgeBaseID, task.DocumentID, task.DocumentVersionID, task.DocumentVersionID, StatusCancelled).Count(&count).Error; err != nil {
+		return false, fmt.Errorf("check document currency: %w", err)
+	}
+	return count == 1, nil
 }
 
 func cleanText(value string) string {

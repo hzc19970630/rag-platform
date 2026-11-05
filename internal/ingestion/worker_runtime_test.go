@@ -3,9 +3,12 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
@@ -83,6 +86,66 @@ func TestCompleteStageChainsNextStageThroughPipelineRuntime(t *testing.T) {
 	}
 	if payload.Stage != StageNormalize || payload.PipelineRunID != "run-1" || payload.IdempotencyKey != "run-1:normalize" {
 		t.Fatalf("next task payload = %+v", payload)
+	}
+}
+
+func TestProcessPropagatesCurrencyCheckFailure(t *testing.T) {
+	db := newTestDB(t)
+	task := seedWorkerStage(t, db, "run-1", StageParse, StatusParsing)
+	task.SchemaVersion = SchemaTask
+	if err := db.Callback().Query().Before("gorm:query").Register("test:fail_currency_lookup", func(tx *gorm.DB) {
+		if tx.Statement.TableExpr != nil && strings.Contains(tx.Statement.TableExpr.SQL, "documents d") {
+			tx.AddError(errors.New("injected currency lookup failure"))
+		}
+	}); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	err := (&PipelineWorker{db: db}).Process(context.Background(), task)
+	if err == nil || !strings.Contains(err.Error(), "injected currency lookup failure") {
+		t.Fatalf("expected the currency lookup failure to propagate, got %v", err)
+	}
+	// A transient lookup error must retry. Settling the inbox would silently
+	// drop a document version that is still current.
+	if apperror.IsTerminal(err) {
+		t.Fatalf("currency lookup failure must stay retryable, got %v", err)
+	}
+	inbox := loadInbox(t, &PipelineWorker{db: db}, "run-1:parse")
+	if inbox.Status != inboxProcessing || inbox.LeaseOwner != "" || inbox.LeaseUntil != nil {
+		t.Fatalf("inbox must stay claimable for the retry, got %+v", inbox)
+	}
+	var stage models.StageRun
+	if err := db.First(&stage, "idempotency_key = ?", "run-1:parse").Error; err != nil {
+		t.Fatalf("load stage: %v", err)
+	}
+	if stage.Status != StageProcessing || stage.CompletedAt != nil {
+		t.Fatalf("stage must not advance on a lookup failure, got %+v", stage)
+	}
+	var pipelineRun models.PipelineRun
+	if err := db.First(&pipelineRun, "id = ?", "run-1").Error; err != nil {
+		t.Fatalf("load pipeline: %v", err)
+	}
+	if pipelineRun.Status != StatusParsing {
+		t.Fatalf("pipeline status = %q, want %q", pipelineRun.Status, StatusParsing)
+	}
+}
+
+func TestProcessSettlesStaleVersionWithoutRunningStage(t *testing.T) {
+	db := newTestDB(t)
+	task := seedWorkerStage(t, db, "run-1", StageParse, StatusParsing)
+	task.SchemaVersion = SchemaTask
+	if err := (&PipelineWorker{db: db}).Process(context.Background(), task); err != nil {
+		t.Fatalf("a stale version must settle quietly, got %v", err)
+	}
+	inbox := loadInbox(t, &PipelineWorker{db: db}, "run-1:parse")
+	if inbox.Status != inboxSucceeded || inbox.LeaseUntil != nil {
+		t.Fatalf("stale inbox = %+v", inbox)
+	}
+	var stage models.StageRun
+	if err := db.First(&stage, "idempotency_key = ?", "run-1:parse").Error; err != nil {
+		t.Fatalf("load stage: %v", err)
+	}
+	if stage.Status != StageProcessing {
+		t.Fatalf("a stale version must not run the stage, got %+v", stage)
 	}
 }
 

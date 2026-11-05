@@ -145,7 +145,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
 - 独立监听器只包含本进程的指标，不包含数据库窗口内的 `operations`；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
-- 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 `/metrics` 暴露；`/ops/metrics` 是 API 路由，看不到 worker 进程计数，入库失败仍可看 `operations.stages.embed.failed`。
+- 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 `/metrics` 暴露；`/ops/metrics` 是 API 路由，看不到 worker 进程计数，入库失败仍可看 `operations.stages.embed.failed`。`rerank_degraded_total{reason=resolve|error|breaker_open}` 记录 Rerank 降级次数：`resolve` 为知识库绑定解析失败，`error` 为供应商调用失败，`breaker_open` 为熔断期间跳过调用；降级时检索仍返回关键词/向量融合结果（`rerankApplied=false`），`model_errors_total` 只统计真实的解析/调用错误。
 
 ## 8. 模型网关故障演练
 
@@ -164,6 +164,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - 可路由模型来自部署配置：`LLM_CHAT_MODEL`、`CHAT_MODELS`、`LLM_RERANK_MODEL`、`RERANK_MODELS`。每项可写成 `name` 或 `name@version`；版本只用于审计，不参与供应商请求。`CHAT_MODELS`/`RERANK_MODELS` 只在对应 `*_SOURCE=remote` 时额外登记，离线适配器固定一个模型。改配置后需重启 api（目录在启动时构建）。
 - 知识库绑定通过 `PATCH /api/v1/knowledge-bases/{id}` 的 `chat_model`、`rerank_model` 字段设置；空串清除覆盖，回到部署默认。绑定写入前会校验模型已登记且能力匹配，未登记返回 400；每次实际变化都写 `audit_logs`（`resource_type=model_binding`，`reason` 含新/旧模型与版本），可用 `GET /api/v1/audit` 按资源排查。
 - 运行路径会做两次保护：绑定模型已不在目录中（例如回滚部署）时自动降级到部署默认；绑定供应商健康探测失败时也降级到默认，探测结果缓存 30 秒。默认模型同样不可用时请求失败（问答记录 `model_error`），不会静默切换。
+- Rerank 是唯一允许降级的模型调用：绑定解析失败、供应商调用失败或熔断打开时，检索退回 rerank 前的关键词/向量融合顺序继续问答（`rerankApplied=false`），只损失重排序，不会让整次问答失败。降级原因通过 `rerank_degraded_total{reason=resolve|error|breaker_open}` 与 `rerank_degraded` 日志观察；`model_errors_total` 仍只统计真实的解析/调用错误。适配器连续失败 5 次后熔断 30 秒，期间直接使用融合顺序；冷却后只放行一个探针，成功即恢复。Chat 生成仍按上一条硬失败，不会静默降级。
 - 探测地址默认从各适配器的 base URL 推导：chat 与 embedding 用 `<base>/models`，rerank 用 `<base>/health`；可用 `CHAT_HEALTH_URL`、`EMBEDDING_HEALTH_URL`、`RERANK_HEALTH_URL` 覆盖（留空即用默认）。探测是带 Bearer 凭据的 `GET`，单次超时 3 秒；401/403（凭据被拒）和 5xx 判为不健康，其余状态（含 404）只要求网关可达，避免因供应商没有标准健康路径而误降级。
 - 当前健康快照可通过租户 owner/admin 的 `GET /api/v1/ops/metrics` 查看（`modelHealth` 数组，含 `model`、`provider`、`version`、`healthy`、`checkedAt`），也可从同一鉴权路由 `GET /api/v1/ops/metrics/prometheus` 抓取 `model_health{model,provider,version}` gauge（1 健康、0 不健康）。`model_health` 目前只在 API 进程的这条路由上暴露，不在 `METRICS_ADDR` 的无鉴权监听器里；需要自动告警时，让抓取端带 owner/admin 会话访问该路由，或对 `modelHealth` 做巡检。
 - `TENANT_MODEL_REQUESTS_PER_MINUTE` 限制每租户、每能力（chat/rerank/embedding）每分钟的模型解析次数，超限返回 `quota_exceeded`。它按进程内固定 1 分钟窗口计数，多副本部署时每个副本各自计数；需要全局硬预算时应在上游网关限流。
