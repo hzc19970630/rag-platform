@@ -108,41 +108,20 @@ type retrievalFile struct {
 // Validate enforces the documented ranges. Every tier goes through this check,
 // so a session override cannot escape the same bounds as a knowledge-base one.
 func (r RetrievalConfig) Validate() error {
-	for name, value := range map[string]int{
-		"top_k":           r.TopK,
-		"embedding_top_k": r.EmbeddingTopK,
-		"keyword_top_k":   r.KeywordTopK,
-		"rerank_top_k":    r.RerankTopK,
-	} {
-		if err := param.IntRange(name, value, 0, 200); err != nil {
-			return err
-		}
-	}
-	if err := param.FloatRange("vector_threshold", r.VectorThreshold, 0, 1); err != nil {
-		return err
-	}
-	if err := param.NonNegativeFloat("keyword_threshold", r.KeywordThreshold); err != nil {
-		return err
-	}
-	if err := param.FloatRange("rerank_threshold", r.RerankThreshold, -10, 10); err != nil {
-		return err
-	}
-	if err := param.PositiveInt("context_token_limit", r.ContextTokenLimit); err != nil {
-		return err
-	}
-	if err := param.NonNegativeInt("adjacent_expansion", r.AdjacentExpansion); err != nil {
-		return err
-	}
-	if err := param.NonNegativeInt("max_adjacent_chunks", r.MaxAdjacentChunks); err != nil {
-		return err
-	}
-	if err := param.IntRange("rrf_k", r.RRFK, 1, 200); err != nil {
-		return err
-	}
-	if err := param.FloatRange("expansion_score_factor", r.ExpansionScoreFactor, 0, 1); err != nil {
-		return err
-	}
-	return nil
+	return param.ValidateRetrieval(param.RetrievalValues{
+		TopK:                 &r.TopK,
+		EmbeddingTopK:        &r.EmbeddingTopK,
+		KeywordTopK:          &r.KeywordTopK,
+		VectorThreshold:      &r.VectorThreshold,
+		KeywordThreshold:     &r.KeywordThreshold,
+		RerankTopK:           &r.RerankTopK,
+		RerankThreshold:      &r.RerankThreshold,
+		ContextTokenLimit:    &r.ContextTokenLimit,
+		AdjacentExpansion:    &r.AdjacentExpansion,
+		MaxAdjacentChunks:    &r.MaxAdjacentChunks,
+		RRFK:                 &r.RRFK,
+		ExpansionScoreFactor: &r.ExpansionScoreFactor,
+	})
 }
 
 // ChatConfig describes the generation model. Like the embedding model it is
@@ -155,6 +134,13 @@ type ChatConfig struct {
 	Model      string
 	TimeoutSec int
 	MaxTokens  int
+	// HealthURL is the provider liveness endpoint used by the model catalog.
+	// Empty derives it from BaseURL (/models); a non-empty value must be a URL.
+	HealthURL string
+	// Models lists additional routable chat models as name[@version]. The
+	// deployment default (LLM_CHAT_MODEL) is always registered. Empty keeps a
+	// single-model deployment.
+	Models []string
 	// HistoryTurns is how many completed user/assistant turns are replayed to
 	// the model. Zero disables multi-turn context.
 	HistoryTurns int
@@ -169,6 +155,9 @@ type ChatConfig struct {
 }
 
 func (c ChatConfig) Validate(appEnv string) error {
+	if err := validateModelList("CHAT_MODELS", c.Models); err != nil {
+		return err
+	}
 	if c.HistoryTurns < 0 {
 		return fmt.Errorf("CHAT_HISTORY_TURNS must be zero or positive")
 	}
@@ -195,6 +184,12 @@ func (c ChatConfig) Validate(appEnv string) error {
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("CHAT_BASE_URL must be a valid base URL")
 		}
+		if strings.TrimSpace(c.HealthURL) != "" {
+			health, err := url.Parse(c.HealthURL)
+			if err != nil || health.Scheme == "" || health.Host == "" {
+				return fmt.Errorf("CHAT_HEALTH_URL must be a valid URL")
+			}
+		}
 	default:
 		return fmt.Errorf("CHAT_SOURCE must be local or remote, got %q", c.Source)
 	}
@@ -212,9 +207,17 @@ type RerankConfig struct {
 	APIKey     string
 	Model      string
 	TimeoutSec int
+	// HealthURL is the provider liveness endpoint used by the model catalog.
+	// Empty derives it from BaseURL (/health); a non-empty value must be a URL.
+	HealthURL string
+	// Models lists additional routable rerank models as name[@version].
+	Models []string
 }
 
 func (r RerankConfig) Validate() error {
+	if err := validateModelList("RERANK_MODELS", r.Models); err != nil {
+		return err
+	}
 	switch r.Source {
 	case "none", "lexical":
 		// Offline adapters: pass-through and overlap scoring. No endpoint needed.
@@ -228,6 +231,12 @@ func (r RerankConfig) Validate() error {
 		parsed, err := url.Parse(r.BaseURL)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("RERANK_BASE_URL must be a valid base URL")
+		}
+		if strings.TrimSpace(r.HealthURL) != "" {
+			health, err := url.Parse(r.HealthURL)
+			if err != nil || health.Scheme == "" || health.Host == "" {
+				return fmt.Errorf("RERANK_HEALTH_URL must be a valid URL")
+			}
 		}
 	default:
 		return fmt.Errorf("RERANK_SOURCE must be none, lexical or remote, got %q", r.Source)
@@ -277,6 +286,9 @@ type EmbeddingConfig struct {
 	Dimension  int
 	BatchSize  int
 	TimeoutSec int
+	// HealthURL is the provider liveness endpoint used by the model catalog.
+	// Empty derives it from BaseURL (/models); a non-empty value must be a URL.
+	HealthURL string
 }
 
 func (e EmbeddingConfig) Validate(appEnv string) error {
@@ -297,6 +309,12 @@ func (e EmbeddingConfig) Validate(appEnv string) error {
 		parsed, err := url.Parse(e.BaseURL)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("EMBEDDING_BASE_URL must be a valid base URL")
+		}
+		if strings.TrimSpace(e.HealthURL) != "" {
+			health, err := url.Parse(e.HealthURL)
+			if err != nil || health.Scheme == "" || health.Host == "" {
+				return fmt.Errorf("EMBEDDING_HEALTH_URL must be a valid URL")
+			}
 		}
 	default:
 		return fmt.Errorf("EMBEDDING_SOURCE must be local or remote, got %q", e.Source)
@@ -400,14 +418,17 @@ type LimitsConfig struct {
 	TenantMaxDocuments       int
 	TenantMaxStorageBytes    int64
 	TenantChatRequestsPerDay int
-	DocumentRetentionDays    int
-	AuditRetentionDays       int
-	StreamEventRetentionDays int
-	OutboxMaxAttempts        int
-	OutboxBatchSize          int
-	ReconcileIntervalSeconds int
-	WorkerConcurrency        int
-	ShutdownTimeoutSeconds   int
+	// TenantModelRequestsPerMinute bounds model registry resolutions per
+	// tenant and capability. Zero disables the limit.
+	TenantModelRequestsPerMinute int
+	DocumentRetentionDays        int
+	AuditRetentionDays           int
+	StreamEventRetentionDays     int
+	OutboxMaxAttempts            int
+	OutboxBatchSize              int
+	ReconcileIntervalSeconds     int
+	WorkerConcurrency            int
+	ShutdownTimeoutSeconds       int
 }
 
 // ConnectorConfig is the M5 external-source baseline. Credentials are sealed
@@ -606,18 +627,19 @@ func LoadFrom(lookup Lookup) Config {
 		Limits: LimitsConfig{
 			// Zero disables the in-process limiter, so this is non-negative
 			// rather than positive.
-			RateLimitPerMinute:       int(reader.nonNegative("RATE_LIMIT_PER_MINUTE", 600)),
-			TenantMaxDocuments:       int(reader.nonNegative("TENANT_MAX_DOCUMENTS", 0)),
-			TenantMaxStorageBytes:    reader.nonNegative("TENANT_MAX_STORAGE_MB", 0) * 1024 * 1024,
-			TenantChatRequestsPerDay: int(reader.nonNegative("TENANT_CHAT_REQUESTS_PER_DAY", 0)),
-			DocumentRetentionDays:    int(reader.positive("DOCUMENT_RETENTION_DAYS", 30)),
-			AuditRetentionDays:       int(reader.nonNegative("AUDIT_RETENTION_DAYS", 180)),
-			StreamEventRetentionDays: int(reader.nonNegative("STREAM_EVENT_RETENTION_DAYS", 7)),
-			OutboxMaxAttempts:        int(reader.positive("OUTBOX_MAX_ATTEMPTS", 10)),
-			OutboxBatchSize:          int(reader.positive("OUTBOX_BATCH_SIZE", 64)),
-			ReconcileIntervalSeconds: int(reader.positive("RECONCILE_INTERVAL_SECONDS", 60)),
-			WorkerConcurrency:        int(reader.positive("WORKER_CONCURRENCY", 4)),
-			ShutdownTimeoutSeconds:   int(reader.positive("SHUTDOWN_TIMEOUT_SECONDS", 10)),
+			RateLimitPerMinute:           int(reader.nonNegative("RATE_LIMIT_PER_MINUTE", 600)),
+			TenantMaxDocuments:           int(reader.nonNegative("TENANT_MAX_DOCUMENTS", 0)),
+			TenantMaxStorageBytes:        reader.nonNegative("TENANT_MAX_STORAGE_MB", 0) * 1024 * 1024,
+			TenantChatRequestsPerDay:     int(reader.nonNegative("TENANT_CHAT_REQUESTS_PER_DAY", 0)),
+			TenantModelRequestsPerMinute: int(reader.nonNegative("TENANT_MODEL_REQUESTS_PER_MINUTE", 0)),
+			DocumentRetentionDays:        int(reader.positive("DOCUMENT_RETENTION_DAYS", 30)),
+			AuditRetentionDays:           int(reader.nonNegative("AUDIT_RETENTION_DAYS", 180)),
+			StreamEventRetentionDays:     int(reader.nonNegative("STREAM_EVENT_RETENTION_DAYS", 7)),
+			OutboxMaxAttempts:            int(reader.positive("OUTBOX_MAX_ATTEMPTS", 10)),
+			OutboxBatchSize:              int(reader.positive("OUTBOX_BATCH_SIZE", 64)),
+			ReconcileIntervalSeconds:     int(reader.positive("RECONCILE_INTERVAL_SECONDS", 60)),
+			WorkerConcurrency:            int(reader.positive("WORKER_CONCURRENCY", 4)),
+			ShutdownTimeoutSeconds:       int(reader.positive("SHUTDOWN_TIMEOUT_SECONDS", 10)),
 		},
 		Connector: ConnectorConfig{
 			EncryptionKey:        value(lookup, "CONNECTOR_ENCRYPTION_KEY", ""),
@@ -657,6 +679,8 @@ func LoadFrom(lookup Lookup) Config {
 			Model:                  value(lookup, "LLM_CHAT_MODEL", "local-extractive"),
 			TimeoutSec:             int(reader.positive("CHAT_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
 			MaxTokens:              int(reader.positive("CHAT_MAX_TOKENS", 1024)),
+			HealthURL:              value(lookup, "CHAT_HEALTH_URL", ""),
+			Models:                 listValue(lookup, "CHAT_MODELS", nil),
 			HistoryTurns:           int(reader.nonNegative("CHAT_HISTORY_TURNS", 3)),
 			HistoryTokenLimit:      int(reader.nonNegative("CHAT_HISTORY_TOKEN_LIMIT", 1200)),
 			QueryRewriteEnabled:    reader.boolean("CHAT_QUERY_REWRITE_ENABLED", true),
@@ -668,6 +692,8 @@ func LoadFrom(lookup Lookup) Config {
 			APIKey:     value(lookup, "RERANK_API_KEY", value(lookup, "LLM_API_KEY", "")),
 			Model:      value(lookup, "LLM_RERANK_MODEL", ""),
 			TimeoutSec: int(reader.positive("RERANK_TIMEOUT_SECONDS", reader.positive("LLM_REQUEST_TIMEOUT_SECONDS", 60))),
+			HealthURL:  value(lookup, "RERANK_HEALTH_URL", ""),
+			Models:     listValue(lookup, "RERANK_MODELS", nil),
 		},
 		Embedding: EmbeddingConfig{
 			Source:     strings.ToLower(value(lookup, "EMBEDDING_SOURCE", "local")),
@@ -677,6 +703,7 @@ func LoadFrom(lookup Lookup) Config {
 			Dimension:  int(reader.positive("EMBEDDING_DIMENSION", 3)),
 			BatchSize:  int(reader.positive("EMBEDDING_BATCH_SIZE", 32)),
 			TimeoutSec: int(reader.positive("EMBEDDING_TIMEOUT_SECONDS", 60)),
+			HealthURL:  value(lookup, "EMBEDDING_HEALTH_URL", ""),
 		},
 		Chunk: ChunkConfig{
 			Size:    int(reader.nonNegative("CHUNK_SIZE", 900)),
@@ -887,6 +914,18 @@ func splitValue(lookup Lookup, key string, fallback []string) []string {
 		return fallback
 	}
 	return result
+}
+
+// validateModelList accepts entries in name or name@version form. The version
+// is recorded in binding audits so an in-place provider upgrade is visible.
+func validateModelList(key string, entries []string) error {
+	for _, entry := range entries {
+		name, version, hasVersion := strings.Cut(entry, "@")
+		if strings.TrimSpace(name) == "" || (hasVersion && strings.TrimSpace(version) == "") {
+			return fmt.Errorf("%s entries must be model or model@version, got %q", key, entry)
+		}
+	}
+	return nil
 }
 
 // positive reads an integer that must be strictly greater than zero.

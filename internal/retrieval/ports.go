@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/platform/embedding"
 )
 
 // RecallRequest is the scope-bearing recall query. Authorization filters are
@@ -93,9 +92,32 @@ type Reranker interface {
 	Name() string
 }
 
+// ModelReranker is implemented by rerankers that can call a model selected at
+// request time. Adapters that ignore the model (offline lexical) implement only
+// Reranker; retrieval then falls back to Rerank.
+type ModelReranker interface {
+	Reranker
+	RerankWithModel(ctx context.Context, model, query string, candidates []Candidate) ([]Candidate, error)
+}
+
+// RerankModelResolver reports the rerank model bound to a knowledge base. An
+// empty knowledge-base id (cross-KB query) skips resolution.
+type RerankModelResolver interface {
+	RerankModel(ctx context.Context, tenantID, knowledgeBaseID string) (string, error)
+}
+
 // Embedder is the shared model port: ingestion writes and retrieval queries
 // through the same contract, so the configured model cannot drift between them.
-type Embedder = embedding.Embedder
+// Embedder is the model port owned by this package. Adapters implement it
+// structurally, so retrieval never depends on a provider package.
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+	// Dimension reports the vector length this adapter produces.
+	Dimension() int
+	// Name identifies the model so vectors from different models are never
+	// compared.
+	Name() string
+}
 
 // Authorizer re-checks the final evidence set against the authorization scope.
 // A scope can change between recall and delivery, so the evidence set is

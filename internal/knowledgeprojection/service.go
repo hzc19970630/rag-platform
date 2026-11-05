@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/contracts/evidence"
 	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/evidencestore"
 	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
@@ -56,8 +57,8 @@ type Service struct {
 	leaseTTL   time.Duration
 }
 
-func (s *Service) lease() inboxlease.Lease {
-	return inboxlease.New(s.leaseOwner.Get(), s.leaseTTL)
+func (s *Service) runtime() *pipeline.Runtime {
+	return pipeline.NewRuntime(s.db, &s.leaseOwner, s.leaseTTL)
 }
 
 func NewService(options Options) *Service {

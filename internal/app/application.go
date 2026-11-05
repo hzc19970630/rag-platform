@@ -7,12 +7,14 @@ import (
 
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
+	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/conversation"
 	"github.com/example/rag-platform/internal/datasource"
 	"github.com/example/rag-platform/internal/identity"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/knowledgebase"
 	"github.com/example/rag-platform/internal/knowledgeprojection"
+	"github.com/example/rag-platform/internal/modelregistry"
 	"github.com/example/rag-platform/internal/ops"
 	"github.com/example/rag-platform/internal/platform/docreader"
 	"github.com/example/rag-platform/internal/platform/evidenceindex"
@@ -43,6 +45,7 @@ type Application struct {
 	Tasks         *ingestion.TaskInspector
 	Retrieval     *retrieval.Service
 	Conversation  *conversation.Service
+	Models        *modelregistry.Registry
 	Prompts       *prompts.Registry
 	Ops           *ops.Service
 	Objects       *storage.S3Store
@@ -51,7 +54,13 @@ type Application struct {
 	Limiter       *ratelimit.Limiter
 }
 
-func Open(cfg config.Config) (*Application, error) {
+// Open builds the process-wide object graph. The metrics recorder is supplied
+// by the command so the API, worker and the dedicated /metrics listener share
+// one registry instead of reaching for a package-level default.
+func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
+	if recorder == nil {
+		recorder = metrics.Nop{}
+	}
 	database, err := persistence.Open(cfg.DatabaseURL, persistence.PoolOptions{
 		MaxOpenConns:    cfg.DatabaseMaxOpenConns,
 		MaxIdleConns:    cfg.DatabaseMaxIdleConns,
@@ -76,7 +85,7 @@ func Open(cfg config.Config) (*Application, error) {
 		closeDatabase(database)
 		return nil, err
 	}
-	identityService, err := identity.NewService(database, cfg.Auth)
+	identityService, err := identity.NewService(database, identityOptions(cfg.Auth))
 	if err != nil {
 		_ = authorization.Close()
 		closeDatabase(database)
@@ -146,6 +155,14 @@ func Open(cfg config.Config) (*Application, error) {
 		closeDatabase(database)
 		return nil, err
 	}
+	modelCatalog, err := newModelRegistry(database, cfg, chatter.Name(), reranker.Name(), embedder.Name(), probeOf(chatter), probeOf(reranker), probeOf(embedder))
+	if err != nil {
+		_ = reader.Close()
+		_ = publisher.Close()
+		closeDatabase(database)
+		return nil, err
+	}
+	knowledgeBaseService.SetModelCatalog(modelCatalog)
 	wikiGenerator, err := knowledgeprojection.NewGenerator(chatter, registry)
 	if err != nil {
 		_ = reader.Close()
@@ -169,21 +186,23 @@ func Open(cfg config.Config) (*Application, error) {
 	knowledgeBaseService.SetProjectionLifecycle(projectionService)
 	var queryRewriter retrieval.Rewriter
 	if cfg.Chat.QueryRewriteEnabled {
-		queryRewriter = conversation.NewQueryRewriter(chatter, registry, time.Duration(cfg.Chat.QueryRewriteTimeoutSec)*time.Second)
+		queryRewriter = conversation.NewQueryRewriter(chatter, registry, time.Duration(cfg.Chat.QueryRewriteTimeoutSec)*time.Second, recorder)
 	}
 	retrievalService := retrieval.NewService(retrieval.Options{
 		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcher(database),
 		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: reranker,
-		Authz: authorization, Defaults: cfg.Retrieval, Join: projectionService, Rewriter: queryRewriter,
+		Authz: authorization, Defaults: retrievalDefaults(cfg.Retrieval), Join: projectionService, Rewriter: queryRewriter, Metrics: recorder,
+		RerankModels: modelCatalog,
 	})
 	conversationService := conversation.NewService(conversation.Options{
-		DB: database, Authz: authorization, Retrieval: retrievalService, Chat: chatter,
+		DB: database, Authz: authorization, Retrieval: retrievalService, Chat: chatter, Models: modelCatalog,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
 		ChatRequestsPerDay: cfg.Limits.TenantChatRequestsPerDay,
 		HistoryTurns:       cfg.Chat.HistoryTurns,
 		HistoryTokenLimit:  cfg.Chat.HistoryTokenLimit,
+		Metrics:            recorder,
 	})
-	return &Application{DB: database, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

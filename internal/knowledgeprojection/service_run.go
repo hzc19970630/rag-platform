@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/example/rag-platform/internal/status"
@@ -260,7 +261,7 @@ func (s *Service) insertRunFor(tx *gorm.DB, knowledgeBase models.KnowledgeBase, 
 	if err := tx.Create(&stage).Error; err != nil {
 		return err
 	}
-	return enqueueStage(tx, &run, StageCollect, 0)
+	return reopenStage(tx, &run, StageCollect, 0)
 }
 
 func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRun) error {
@@ -294,12 +295,10 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 		// have succeeded before the failure was recorded, and Asynq keeps the
 		// completed task record. The next attempt number gives the enqueue a fresh
 		// task id, and a non-SUCCEEDED inbox lets the worker claim it again.
-		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", run.ID+":"+retryStage.Stage).Updates(map[string]any{
-			"status": inboxFailed, "processed_at": nil, "last_error": "", "lease_owner": "", "lease_until": nil, "updated_at": now,
-		}).Error; err != nil {
+		if err := pipeline.RequeueInbox(tx, run.ID+":"+retryStage.Stage, now); err != nil {
 			return err
 		}
-		if err := enqueueStage(tx, run, retryStage.Stage, retryStage.Attempts+1); err != nil {
+		if err := reopenStage(tx, run, retryStage.Stage, retryStage.Attempts+1); err != nil {
 			return err
 		}
 		run.Status = retryStatusFor(run.ProjectionType)

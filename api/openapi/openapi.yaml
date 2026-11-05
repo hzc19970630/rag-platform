@@ -66,6 +66,23 @@ components:
     GenericObject:
       type: object
       additionalProperties: true
+    RetrievalConfigOverride:
+      type: object
+      description: Optional knowledge-base tier fields; omitted fields keep the global default.
+      properties:
+        top_k: {type: integer}
+        embedding_top_k: {type: integer}
+        keyword_top_k: {type: integer}
+        vector_threshold: {type: number}
+        keyword_threshold: {type: number}
+        rerank_enabled: {type: boolean}
+        rerank_top_k: {type: integer}
+        rerank_threshold: {type: number}
+        context_token_limit: {type: integer}
+        adjacent_expansion: {type: integer}
+        max_adjacent_chunks: {type: integer}
+        rrf_k: {type: integer}
+        expansion_score_factor: {type: number}
     MeResponse:
       type: object
       properties:
@@ -108,6 +125,59 @@ components:
         items:
           type: array
           items: {$ref: '#/components/schemas/KnowledgeBase'}
+    KnowledgeBaseCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, maxLength: 255}
+        description: {type: string}
+    KnowledgeBaseUpdateRequest:
+      type: object
+      description: >-
+        Only supplied fields change. An empty chat_model or rerank_model clears
+        the knowledge-base override so the deployment default applies again.
+      properties:
+        name: {type: string, maxLength: 255}
+        description: {type: string}
+        retrieval_config: {$ref: '#/components/schemas/RetrievalConfigOverride'}
+        indexing_strategy: {type: object, additionalProperties: true}
+        embedding_model: {type: string}
+        embedding_dimension: {type: integer}
+        chat_model: {type: string}
+        rerank_model: {type: string}
+    KnowledgeBaseMember:
+      type: object
+      properties:
+        knowledgeBaseId: {type: string}
+        userId: {type: string}
+        role: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    KnowledgeBaseMemberList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/KnowledgeBaseMember'}
+    KnowledgeBaseMemberCreateRequest:
+      type: object
+      required: [user_id, role]
+      properties:
+        user_id: {type: string}
+        role: {type: string, enum: [viewer, editor]}
+    ConversationCreateRequest:
+      type: object
+      required: [knowledge_base_id]
+      properties:
+        knowledge_base_id: {type: string}
+        title: {type: string}
+    MessageCreateRequest:
+      type: object
+      required: [query]
+      properties:
+        query: {type: string}
+        requestId: {type: string}
+        sessionOverride: {type: string}
     KnowledgeBaseConfiguration:
       type: object
       additionalProperties: true
@@ -126,36 +196,57 @@ components:
         document: {type: object, additionalProperties: true}
         version: {type: object, additionalProperties: true}
         pipeline: {type: object, additionalProperties: true}
+        stages:
+          type: array
+          items: {type: object, additionalProperties: true}
     DocumentPage:
       type: object
       properties:
+        schemaVersion: {type: string}
+        knowledgeBaseId: {type: string}
         items:
           type: array
-          items: {$ref: '#/components/schemas/DocumentView'}
+          items: {$ref: '#/components/schemas/DocumentSummary'}
         nextCursor: {type: string}
+        hasMore: {type: boolean}
     Chunk:
       type: object
-      additionalProperties: true
       properties:
-        id: {type: string}
+        chunkId: {type: string}
         documentId: {type: string}
+        documentVersionId: {type: string}
+        knowledgeBaseId: {type: string}
+        parentId: {type: string}
+        ordinal: {type: integer}
         content: {type: string}
+        contentHash: {type: string}
         headingPath: {type: string}
         pageNumber: {type: integer}
+        sourcePath: {type: string}
+        startOffset: {type: integer}
+        endOffset: {type: integer}
+        status: {type: string}
     ChunkPage:
       type: object
       properties:
+        schemaVersion: {type: string}
+        documentId: {type: string}
+        versionId: {type: string}
+        status: {type: string}
         items:
           type: array
           items: {$ref: '#/components/schemas/Chunk'}
-        nextCursor: {type: string}
+        nextCursor: {type: integer}
+        hasMore: {type: boolean}
     EvidenceSet:
       type: object
       additionalProperties: true
       properties:
         schemaVersion: {type: string}
         requestId: {type: string}
+        authorizationScopeVersion: {type: string}
         query: {type: string}
+        plan: {type: object, additionalProperties: true}
         items:
           type: array
           items: {type: object, additionalProperties: true}
@@ -168,6 +259,7 @@ components:
       additionalProperties: true
       properties:
         id: {type: string}
+        tenantId: {type: string}
         knowledgeBaseId: {type: string}
         userId: {type: string}
         title: {type: string}
@@ -196,6 +288,439 @@ components:
     OpsMetrics:
       type: object
       additionalProperties: true
+    AuthConfig:
+      type: object
+      required: [oidcEnabled, devAuthEnabled, sessionCookie, sessionTTLHours]
+      properties:
+        oidcEnabled: {type: boolean}
+        oidcIssuer: {type: string}
+        devAuthEnabled: {type: boolean}
+        sessionCookie: {type: string}
+        sessionTTLHours: {type: integer}
+    DevLoginRequest:
+      type: object
+      properties:
+        userId: {type: string}
+        tenantId: {type: string}
+    DevLoginResponse:
+      type: object
+      required: [token, expiresAt, user, principal]
+      properties:
+        token: {type: string}
+        expiresAt: {type: string, format: date-time}
+        user: {type: object, additionalProperties: true}
+        principal: {type: object, additionalProperties: true}
+    RefreshResponse:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token: {type: string}
+        expiresAt: {type: string, format: date-time}
+    APIKey:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        keyPrefix: {type: string}
+        capabilities: {type: array, items: {type: string}}
+        knowledgeBaseIds: {type: array, items: {type: string}}
+        expiresAt: {type: string, format: date-time}
+        revokedAt: {type: string, format: date-time}
+        lastUsedAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+    APIKeyList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/APIKey'}}
+    APIKeyCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        capabilities: {type: array, items: {type: string}}
+        knowledgeBaseIds: {type: array, items: {type: string}}
+        expiresAt: {type: string, format: date-time}
+    APIKeyCreateResponse:
+      type: object
+      required: [apiKey, token]
+      properties:
+        apiKey: {$ref: '#/components/schemas/APIKey'}
+        token: {type: string}
+    TenantMember:
+      type: object
+      properties:
+        userId: {type: string}
+        email: {type: string}
+        displayName: {type: string}
+        role: {type: string}
+    TenantMemberList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/TenantMember'}}
+    TenantMemberCreateRequest:
+      type: object
+      required: [userId, role]
+      properties:
+        userId: {type: string}
+        role: {type: string}
+    TenantMemberUpdateRequest:
+      type: object
+      required: [role]
+      properties:
+        role: {type: string}
+    AuditEvent:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        actorId: {type: string}
+        action: {type: string}
+        resourceType: {type: string}
+        resourceId: {type: string}
+        allowed: {type: boolean}
+        reason: {type: string}
+        requestId: {type: string}
+        ipAddress: {type: string}
+        userAgent: {type: string}
+        createdAt: {type: string, format: date-time}
+    AuditEventList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/AuditEvent'}}
+    SearchRequest:
+      type: object
+      properties:
+        query: {type: string}
+        knowledgeBaseId: {type: string}
+        sessionOverride: {type: string}
+    WikiReviewRequest:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string}
+        note: {type: string}
+    WikiRollbackRequest:
+      type: object
+      required: [version_id]
+      properties:
+        version_id: {type: string}
+    GraphReviewRequest:
+      type: object
+      required: [action]
+      properties:
+        action: {type: string}
+        note: {type: string}
+    ConnectorConfig:
+      type: object
+      properties:
+        manifestUrl: {type: string}
+        requestsPerSecond: {type: number}
+        maxItemsPerRun: {type: integer}
+        aclMode: {type: string}
+    CredentialInput:
+      type: object
+      properties:
+        type: {type: string}
+        token: {type: string}
+        username: {type: string}
+        password: {type: string}
+    ConnectorCreateRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name: {type: string}
+        type: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        credential: {$ref: '#/components/schemas/CredentialInput'}
+        syncIntervalSeconds: {type: integer}
+        enabled: {type: boolean}
+    ConnectorUpdateRequest:
+      type: object
+      properties:
+        name: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        credential: {$ref: '#/components/schemas/CredentialInput'}
+        syncIntervalSeconds: {type: integer}
+        enabled: {type: boolean}
+    Connector:
+      type: object
+      properties:
+        id: {type: string}
+        tenantId: {type: string}
+        knowledgeBaseId: {type: string}
+        name: {type: string}
+        type: {type: string}
+        config: {$ref: '#/components/schemas/ConnectorConfig'}
+        enabled: {type: boolean}
+        syncIntervalSeconds: {type: integer}
+        nextSyncAt: {type: string, format: date-time}
+        lastSyncAt: {type: string, format: date-time}
+        hasCredential: {type: boolean}
+        createdBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    ConnectorList:
+      type: object
+      required: [connectors]
+      properties:
+        connectors:
+          type: array
+          items: {$ref: '#/components/schemas/Connector'}
+    ConnectorRun:
+      type: object
+      properties:
+        id: {type: string}
+        tenantId: {type: string}
+        connectorId: {type: string}
+        knowledgeBaseId: {type: string}
+        mode: {type: string}
+        status: {type: string}
+        cursor: {}
+        resumeOfRunId: {type: string}
+        triggeredBy: {type: string}
+        itemsTotal: {type: integer}
+        itemsCreated: {type: integer}
+        itemsUpdated: {type: integer}
+        itemsDeleted: {type: integer}
+        itemsSkipped: {type: integer}
+        itemsFailed: {type: integer}
+        errorSummary: {type: string}
+        cancelRequested: {type: boolean}
+        attempts: {type: integer}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {type: string, format: date-time}
+        createdAt: {type: string, format: date-time}
+    ConnectorRunList:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: {$ref: '#/components/schemas/ConnectorRun'}
+    ConnectorPermissions:
+      type: object
+      properties:
+        connectorId: {type: string}
+        knowledgeBaseId: {type: string}
+        sourceAcl: {type: string}
+        effectiveAcl: {type: string}
+        aclMode: {type: string}
+        aclVersion: {type: integer, format: int64}
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              userId: {type: string}
+              role: {type: string}
+    CancelResult:
+      type: object
+      required: [cancelled]
+      properties:
+        cancelled: {type: boolean}
+    StartResult:
+      type: object
+      required: [started]
+      properties:
+        started: {type: integer}
+    DocumentVersionSummary:
+      type: object
+      properties:
+        id: {type: string}
+        version: {type: integer}
+        sizeBytes: {type: integer, format: int64}
+        status: {type: string}
+        errorCode: {type: string}
+        errorMessage: {type: string}
+    DocumentSummary:
+      type: object
+      properties:
+        document: {type: object, additionalProperties: true}
+        version: {$ref: '#/components/schemas/DocumentVersionSummary'}
+        contentReady: {type: boolean}
+        previewable: {type: boolean}
+    DocumentStatus:
+      type: object
+      properties:
+        document: {type: object, additionalProperties: true}
+        version: {type: object, additionalProperties: true}
+        pipeline: {type: object, additionalProperties: true}
+        stages:
+          type: array
+          items: {type: object, additionalProperties: true}
+        contentReady: {type: boolean}
+        previewable: {type: boolean}
+    DocumentVersionPage:
+      type: object
+      properties:
+        schemaVersion: {type: string}
+        documentId: {type: string}
+        currentVersionId: {type: string}
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string}
+              version: {type: integer}
+              contentHash: {type: string}
+              sizeBytes: {type: integer, format: int64}
+              status: {type: string}
+              errorCode: {type: string}
+              errorMessage: {type: string}
+              current: {type: boolean}
+              contentReady: {type: boolean}
+              restorable: {type: boolean}
+              createdAt: {type: string, format: date-time}
+    DocumentPreview:
+      type: object
+      properties:
+        schemaVersion: {type: string}
+        documentId: {type: string}
+        versionId: {type: string}
+        knowledgeBaseId: {type: string}
+        filename: {type: string}
+        mimeType: {type: string}
+        status: {type: string}
+        title: {type: string}
+        language: {type: string}
+        parserVersion: {type: string}
+        blocks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        visibility: {type: string}
+    DocumentEnvelope:
+      type: object
+      required: [document]
+      properties:
+        document: {type: object, additionalProperties: true}
+    ProjectionState:
+      type: object
+      properties:
+        knowledgeBaseId: {type: string}
+        joinStatus: {type: string}
+        wikiEnabled: {type: boolean}
+        graphEnabled: {type: boolean}
+        runs: {type: array, items: {type: object, additionalProperties: true}}
+        relationRuns: {type: array, items: {type: object, additionalProperties: true}}
+        pages: {type: object, additionalProperties: true}
+        graph: {type: object, additionalProperties: true}
+    WikiPageDetail:
+      type: object
+      properties:
+        page: {type: object, additionalProperties: true}
+        version: {type: object, additionalProperties: true}
+        blocks: {type: array, items: {type: object, additionalProperties: true}}
+        sources: {type: array, items: {type: object, additionalProperties: true}}
+    WikiPageList:
+      type: object
+      required: [pages]
+      properties:
+        pages:
+          type: array
+          items: {type: object, additionalProperties: true}
+    WikiVersion:
+      type: object
+      additionalProperties: true
+    WikiVersionList:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items: {$ref: '#/components/schemas/WikiVersion'}
+    WikiRunDetail:
+      type: object
+      properties:
+        run: {type: object, additionalProperties: true}
+        stages: {type: array, items: {type: object, additionalProperties: true}}
+    WikiRunList:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: {type: object, additionalProperties: true}
+    KnowledgeSearchResult:
+      type: object
+      properties:
+        query: {type: string}
+        items:
+          type: array
+          items: {type: object, additionalProperties: true}
+        joined: {type: boolean}
+    GraphQueryResult:
+      type: object
+      properties:
+        query: {type: string}
+        snapshotId: {type: string}
+        depth: {type: integer}
+        nodes: {type: array, items: {type: object, additionalProperties: true}}
+        edges: {type: array, items: {type: object, additionalProperties: true}}
+        paths: {type: array, items: {type: object, additionalProperties: true}}
+        truncated: {type: boolean}
+        joined: {type: boolean}
+    GraphSnapshotDetail:
+      type: object
+      properties:
+        snapshot: {type: object, additionalProperties: true}
+        entities: {type: array, items: {type: object, additionalProperties: true}}
+        relations: {type: array, items: {type: object, additionalProperties: true}}
+        aliases: {type: array, items: {type: object, additionalProperties: true}}
+    GraphSnapshotList:
+      type: object
+      required: [snapshots]
+      properties:
+        snapshots:
+          type: array
+          items: {type: object, additionalProperties: true}
+    GraphRunDetail:
+      type: object
+      properties:
+        run: {type: object, additionalProperties: true}
+        stages: {type: array, items: {type: object, additionalProperties: true}}
+        snapshot: {type: object, additionalProperties: true}
+    GraphRunList:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: {type: object, additionalProperties: true}
+    DeadLetter:
+      type: object
+      additionalProperties: true
+    DeadLetterList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/DeadLetter'}
+    TaskInspection:
+      type: object
+      required: [task, outbox]
+      properties:
+        task: {type: object, additionalProperties: true}
+        inbox: {type: object, additionalProperties: true}
+        pipeline: {type: object, additionalProperties: true}
+        stage: {type: object, additionalProperties: true}
+        outbox: {type: array, items: {type: object, additionalProperties: true}}
+        deadLetter: {type: object, additionalProperties: true}
+    ReconcileReport:
+      type: object
+      properties:
+        documentsRepaired: {type: integer, format: int64}
+        versionsRepaired: {type: integer, format: int64}
+        stagesRequeued: {type: integer}
+        pipelinesCancelled: {type: integer}
+        inboxesExpired: {type: integer, format: int64}
+        deadLettersResolved: {type: integer, format: int64}
 paths:
 
   /api/v1/api-keys:
@@ -209,7 +734,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/APIKeyList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -222,13 +747,19 @@ paths:
       tags: [identity]
       summary: "POST /api/v1/api-keys"
       operationId: post_api_keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreateRequest'
       responses:
-        '200':
+        '201':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/APIKeyCreateResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -260,7 +791,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/AuditEventList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -280,7 +811,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/AuditEventList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -296,12 +827,8 @@ paths:
       operationId: get_auth_callback
       security: []
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '302':
+          description: Redirect to the web application
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -322,7 +849,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/AuthConfig'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -337,13 +864,19 @@ paths:
       summary: "POST /api/v1/auth/dev-login"
       operationId: post_auth_dev_login
       security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DevLoginResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -359,12 +892,8 @@ paths:
       operationId: post_auth_logout
       security: []
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No content
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -380,12 +909,8 @@ paths:
       operationId: get_auth_oidc_login
       security: []
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '302':
+          description: Redirect to the web application
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -406,7 +931,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/RefreshResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -426,7 +951,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/Chunk'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -446,7 +971,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/Connector'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -459,13 +984,19 @@ paths:
       tags: [connectors]
       summary: "PATCH /api/v1/connectors/{id}"
       operationId: patch_connectors_id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorUpdateRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/Connector'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -491,12 +1022,12 @@ paths:
       summary: "POST /api/v1/connectors/{id}/cancel"
       operationId: post_connectors_id_cancel
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/CancelResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -516,7 +1047,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorPermissions'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -536,7 +1067,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorRunList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -556,7 +1087,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorRun'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -571,12 +1102,12 @@ paths:
       summary: "POST /api/v1/connectors/{id}/runs/{runId}/cancel"
       operationId: post_connectors_id_runs_runId_cancel
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorRun'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -591,12 +1122,12 @@ paths:
       summary: "POST /api/v1/connectors/{id}/runs/{runId}/retry"
       operationId: post_connectors_id_runs_runId_retry
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorRun'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -611,12 +1142,12 @@ paths:
       summary: "POST /api/v1/connectors/{id}/sync"
       operationId: post_connectors_id_sync
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorRun'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -636,7 +1167,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentView'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -687,7 +1218,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentPreview'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -703,11 +1234,10 @@ paths:
       operationId: get_documents_id_preview
       responses:
         '200':
-          description: Success
+          description: Original file bytes with the stored MIME type
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+            application/octet-stream:
+              schema: {type: string, format: binary}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -722,12 +1252,8 @@ paths:
       summary: "POST /api/v1/documents/{id}/purge"
       operationId: post_documents_id_purge
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No content
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -742,12 +1268,12 @@ paths:
       summary: "POST /api/v1/documents/{id}/reparse"
       operationId: post_documents_id_reparse
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentView'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -767,7 +1293,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -787,7 +1313,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentStatus'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -807,7 +1333,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentVersionPage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -827,7 +1353,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentView'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -847,7 +1373,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphRunDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -862,12 +1388,12 @@ paths:
       summary: "POST /api/v1/graph/runs/{runId}/retry"
       operationId: post_graph_runs_runId_retry
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphRunDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -887,7 +1413,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphSnapshotDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -901,13 +1427,19 @@ paths:
       tags: [projections]
       summary: "POST /api/v1/graph/snapshots/{snapshotId}/review"
       operationId: post_graph_snapshots_snapshotId_review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphReviewRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphSnapshotDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -940,13 +1472,19 @@ paths:
       tags: [knowledge-bases]
       summary: "POST /api/v1/knowledge-bases"
       operationId: post_knowledge_bases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeBaseCreateRequest'
       responses:
-        '200':
+        '201':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeBase'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -966,7 +1504,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeBase'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -979,13 +1517,19 @@ paths:
       tags: [knowledge-bases]
       summary: "PATCH /api/v1/knowledge-bases/{id}"
       operationId: patch_knowledge_bases_id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeBaseUpdateRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeBase'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1036,7 +1580,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ConnectorList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1049,13 +1593,19 @@ paths:
       tags: [knowledge-bases]
       summary: "POST /api/v1/knowledge-bases/{id}/connectors"
       operationId: post_knowledge_bases_id_connectors
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorCreateRequest'
       responses:
-        '200':
+        '201':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/Connector'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1088,13 +1638,23 @@ paths:
       tags: [knowledge-bases]
       summary: "POST /api/v1/knowledge-bases/{id}/documents"
       operationId: post_knowledge_bases_id_documents
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary}
+                document_id: {type: string}
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DocumentView'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1114,7 +1674,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphQueryResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1129,12 +1689,12 @@ paths:
       summary: "POST /api/v1/knowledge-bases/{id}/graph/rebuild"
       operationId: post_knowledge_bases_id_graph_rebuild
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/StartResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1154,7 +1714,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphRunList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1174,7 +1734,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/GraphSnapshotList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1194,7 +1754,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeSearchResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1214,7 +1774,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeBaseMemberList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1227,13 +1787,19 @@ paths:
       tags: [knowledge-bases]
       summary: "POST /api/v1/knowledge-bases/{id}/members"
       operationId: post_knowledge_bases_id_members
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeBaseMemberCreateRequest'
       responses:
-        '200':
+        '201':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeBaseMember'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1265,7 +1831,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ProjectionState'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1278,14 +1844,21 @@ paths:
     put:
       tags: [knowledge-bases]
       summary: "PUT /api/v1/knowledge-bases/{id}/retrieval-config"
+      description: Whole replacement; an empty body clears the knowledge-base tier.
       operationId: put_knowledge_bases_id_retrieval_config
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetrievalConfigOverride'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/KnowledgeBaseConfiguration'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1300,12 +1873,12 @@ paths:
       summary: "POST /api/v1/knowledge-bases/{id}/sync/cancel"
       operationId: post_knowledge_bases_id_sync_cancel
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/CancelResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1325,7 +1898,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiPageList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1340,12 +1913,12 @@ paths:
       summary: "POST /api/v1/knowledge-bases/{id}/wiki/rebuild"
       operationId: post_knowledge_bases_id_wiki_rebuild
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/StartResult'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1365,7 +1938,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiRunList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1405,7 +1978,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/DeadLetterList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1420,12 +1993,8 @@ paths:
       summary: "POST /api/v1/ops/dead-letters/{id}/discard"
       operationId: post_ops_dead_letters_id_discard
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No content
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1440,12 +2009,8 @@ paths:
       summary: "POST /api/v1/ops/dead-letters/{id}/retry"
       operationId: post_ops_dead_letters_id_retry
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No content
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1481,11 +2046,10 @@ paths:
       operationId: get_ops_metrics_prometheus
       responses:
         '200':
-          description: Success
+          description: Prometheus text exposition
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+            text/plain:
+              schema: {type: string}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1500,12 +2064,8 @@ paths:
       summary: "POST /api/v1/ops/pipelines/{id}/cancel"
       operationId: post_ops_pipelines_id_cancel
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No content
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1525,7 +2085,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/ReconcileReport'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1545,7 +2105,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/TaskInspection'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1561,11 +2121,10 @@ paths:
       operationId: get_requests_requestID_events
       responses:
         '200':
-          description: Success
+          description: Server-sent events
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+            text/event-stream:
+              schema: {type: string}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1579,6 +2138,12 @@ paths:
       tags: [conversations]
       summary: "POST /api/v1/search"
       operationId: post_search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
       responses:
         '200':
           description: Success
@@ -1618,13 +2183,19 @@ paths:
       tags: [conversations]
       summary: "POST /api/v1/sessions"
       operationId: post_sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreateRequest'
       responses:
-        '200':
+        '201':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/Conversation'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1644,7 +2215,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/MessageList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1657,13 +2228,18 @@ paths:
       tags: [conversations]
       summary: "POST /api/v1/sessions/{id}/messages"
       operationId: post_sessions_id_messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequest'
       responses:
         '200':
-          description: Success
+          description: Server-sent events
           content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+            text/event-stream:
+              schema: {type: string}
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1683,7 +2259,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/TenantMemberList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1696,13 +2272,19 @@ paths:
       tags: [identity]
       summary: "POST /api/v1/tenant/members"
       operationId: post_tenant_members
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMemberCreateRequest'
       responses:
-        '200':
+        '201':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/TenantMember'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1716,13 +2298,15 @@ paths:
       tags: [identity]
       summary: "PATCH /api/v1/tenant/members/{userID}"
       operationId: patch_tenant_members_userID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMemberUpdateRequest'
       responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenericObject'
+        '204':
+          description: No content
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1753,7 +2337,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiPageDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1767,13 +2351,19 @@ paths:
       tags: [projections]
       summary: "POST /api/v1/wiki/pages/{pageId}/rollback"
       operationId: post_wiki_pages_pageId_rollback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WikiRollbackRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiPageDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1793,7 +2383,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiVersionList'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1813,7 +2403,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiPageDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1827,13 +2417,19 @@ paths:
       tags: [projections]
       summary: "POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review"
       operationId: post_wiki_pages_pageId_versions_versionId_review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WikiReviewRequest'
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiVersion'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1853,7 +2449,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiRunDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1868,12 +2464,12 @@ paths:
       summary: "POST /api/v1/wiki/runs/{runId}/retry"
       operationId: post_wiki_runs_runId_retry
       responses:
-        '200':
+        '202':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GenericObject'
+                $ref: '#/components/schemas/WikiRunDetail'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

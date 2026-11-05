@@ -21,10 +21,11 @@ func NewReranker(cfg config.Config) (retrieval.Reranker, error) {
 		return retrieval.LexicalReranker{}, nil
 	case "remote":
 		return rerank.NewRemoteReranker(rerank.RemoteRerankerOptions{
-			BaseURL: cfg.Rerank.BaseURL,
-			APIKey:  cfg.Rerank.APIKey,
-			Model:   cfg.Rerank.Model,
-			Timeout: time.Duration(cfg.Rerank.TimeoutSec) * time.Second,
+			BaseURL:   cfg.Rerank.BaseURL,
+			APIKey:    cfg.Rerank.APIKey,
+			Model:     cfg.Rerank.Model,
+			Timeout:   time.Duration(cfg.Rerank.TimeoutSec) * time.Second,
+			HealthURL: cfg.Rerank.HealthURL,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported RERANK_SOURCE %q", cfg.Rerank.Source)

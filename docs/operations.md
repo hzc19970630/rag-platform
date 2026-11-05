@@ -159,6 +159,17 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 注意：纯检索不调用生成模型；`modelErrors24h` 只反映问答生成失败。入库 Embedding 失败体现在 `operations.stages.embed.failed`；Worker 进程内的 `model_errors_total{stage="embed"}` 不通过 `/ops/metrics` 暴露。
 
+### 8.1 Chat / Rerank 模型绑定
+
+- 可路由模型来自部署配置：`LLM_CHAT_MODEL`、`CHAT_MODELS`、`LLM_RERANK_MODEL`、`RERANK_MODELS`。每项可写成 `name` 或 `name@version`；版本只用于审计，不参与供应商请求。`CHAT_MODELS`/`RERANK_MODELS` 只在对应 `*_SOURCE=remote` 时额外登记，离线适配器固定一个模型。改配置后需重启 api（目录在启动时构建）。
+- 知识库绑定通过 `PATCH /api/v1/knowledge-bases/{id}` 的 `chat_model`、`rerank_model` 字段设置；空串清除覆盖，回到部署默认。绑定写入前会校验模型已登记且能力匹配，未登记返回 400；每次实际变化都写 `audit_logs`（`resource_type=model_binding`，`reason` 含新/旧模型与版本），可用 `GET /api/v1/audit` 按资源排查。
+- 运行路径会做两次保护：绑定模型已不在目录中（例如回滚部署）时自动降级到部署默认；绑定供应商健康探测失败时也降级到默认，探测结果缓存 30 秒。默认模型同样不可用时请求失败（问答记录 `model_error`），不会静默切换。
+- 探测地址默认从各适配器的 base URL 推导：chat 与 embedding 用 `<base>/models`，rerank 用 `<base>/health`；可用 `CHAT_HEALTH_URL`、`EMBEDDING_HEALTH_URL`、`RERANK_HEALTH_URL` 覆盖（留空即用默认）。探测是带 Bearer 凭据的 `GET`，单次超时 3 秒；401/403（凭据被拒）和 5xx 判为不健康，其余状态（含 404）只要求网关可达，避免因供应商没有标准健康路径而误降级。
+- 当前健康快照可通过租户 owner/admin 的 `GET /api/v1/ops/metrics` 查看（`modelHealth` 数组，含 `model`、`provider`、`version`、`healthy`、`checkedAt`），也可从同一鉴权路由 `GET /api/v1/ops/metrics/prometheus` 抓取 `model_health{model,provider,version}` gauge（1 健康、0 不健康）。`model_health` 目前只在 API 进程的这条路由上暴露，不在 `METRICS_ADDR` 的无鉴权监听器里；需要自动告警时，让抓取端带 owner/admin 会话访问该路由，或对 `modelHealth` 做巡检。
+- `TENANT_MODEL_REQUESTS_PER_MINUTE` 限制每租户、每能力（chat/rerank/embedding）每分钟的模型解析次数，超限返回 `quota_exceeded`。它按进程内固定 1 分钟窗口计数，多副本部署时每个副本各自计数；需要全局硬预算时应在上游网关限流。
+- Embedding 绑定不受这套运行时切换影响：知识库有文档后仍不能改模型或维度，需走受管重建。
+- 迁移 `migrations/postgres/0020_model_registry.sql` 只新增 `chat_model`、`chat_model_version`、`rerank_model`、`rerank_model_version` 四列，使用 `ADD COLUMN IF NOT EXISTS`，可重复执行；回滚时删除这四列即可（不触碰 Embedding 列）。
+
 ## 9. 身份与密钥轮换
 
 - **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键。

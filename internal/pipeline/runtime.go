@@ -115,13 +115,38 @@ func (r *Runtime) Fail(ctx context.Context, stage Stage, code, message string) e
 }
 
 func (r *Runtime) FinishInbox(ctx context.Context, key, status string, processErr error) error {
-	now := time.Now()
+	return r.db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).
+		Updates(inboxFinishValues(status, processErr, time.Now())).Error
+}
+
+// SettleInbox marks a row finished from a recovery path that repaired work
+// without running the stage handler. It shares the terminal field set with
+// FinishInbox so recovery and the worker cannot drift.
+func SettleInbox(tx *gorm.DB, key, status string, now time.Time) error {
+	return tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).
+		Updates(inboxFinishValues(status, nil, now)).Error
+}
+
+// RequeueInbox makes a finished inbox row claimable again. A retry is not a
+// success: the row stays FAILED, but cleared processed_at and lease fields let
+// the next attempt claim it.
+func RequeueInbox(tx *gorm.DB, key string, now time.Time) error {
+	return tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Updates(map[string]any{
+		"status": InboxFailed, "processed_at": nil, "last_error": "",
+		"lease_owner": "", "lease_until": nil, "updated_at": now,
+	}).Error
+}
+
+func inboxFinishValues(status string, processErr error, now time.Time) map[string]any {
 	values := map[string]any{"status": status, "lease_owner": "", "lease_until": nil, "updated_at": now}
 	if status == InboxSucceeded || status == InboxFailed {
 		values["processed_at"] = now
 	}
+	if status == InboxSucceeded {
+		values["last_error"] = ""
+	}
 	if processErr != nil {
 		values["last_error"] = processErr.Error()
 	}
-	return r.db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Updates(values).Error
+	return values
 }

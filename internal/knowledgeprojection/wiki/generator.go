@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/example/rag-platform/internal/contracts/evidence"
-	"github.com/example/rag-platform/internal/platform/llm"
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/prompts"
 )
@@ -26,7 +26,7 @@ const (
 )
 
 type Generator struct {
-	chatter       llm.Chatter
+	chatter       Chatter
 	template      string
 	promptVersion string
 }
@@ -41,7 +41,7 @@ type GeneratedPage struct {
 	SourceHash string
 }
 
-func NewGenerator(chatter llm.Chatter, registry *prompts.Registry) (*Generator, error) {
+func NewGenerator(chatter Chatter, registry *prompts.Registry) (*Generator, error) {
 	if chatter == nil {
 		return nil, fmt.Errorf("wiki generation requires a chat adapter")
 	}
@@ -173,21 +173,21 @@ func (g *Generator) block(ctx context.Context, pkg evidence.Package, pageTitle, 
 	if len(selected) > maxChunksPerBlock {
 		selected = selected[:maxChunksPerBlock]
 	}
-	evidence := make([]llm.EvidenceItem, 0, len(selected))
+	evidence := make([]model.EvidenceItem, 0, len(selected))
 	ids := make([]string, 0, len(selected))
 	queryParts := []string{pageTitle}
 	if strings.TrimSpace(heading) != "" {
 		queryParts = append(queryParts, heading)
 	}
 	for index, chunk := range selected {
-		evidence = append(evidence, llm.EvidenceItem{Index: index + 1, ChunkID: chunk.ID, HeadingPath: chunk.HeadingPath, Text: chunk.Content})
+		evidence = append(evidence, model.EvidenceItem{Index: index + 1, ChunkID: chunk.ID, HeadingPath: chunk.HeadingPath, Text: chunk.Content})
 		ids = append(ids, chunk.ID)
 		if index < 2 {
 			queryParts = append(queryParts, chunk.Content)
 		}
 	}
 	query := strings.TrimSpace(strings.Join(queryParts, " "))
-	response, err := g.chatter.Complete(ctx, llm.ChatRequest{
+	response, err := g.chatter.Complete(ctx, model.ChatRequest{
 		ContextTemplate: g.template,
 		Query:           query,
 		Evidence:        evidence,

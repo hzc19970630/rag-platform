@@ -137,6 +137,9 @@ type PermissionMappingView struct {
 	Members         []PermissionMemberView `json:"members"`
 }
 
+// Service is the dependency container shared by the datasource managers.
+// Connector management, sync runs and maintenance have separate entry points
+// but still share the tenant boundary, credential cipher and ingestion port.
 type Service struct {
 	db            *gorm.DB
 	authz         *authz.Service
@@ -145,6 +148,10 @@ type Service struct {
 	ingestion     *ingestion.Service
 	worker        *Worker
 	maxItemsLimit int
+
+	connectors  *ConnectorManager
+	runs        *SyncRunManager
+	maintenance *MaintenanceManager
 }
 
 func NewService(db *gorm.DB, authorizer *authz.Service, cipher *secrets.Cipher, ingestionService *ingestion.Service, fetchOptions FetchOptions, maxItemsPerRun int) *Service {
@@ -154,463 +161,40 @@ func NewService(db *gorm.DB, authorizer *authz.Service, cipher *secrets.Cipher, 
 	fetcher := NewFetcher(fetchOptions)
 	service := &Service{db: db, authz: authorizer, cipher: cipher, fetcher: fetcher, ingestion: ingestionService, maxItemsLimit: maxItemsPerRun}
 	service.worker = NewWorker(db, cipher, fetcher, ingestionService)
+	service.connectors = &ConnectorManager{Service: service}
+	service.runs = &SyncRunManager{Service: service}
+	service.maintenance = &MaintenanceManager{Service: service}
 	return service
+}
+
+// Connectors, Runs and Maintenance expose the split use-case surface. The
+// accessors stay lazy so tests can construct a Service with only the
+// dependencies the exercised slice needs.
+func (s *Service) Connectors() *ConnectorManager {
+	if s.connectors == nil {
+		s.connectors = &ConnectorManager{Service: s}
+	}
+	return s.connectors
+}
+
+func (s *Service) Runs() *SyncRunManager {
+	if s.runs == nil {
+		s.runs = &SyncRunManager{Service: s}
+	}
+	return s.runs
+}
+
+func (s *Service) Maintenance() *MaintenanceManager {
+	if s.maintenance == nil {
+		s.maintenance = &MaintenanceManager{Service: s}
+	}
+	return s.maintenance
 }
 
 // ProcessSync runs one durable sync attempt. The worker entry point lives on
 // the service so cmd/worker only needs the application container.
 func (s *Service) ProcessSync(ctx context.Context, task SyncTask) error {
 	return s.worker.Process(ctx, task)
-}
-
-func (s *Service) Create(ctx context.Context, principal authz.Principal, knowledgeBaseID string, input CreateConnectorInput) (ConnectorView, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return ConnectorView{}, err
-	}
-	if _, err := s.authorizedKnowledgeBase(ctx, principal, knowledgeBaseID, "write"); err != nil {
-		return ConnectorView{}, err
-	}
-	name := strings.TrimSpace(input.Name)
-	if name == "" {
-		return ConnectorView{}, apperror.Invalidf("connector name is required")
-	}
-	if len(name) > 255 {
-		return ConnectorView{}, apperror.Invalidf("connector name must be at most 255 characters")
-	}
-	connectorType := strings.TrimSpace(input.Type)
-	if connectorType == "" {
-		connectorType = TypeHTTPManifest
-	}
-	if connectorType != TypeHTTPManifest {
-		return ConnectorView{}, apperror.Invalidf("unsupported connector type")
-	}
-	config, err := s.normalizeConfig(input.Config)
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	if input.SyncIntervalSeconds < 0 || input.SyncIntervalSeconds > 30*24*60*60 {
-		return ConnectorView{}, apperror.Invalidf("sync interval must be between 0 and 30 days")
-	}
-	credentialRef, err := s.sealCredential(input.Credential)
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	id, err := newID("conn")
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	encodedConfig, err := json.Marshal(config)
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	enabled := true
-	if input.Enabled != nil {
-		enabled = *input.Enabled
-	}
-	now := time.Now()
-	connector := models.Connector{
-		ID: id, TenantID: principal.TenantID, KnowledgeBaseID: knowledgeBaseID, Name: name, Type: connectorType,
-		Config: string(encodedConfig), CredentialRef: credentialRef, Enabled: enabled,
-		SyncIntervalSeconds: input.SyncIntervalSeconds, CreatedBy: principal.SubjectID,
-	}
-	if input.SyncIntervalSeconds > 0 {
-		next := now.Add(time.Duration(input.SyncIntervalSeconds) * time.Second)
-		connector.NextSyncAt = &next
-	}
-	if err := s.db.WithContext(ctx).Create(&connector).Error; err != nil {
-		if isUniqueViolation(err) {
-			return ConnectorView{}, fmt.Errorf("%w: a connector with this name already exists", apperror.ErrConflict)
-		}
-		return ConnectorView{}, fmt.Errorf("create connector: %w", err)
-	}
-	if err := s.audit(ctx, principal, "write", connector.ID, "connector_created"); err != nil {
-		return ConnectorView{}, err
-	}
-	return connectorView(connector), nil
-}
-
-func (s *Service) List(ctx context.Context, principal authz.Principal, knowledgeBaseID string) ([]ConnectorView, error) {
-	if _, err := s.authorizedKnowledgeBase(ctx, principal, knowledgeBaseID, "read"); err != nil {
-		return nil, err
-	}
-	var rows []models.Connector
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND knowledge_base_id = ?", principal.TenantID, knowledgeBaseID).Order("created_at DESC").Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list connectors: %w", err)
-	}
-	views := make([]ConnectorView, 0, len(rows))
-	for _, row := range rows {
-		views = append(views, connectorView(row))
-	}
-	return views, nil
-}
-
-func (s *Service) Get(ctx context.Context, principal authz.Principal, connectorID string) (ConnectorView, error) {
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "read")
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	return connectorView(connector), nil
-}
-
-func (s *Service) Update(ctx context.Context, principal authz.Principal, connectorID string, input UpdateConnectorInput) (ConnectorView, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return ConnectorView{}, err
-	}
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "write")
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	updates := map[string]any{"updated_at": time.Now()}
-	if input.Name != nil {
-		name := strings.TrimSpace(*input.Name)
-		if name == "" {
-			return ConnectorView{}, apperror.Invalidf("connector name cannot be empty")
-		}
-		if len(name) > 255 {
-			return ConnectorView{}, apperror.Invalidf("connector name must be at most 255 characters")
-		}
-		updates["name"] = name
-	}
-	if input.Config != nil {
-		config, err := s.normalizeConfig(*input.Config)
-		if err != nil {
-			return ConnectorView{}, err
-		}
-		encoded, err := json.Marshal(config)
-		if err != nil {
-			return ConnectorView{}, err
-		}
-		updates["config"] = string(encoded)
-	}
-	if input.Credential != nil {
-		credentialRef, err := s.sealCredential(input.Credential)
-		if err != nil {
-			return ConnectorView{}, err
-		}
-		updates["credential_ref"] = credentialRef
-	}
-	if input.SyncIntervalSeconds != nil {
-		interval := *input.SyncIntervalSeconds
-		if interval < 0 || interval > 30*24*60*60 {
-			return ConnectorView{}, apperror.Invalidf("sync interval must be between 0 and 30 days")
-		}
-		updates["sync_interval_seconds"] = interval
-		if interval == 0 {
-			updates["next_sync_at"] = nil
-		} else {
-			next := time.Now().Add(time.Duration(interval) * time.Second)
-			updates["next_sync_at"] = &next
-		}
-	}
-	if input.Enabled != nil {
-		updates["enabled"] = *input.Enabled
-		if !*input.Enabled {
-			updates["next_sync_at"] = nil
-		}
-	}
-	if err := s.db.WithContext(ctx).Model(&models.Connector{}).Where("tenant_id = ? AND id = ?", principal.TenantID, connector.ID).Updates(updates).Error; err != nil {
-		if isUniqueViolation(err) {
-			return ConnectorView{}, fmt.Errorf("%w: a connector with this name already exists", apperror.ErrConflict)
-		}
-		return ConnectorView{}, fmt.Errorf("update connector: %w", err)
-	}
-	if err := s.audit(ctx, principal, "write", connector.ID, "connector_updated"); err != nil {
-		return ConnectorView{}, err
-	}
-	connector, err = s.loadConnector(ctx, principal.TenantID, connector.ID)
-	if err != nil {
-		return ConnectorView{}, err
-	}
-	return connectorView(connector), nil
-}
-
-func (s *Service) Delete(ctx context.Context, principal authz.Principal, connectorID string) error {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return err
-	}
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "delete")
-	if err != nil {
-		return err
-	}
-	var active int64
-	if err := s.db.WithContext(ctx).Model(&models.SyncRun{}).Where("connector_id = ? AND status IN ?", connector.ID, []string{StatusPending, StatusRunning}).Count(&active).Error; err != nil {
-		return fmt.Errorf("check active sync runs: %w", err)
-	}
-	if active > 0 {
-		return fmt.Errorf("%w: cancel the active sync run before deleting the connector", apperror.ErrConflict)
-	}
-	if err := s.db.WithContext(ctx).Delete(&models.Connector{}, "tenant_id = ? AND id = ?", principal.TenantID, connector.ID).Error; err != nil {
-		return fmt.Errorf("delete connector: %w", err)
-	}
-	return s.audit(ctx, principal, "delete", connector.ID, "connector_deleted")
-}
-
-func (s *Service) TriggerSync(ctx context.Context, principal authz.Principal, connectorID string) (RunView, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return RunView{}, err
-	}
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "write")
-	if err != nil {
-		return RunView{}, err
-	}
-	if !connector.Enabled {
-		return RunView{}, apperror.Invalidf("connector must be enabled before syncing")
-	}
-	run, err := s.createRun(ctx, connector, ModeManual, "", "{}", principal.SubjectID)
-	if err != nil {
-		return RunView{}, err
-	}
-	if err := s.audit(ctx, principal, "write", connector.ID, "sync_triggered:"+run.ID); err != nil {
-		return RunView{}, err
-	}
-	return runView(run), nil
-}
-
-func (s *Service) ListRuns(ctx context.Context, principal authz.Principal, connectorID string, limit int) ([]RunView, error) {
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "read")
-	if err != nil {
-		return nil, err
-	}
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	var runs []models.SyncRun
-	if err := s.db.WithContext(ctx).Where("connector_id = ?", connector.ID).Order("created_at DESC").Limit(limit).Find(&runs).Error; err != nil {
-		return nil, fmt.Errorf("list sync runs: %w", err)
-	}
-	views := make([]RunView, 0, len(runs))
-	for _, run := range runs {
-		views = append(views, runView(run))
-	}
-	return views, nil
-}
-
-func (s *Service) GetRun(ctx context.Context, principal authz.Principal, connectorID, runID string) (RunView, error) {
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "read")
-	if err != nil {
-		return RunView{}, err
-	}
-	var run models.SyncRun
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND connector_id = ? AND id = ?", principal.TenantID, connector.ID, runID).First(&run).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return RunView{}, apperror.ErrNotFound
-		}
-		return RunView{}, fmt.Errorf("load sync run: %w", err)
-	}
-	return runView(run), nil
-}
-
-func (s *Service) RetryRun(ctx context.Context, principal authz.Principal, connectorID, runID string) (RunView, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return RunView{}, err
-	}
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "write")
-	if err != nil {
-		return RunView{}, err
-	}
-	var source models.SyncRun
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND connector_id = ? AND id = ?", principal.TenantID, connector.ID, runID).First(&source).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return RunView{}, apperror.ErrNotFound
-		}
-		return RunView{}, fmt.Errorf("load sync run: %w", err)
-	}
-	switch source.Status {
-	case StatusFailed, StatusPartial, StatusCancelled:
-	default:
-		return RunView{}, fmt.Errorf("%w: only a failed, partial or cancelled run can be retried", apperror.ErrConflict)
-	}
-	cursor := source.Cursor
-	if strings.TrimSpace(cursor) == "" {
-		cursor = "{}"
-	}
-	run, err := s.createRun(ctx, connector, ModeResume, source.ID, cursor, principal.SubjectID)
-	if err != nil {
-		return RunView{}, err
-	}
-	if err := s.audit(ctx, principal, "write", connector.ID, "sync_retried:"+source.ID+"->"+run.ID); err != nil {
-		return RunView{}, err
-	}
-	return runView(run), nil
-}
-
-func (s *Service) CancelRun(ctx context.Context, principal authz.Principal, connectorID, runID string) (RunView, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return RunView{}, err
-	}
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "write")
-	if err != nil {
-		return RunView{}, err
-	}
-	var run models.SyncRun
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND connector_id = ? AND id = ?", principal.TenantID, connector.ID, runID).First(&run).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return RunView{}, apperror.ErrNotFound
-		}
-		return RunView{}, fmt.Errorf("load sync run: %w", err)
-	}
-	now := time.Now()
-	switch run.Status {
-	case StatusPending:
-		if err := s.db.WithContext(ctx).Model(&models.SyncRun{}).Where("id = ? AND status = ?", run.ID, StatusPending).
-			Updates(map[string]any{"status": StatusCancelled, "cancel_requested": true, "finished_at": &now, "updated_at": now}).Error; err != nil {
-			return RunView{}, fmt.Errorf("cancel sync run: %w", err)
-		}
-	case StatusRunning:
-		if err := s.db.WithContext(ctx).Model(&models.SyncRun{}).Where("id = ? AND status = ?", run.ID, StatusRunning).
-			Updates(map[string]any{"cancel_requested": true, "updated_at": now}).Error; err != nil {
-			return RunView{}, fmt.Errorf("cancel sync run: %w", err)
-		}
-	}
-	if err := s.audit(ctx, principal, "write", connector.ID, "sync_cancelled:"+run.ID); err != nil {
-		return RunView{}, err
-	}
-	run, err = s.reloadRun(ctx, run.ID)
-	if err != nil {
-		return RunView{}, err
-	}
-	return runView(run), nil
-}
-
-func (s *Service) CancelConnector(ctx context.Context, principal authz.Principal, connectorID string) (int, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return 0, err
-	}
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "write")
-	if err != nil {
-		return 0, err
-	}
-	count, err := s.cancelActiveRuns(ctx, []string{connector.ID})
-	if err != nil {
-		return 0, err
-	}
-	if err := s.audit(ctx, principal, "write", connector.ID, "sync_cancelled_connector"); err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func (s *Service) CancelKnowledgeBase(ctx context.Context, principal authz.Principal, knowledgeBaseID string) (int, error) {
-	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
-		return 0, err
-	}
-	if _, err := s.authorizedKnowledgeBase(ctx, principal, knowledgeBaseID, "write"); err != nil {
-		return 0, err
-	}
-	var ids []string
-	if err := s.db.WithContext(ctx).Model(&models.Connector{}).Where("tenant_id = ? AND knowledge_base_id = ?", principal.TenantID, knowledgeBaseID).Pluck("id", &ids).Error; err != nil {
-		return 0, fmt.Errorf("list knowledge base connectors: %w", err)
-	}
-	count, err := s.cancelActiveRuns(ctx, ids)
-	if err != nil {
-		return 0, err
-	}
-	if err := s.audit(ctx, principal, "write", knowledgeBaseID, "sync_cancelled_knowledge_base"); err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-func (s *Service) Permissions(ctx context.Context, principal authz.Principal, connectorID string) (PermissionMappingView, error) {
-	connector, err := s.authorizedConnector(ctx, principal, connectorID, "read")
-	if err != nil {
-		return PermissionMappingView{}, err
-	}
-	var knowledgeBase models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, connector.KnowledgeBaseID).First(&knowledgeBase).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return PermissionMappingView{}, apperror.ErrNotFound
-		}
-		return PermissionMappingView{}, fmt.Errorf("load knowledge base: %w", err)
-	}
-	var members []models.KnowledgeBaseMember
-	if err := s.db.WithContext(ctx).Where("knowledge_base_id = ?", connector.KnowledgeBaseID).Order("user_id").Find(&members).Error; err != nil {
-		return PermissionMappingView{}, fmt.Errorf("list knowledge base members: %w", err)
-	}
-	config := decodeConfig(connector.Config)
-	views := make([]PermissionMemberView, 0, len(members))
-	for _, member := range members {
-		views = append(views, PermissionMemberView{UserID: member.UserID, Role: member.Role})
-	}
-	return PermissionMappingView{
-		ConnectorID: connector.ID, KnowledgeBaseID: connector.KnowledgeBaseID,
-		SourceACL: "none", EffectiveACL: "knowledge_base_members", ACLMode: config.ACLMode,
-		ACLVersion: knowledgeBase.ACLVersion, Members: views,
-	}, nil
-}
-
-// ScheduleDue turns due connectors into durable PENDING runs. It is called from
-// the worker maintenance loop, not from the API request path.
-func (s *Service) ScheduleDue(ctx context.Context, limit int) (int, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-	now := time.Now()
-	var connectors []models.Connector
-	if err := s.db.WithContext(ctx).
-		Where("enabled = TRUE AND next_sync_at IS NOT NULL AND next_sync_at <= ?", now).
-		Order("next_sync_at").Limit(limit).Find(&connectors).Error; err != nil {
-		return 0, fmt.Errorf("list due connectors: %w", err)
-	}
-	triggered := 0
-	var firstErr error
-	for _, connector := range connectors {
-		_, err := s.createRun(ctx, connector, ModeScheduled, "", "{}", "scheduler")
-		if err != nil && !errors.Is(err, apperror.ErrConflict) {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		if err == nil {
-			triggered++
-		}
-		var next *time.Time
-		if connector.SyncIntervalSeconds > 0 {
-			value := now.Add(time.Duration(connector.SyncIntervalSeconds) * time.Second)
-			next = &value
-		}
-		if err := s.db.WithContext(ctx).Model(&models.Connector{}).Where("id = ?", connector.ID).
-			Updates(map[string]any{"next_sync_at": next, "updated_at": now}).Error; err != nil && firstErr == nil {
-			firstErr = fmt.Errorf("reschedule connector %s: %w", connector.ID, err)
-		}
-	}
-	return triggered, firstErr
-}
-
-// ExpireStaleRuns recovers work that Redis lost after the run row was written.
-// Without it the one-active-run index would block that connector forever.
-func (s *Service) ExpireStaleRuns(ctx context.Context, now time.Time) (int, error) {
-	result := s.db.WithContext(ctx).Model(&models.SyncRun{}).
-		Where("status = ? AND lease_until IS NOT NULL AND lease_until < ?", StatusRunning, now.Add(-5*time.Minute)).
-		Updates(map[string]any{"status": StatusFailed, "error_summary": "worker lease expired", "finished_at": &now, "updated_at": now})
-	if result.Error != nil {
-		return 0, fmt.Errorf("expire stale sync runs: %w", result.Error)
-	}
-	expired := int(result.RowsAffected)
-	stalePending := s.db.WithContext(ctx).Model(&models.SyncRun{}).
-		Where("status = ? AND created_at < ?", StatusPending, now.Add(-time.Hour)).
-		Updates(map[string]any{"status": StatusFailed, "error_summary": "sync dispatch timed out", "finished_at": &now, "updated_at": now})
-	if stalePending.Error != nil {
-		return expired, fmt.Errorf("expire pending sync runs: %w", stalePending.Error)
-	}
-	return expired + int(stalePending.RowsAffected), nil
-}
-
-// FailRun is the terminal hook for an exhausted Asynq retry budget. It only
-// touches active runs, so a late failure cannot overwrite a completed result.
-func (s *Service) FailRun(ctx context.Context, task SyncTask, cause error) error {
-	if task.SyncRunID == "" {
-		return nil
-	}
-	message := "sync worker exhausted retries"
-	if cause != nil {
-		message = truncate("sync worker exhausted retries: "+cause.Error(), 2000)
-	}
-	now := time.Now()
-	return s.db.WithContext(ctx).Model(&models.SyncRun{}).
-		Where("id = ? AND tenant_id = ? AND status IN ?", task.SyncRunID, task.TenantID, []string{StatusPending, StatusRunning}).
-		Updates(map[string]any{"status": StatusFailed, "error_summary": message, "finished_at": &now, "updated_at": now}).Error
 }
 
 func (s *Service) createRun(ctx context.Context, connector models.Connector, mode, resumeOf, cursor, triggeredBy string) (models.SyncRun, error) {
@@ -672,35 +256,6 @@ func (s *Service) cancelActiveRuns(ctx context.Context, connectorIDs []string) (
 		return 0, fmt.Errorf("cancel running sync runs: %w", running.Error)
 	}
 	return int(result.RowsAffected + running.RowsAffected), nil
-}
-
-func (s *Service) normalizeConfig(input ConnectorConfig) (ConnectorConfig, error) {
-	parsed, err := ParseManifestURL(input.ManifestURL)
-	if err != nil {
-		return ConnectorConfig{}, err
-	}
-	_ = parsed
-	if input.RequestsPerSecond < 0 || input.RequestsPerSecond > 50 {
-		return ConnectorConfig{}, apperror.Invalidf("requests per second must be between 0 and 50")
-	}
-	maxItems := input.MaxItemsPerRun
-	if maxItems == 0 {
-		maxItems = min(s.maxItemsLimit, defaultMaxItemsPerRun)
-	}
-	if maxItems < 1 || maxItems > s.maxItemsLimit {
-		return ConnectorConfig{}, apperror.Invalidf("max items per run must be between 1 and %d", s.maxItemsLimit)
-	}
-	aclMode := strings.TrimSpace(input.ACLMode)
-	if aclMode == "" {
-		aclMode = ACLModeKnowledgeBase
-	}
-	if aclMode != ACLModeKnowledgeBase {
-		return ConnectorConfig{}, apperror.Invalidf("unsupported ACL mode")
-	}
-	return ConnectorConfig{
-		ManifestURL: strings.TrimSpace(input.ManifestURL), RequestsPerSecond: input.RequestsPerSecond,
-		MaxItemsPerRun: maxItems, ACLMode: aclMode,
-	}, nil
 }
 
 func (s *Service) sealCredential(input *CredentialInput) (string, error) {

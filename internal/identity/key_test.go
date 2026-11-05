@@ -3,8 +3,6 @@ package identity
 import (
 	"strings"
 	"testing"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 func TestGenerateAPIKeyHasLookupPrefixAndSecret(t *testing.T) {
@@ -34,8 +32,8 @@ func TestAPIKeyPrefixRejectsUnusableKeys(t *testing.T) {
 }
 
 func TestHashAPIKeyIsPepperedAndStable(t *testing.T) {
-	service := &Service{cfg: config.AuthConfig{APIKeyPepper: "pepper-one"}}
-	other := &Service{cfg: config.AuthConfig{APIKeyPepper: "pepper-two"}}
+	service := &Service{cfg: AuthOptions{APIKeyPepper: "pepper-one"}}
+	other := &Service{cfg: AuthOptions{APIKeyPepper: "pepper-two"}}
 	raw := "rk_0011223344556677_secret"
 	if service.hashAPIKey(raw) != service.hashAPIKey(raw) {
 		t.Fatal("the same key must hash identically")

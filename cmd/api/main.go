@@ -35,14 +35,23 @@ func main() {
 		defer cancel()
 		_ = shutdownTracing(shutdownCtx)
 	}()
-	r := httpapi.NewRouterWithLogger(cfg, logger)
-	application, err := app.Open(cfg)
+	// One registry is shared by HTTP middleware and the application services so
+	// the scrape endpoint and /ops/metrics report the same process counters.
+	metricsRegistry := observability.New()
+	r := httpapi.NewRouterWithMetrics(cfg, logger, metricsRegistry)
+	application, err := app.Open(cfg, metricsRegistry)
 	if err != nil {
 		logger.Error("application_bootstrap_failed", "error", err)
 		os.Exit(1)
 	}
 	defer application.Close()
-	httpapi.RegisterRoutes(r, cfg, application, logger)
+	httpapi.RegisterRoutes(r, cfg, httpapi.RouteDeps{
+		Identity: application.Identity, Authorization: application.Authorization, Limiter: application.Limiter,
+		KnowledgeBase: application.KnowledgeBase, Ingestion: application.Ingestion, Conversation: application.Conversation,
+		Retrieval: application.Retrieval, DataSources: application.DataSources, Projection: application.Projection,
+		Ops: application.Ops, Queue: application.Queue, Tasks: application.Tasks,
+		Metrics: metricsRegistry, Models: application.Models,
+	}, logger)
 
 	// ReadHeaderTimeout blocks slowloris-style header trickling; ReadTimeout
 	// bounds body reads without touching response writes, so it is compatible
@@ -62,7 +71,7 @@ func main() {
 	if metricsAddr := strings.TrimSpace(cfg.MetricsAddr); metricsAddr != "" {
 		metricsServer = &http.Server{
 			Addr:              metricsAddr,
-			Handler:           observability.Handler(),
+			Handler:           observability.HandlerFor(metricsRegistry),
 			ReadHeaderTimeout: 5 * time.Second,
 			IdleTimeout:       60 * time.Second,
 		}

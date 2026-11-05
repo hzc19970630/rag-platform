@@ -15,15 +15,13 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 // OIDCClient is a discovery-based OpenID Connect client. It deliberately
 // supports the standard authorization-code flow with PKCE and RS256 ID tokens,
 // so any compliant provider works without a provider-specific adapter.
 type OIDCClient struct {
-	cfg    config.OIDCConfig
+	cfg    OIDCOptions
 	client *http.Client
 
 	mu        sync.Mutex
@@ -66,7 +64,7 @@ type jwksDocument struct {
 	} `json:"keys"`
 }
 
-func NewOIDCClient(cfg config.OIDCConfig) *OIDCClient {
+func NewOIDCClient(cfg OIDCOptions) *OIDCClient {
 	return &OIDCClient{cfg: cfg, client: &http.Client{Timeout: 15 * time.Second}, keys: map[string]*rsa.PublicKey{}}
 }
 

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
+	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/token"
@@ -38,17 +38,20 @@ type HistoryTurn struct {
 }
 
 type Service struct {
-	db       *gorm.DB
-	keyword  KeywordSearcher
-	vector   VectorSearcher
-	embedder Embedder
-	expander ChunkExpander
-	reranker Reranker
-	authz    Authorizer
-	join     KnowledgeJoin
-	defaults Params
-	planner  Planner
-	rewriter Rewriter
+	db           *gorm.DB
+	keyword      KeywordSearcher
+	vector       VectorSearcher
+	embedder     Embedder
+	expander     ChunkExpander
+	reranker     Reranker
+	rerankModels RerankModelResolver
+	authz        Authorizer
+	join         KnowledgeJoin
+	defaults     Params
+	planner      Planner
+	rewriter     Rewriter
+	executor     *PlanExecutor
+	metrics      metrics.Recorder
 }
 
 type Options struct {
@@ -58,11 +61,19 @@ type Options struct {
 	Embedder Embedder
 	Expander ChunkExpander
 	Reranker Reranker
-	Authz    Authorizer
-	Join     KnowledgeJoin
-	Defaults Params
-	Planner  Planner
-	Rewriter Rewriter
+	// RerankModels resolves the knowledge-base rerank binding. Nil keeps the
+	// adapter's configured model.
+	RerankModels RerankModelResolver
+	Authz        Authorizer
+	Join         KnowledgeJoin
+	Defaults     Params
+	Planner      Planner
+	Rewriter     Rewriter
+	Metrics      metrics.Recorder
+	// Channels and Fusions extend the default keyword/vector + RRF setup. The
+	// retrieval service only registers them; the plan chooses what runs.
+	Channels []RecallChannel
+	Fusions  []FusionStrategy
 }
 
 func NewService(options Options) *Service {
@@ -78,19 +89,36 @@ func NewService(options Options) *Service {
 	if rewriter == nil {
 		rewriter = IdentityRewriter{}
 	}
-	return &Service{
-		db:       options.DB,
-		keyword:  options.Keyword,
-		vector:   options.Vector,
-		embedder: options.Embedder,
-		expander: options.Expander,
-		reranker: reranker,
-		authz:    options.Authz,
-		join:     options.Join,
-		defaults: options.Defaults,
-		planner:  planner,
-		rewriter: rewriter,
+	recorder := options.Metrics
+	if recorder == nil {
+		recorder = metrics.Nop{}
 	}
+	service := &Service{
+		db:           options.DB,
+		keyword:      options.Keyword,
+		vector:       options.Vector,
+		embedder:     options.Embedder,
+		expander:     options.Expander,
+		reranker:     reranker,
+		rerankModels: options.RerankModels,
+		authz:        options.Authz,
+		join:         options.Join,
+		defaults:     options.Defaults,
+		planner:      planner,
+		rewriter:     rewriter,
+		metrics:      recorder,
+	}
+	channels := append([]RecallChannel{}, options.Channels...)
+	if options.Keyword != nil {
+		channels = append(channels, KeywordChannel{Searcher: options.Keyword})
+	}
+	if options.Vector != nil && options.Embedder != nil {
+		channels = append(channels, VectorChannel{
+			Searcher: options.Vector, Embedder: options.Embedder, Verify: service.verifyEmbeddingBinding, Metrics: service.metrics,
+		})
+	}
+	service.executor = NewPlanExecutor(channels, options.Fusions)
+	return service
 }
 
 // Retrieve runs the fixed first-phase plan: normalize, resolve parameters,
@@ -98,7 +126,7 @@ func NewService(options Options) *Service {
 // authorization.
 func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, input QueryInput) (EvidenceSet, error) {
 	started := time.Now()
-	defer func() { observability.Default().Observe("retrieval_duration_ms", time.Since(started), nil) }()
+	defer func() { s.metrics.Observe("retrieval_duration_ms", time.Since(started), nil) }()
 	ctx, span := observability.StartSpan(ctx, "retrieval.retrieve",
 		attribute.String("request.id", input.RequestID),
 		attribute.String("tenant.id", scope.TenantID),
@@ -153,19 +181,35 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		return EvidenceSet{}, fmt.Errorf("build query plan: %w", err)
 	}
 
-	vectorHits, keywordHits, err := s.recall(ctx, plan, params, recall)
+	candidates, err := s.executor.Execute(ctx, plan, params, recall)
 	if err != nil {
 		return EvidenceSet{}, err
 	}
-
-	candidates := fuseFRL(vectorHits, keywordHits, params.RRFK)
 	deduped := dedupe(candidates)
 
 	rerankApplied := false
-	if params.RerankEnabled && s.reranker != nil && s.reranker.Name() != "none" {
-		reranked, err := s.reranker.Rerank(ctx, query, deduped)
+	if plan.RerankEnabled && s.reranker != nil && s.reranker.Name() != "none" {
+		// The binding only applies to a single knowledge base; a cross-KB query
+		// has no one binding and keeps the adapter's configured model. Offline
+		// rerankers ignore the model, so resolving would spend the tenant model
+		// budget on a provider call that never happens.
+		_, perRequestModel := s.reranker.(ModelReranker)
+		rerankModel := ""
+		if perRequestModel && s.rerankModels != nil && input.KnowledgeBaseID != "" {
+			resolved, err := s.rerankModels.RerankModel(ctx, scope.TenantID, input.KnowledgeBaseID)
+			if err != nil {
+				s.metrics.Inc("model_errors_total", metrics.Labels("model", "rerank", "stage", "resolve"))
+				return EvidenceSet{}, err
+			}
+			rerankModel = resolved
+		}
+		reranked, err := s.rerank(ctx, rerankModel, query, deduped)
 		if err != nil {
-			observability.Default().Inc("model_errors_total", observability.Labels("model", "rerank", "stage", "rerank"))
+			modelLabel := rerankModel
+			if modelLabel == "" {
+				modelLabel = s.reranker.Name()
+			}
+			s.metrics.Inc("model_errors_total", metrics.Labels("model", modelLabel, "stage", "rerank"))
 			return EvidenceSet{}, fmt.Errorf("rerank: %w", err)
 		}
 		// rerank_threshold and rerank_top_k bound the reranked candidate set that
@@ -194,8 +238,8 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 	expanded = dedupe(expanded)
 	SortCandidates(expanded)
 
-	if params.TopK >= 0 && len(expanded) > params.TopK {
-		expanded = expanded[:params.TopK]
+	if plan.TopK >= 0 && len(expanded) > plan.TopK {
+		expanded = expanded[:plan.TopK]
 	}
 	expanded, tokens := applyTokenLimit(expanded, params.ContextTokenLimit)
 
@@ -224,75 +268,15 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 	}, nil
 }
 
-// recall runs both channels concurrently. A single channel failing does not
-// fail the query, because the other channel may still ground the answer; both
-// failing does.
-func (s *Service) recall(ctx context.Context, plan QueryPlan, params Params, request RecallRequest) ([]Hit, []Hit, error) {
-	var (
-		wg          sync.WaitGroup
-		vectorHits  []Hit
-		keywordHits []Hit
-		vectorErr   error
-		keywordErr  error
-		attempted   int
-	)
-
-	if plan.KeywordEnabled && s.keyword != nil {
-		attempted++
-		keywordRequest := request
-		keywordRequest.TopK = params.KeywordTopK
-		keywordRequest.Threshold = params.KeywordThreshold
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			keywordHits, keywordErr = s.keyword.SearchKeyword(ctx, keywordRequest)
-		}()
+// rerank applies the resolved model when the adapter supports per-request model
+// selection; otherwise it keeps the adapter's configured behavior.
+func (s *Service) rerank(ctx context.Context, model, query string, candidates []Candidate) ([]Candidate, error) {
+	if model != "" {
+		if modelReranker, ok := s.reranker.(ModelReranker); ok {
+			return modelReranker.RerankWithModel(ctx, model, query, candidates)
+		}
 	}
-	if plan.VectorEnabled && s.vector != nil && s.embedder != nil {
-		attempted++
-		vectorRequest := request
-		vectorRequest.EmbeddingModel = s.embedder.Name()
-		vectorRequest.TopK = params.EmbeddingTopK
-		vectorRequest.Threshold = params.VectorThreshold
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := s.verifyEmbeddingBinding(ctx, request.TenantID, request.KnowledgeBaseIDs); err != nil {
-				vectorErr = fmt.Errorf("embedding binding mismatch: %w", err)
-				return
-			}
-			vectors, err := s.embedder.Embed(ctx, []string{request.Query})
-			if err != nil {
-				observability.Default().Inc("model_errors_total", observability.Labels("model", "embedding", "stage", "query"))
-				vectorErr = fmt.Errorf("embed query: %w", err)
-				return
-			}
-			if len(vectors) != 1 {
-				vectorErr = fmt.Errorf("embed query returned %d vectors", len(vectors))
-				return
-			}
-			if len(vectors[0]) != s.embedder.Dimension() {
-				vectorErr = fmt.Errorf("query vector dimension %d does not match configured dimension %d", len(vectors[0]), s.embedder.Dimension())
-				return
-			}
-			vectorHits, vectorErr = s.vector.SearchVector(ctx, vectorRequest, vectors[0])
-		}()
-	}
-	wg.Wait()
-
-	if attempted == 0 {
-		return nil, nil, fmt.Errorf("no retrieval channel is enabled for this knowledge base")
-	}
-	if keywordErr != nil && vectorErr != nil {
-		return nil, nil, fmt.Errorf("all retrieval channels failed: keyword: %v; vector: %v", keywordErr, vectorErr)
-	}
-	if keywordErr != nil {
-		keywordHits = nil
-	}
-	if vectorErr != nil {
-		vectorHits = nil
-	}
-	return vectorHits, keywordHits, nil
+	return s.reranker.Rerank(ctx, query, candidates)
 }
 
 // verifyEmbeddingBinding refuses to embed a query for a knowledge base whose
@@ -321,60 +305,13 @@ func (s *Service) verifyEmbeddingBinding(ctx context.Context, tenantID string, k
 	return nil
 }
 
-// fuseFRL merges the two ranked lists with reciprocal rank fusion. RRF is used
-// because BM25 and cosine scores are not comparable. The damping constant comes
-// from the resolved retrieval parameters (rrf_k), so the score band a fused
-// result lands in is policy rather than a code constant.
+// fuseFRL keeps the two-channel call shape for callers that do not build a
+// plan. It delegates to the default RRF fusion strategy.
 func fuseFRL(vectorHits, keywordHits []Hit, rrfK int) []Candidate {
-	byID := map[string]*Candidate{}
-	merge := func(hits []Hit, channel string, isVector bool) {
-		for index, hit := range hits {
-			rank := hit.Rank
-			if rank <= 0 {
-				rank = index + 1
-			}
-			candidate, exists := byID[hit.ChunkID]
-			if !exists {
-				candidate = &Candidate{
-					ChunkID:           hit.ChunkID,
-					DocumentID:        hit.DocumentID,
-					DocumentVersionID: hit.DocumentVersionID,
-					KnowledgeBaseID:   hit.KnowledgeBaseID,
-					ParentID:          hit.ParentID,
-					Ordinal:           hit.Ordinal,
-					Content:           hit.Content,
-					ContentHash:       hit.ContentHash,
-					HeadingPath:       hit.HeadingPath,
-					PageNumber:        hit.PageNumber,
-					SourcePath:        hit.SourcePath,
-				}
-				byID[hit.ChunkID] = candidate
-			}
-			candidate.Score += 1.0 / float64(rrfK+rank)
-			if isVector {
-				candidate.VectorRank = rank
-				candidate.VectorScore = hit.Score
-			} else {
-				candidate.KeywordRank = rank
-				candidate.KeywordScore = hit.Score
-			}
-			if !contains(candidate.Channels, channel) {
-				candidate.Channels = append(candidate.Channels, channel)
-			}
-		}
-	}
-	merge(vectorHits, ChannelVector, true)
-	merge(keywordHits, ChannelKeyword, false)
-
-	result := make([]Candidate, 0, len(byID))
-	for _, candidate := range byID {
-		if candidate.VectorRank > 0 && candidate.KeywordRank > 0 {
-			candidate.Channels = []string{ChannelBoth}
-		}
-		result = append(result, *candidate)
-	}
-	SortCandidates(result)
-	return result
+	return RRFusion{}.Fuse(map[string][]Hit{
+		ChannelVector:  vectorHits,
+		ChannelKeyword: keywordHits,
+	}, Params{RRFK: rrfK})
 }
 
 func dedupe(candidates []Candidate) []Candidate {

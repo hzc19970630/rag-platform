@@ -2,7 +2,7 @@ FROM golang:1.26-alpine AS build
 # The module proxy must be selectable at build time: the default proxy is not
 # reachable from every network, and a failed download otherwise stalls the
 # whole image build.
-ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://goproxy.cn,direct
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN GOPROXY=${GOPROXY} go mod download

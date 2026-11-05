@@ -12,7 +12,7 @@ import (
 	"unicode"
 
 	"github.com/example/rag-platform/internal/contracts/evidence"
-	"github.com/example/rag-platform/internal/platform/llm"
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/prompts"
 )
 
@@ -24,12 +24,12 @@ const maxRelationChunksPerCall = 8
 // acceptance runs reproducible; a remote model can extract natural-language
 // relations in the same schema.
 type Extractor struct {
-	chatter       llm.Chatter
+	chatter       Chatter
 	template      string
 	promptVersion string
 }
 
-func NewExtractor(chatter llm.Chatter, registry *prompts.Registry) (*Extractor, error) {
+func NewExtractor(chatter Chatter, registry *prompts.Registry) (*Extractor, error) {
 	if chatter == nil {
 		return nil, fmt.Errorf("relation extraction requires a chat adapter")
 	}
@@ -86,13 +86,13 @@ func (e *Extractor) Extract(ctx context.Context, tenantID, knowledgeBaseID strin
 }
 
 func (e *Extractor) extractBatch(ctx context.Context, pkg evidence.Package, chunks []evidence.Chunk) (RelationProjectionPackage, error) {
-	evidence := make([]llm.EvidenceItem, 0, len(chunks))
+	evidence := make([]model.EvidenceItem, 0, len(chunks))
 	byIndex := map[int]string{}
 	for index, chunk := range chunks {
-		evidence = append(evidence, llm.EvidenceItem{Index: index + 1, ChunkID: chunk.ID, HeadingPath: chunk.HeadingPath, Text: chunk.Content})
+		evidence = append(evidence, model.EvidenceItem{Index: index + 1, ChunkID: chunk.ID, HeadingPath: chunk.HeadingPath, Text: chunk.Content})
 		byIndex[index+1] = chunk.ID
 	}
-	response, err := e.chatter.Complete(ctx, llm.ChatRequest{
+	response, err := e.chatter.Complete(ctx, model.ChatRequest{
 		ContextTemplate: e.template,
 		Query:           "Extract entities and relations from the evidence. Return the JSON object only.",
 		Evidence:        evidence,

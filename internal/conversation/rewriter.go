@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/llm"
-	"github.com/example/rag-platform/internal/platform/observability"
+	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
 )
@@ -18,16 +18,20 @@ const queryRewriteMaxRunes = 400
 // It is only used when history exists and a real generation adapter is wired;
 // the deterministic local adapter would not produce a rewrite.
 type QueryRewriter struct {
-	chat    llm.Chatter
+	chat    Chatter
 	prompts *prompts.Registry
 	timeout time.Duration
+	metrics metrics.Recorder
 }
 
-func NewQueryRewriter(chat llm.Chatter, registry *prompts.Registry, timeout time.Duration) *QueryRewriter {
+func NewQueryRewriter(chat Chatter, registry *prompts.Registry, timeout time.Duration, recorder metrics.Recorder) *QueryRewriter {
 	if timeout <= 0 {
 		timeout = 8 * time.Second
 	}
-	return &QueryRewriter{chat: chat, prompts: registry, timeout: timeout}
+	if recorder == nil {
+		recorder = metrics.Nop{}
+	}
+	return &QueryRewriter{chat: chat, prompts: registry, timeout: timeout, metrics: recorder}
 }
 
 func (r *QueryRewriter) Rewrite(ctx context.Context, query string, history []retrieval.HistoryTurn) (string, error) {
@@ -42,13 +46,13 @@ func (r *QueryRewriter) Rewrite(ctx context.Context, query string, history []ret
 	if !ok {
 		return query, fmt.Errorf("query rewrite template is not configured")
 	}
-	turns := make([]llm.Turn, len(history))
+	turns := make([]model.Turn, len(history))
 	for index, turn := range history {
-		turns[index] = llm.Turn{Role: turn.Role, Content: turn.Content}
+		turns[index] = model.Turn{Role: turn.Role, Content: turn.Content}
 	}
 	rewriteCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
-	response, err := r.chat.Complete(rewriteCtx, llm.ChatRequest{
+	response, err := r.chat.Complete(rewriteCtx, model.ChatRequest{
 		SystemInstruction: system,
 		ContextTemplate:   template,
 		Query:             query,
@@ -56,15 +60,15 @@ func (r *QueryRewriter) Rewrite(ctx context.Context, query string, history []ret
 		MaxTokens:         128,
 	})
 	if err != nil {
-		observability.Default().Inc("query_rewrite_total", observability.Labels("result", "failure"))
+		r.metrics.Inc("query_rewrite_total", metrics.Labels("result", "failure"))
 		return query, err
 	}
 	rewritten := cleanRewrite(response.Text)
 	if rewritten == "" || len([]rune(rewritten)) > queryRewriteMaxRunes {
-		observability.Default().Inc("query_rewrite_total", observability.Labels("result", "fallback"))
+		r.metrics.Inc("query_rewrite_total", metrics.Labels("result", "fallback"))
 		return query, nil
 	}
-	observability.Default().Inc("query_rewrite_total", observability.Labels("result", "success"))
+	r.metrics.Inc("query_rewrite_total", metrics.Labels("result", "success"))
 	return rewritten, nil
 }
 

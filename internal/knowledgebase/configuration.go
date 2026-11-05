@@ -117,9 +117,18 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 	if err != nil {
 		return KnowledgeBaseConfigurationV1{}, err
 	}
-	effective, err := retrieval.ResolveParams(defaults, knowledgeBase.RetrievalConfig, "")
+	resolvedDefaults := retrievalParamsFromConfig(defaults)
+	effective, err := retrieval.ResolveParams(resolvedDefaults, knowledgeBase.RetrievalConfig, "")
 	if err != nil {
 		return KnowledgeBaseConfigurationV1{}, err
+	}
+	// The read-only surface reports the knowledge-base binding when one exists;
+	// empty means the deployment default already in readOnly.
+	if knowledgeBase.ChatModel != "" {
+		readOnly.Chat.Model = knowledgeBase.ChatModel
+	}
+	if knowledgeBase.RerankModel != "" {
+		readOnly.Rerank.Model = knowledgeBase.RerankModel
 	}
 	return KnowledgeBaseConfigurationV1{
 		SchemaVersion:    SchemaKnowledgeBaseConfigurationV1,
@@ -127,7 +136,7 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 		ACLVersion:       knowledgeBase.ACLVersion,
 		IndexingStrategy: strategy,
 		Retrieval: RetrievalConfigurationV1{
-			GlobalDefaults:        retrievalParamsView(defaults),
+			GlobalDefaults:        retrievalParamsView(resolvedDefaults),
 			KnowledgeBaseOverride: override,
 			Effective:             retrievalParamsView(effective),
 			Sources:               retrievalSources(override),
@@ -136,7 +145,19 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 	}, nil
 }
 
-func retrievalParamsView(params config.RetrievalConfig) RetrievalParamsV1 {
+// retrievalParamsFromConfig keeps the config conversion in the knowledge-base
+// configuration view, the one domain allowed to read the global config type.
+func retrievalParamsFromConfig(cfg config.RetrievalConfig) retrieval.Params {
+	return retrieval.Params{
+		TopK: cfg.TopK, EmbeddingTopK: cfg.EmbeddingTopK, KeywordTopK: cfg.KeywordTopK,
+		VectorThreshold: cfg.VectorThreshold, KeywordThreshold: cfg.KeywordThreshold,
+		RerankEnabled: cfg.RerankEnabled, RerankTopK: cfg.RerankTopK, RerankThreshold: cfg.RerankThreshold,
+		ContextTokenLimit: cfg.ContextTokenLimit, AdjacentExpansion: cfg.AdjacentExpansion,
+		MaxAdjacentChunks: cfg.MaxAdjacentChunks, RRFK: cfg.RRFK, ExpansionScoreFactor: cfg.ExpansionScoreFactor,
+	}
+}
+
+func retrievalParamsView(params retrieval.Params) RetrievalParamsV1 {
 	return RetrievalParamsV1{
 		TopK:                 params.TopK,
 		EmbeddingTopK:        params.EmbeddingTopK,
@@ -198,6 +219,10 @@ func (s *Service) Configuration(ctx context.Context, principal authz.Principal, 
 // defaults. Retrieval parameters do not participate in ACL or projection
 // invalidation, so neither acl_version nor derived projections change.
 func (s *Service) ReplaceRetrievalConfig(ctx context.Context, principal authz.Principal, id string, override retrieval.ParamsOverride) (models.KnowledgeBase, error) {
+	return s.writeRetrievalConfig(ctx, principal, id, override)
+}
+
+func (s *Service) writeRetrievalConfig(ctx context.Context, principal authz.Principal, id string, override retrieval.ParamsOverride) (models.KnowledgeBase, error) {
 	if _, err := s.authorizedScope(ctx, principal, id, "write"); err != nil {
 		return models.KnowledgeBase{}, err
 	}

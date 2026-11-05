@@ -269,17 +269,7 @@ func (s *Service) enqueueReconciledTask(ctx context.Context, task Task) (bool, e
 func (s *Service) failReconciledStage(ctx context.Context, task Task, code, message string) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
-		if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{
-			"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND tenant_id = ? AND status NOT IN ?", task.PipelineRunID, task.TenantID, []string{StatusEvidenceReady, StatusCancelled}).
-			Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&models.DocumentVersion{}).Where("id = ? AND tenant_id = ? AND status <> ?", task.DocumentVersionID, task.TenantID, StatusCancelled).
-			Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
+		if err := failStageRecords(tx, task, code, message, now); err != nil {
 			return err
 		}
 		payload, _ := json.Marshal(task)

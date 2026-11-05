@@ -21,7 +21,7 @@ func testService(t *testing.T) *Service {
 
 func TestNormalizeConfigAppliesDefaults(t *testing.T) {
 	service := testService(t)
-	config, err := service.normalizeConfig(ConnectorConfig{ManifestURL: "https://example.com/manifest.json"})
+	config, err := HTTPManifestConnector{}.NormalizeConfig(ConnectorConfig{ManifestURL: "https://example.com/manifest.json"}, service.maxItemsLimit)
 	if err != nil {
 		t.Fatalf("normalize config: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestNormalizeConfigRejectsInvalidValues(t *testing.T) {
 		{ManifestURL: "https://example.com/m.json", ACLMode: "document"},
 	}
 	for _, input := range cases {
-		if _, err := service.normalizeConfig(input); err == nil {
+		if _, err := (HTTPManifestConnector{}).NormalizeConfig(input, service.maxItemsLimit); err == nil {
 			t.Fatalf("expected %+v to be rejected", input)
 		}
 	}
@@ -57,10 +57,10 @@ func TestNormalizeConfigRejectsInvalidValues(t *testing.T) {
 
 func TestNormalizeConfigTrimsValues(t *testing.T) {
 	service := testService(t)
-	config, err := service.normalizeConfig(ConnectorConfig{
+	config, err := HTTPManifestConnector{}.NormalizeConfig(ConnectorConfig{
 		ManifestURL: "  https://example.com/manifest.json  ", RequestsPerSecond: 5,
 		MaxItemsPerRun: 25, ACLMode: " knowledge_base ",
-	})
+	}, service.maxItemsLimit)
 	if err != nil {
 		t.Fatalf("normalize config: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
@@ -22,6 +23,14 @@ type Service struct {
 	authz      *authz.Service
 	projection ProjectionLifecycle
 	embedding  EmbeddingBinding
+	catalog    ModelCatalog
+}
+
+// ModelCatalog is the deployment model catalog. The knowledge-base service
+// validates bindings against it but does not know which adapters implement the
+// models, so a binding can never name a model this deployment cannot serve.
+type ModelCatalog interface {
+	ResolveBinding(capability model.Capability, requested string) (model.ModelRef, error)
 }
 
 // EmbeddingBinding is the model and dimension this deployment writes and
@@ -53,6 +62,11 @@ type UpdateInput struct {
 	// is locked; the managed rebuild is the only path that moves it.
 	EmbeddingModel     *string `json:"embedding_model"`
 	EmbeddingDimension *int    `json:"embedding_dimension"`
+	// ChatModel and RerankModel select a model registered by this deployment.
+	// Empty inherits the deployment default. Both are runtime-changeable and
+	// audited; embedding stays locked because it defines the vector contract.
+	ChatModel   *string `json:"chat_model"`
+	RerankModel *string `json:"rerank_model"`
 }
 
 // ProjectionLifecycle is the Pipeline B hook. It is separate from Pipeline A:
@@ -77,6 +91,12 @@ func NewService(db *gorm.DB, authorizer *authz.Service, embedding EmbeddingBindi
 // service depend on the projection package.
 func (s *Service) SetProjectionLifecycle(lifecycle ProjectionLifecycle) {
 	s.projection = lifecycle
+}
+
+// SetModelCatalog wires model binding validation without coupling the service
+// to the registry implementation.
+func (s *Service) SetModelCatalog(catalog ModelCatalog) {
+	s.catalog = catalog
 }
 
 func (s *Service) Create(ctx context.Context, principal authz.Principal, input CreateInput) (models.KnowledgeBase, error) {
@@ -210,6 +230,27 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 			row.EmbeddingDimension = next.Dimension
 		}
 	}
+	bindingAudits := make([]modelBindingAudit, 0, 2)
+	if input.ChatModel != nil {
+		audit, next, err := s.nextModelBinding(model.CapabilityChat, *input.ChatModel, row.ChatModel, row.ChatModelVersion)
+		if err != nil {
+			return models.KnowledgeBase{}, err
+		}
+		if audit != nil {
+			row.ChatModel, row.ChatModelVersion = next.Model, next.Version
+			bindingAudits = append(bindingAudits, *audit)
+		}
+	}
+	if input.RerankModel != nil {
+		audit, next, err := s.nextModelBinding(model.CapabilityRerank, *input.RerankModel, row.RerankModel, row.RerankModelVersion)
+		if err != nil {
+			return models.KnowledgeBase{}, err
+		}
+		if audit != nil {
+			row.RerankModel, row.RerankModelVersion = next.Model, next.Version
+			bindingAudits = append(bindingAudits, *audit)
+		}
+	}
 	if input.RetrievalConfig != nil {
 		if err := retrieval.ValidateOverride(*input.RetrievalConfig); err != nil {
 			return models.KnowledgeBase{}, err
@@ -253,6 +294,11 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 	}
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return models.KnowledgeBase{}, fmt.Errorf("update knowledge base: %w", err)
+	}
+	for _, audit := range bindingAudits {
+		if err := s.recordModelBindingAudit(ctx, principal, id, audit); err != nil {
+			return models.KnowledgeBase{}, err
+		}
 	}
 	if input.RetrievalConfig != nil {
 		if err := s.recordRetrievalConfigAudit(ctx, principal, id, row.RetrievalConfig); err != nil {
@@ -300,6 +346,52 @@ func (s *Service) refreshProjection(ctx context.Context, tenantID string, knowle
 		}
 	}
 	return rebuildErr
+}
+
+type modelBindingAudit struct {
+	Capability      model.Capability `json:"capability"`
+	Model           string           `json:"model"`
+	Provider        string           `json:"provider"`
+	Version         string           `json:"version"`
+	PreviousModel   string           `json:"previousModel"`
+	PreviousVersion string           `json:"previousVersion"`
+}
+
+// nextModelBinding validates the requested model and reports whether the
+// binding changed. An empty request clears the knowledge-base override so the
+// row follows the deployment default again.
+func (s *Service) nextModelBinding(capability model.Capability, requested, currentModel, currentVersion string) (*modelBindingAudit, model.ModelRef, error) {
+	requested = strings.TrimSpace(requested)
+	next := model.ModelRef{}
+	if requested != "" {
+		if s.catalog == nil {
+			return nil, model.ModelRef{}, apperror.Invalidf("model registry is not configured")
+		}
+		resolved, err := s.catalog.ResolveBinding(capability, requested)
+		if err != nil {
+			return nil, model.ModelRef{}, err
+		}
+		next = resolved
+	}
+	if next.Model == currentModel && next.Version == currentVersion {
+		return nil, next, nil
+	}
+	return &modelBindingAudit{
+		Capability: capability, Model: next.Model, Provider: next.Provider, Version: next.Version,
+		PreviousModel: currentModel, PreviousVersion: currentVersion,
+	}, next, nil
+}
+
+func (s *Service) recordModelBindingAudit(ctx context.Context, principal authz.Principal, id string, audit modelBindingAudit) error {
+	encoded, err := json.Marshal(audit)
+	if err != nil {
+		return fmt.Errorf("encode model binding audit: %w", err)
+	}
+	return s.db.WithContext(ctx).Create(&models.AuditLog{
+		TenantID: principal.TenantID, ActorID: principal.SubjectID, Action: "write",
+		ResourceType: "model_binding", ResourceID: id, Allowed: true, Reason: "model_binding_updated: " + string(encoded),
+		RequestID: principal.RequestID, IPAddress: principal.IPAddress, UserAgent: principal.UserAgent,
+	}).Error
 }
 
 func (s *Service) recordIndexingStrategyAudit(ctx context.Context, principal authz.Principal, id, strategy string) error {

@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 type tokenSigner struct {
@@ -46,7 +44,7 @@ type tokenPayload struct {
 	IssuedAt  int64  `json:"iat"`
 }
 
-func newTokenSigner(cfg config.AuthConfig) (*tokenSigner, error) {
+func newTokenSigner(cfg AuthOptions) (*tokenSigner, error) {
 	keys := make(map[string][]byte, len(cfg.SigningKeys))
 	for _, entry := range cfg.SigningKeys {
 		kid, secret, ok := strings.Cut(entry, ":")

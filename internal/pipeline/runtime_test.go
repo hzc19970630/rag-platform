@@ -272,3 +272,30 @@ func TestFinishInboxReportsStatusAndError(t *testing.T) {
 		t.Fatalf("failed inbox = %+v", row)
 	}
 }
+
+func TestInboxRecoveryHelpersShareTheTerminalShape(t *testing.T) {
+	db := newTestDB(t)
+	now := time.Now()
+	if err := db.Create(&models.TaskInbox{
+		IdempotencyKey: "run:parse", TaskType: "ingestion", Status: InboxSucceeded,
+		LeaseOwner: "worker-a", ProcessedAt: &now, LastError: "old failure", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed inbox: %v", err)
+	}
+
+	if err := RequeueInbox(db, "run:parse", now); err != nil {
+		t.Fatalf("requeue inbox: %v", err)
+	}
+	row := loadInbox(t, db, "run:parse")
+	if row.Status != InboxFailed || row.ProcessedAt != nil || row.LeaseOwner != "" || row.LeaseUntil != nil || row.LastError != "" {
+		t.Fatalf("requeued inbox = %+v", row)
+	}
+
+	if err := SettleInbox(db, "run:parse", InboxSucceeded, now); err != nil {
+		t.Fatalf("settle inbox: %v", err)
+	}
+	row = loadInbox(t, db, "run:parse")
+	if row.Status != InboxSucceeded || row.ProcessedAt == nil || row.LeaseOwner != "" || row.LastError != "" {
+		t.Fatalf("settled inbox = %+v", row)
+	}
+}

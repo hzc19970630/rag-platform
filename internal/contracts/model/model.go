@@ -1,9 +1,9 @@
-// Package llm provides the generation adapters. The retrieval layer hands the
-// model short citation ids, and the model can only reference ids it was given.
-package llm
+// Package model holds the provider-neutral generation contract shared by the
+// domain packages. The interfaces live with their consumers; only the request
+// and response data shapes are shared so adapters and callers agree on the wire.
+package model
 
 import (
-	"context"
 	"fmt"
 	"strings"
 )
@@ -15,6 +15,24 @@ type EvidenceItem struct {
 	ChunkID     string
 	HeadingPath string
 	Text        string
+}
+
+// Capability names one routable model role. Providers may serve more than one.
+type Capability string
+
+const (
+	CapabilityChat      Capability = "chat"
+	CapabilityEmbedding Capability = "embedding"
+	CapabilityRerank    Capability = "rerank"
+)
+
+// ModelRef identifies the model and version a binding resolves to. The version
+// is recorded in audit entries so an in-place model upgrade is distinguishable
+// from a routing change.
+type ModelRef struct {
+	Model    string
+	Provider string
+	Version  string
 }
 
 // Turn is one prior conversation message. History is untrusted context: the
@@ -33,6 +51,9 @@ type ChatRequest struct {
 	Evidence          []EvidenceItem
 	History           []Turn
 	MaxTokens         int
+	// Model overrides the adapter's configured model for this call. It is set
+	// from the knowledge-base binding; empty keeps the deployment default.
+	Model string
 }
 
 // ChatResponse is the model output plus the provenance recorded on the message.
@@ -41,13 +62,6 @@ type ChatResponse struct {
 	Model            string
 	PromptTokens     int
 	CompletionTokens int
-}
-
-// Chatter is the generation port. Implementations must not create citations:
-// they may only echo ids supplied in ChatRequest.Evidence.
-type Chatter interface {
-	Complete(ctx context.Context, request ChatRequest) (ChatResponse, error)
-	Name() string
 }
 
 // RenderContext formats the evidence block list for a model prompt. Each block

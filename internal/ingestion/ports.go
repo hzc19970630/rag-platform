@@ -1,10 +1,6 @@
 package ingestion
 
-import (
-	"context"
-
-	"github.com/example/rag-platform/internal/platform/embedding"
-)
+import "context"
 
 type ObjectStore interface {
 	Put(ctx context.Context, key string, content []byte, contentType string) error
@@ -17,7 +13,18 @@ type DocumentReader interface {
 }
 
 // Embedder is the shared model port; the pipeline depends on the interface only.
-type Embedder = embedding.Embedder
+// Embedder is the model port owned by this package. Adapters live here or in
+// platform; the pipeline depends on the interface only.
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+	// Dimension reports the vector length this adapter produces. Callers
+	// validate it against stored rows so a model or dimension change fails
+	// loudly instead of writing vectors that cannot be searched.
+	Dimension() int
+	// Name identifies the model so a knowledge base bound to a different one
+	// cannot be written or queried with an incomparable vector.
+	Name() string
+}
 
 // EmbeddingRecord is one chunk vector produced by the embed stage. The writer
 // owns persistence so a vector-store adapter can replace PostgreSQL without

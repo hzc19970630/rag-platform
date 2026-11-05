@@ -507,14 +507,27 @@ func (s workerStage) Succeed(tx *gorm.DB, now time.Time) (*models.OutboxEvent, e
 }
 
 func (s workerStage) Fail(tx *gorm.DB, code, message string, now time.Time) error {
-	task := s.task
-	if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
+	return failStageRecords(tx, s.task, code, message, now)
+}
+
+// failStageRecords is the single failure projection for ingestion: the stage,
+// the pipeline and the document version move together. Reconcile uses it too,
+// so a retry-budget failure and a worker failure cannot diverge. A record that
+// another writer already settled (evidence ready, cancelled) is left alone.
+func failStageRecords(tx *gorm.DB, task Task, code, message string, now time.Time) error {
+	if err := tx.Model(&models.StageRun{}).Where("idempotency_key = ? AND status <> ?", task.IdempotencyKey, StageCancelled).Updates(map[string]any{
+		"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now,
+	}).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND status <> ?", task.PipelineRunID, StatusCancelled).Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error; err != nil {
+	if err := tx.Model(&models.PipelineRun{}).Where("id = ? AND tenant_id = ? AND status NOT IN ?", task.PipelineRunID, task.TenantID, []string{StatusEvidenceReady, StatusCancelled}).Updates(map[string]any{
+		"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now,
+	}).Error; err != nil {
 		return err
 	}
-	return tx.Model(&models.DocumentVersion{}).Where("id = ? AND status <> ?", task.DocumentVersionID, StatusCancelled).Updates(map[string]any{"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now}).Error
+	return tx.Model(&models.DocumentVersion{}).Where("id = ? AND tenant_id = ? AND status <> ?", task.DocumentVersionID, task.TenantID, StatusCancelled).Updates(map[string]any{
+		"status": StatusFailed, "error_code": code, "error_message": message, "updated_at": now,
+	}).Error
 }
 
 // statusFields builds the field set for a status change that is not a failure.

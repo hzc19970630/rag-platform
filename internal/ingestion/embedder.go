@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/example/rag-platform/internal/platform/netprobe"
 )
 
 // LocalEmbedder provides a deterministic, offline embedding adapter for local
@@ -63,6 +65,7 @@ type RemoteEmbedder struct {
 	model     string
 	dimension int
 	batchSize int
+	healthURL string
 	client    *http.Client
 }
 
@@ -73,6 +76,9 @@ type RemoteEmbedderOptions struct {
 	Dimension int
 	BatchSize int
 	Timeout   time.Duration
+	// HealthURL overrides the liveness endpoint. Empty uses /models, which is
+	// part of the OpenAI-compatible surface this adapter targets.
+	HealthURL string
 }
 
 func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
@@ -91,12 +97,18 @@ func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
 	if opts.Timeout <= 0 {
 		opts.Timeout = 60 * time.Second
 	}
+	baseURL := strings.TrimRight(opts.BaseURL, "/")
+	healthURL := strings.TrimSpace(opts.HealthURL)
+	if healthURL == "" {
+		healthURL = baseURL + "/models"
+	}
 	return &RemoteEmbedder{
-		baseURL:   strings.TrimRight(opts.BaseURL, "/"),
+		baseURL:   baseURL,
 		apiKey:    opts.APIKey,
 		model:     opts.Model,
 		dimension: opts.Dimension,
 		batchSize: opts.BatchSize,
+		healthURL: healthURL,
 		client:    &http.Client{Timeout: opts.Timeout},
 	}, nil
 }
@@ -104,6 +116,11 @@ func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
 func (e *RemoteEmbedder) Dimension() int { return e.dimension }
 
 func (e *RemoteEmbedder) Name() string { return e.model }
+
+// Probe reports provider reachability for the model catalog.
+func (e *RemoteEmbedder) Probe(ctx context.Context) error {
+	return netprobe.Check(ctx, e.healthURL, e.apiKey)
+}
 
 type embeddingRequest struct {
 	Model string   `json:"model"`

@@ -7,14 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -84,41 +82,75 @@ func (s *Service) Process(ctx context.Context, task Task) error {
 	}
 }
 
-func (s *Service) completeStage(ctx context.Context, task Task, run *models.ProjectionRun, stage *models.ProjectionStageRun) error {
-	now := time.Now()
-	next, hasNext := nextStageFor(run.ProjectionType, task.Stage)
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.ProjectionStageRun{}).Where("id = ?", stage.ID).Updates(map[string]any{
-			"status": StageSucceeded, "completed_at": &now, "error_code": "", "error_message": "", "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", task.IdempotencyKey).Updates(map[string]any{
-			"status": inboxSucceeded, "processed_at": &now, "lease_owner": "", "lease_until": nil, "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		if !hasNext {
-			return nil
-		}
-		nextKey := run.ID + ":" + next
-		var nextStageRow models.ProjectionStageRun
-		if err := tx.Where("idempotency_key = ?", nextKey).First(&nextStageRow).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-			nextStageRow = models.ProjectionStageRun{
-				ProjectionRunID: run.ID, ProjectionType: run.ProjectionType, Stage: next,
-				Status: StagePending, IdempotencyKey: nextKey,
-			}
-			if err := tx.Create(&nextStageRow).Error; err != nil {
-				return err
-			}
-		} else if err != nil {
-			return err
-		}
-		return enqueueStage(tx, run, next, nextStageRow.Attempts)
-	})
+// projectionStage adapts one projection stage to the shared pipeline runtime.
+// Wiki and relation keep their own stages, status names and transition rules;
+// claim, lease, inbox outcome and outbox reopening are owned by pipeline.
+type projectionStage struct {
+	task Task
+	run  *models.ProjectionRun
 }
 
-func enqueueStage(tx *gorm.DB, run *models.ProjectionRun, stage string, attempt int) error {
+func (p projectionStage) Start(tx *gorm.DB, now time.Time) error {
+	var stage models.ProjectionStageRun
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stage, "idempotency_key = ?", p.task.IdempotencyKey).Error; err != nil {
+		return err
+	}
+	if stage.ProjectionRunID != p.run.ID || stage.Stage != p.task.Stage || stage.ProjectionType != p.run.ProjectionType {
+		return fmt.Errorf("projection stage does not belong to run")
+	}
+	if err := tx.Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
+		"status": stageStatusFor(p.run.ProjectionType, p.task.Stage), "error_code": "", "error_message": "", "updated_at": now,
+	}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&models.ProjectionStageRun{}).Where("id = ?", stage.ID).Updates(map[string]any{
+		"status": StageProcessing, "attempts": gorm.Expr("attempts + 1"), "started_at": &now,
+		"error_code": "", "error_message": "", "updated_at": now,
+	}).Error
+}
+
+func (p projectionStage) Succeed(tx *gorm.DB, now time.Time) (*models.OutboxEvent, error) {
+	if err := tx.Model(&models.ProjectionStageRun{}).Where("idempotency_key = ?", p.task.IdempotencyKey).Updates(map[string]any{
+		"status": StageSucceeded, "completed_at": &now, "error_code": "", "error_message": "", "updated_at": now,
+	}).Error; err != nil {
+		return nil, err
+	}
+	next, hasNext := nextStageFor(p.run.ProjectionType, p.task.Stage)
+	if !hasNext {
+		return nil, nil
+	}
+	nextKey := p.run.ID + ":" + next
+	var nextStageRow models.ProjectionStageRun
+	if err := tx.Where("idempotency_key = ?", nextKey).First(&nextStageRow).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+		nextStageRow = models.ProjectionStageRun{
+			ProjectionRunID: p.run.ID, ProjectionType: p.run.ProjectionType, Stage: next,
+			Status: StagePending, IdempotencyKey: nextKey,
+		}
+		if err := tx.Create(&nextStageRow).Error; err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	event, err := stageEvent(p.run, next, nextStageRow.Attempts)
+	if err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
+func (p projectionStage) Fail(tx *gorm.DB, code, message string, now time.Time) error {
+	if err := tx.Model(&models.ProjectionStageRun{}).Where("idempotency_key = ?", p.task.IdempotencyKey).Updates(map[string]any{
+		"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now,
+	}).Error; err != nil {
+		return err
+	}
+	return tx.Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
+		"status": failedStatusFor(p.run.ProjectionType), "error_code": code, "error_message": message, "updated_at": now,
+	}).Error
+}
+
+func stageEvent(run *models.ProjectionRun, stage string, attempt int) (models.OutboxEvent, error) {
 	key := run.ID + ":" + stage
 	schema, eventType := SchemaWikiTask, "projection.wiki"
 	if run.ProjectionType == ProjectionTypeRelation {
@@ -131,102 +163,37 @@ func enqueueStage(tx *gorm.DB, run *models.ProjectionRun, stage string, attempt 
 	}
 	payload, err := json.Marshal(task)
 	if err != nil {
+		return models.OutboxEvent{}, err
+	}
+	return models.OutboxEvent{
+		TenantID: run.TenantID, AggregateType: "projection_run", AggregateID: run.ID,
+		EventType: eventType, IdempotencyKey: key, Payload: string(payload),
+	}, nil
+}
+
+// reopenStage is the projection call site of the single outbox reopen
+// implementation. A retry re-opens the same durable event; the task attempt
+// changes the queue id so Asynq's retained completed record cannot suppress it.
+func reopenStage(tx *gorm.DB, run *models.ProjectionRun, stage string, attempt int) error {
+	event, err := stageEvent(run, stage, attempt)
+	if err != nil {
 		return err
 	}
-	var event models.OutboxEvent
-	lookupErr := tx.Where("idempotency_key = ?", key).First(&event).Error
-	if errors.Is(lookupErr, gorm.ErrRecordNotFound) {
-		return tx.Create(&models.OutboxEvent{
-			TenantID: run.TenantID, AggregateType: "projection_run", AggregateID: run.ID,
-			EventType: eventType, IdempotencyKey: key, Payload: string(payload),
-		}).Error
-	}
-	if lookupErr != nil {
-		return lookupErr
-	}
-	// A retry re-opens the same durable event. The task attempt changes the queue
-	// id so Asynq's retained completed record cannot suppress the retry.
-	return tx.Model(&event).Updates(map[string]any{
-		"payload": string(payload), "published_at": nil, "attempts": 0, "next_attempt_at": nil, "last_error": "",
-	}).Error
+	return pipeline.ReopenEvent(tx, event)
 }
 
 func (s *Service) claimInbox(ctx context.Context, task Task) (bool, error) {
 	taskType := "projection." + task.ProjectionType + "." + task.Stage
-	return inboxlease.Claim(ctx, s.db, task.IdempotencyKey, taskType, 0, s.lease())
+	return s.runtime().Claim(ctx, task.IdempotencyKey, taskType, 0)
 }
 
-// beginInboxLease keeps the inbox lease alive while the projection stage runs.
-// If the lease is lost, the returned context is canceled and the stage must not
-// persist its outcome: another worker owns the row.
-func (s *Service) beginInboxLease(ctx context.Context, key string) (context.Context, func(), func() bool) {
-	lease := s.lease()
-	leaseCtx, cancel := context.WithCancel(ctx)
-	var lost atomic.Bool
-	stop := inboxlease.Keep(leaseCtx, s.db, key, lease, func() {
-		lost.Store(true)
-		cancel()
-	})
-	release := func() {
-		stop()
-		cancel()
-		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer releaseCancel()
-		if err := inboxlease.Release(releaseCtx, s.db, key, lease.Owner); err != nil {
-			slog.Warn("inbox_lease_release_failed", "idempotency_key", key, "error", err)
-		}
-	}
-	return leaseCtx, release, lost.Load
-}
-
-func (s *Service) markStageProcessing(ctx context.Context, task Task, run *models.ProjectionRun) (*models.ProjectionStageRun, error) {
-	now := time.Now()
-	var stage models.ProjectionStageRun
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stage, "idempotency_key = ?", task.IdempotencyKey).Error; err != nil {
-			return err
-		}
-		if stage.ProjectionRunID != run.ID || stage.Stage != task.Stage || stage.ProjectionType != run.ProjectionType {
-			return fmt.Errorf("projection stage does not belong to run")
-		}
-		runStatus := stageStatusFor(run.ProjectionType, task.Stage)
-		if err := tx.Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", run.ID, ProjectionCancelled).Updates(map[string]any{
-			"status": runStatus, "error_code": "", "error_message": "", "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&models.ProjectionStageRun{}).Where("id = ?", stage.ID).Updates(map[string]any{
-			"status": StageProcessing, "attempts": gorm.Expr("attempts + 1"), "started_at": &now,
-			"error_code": "", "error_message": "", "updated_at": now,
-		}).Error
-	})
-	return &stage, err
-}
-
-func (s *Service) failStage(ctx context.Context, run *models.ProjectionRun, stage *models.ProjectionStageRun, processErr error) error {
+func (s *Service) failStage(ctx context.Context, task Task, run *models.ProjectionRun, processErr error) error {
 	code, message := splitError(processErr)
-	now := time.Now()
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.ProjectionStageRun{}).Where("id = ?", stage.ID).Updates(map[string]any{
-			"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		return tx.Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", run.ID, ProjectionCancelled).Updates(map[string]any{
-			"status": failedStatusFor(run.ProjectionType), "error_code": code, "error_message": message, "updated_at": now,
-		}).Error
-	})
+	return s.runtime().Fail(ctx, projectionStage{task: task, run: run}, code, message)
 }
 
 func (s *Service) finishInbox(ctx context.Context, key, status string, processErr error) error {
-	values := map[string]any{"status": status, "lease_owner": "", "lease_until": nil, "updated_at": time.Now()}
-	if status == inboxSucceeded || status == inboxFailed {
-		values["processed_at"] = time.Now()
-	}
-	if processErr != nil {
-		values["last_error"] = processErr.Error()
-	}
-	return s.db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Updates(values).Error
+	return s.runtime().FinishInbox(ctx, key, status, processErr)
 }
 
 func (s *Service) loadRun(ctx context.Context, id string) (*models.ProjectionRun, error) {

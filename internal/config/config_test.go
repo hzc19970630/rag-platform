@@ -203,6 +203,45 @@ func TestValidateProductionGuards(t *testing.T) {
 	}
 }
 
+func TestModelRegistryConfig(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{
+		"CHAT_MODELS":                      " chat-a , chat-b@2025-01 ",
+		"RERANK_MODELS":                    "rerank-a@v2",
+		"TENANT_MODEL_REQUESTS_PER_MINUTE": "30",
+	}))
+	if len(cfg.Chat.Models) != 2 || cfg.Chat.Models[0] != "chat-a" || cfg.Chat.Models[1] != "chat-b@2025-01" {
+		t.Fatalf("CHAT_MODELS parsed as %v", cfg.Chat.Models)
+	}
+	if len(cfg.Rerank.Models) != 1 || cfg.Rerank.Models[0] != "rerank-a@v2" {
+		t.Fatalf("RERANK_MODELS parsed as %v", cfg.Rerank.Models)
+	}
+	if cfg.Limits.TenantModelRequestsPerMinute != 30 {
+		t.Fatalf("per-tenant model budget = %d", cfg.Limits.TenantModelRequestsPerMinute)
+	}
+	if err := cfg.Chat.Validate("test"); err != nil {
+		t.Fatalf("valid chat model config must pass: %v", err)
+	}
+	if err := cfg.Rerank.Validate(); err != nil {
+		t.Fatalf("valid rerank model config must pass: %v", err)
+	}
+
+	// A version separator without a version is a configuration error, not a
+	// model literally named "chat-a@".
+	broken := LoadFrom(lookupFrom(map[string]string{"CHAT_MODELS": "chat-a@"}))
+	if err := broken.Chat.Validate("test"); err == nil || !strings.Contains(err.Error(), "CHAT_MODELS") {
+		t.Fatalf("expected CHAT_MODELS validation error, got %v", err)
+	}
+	brokenRerank := LoadFrom(lookupFrom(map[string]string{"RERANK_MODELS": "@v1"}))
+	if err := brokenRerank.Rerank.Validate(); err == nil || !strings.Contains(err.Error(), "RERANK_MODELS") {
+		t.Fatalf("expected RERANK_MODELS validation error, got %v", err)
+	}
+
+	negative := LoadFrom(lookupFrom(map[string]string{"TENANT_MODEL_REQUESTS_PER_MINUTE": "-1"}))
+	if negative.ConfigError == nil || !strings.Contains(negative.ConfigError.Error(), "TENANT_MODEL_REQUESTS_PER_MINUTE") {
+		t.Fatalf("expected negative model budget rejection, got %v", negative.ConfigError)
+	}
+}
+
 func TestConnectorConfigDefaultsAndOverrides(t *testing.T) {
 	cfg := LoadFrom(lookupFrom(map[string]string{}))
 	if cfg.Connector.EncryptionKey != "" {

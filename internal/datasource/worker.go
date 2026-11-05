@@ -118,7 +118,11 @@ func (w *Worker) Process(ctx context.Context, task SyncTask) error {
 		return w.finishRun(ctx, connector, run, StatusCancelled, state, counters, appendSummary(run.ErrorSummary, "", "cancelled by operator"), false)
 	}
 
-	manifest, hash, err := w.fetcher.FetchManifest(ctx, connector.ID, manifestURL, credential, config.RequestsPerSecond)
+	port, ok := ConnectorFor(connector.Type)
+	if !ok {
+		return w.failTerminal(ctx, connector, run, state, counters, "unsupported connector type: "+connector.Type)
+	}
+	manifest, hash, err := port.FetchManifest(ctx, w.fetcher, connector.ID, manifestURL, credential, config.RequestsPerSecond)
 	if err != nil {
 		if IsRetryable(err) {
 			return err
@@ -178,7 +182,7 @@ func (w *Worker) Process(ctx context.Context, task SyncTask) error {
 			}
 			continue
 		}
-		file, err := w.fetcher.FetchFile(ctx, connector.ID, item, manifestURL, credential, config.RequestsPerSecond)
+		file, err := port.FetchFile(ctx, w.fetcher, connector.ID, item, manifestURL, credential, config.RequestsPerSecond)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				_ = w.saveProgress(context.Background(), run.ID, state, counters, summary)

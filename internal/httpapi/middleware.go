@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/app"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
@@ -20,7 +19,7 @@ const (
 	oidcCookieTTL      = 600
 )
 
-func authenticationMiddleware(cfg config.Config, application *app.Application) gin.HandlerFunc {
+func authenticationMiddleware(cfg config.Config, deps MiddlewareDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := strings.TrimSpace(c.GetHeader("X-Request-ID"))
 		raw := bearerToken(c)
@@ -30,13 +29,13 @@ func authenticationMiddleware(cfg config.Config, application *app.Application) g
 			}
 		}
 		if raw != "" {
-			principal, err := resolveCredential(c, application.Identity, raw)
+			principal, err := resolveCredential(c, deps.Identity, raw)
 			if err != nil {
 				writeError(c, err)
 				return
 			}
 			principal = withRequestMetadata(c, principal, requestID)
-			if !application.Limiter.Allow(principal.TenantID) {
+			if !deps.Limiter.Allow(principal.TenantID) {
 				writeError(c, apperror.ErrRateLimited)
 				return
 			}
@@ -56,14 +55,14 @@ func authenticationMiddleware(cfg config.Config, application *app.Application) g
 		if tenantID == "" {
 			tenantID = identity.DefaultDevTenantID
 		}
-		principal, err := application.Identity.ResolveDevelopmentPrincipal(c.Request.Context(), userID, tenantID)
+		principal, err := deps.Identity.ResolveDevelopmentPrincipal(c.Request.Context(), userID, tenantID)
 		if err != nil {
 			writeError(c, err)
 			return
 		}
 		principal.CredentialType = "dev"
 		principal = withRequestMetadata(c, principal, requestID)
-		if !application.Limiter.Allow(principal.TenantID) {
+		if !deps.Limiter.Allow(principal.TenantID) {
 			writeError(c, apperror.ErrRateLimited)
 			return
 		}
@@ -103,9 +102,9 @@ func bearerToken(c *gin.Context) string {
 // RegisterM4Routes wires authentication, API keys, tenant membership and audit
 // query. The OIDC callback is deliberately unauthenticated: it establishes the
 
-func requireOperator(application *app.Application) gin.HandlerFunc {
+func requireOperator(deps MiddlewareDeps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if err := application.Authorization.RequireTenantOperator(c.Request.Context(), accessContext(c).Principal); err != nil {
+		if err := deps.Authorization.RequireTenantOperator(c.Request.Context(), accessContext(c).Principal); err != nil {
 			writeError(c, err)
 			return
 		}

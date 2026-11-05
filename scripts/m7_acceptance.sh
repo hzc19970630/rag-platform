@@ -331,6 +331,14 @@ printf '%s\n' "$migrate_output" | grep -q migrations_compatible || {
   printf '%s\n' "$migrate_output" >&2
   fail "migration -check did not report compatibility"
 }
+# 0020 touches an existing table on upgrades, so re-execute it here: the
+# guarded ADD COLUMN statements must succeed a second time, and the four
+# runtime model-binding columns must be present afterwards.
+"${compose[@]}" exec -T postgres psql -U rag_platform -d rag_platform -v ON_ERROR_STOP=1 -q \
+  < migrations/postgres/0020_model_registry.sql || fail "migration 0020 is not repeatable"
+model_columns="$(psql_value "SELECT string_agg(column_name, ',' ORDER BY column_name) FROM information_schema.columns WHERE table_name = 'knowledge_bases' AND column_name IN ('chat_model','chat_model_version','rerank_model','rerank_model_version');")"
+[[ "$model_columns" == "chat_model,chat_model_version,rerank_model,rerank_model_version" ]] \
+  || fail "model registry columns missing after 0020: $model_columns"
 tables="$(psql_value "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('graph_snapshots','graph_entities','graph_entity_aliases','graph_relations','graph_relation_sources');")"
 [[ "$tables" == "graph_entities,graph_entity_aliases,graph_relation_sources,graph_relations,graph_snapshots" ]] \
   || fail "M7 tables missing: $tables"

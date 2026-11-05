@@ -8,6 +8,13 @@ import "context"
 type EvidencePlanner struct{}
 
 func (EvidencePlanner) Plan(_ context.Context, input PlanInput) (QueryPlan, error) {
+	var channels []string
+	if input.Strategy.KeywordEnabled {
+		channels = append(channels, ChannelKeyword)
+	}
+	if input.Strategy.VectorEnabled {
+		channels = append(channels, ChannelVector)
+	}
 	return QueryPlan{
 		SchemaVersion:             SchemaQueryPlan,
 		RequestID:                 input.Query.RequestID,
@@ -21,6 +28,8 @@ func (EvidencePlanner) Plan(_ context.Context, input PlanInput) (QueryPlan, erro
 		VectorEnabled:             input.Strategy.VectorEnabled,
 		KeywordEnabled:            input.Strategy.KeywordEnabled,
 		RerankEnabled:             input.Params.RerankEnabled,
+		Channels:                  channels,
+		Fusion:                    FusionRRF,
 		RequiredCapabilities:      input.Strategy.RequiredCapabilities,
 		Params:                    input.Params,
 		HistoryTurns:              len(input.History),

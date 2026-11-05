@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/rag-platform/internal/platform/netprobe"
 	"github.com/example/rag-platform/internal/retrieval"
 )
 
@@ -21,10 +22,11 @@ import (
 // because the citation layer reports it, and rerank_score carries the model's
 // own relevance so rerank_threshold is comparable across adapters.
 type RemoteReranker struct {
-	baseURL string
-	apiKey  string
-	model   string
-	client  *http.Client
+	baseURL   string
+	apiKey    string
+	model     string
+	healthURL string
+	client    *http.Client
 }
 
 type RemoteRerankerOptions struct {
@@ -32,6 +34,9 @@ type RemoteRerankerOptions struct {
 	APIKey  string
 	Model   string
 	Timeout time.Duration
+	// HealthURL overrides the liveness endpoint. Empty uses /health, the
+	// conventional endpoint for the self-hosted rerank servers this targets.
+	HealthURL string
 }
 
 func NewRemoteReranker(options RemoteRerankerOptions) (*RemoteReranker, error) {
@@ -45,15 +50,28 @@ func NewRemoteReranker(options RemoteRerankerOptions) (*RemoteReranker, error) {
 	if timeout <= 0 {
 		timeout = 60 * time.Second
 	}
+	baseURL := strings.TrimRight(options.BaseURL, "/")
+	healthURL := strings.TrimSpace(options.HealthURL)
+	if healthURL == "" {
+		healthURL = baseURL + "/health"
+	}
 	return &RemoteReranker{
-		baseURL: strings.TrimRight(options.BaseURL, "/"),
-		apiKey:  strings.TrimSpace(options.APIKey),
-		model:   options.Model,
-		client:  &http.Client{Timeout: timeout},
+		baseURL:   baseURL,
+		apiKey:    strings.TrimSpace(options.APIKey),
+		model:     options.Model,
+		healthURL: healthURL,
+		client:    &http.Client{Timeout: timeout},
 	}, nil
 }
 
-func (r *RemoteReranker) Name() string { return "remote:" + r.model }
+// Name is the configured model, matching the chat and embedding adapters so the
+// model catalog registers names a knowledge-base binding can actually select.
+func (r *RemoteReranker) Name() string { return r.model }
+
+// Probe reports provider reachability for the model catalog.
+func (r *RemoteReranker) Probe(ctx context.Context) error {
+	return netprobe.Check(ctx, r.healthURL, r.apiKey)
+}
 
 type rerankRequest struct {
 	Model     string           `json:"model"`
@@ -73,14 +91,23 @@ type rerankResponse struct {
 }
 
 func (r *RemoteReranker) Rerank(ctx context.Context, query string, candidates []retrieval.Candidate) ([]retrieval.Candidate, error) {
+	return r.RerankWithModel(ctx, r.model, query, candidates)
+}
+
+// RerankWithModel reranks with the resolved knowledge-base model. An empty
+// model falls back to the adapter's configured default.
+func (r *RemoteReranker) RerankWithModel(ctx context.Context, model, query string, candidates []retrieval.Candidate) ([]retrieval.Candidate, error) {
 	if len(candidates) == 0 {
 		return candidates, nil
+	}
+	if strings.TrimSpace(model) == "" {
+		model = r.model
 	}
 	documents := make([]rerankDocument, 0, len(candidates))
 	for _, candidate := range candidates {
 		documents = append(documents, rerankDocument{Text: candidate.Content})
 	}
-	payload, err := json.Marshal(rerankRequest{Model: r.model, Query: query, Documents: documents})
+	payload, err := json.Marshal(rerankRequest{Model: model, Query: query, Documents: documents})
 	if err != nil {
 		return nil, fmt.Errorf("encode rerank request: %w", err)
 	}

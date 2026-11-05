@@ -7,20 +7,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/llm"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
 )
 
 type recordingChatter struct {
-	request llm.ChatRequest
+	request model.ChatRequest
 	output  string
 	err     error
 }
 
-func (r *recordingChatter) Complete(_ context.Context, request llm.ChatRequest) (llm.ChatResponse, error) {
+func (r *recordingChatter) Complete(_ context.Context, request model.ChatRequest) (model.ChatResponse, error) {
 	r.request = request
-	return llm.ChatResponse{Text: r.output}, r.err
+	return model.ChatResponse{Text: r.output}, r.err
 }
 
 func (r *recordingChatter) Name() string { return "remote-test" }
@@ -36,7 +37,7 @@ func loadRewritePrompts(t *testing.T) *prompts.Registry {
 
 func TestQueryRewriterSendsHistoryAndReturnsStandaloneQuery(t *testing.T) {
 	chatter := &recordingChatter{output: "second point details\n"}
-	rewriter := NewQueryRewriter(chatter, loadRewritePrompts(t), time.Second)
+	rewriter := NewQueryRewriter(chatter, loadRewritePrompts(t), time.Second, nil)
 	history := []retrieval.HistoryTurn{
 		{Role: MessageRoleUser, Content: "first question"},
 		{Role: MessageRoleAssistant, Content: "first answer"},
@@ -61,7 +62,7 @@ func TestQueryRewriterSendsHistoryAndReturnsStandaloneQuery(t *testing.T) {
 
 func TestQueryRewriterFallsBackOnError(t *testing.T) {
 	chatter := &recordingChatter{err: errors.New("provider down")}
-	rewriter := NewQueryRewriter(chatter, loadRewritePrompts(t), time.Second)
+	rewriter := NewQueryRewriter(chatter, loadRewritePrompts(t), time.Second, nil)
 	got, err := rewriter.Rewrite(context.Background(), "original", []retrieval.HistoryTurn{{Role: MessageRoleUser, Content: "prior"}})
 	if err == nil {
 		t.Fatalf("expected the provider error")
@@ -72,7 +73,7 @@ func TestQueryRewriterFallsBackOnError(t *testing.T) {
 }
 
 func TestQueryRewriterSkipsLocalAdapter(t *testing.T) {
-	rewriter := NewQueryRewriter(llm.NewLocalChatter(), loadRewritePrompts(t), time.Second)
+	rewriter := NewQueryRewriter(llm.NewLocalChatter(), loadRewritePrompts(t), time.Second, nil)
 	got, err := rewriter.Rewrite(context.Background(), "original", []retrieval.HistoryTurn{{Role: MessageRoleUser, Content: "prior"}})
 	if err != nil || got != "original" {
 		t.Fatalf("local rewrite = %q, %v", got, err)

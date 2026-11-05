@@ -51,13 +51,13 @@ func TestSyncCancelRejectsAPIKeyAndNonOperator(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			ctx := context.Background()
-			if _, err := service.CancelRun(ctx, testCase.principal, "conn-1", "run-1"); !errors.Is(err, apperror.ErrForbidden) {
+			if _, err := service.Runs().CancelRun(ctx, testCase.principal, "conn-1", "run-1"); !errors.Is(err, apperror.ErrForbidden) {
 				t.Fatalf("CancelRun must be forbidden, got %v", err)
 			}
-			if _, err := service.CancelConnector(ctx, testCase.principal, "conn-1"); !errors.Is(err, apperror.ErrForbidden) {
+			if _, err := service.Runs().CancelConnector(ctx, testCase.principal, "conn-1"); !errors.Is(err, apperror.ErrForbidden) {
 				t.Fatalf("CancelConnector must be forbidden, got %v", err)
 			}
-			if _, err := service.CancelKnowledgeBase(ctx, testCase.principal, "kb-1"); !errors.Is(err, apperror.ErrForbidden) {
+			if _, err := service.Runs().CancelKnowledgeBase(ctx, testCase.principal, "kb-1"); !errors.Is(err, apperror.ErrForbidden) {
 				t.Fatalf("CancelKnowledgeBase must be forbidden, got %v", err)
 			}
 		})

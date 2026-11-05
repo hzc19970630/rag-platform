@@ -4,13 +4,11 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 func testSigner(t *testing.T) *tokenSigner {
 	t.Helper()
-	signer, err := newTokenSigner(config.AuthConfig{
+	signer, err := newTokenSigner(AuthOptions{
 		SigningKeys:       []string{"old:old-secret-at-least-16", "new:new-secret-at-least-16"},
 		ActiveKeyID:       "new",
 		SessionTTLSeconds: 3600,
@@ -49,7 +47,7 @@ func TestTokenSignerIssuesWithActiveKeyAndVerifies(t *testing.T) {
 }
 
 func TestTokenSignerKeepsOldKeyForRotation(t *testing.T) {
-	oldSigner, err := newTokenSigner(config.AuthConfig{
+	oldSigner, err := newTokenSigner(AuthOptions{
 		SigningKeys: []string{"old:old-secret-at-least-16", "new:new-secret-at-least-16"},
 		ActiveKeyID: "old", SessionTTLSeconds: 3600, JWTIssuer: "rag-platform", JWTAudience: "rag-api",
 	})
@@ -66,7 +64,7 @@ func TestTokenSignerKeepsOldKeyForRotation(t *testing.T) {
 		t.Fatalf("a token signed by the retired key must verify during rotation: %v", err)
 	}
 
-	withoutOld, err := newTokenSigner(config.AuthConfig{
+	withoutOld, err := newTokenSigner(AuthOptions{
 		SigningKeys: []string{"new:new-secret-at-least-16"},
 		ActiveKeyID: "new", SessionTTLSeconds: 3600, JWTIssuer: "rag-platform", JWTAudience: "rag-api",
 	})
@@ -120,13 +118,13 @@ func TestTokenSignerRejectsInvalidTokens(t *testing.T) {
 }
 
 func TestTokenSignerRequiresConfiguredActiveKey(t *testing.T) {
-	if _, err := newTokenSigner(config.AuthConfig{
+	if _, err := newTokenSigner(AuthOptions{
 		SigningKeys: []string{"old:old-secret-at-least-16"}, ActiveKeyID: "missing",
 		SessionTTLSeconds: 3600, JWTIssuer: "rag-platform", JWTAudience: "rag-api",
 	}); err == nil {
 		t.Fatal("an active key id that is not configured must be rejected")
 	}
-	if _, err := newTokenSigner(config.AuthConfig{
+	if _, err := newTokenSigner(AuthOptions{
 		SigningKeys: []string{":secret"}, ActiveKeyID: "",
 		SessionTTLSeconds: 3600, JWTIssuer: "rag-platform", JWTAudience: "rag-api",
 	}); err == nil {

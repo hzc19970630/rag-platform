@@ -10,6 +10,7 @@ import (
 
 	"github.com/example/rag-platform/internal/app"
 	"github.com/example/rag-platform/internal/apperror"
+	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/datasource"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/knowledgeprojection"
@@ -27,10 +28,14 @@ type taskHandlers struct {
 	pipeline    *ingestion.PipelineWorker
 	application *app.Application
 	logger      *slog.Logger
+	metrics     metrics.Recorder
 }
 
-func newTaskHandlers(pipeline *ingestion.PipelineWorker, application *app.Application, logger *slog.Logger) *taskHandlers {
-	return &taskHandlers{pipeline: pipeline, application: application, logger: logger}
+func newTaskHandlers(pipeline *ingestion.PipelineWorker, application *app.Application, logger *slog.Logger, recorder metrics.Recorder) *taskHandlers {
+	if recorder == nil {
+		recorder = metrics.Nop{}
+	}
+	return &taskHandlers{pipeline: pipeline, application: application, logger: logger, metrics: recorder}
 }
 
 func (h *taskHandlers) register(mux *asynq.ServeMux) {
@@ -64,10 +69,10 @@ func (h *taskHandlers) ingest(ctx context.Context, task *asynq.Task) (err error)
 	if err != nil {
 		result = "failure"
 	}
-	observability.Default().Inc("ingestion_stage_total", observability.Labels("stage", message.Stage, "result", result))
-	observability.Default().Observe("ingestion_stage_duration_ms", time.Since(started), observability.Labels("stage", message.Stage))
+	h.metrics.Inc("ingestion_stage_total", metrics.Labels("stage", message.Stage, "result", result))
+	h.metrics.Observe("ingestion_stage_duration_ms", time.Since(started), metrics.Labels("stage", message.Stage))
 	if err != nil && message.Stage == ingestion.StageEmbed {
-		observability.Default().Inc("model_errors_total", observability.Labels("model", "embedding", "stage", "embed"))
+		h.metrics.Inc("model_errors_total", metrics.Labels("model", "embedding", "stage", "embed"))
 	}
 	if err != nil && apperror.IsTerminal(err) {
 		// Terminal failures are already recorded on the stage, version and
@@ -99,8 +104,8 @@ func (h *taskHandlers) sync(ctx context.Context, task *asynq.Task) (err error) {
 	if err != nil {
 		result = "failure"
 	}
-	observability.Default().Inc("connector_sync_attempt_total", observability.Labels("result", result))
-	observability.Default().Observe("connector_sync_duration_ms", time.Since(started), observability.Labels("mode", message.Queue))
+	h.metrics.Inc("connector_sync_attempt_total", metrics.Labels("result", result))
+	h.metrics.Observe("connector_sync_duration_ms", time.Since(started), metrics.Labels("mode", message.Queue))
 	return err
 }
 
@@ -136,8 +141,8 @@ func (h *taskHandlers) projection(ctx context.Context, task *asynq.Task, decodeL
 	if err != nil {
 		result = "failure"
 	}
-	observability.Default().Inc(metricPrefix+"_stage_total", observability.Labels("stage", message.Stage, "result", result))
-	observability.Default().Observe(metricPrefix+"_stage_duration_ms", time.Since(started), observability.Labels("stage", message.Stage))
+	h.metrics.Inc(metricPrefix+"_stage_total", metrics.Labels("stage", message.Stage, "result", result))
+	h.metrics.Observe(metricPrefix+"_stage_duration_ms", time.Since(started), metrics.Labels("stage", message.Stage))
 	if err != nil && apperror.IsTerminal(err) {
 		// Terminal projection failures are recorded on the run/stage rows and
 		// must not retry. Evidence RAG is unaffected either way.
@@ -190,7 +195,7 @@ func recordSyncFailure(logger *slog.Logger, application *app.Application, ctx co
 	}
 	recordCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := application.DataSources.FailRun(recordCtx, message, taskErr); err != nil {
+	if err := application.DataSources.Maintenance().FailRun(recordCtx, message, taskErr); err != nil {
 		logger.Error("connector_sync_failure_record_failed", "run_id", message.SyncRunID, "error", err)
 		return
 	}

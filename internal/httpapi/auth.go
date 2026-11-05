@@ -4,22 +4,23 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/example/rag-platform/internal/app"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/identity"
+	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
+func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, deps AuthDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, application))
+	protected.Use(authenticationMiddleware(cfg, mw))
 
 	protected.GET("/me", func(c *gin.Context) {
 		access := accessContext(c)
-		scope, err := application.Authorization.BuildScope(c.Request.Context(), access.Principal, authz.QueryTarget{})
+		scope, err := deps.Authorization.BuildScope(c.Request.Context(), access.Principal, authz.QueryTarget{})
 		if err != nil {
 			writeError(c, err)
 			return
@@ -28,30 +29,30 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 	})
 	protected.GET("/audit/authorization", func(c *gin.Context) {
 		access := accessContext(c)
-		rows, err := application.Authorization.ListAudit(c.Request.Context(), access.Principal, 100)
+		rows, err := deps.Authorization.ListAudit(c.Request.Context(), access.Principal, 100)
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": rows})
+		c.JSON(http.StatusOK, gin.H{"items": auditLogViews(rows)})
 	})
 
 	auth := router.Group("/api/v1/auth")
 	auth.GET("/config", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"oidcEnabled":     application.Identity.OIDCEnabled(),
-			"oidcIssuer":      application.Identity.OIDCIssuer(),
+			"oidcEnabled":     deps.Identity.OIDCEnabled(),
+			"oidcIssuer":      deps.Identity.OIDCIssuer(),
 			"devAuthEnabled":  cfg.Auth.DevAuthEnabled && (cfg.AppEnv == "development" || cfg.AppEnv == "test"),
 			"sessionCookie":   cfg.Auth.CookieName,
 			"sessionTTLHours": cfg.Auth.SessionTTLSeconds / 3600,
 		})
 	})
 	auth.GET("/oidc/login", func(c *gin.Context) {
-		if !application.Identity.OIDCEnabled() {
+		if !deps.Identity.OIDCEnabled() {
 			writeError(c, apperror.ErrNotFound)
 			return
 		}
-		authorizationURL, state, nonce, verifier, err := application.Identity.BeginOIDC(c.Request.Context())
+		authorizationURL, state, nonce, verifier, err := deps.Identity.BeginOIDC(c.Request.Context())
 		if err != nil {
 			writeError(c, err)
 			return
@@ -76,7 +77,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 			redirectAuthError(c, cfg, providerError)
 			return
 		}
-		result, err := application.Identity.CompleteOIDC(c.Request.Context(), c.Query("code"), verifier, nonce, c.Request.UserAgent(), clientIP(c))
+		result, err := deps.Identity.CompleteOIDC(c.Request.Context(), c.Query("code"), verifier, nonce, c.Request.UserAgent(), clientIP(c))
 		if err != nil {
 			logger.Warn("oidc_callback_failed", "error", err)
 			redirectAuthError(c, cfg, "oidc_callback_failed")
@@ -90,10 +91,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 			writeError(c, apperror.ErrNotFound)
 			return
 		}
-		var input struct {
-			UserID   string `json:"userId"`
-			TenantID string `json:"tenantId"`
-		}
+		var input devLoginRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
@@ -104,7 +102,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		if strings.TrimSpace(input.TenantID) == "" {
 			input.TenantID = identity.DefaultDevTenantID
 		}
-		result, err := application.Identity.LoginDevelopment(c.Request.Context(), input.UserID, input.TenantID, c.Request.UserAgent(), clientIP(c))
+		result, err := deps.Identity.LoginDevelopment(c.Request.Context(), input.UserID, input.TenantID, c.Request.UserAgent(), clientIP(c))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -117,7 +115,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		if raw == "" {
 			raw, _ = c.Cookie(cfg.Auth.CookieName)
 		}
-		token, expiresAt, err := application.Identity.Refresh(c.Request.Context(), raw)
+		token, expiresAt, err := deps.Identity.Refresh(c.Request.Context(), raw)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -131,7 +129,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 			raw, _ = c.Cookie(cfg.Auth.CookieName)
 		}
 		if raw != "" {
-			_ = application.Identity.RevokeSession(c.Request.Context(), raw)
+			_ = deps.Identity.RevokeSession(c.Request.Context(), raw)
 		}
 		clearCookie(c, cfg, cfg.Auth.CookieName)
 		c.Status(http.StatusNoContent)
@@ -142,7 +140,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		if !requireSessionCredential(c) {
 			return
 		}
-		rows, err := application.Identity.ListAPIKeys(c.Request.Context(), accessContext(c).Principal)
+		rows, err := deps.Identity.ListAPIKeys(c.Request.Context(), accessContext(c).Principal)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -158,7 +156,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 			writeError(c, err)
 			return
 		}
-		view, token, err := application.Identity.CreateAPIKey(c.Request.Context(), accessContext(c).Principal, input)
+		view, token, err := deps.Identity.CreateAPIKey(c.Request.Context(), accessContext(c).Principal, input)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -169,7 +167,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		if !requireSessionCredential(c) {
 			return
 		}
-		if err := application.Identity.RevokeAPIKey(c.Request.Context(), accessContext(c).Principal, c.Param("id")); err != nil {
+		if err := deps.Identity.RevokeAPIKey(c.Request.Context(), accessContext(c).Principal, c.Param("id")); err != nil {
 			writeError(c, err)
 			return
 		}
@@ -178,7 +176,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 
 	tenantMembers := protected.Group("/tenant/members")
 	tenantMembers.GET("", func(c *gin.Context) {
-		rows, err := application.Authorization.ListTenantMembers(c.Request.Context(), accessContext(c).Principal)
+		rows, err := deps.Authorization.ListTenantMembers(c.Request.Context(), accessContext(c).Principal)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -186,15 +184,12 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		c.JSON(http.StatusOK, gin.H{"items": rows})
 	})
 	tenantMembers.POST("", func(c *gin.Context) {
-		var input struct {
-			UserID string `json:"userId" binding:"required"`
-			Role   string `json:"role" binding:"required"`
-		}
+		var input tenantMemberCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		view, err := application.Authorization.AddTenantMember(c.Request.Context(), accessContext(c).Principal, input.UserID, input.Role)
+		view, err := deps.Authorization.AddTenantMember(c.Request.Context(), accessContext(c).Principal, input.UserID, input.Role)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -202,21 +197,19 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 		c.JSON(http.StatusCreated, view)
 	})
 	tenantMembers.PATCH("/:userID", func(c *gin.Context) {
-		var input struct {
-			Role string `json:"role" binding:"required"`
-		}
+		var input tenantMemberUpdateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		if err := application.Authorization.UpdateTenantMember(c.Request.Context(), accessContext(c).Principal, c.Param("userID"), input.Role); err != nil {
+		if err := deps.Authorization.UpdateTenantMember(c.Request.Context(), accessContext(c).Principal, c.Param("userID"), input.Role); err != nil {
 			writeError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
 	})
 	tenantMembers.DELETE("/:userID", func(c *gin.Context) {
-		if err := application.Authorization.RemoveTenantMember(c.Request.Context(), accessContext(c).Principal, c.Param("userID")); err != nil {
+		if err := deps.Authorization.RemoveTenantMember(c.Request.Context(), accessContext(c).Principal, c.Param("userID")); err != nil {
 			writeError(c, err)
 			return
 		}
@@ -235,11 +228,57 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, application *app.
 			allowed := raw == "true" || raw == "1"
 			query.Allowed = &allowed
 		}
-		rows, err := application.Authorization.QueryAudit(c.Request.Context(), accessContext(c).Principal, query)
+		rows, err := deps.Authorization.QueryAudit(c.Request.Context(), accessContext(c).Principal, query)
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": rows})
+		c.JSON(http.StatusOK, gin.H{"items": auditLogViews(rows)})
 	})
+}
+
+type devLoginRequest struct {
+	UserID   string `json:"userId"`
+	TenantID string `json:"tenantId"`
+}
+
+type tenantMemberCreateRequest struct {
+	UserID string `json:"userId" binding:"required"`
+	Role   string `json:"role" binding:"required"`
+}
+
+type tenantMemberUpdateRequest struct {
+	Role string `json:"role" binding:"required"`
+}
+
+type auditLogResponse struct {
+	ID           uint64    `json:"id"`
+	TenantID     string    `json:"tenantId"`
+	ActorID      string    `json:"actorId"`
+	Action       string    `json:"action"`
+	ResourceType string    `json:"resourceType"`
+	ResourceID   string    `json:"resourceId"`
+	Allowed      bool      `json:"allowed"`
+	Reason       string    `json:"reason"`
+	RequestID    string    `json:"requestId"`
+	IPAddress    string    `json:"ipAddress"`
+	UserAgent    string    `json:"userAgent"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+func auditLogView(row models.AuditLog) auditLogResponse {
+	return auditLogResponse{
+		ID: row.ID, TenantID: row.TenantID, ActorID: row.ActorID, Action: row.Action,
+		ResourceType: row.ResourceType, ResourceID: row.ResourceID, Allowed: row.Allowed,
+		Reason: row.Reason, RequestID: row.RequestID, IPAddress: row.IPAddress,
+		UserAgent: row.UserAgent, CreatedAt: row.CreatedAt,
+	}
+}
+
+func auditLogViews(rows []models.AuditLog) []auditLogResponse {
+	items := make([]auditLogResponse, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, auditLogView(row))
+	}
+	return items
 }

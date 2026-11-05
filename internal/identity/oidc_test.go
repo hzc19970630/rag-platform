@@ -15,8 +15,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 // oidcTestProvider is a wire-level OpenID provider: discovery, JWKS and token
@@ -102,7 +100,7 @@ func (p *oidcTestProvider) signToken(claims map[string]any) (string, error) {
 
 func (p *oidcTestProvider) client(t *testing.T) *OIDCClient {
 	t.Helper()
-	return NewOIDCClient(config.OIDCConfig{
+	return NewOIDCClient(OIDCOptions{
 		Enabled: true, Issuer: p.server.URL, ClientID: p.clientID, ClientSecret: "secret",
 		RedirectURL: "http://localhost/callback", Scopes: []string{"openid", "email", "profile"},
 		TenantClaim: "tenant_id", EmailClaim: "email", NameClaim: "name",
@@ -215,7 +213,7 @@ func TestOIDCDiscoveryIssuerMismatchFailsClosed(t *testing.T) {
 		})
 	}))
 	defer server.Close()
-	client := NewOIDCClient(config.OIDCConfig{
+	client := NewOIDCClient(OIDCOptions{
 		Enabled: true, Issuer: server.URL, ClientID: "client-1",
 		RedirectURL: "http://localhost/callback", Scopes: []string{"openid"},
 	})

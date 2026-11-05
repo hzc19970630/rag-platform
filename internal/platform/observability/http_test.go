@@ -31,3 +31,17 @@ func TestHandlerServesOnlyGetMetrics(t *testing.T) {
 		t.Fatalf("non-metrics path status: %d", recorder.Code)
 	}
 }
+
+func TestHandlerForServesTheInjectedRegistry(t *testing.T) {
+	registry := New()
+	registry.Inc("injected_total", nil)
+
+	recorder := httptest.NewRecorder()
+	HandlerFor(registry).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /metrics status: %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "injected_total 1") {
+		t.Fatalf("the listener must render the injected registry, got:\n%s", recorder.Body.String())
+	}
+}

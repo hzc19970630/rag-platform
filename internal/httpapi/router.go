@@ -19,6 +19,12 @@ func NewRouter(cfg config.Config) *gin.Engine {
 }
 
 func NewRouterWithLogger(cfg config.Config, logger *slog.Logger) *gin.Engine {
+	return NewRouterWithMetrics(cfg, logger, observability.New())
+}
+
+// NewRouterWithMetrics is the composition-root constructor: the request
+// middleware and the application services must record into the same registry.
+func NewRouterWithMetrics(cfg config.Config, logger *slog.Logger, registry *observability.Registry) *gin.Engine {
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -30,7 +36,7 @@ func NewRouterWithLogger(cfg config.Config, logger *slog.Logger) *gin.Engine {
 		logger.Error("trusted_proxies_invalid", "error", err)
 		_ = r.SetTrustedProxies(nil)
 	}
-	r.Use(tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
+	r.Use(tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(registry), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		logger.Error("http_panic", "path", c.Request.URL.Path, "panic", recovered)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_server_error"})
 	}))
@@ -129,8 +135,10 @@ func requestBodyLimit(limit int64) gin.HandlerFunc {
 // metricsMiddleware records request count and latency. c.FullPath() is the
 // route template rather than the concrete URL, so metric cardinality stays
 // bounded no matter how many document ids are requested.
-func metricsMiddleware() gin.HandlerFunc {
-	registry := observability.Default()
+func metricsMiddleware(registry *observability.Registry) gin.HandlerFunc {
+	if registry == nil {
+		registry = observability.New()
+	}
 	return func(c *gin.Context) {
 		started := time.Now()
 		c.Next()

@@ -2,7 +2,6 @@ package knowledgeprojection
 
 import (
 	"github.com/example/rag-platform/internal/knowledgeprojection/relation"
-	"github.com/example/rag-platform/internal/platform/llm"
 	"github.com/example/rag-platform/internal/prompts"
 )
 
@@ -10,6 +9,6 @@ import (
 // orchestration on the existing name.
 type Extractor = relation.Extractor
 
-func NewExtractor(chatter llm.Chatter, registry *prompts.Registry) (*Extractor, error) {
+func NewExtractor(chatter Chatter, registry *prompts.Registry) (*Extractor, error) {
 	return relation.NewExtractor(chatter, registry)
 }

@@ -4,20 +4,20 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/example/rag-platform/internal/app"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/knowledgebase"
+	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterKnowledgeBaseConfigRoutes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
+func RegisterKnowledgeBaseConfigRoutes(router *gin.Engine, cfg config.Config, deps KnowledgeBaseDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, application))
+	protected.Use(authenticationMiddleware(cfg, mw))
 
 	byID := protected.Group("/knowledge-bases/:id")
 	byID.GET("/configuration", func(c *gin.Context) {
-		view, err := application.KnowledgeBase.Configuration(
+		view, err := deps.KnowledgeBase.Configuration(
 			c.Request.Context(),
 			accessContext(c).Principal,
 			c.Param("id"),
@@ -37,16 +37,21 @@ func RegisterKnowledgeBaseConfigRoutes(router *gin.Engine, cfg config.Config, ap
 			writeError(c, err)
 			return
 		}
-		row, err := application.KnowledgeBase.ReplaceRetrievalConfig(c.Request.Context(), accessContext(c).Principal, c.Param("id"), override)
+		row, err := deps.KnowledgeBase.ReplaceRetrievalConfig(c.Request.Context(), accessContext(c).Principal, c.Param("id"), override)
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		view, err := knowledgebase.BuildKnowledgeBaseConfiguration(row, cfg.Retrieval, knowledgebase.ReadOnlySystemConfiguration(cfg))
-		if err != nil {
-			writeError(c, err)
-			return
-		}
-		c.JSON(http.StatusOK, view)
+		writeRetrievalConfigView(c, cfg, row)
 	})
+
+}
+
+func writeRetrievalConfigView(c *gin.Context, cfg config.Config, row models.KnowledgeBase) {
+	view, err := knowledgebase.BuildKnowledgeBaseConfiguration(row, cfg.Retrieval, knowledgebase.ReadOnlySystemConfiguration(cfg))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, view)
 }

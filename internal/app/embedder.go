@@ -25,6 +25,7 @@ func NewEmbedder(cfg config.Config) (ingestion.Embedder, error) {
 			Dimension: cfg.Embedding.Dimension,
 			BatchSize: cfg.Embedding.BatchSize,
 			Timeout:   time.Duration(cfg.Embedding.TimeoutSec) * time.Second,
+			HealthURL: cfg.Embedding.HealthURL,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported EMBEDDING_SOURCE %q", cfg.Embedding.Source)

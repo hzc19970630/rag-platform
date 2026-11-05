@@ -1,4 +1,4 @@
-.PHONY: dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m3-eval embed-index embed-rebuild embed-verify embed-acceptance
+.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m3-eval embed-index embed-rebuild embed-verify embed-acceptance
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -13,6 +13,9 @@ GO_RUN = docker run --rm \
 	-v rag-go-buildcache:/root/.cache/go-build \
 	-e GOPROXY=$(GO_PROXY) \
 	$(GO_IMAGE)
+
+deps:
+	$(GO_RUN) go run ./cmd/checkdeps
 
 dev-up:
 	@test -f .env || cp .env.example .env
@@ -43,11 +46,11 @@ web-build:
 	cd web && npm run build
 
 test:
-	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go test ./... && go vet ./...'
+	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go run ./cmd/checkdeps && go test ./... && go vet ./...'
 	cd web && npm test -- --passWithNoTests
 
 lint:
-	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go vet ./...'
+	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go run ./cmd/checkdeps && go vet ./...'
 	cd web && npm run build
 
 acceptance: m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance embed-acceptance

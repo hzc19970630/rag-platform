@@ -117,7 +117,7 @@ graph LR
 | 部署 | 目标：Docker Compose + Helm/Kubernetes；当前：仅 Docker Compose | 本地开发、私有化和生产集群统一交付方式 |
 | API 契约 | REST 使用 OpenAPI 3（`api/openapi/openapi.yaml`）；gRPC 使用 Protobuf；异步任务使用 `contracts/tasks` 的版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
 
-`web/` 已完成 M9 迁移：React Router + Ant Design + TanStack Query + Zustand + i18next 已接入。`web/src/api/generated.ts` 由 OpenAPI spec 生成，`types.ts` 仍是前端使用的收敛视图；扩充 schema 后再逐步替换。
+`web/` 已完成 M9 迁移：React Router + Ant Design + TanStack Query + Zustand + i18next 已接入。前端只保留手写的 `web/src/api/types.ts` 作为收敛视图；M12 移除了 OpenAPI 类型生成（`generated.ts`）和对应的漂移检查，避免两套模型并存。`api/openapi/openapi.yaml` 仍是 HTTP 契约事实源，由 `internal/httpapi` 的契约测试校验路由覆盖、请求/响应 schema 和引用完整性。
 
 ### 4.2 检索存储策略
 
@@ -314,7 +314,7 @@ Wiki 页面和图谱关系都必须记录来源、生成模型、生成时间、
 | 配置类 | 载体 | 示例 | 生效范围 | 装载方式 |
 | --- | --- | --- | --- | --- |
 | 基础设施连接 | 环境变量 | `DATABASE_URL`、`S3_ENDPOINT`、`REDIS_ADDR`、`DOCREADER_GRPC_ADDR` | 进程级 | 组合根 `config.Load()` 启动时读取 |
-| 模型定义 | YAML/JSON 文件 + 环境变量插值 | `EMBEDDING_SOURCE`、`LLM_EMBEDDING_MODEL`、`EMBEDDING_DIMENSION`、`EMBEDDING_BATCH_SIZE`、`RERANK_SOURCE`、`LLM_RERANK_MODEL` | 进程级 | 启动时构造适配器并校验 |
+| 模型定义 | YAML/JSON 文件 + 环境变量插值 | `EMBEDDING_SOURCE`、`LLM_EMBEDDING_MODEL`、`EMBEDDING_DIMENSION`、`EMBEDDING_BATCH_SIZE`、`RERANK_SOURCE`、`LLM_RERANK_MODEL`、`CHAT_MODELS`、`RERANK_MODELS` | 进程级 | 启动时构造适配器并校验 |
 | 切分策略 | YAML 或环境变量 | `CHUNK_SIZE`、`CHUNK_OVERLAP`、`CHUNK_SPLIT_MARKERS`、`PARSER_SANDBOX_ENABLED` | 进程级，可按知识库覆盖 | 切分阶段读取 |
 | Prompt 模板 | `config/prompt_templates/*.yaml` | 系统提示、上下文模板、fallback、会话标题、Wiki 生成、关系抽取 | 进程级，可按租户覆盖 | 启动时加载并校验模板 ID 引用 |
 | 检索参数 | YAML + 数据库三级覆盖 | `embedding_top_k`、`vector_threshold`、`keyword_threshold`、`rerank_threshold`、`rerank_top_k`、`rrf_k`、`expansion_score_factor` | 全局默认 → 知识库 → 会话 | 检索请求组装时解析 |
@@ -356,7 +356,28 @@ EMBEDDING_TIMEOUT_SECONDS 单次模型调用超时
 
 迁移 `migrations/postgres/0005_embedding_model_config.sql` 只记录模型元数据，不把生产维度硬编码进 SQL；`migrations/postgres/0012_knowledge_base_embedding_binding.sql` 增加知识库级绑定。当前 M2 继续使用 3 维本地验收索引。切换到真实模型时，由受管部署/重建命令按 `EMBEDDING_DIMENSION=N` 创建 `halfvec(N)` HNSW 索引，完成全量重建（同时更新知识库绑定）后再切换检索流量，并人工确认没有遗留旧维度 Chunk。
 
-#### 4.5.3 切分与 Prompt 配置化
+#### 4.5.3 Chat / Rerank 模型绑定（Model Registry）
+
+M12 在既有 Embedding 绑定的基础上引入最小 Model Registry。它解决的是「同一个部署要服务多个模型，且每个知识库可以选择不同模型」的问题，不改变 Embedding 的索引契约。
+
+```text
+LLM_CHAT_MODEL            部署默认 chat 模型（CHAT_SOURCE=remote 必填）
+CHAT_MODELS               额外可路由 chat 模型，逗号分隔，name 或 name@version
+LLM_RERANK_MODEL          部署默认 rerank 模型（RERANK_SOURCE=remote 必填）
+RERANK_MODELS             额外可路由 rerank 模型，逗号分隔，name 或 name@version
+TENANT_MODEL_REQUESTS_PER_MINUTE  每租户每能力的模型解析预算，0 关闭
+```
+
+约束：
+
+- 目录是进程内的：只登记本次部署实际构造出的适配器，绑定不能指向没人服务的模型。默认模型始终登记，额外模型只对 `remote` 源登记（离线适配器固定一个模型）。
+- 知识库在 `knowledge_bases.chat_model`、`chat_model_version`、`rerank_model`、`rerank_model_version` 保存覆盖；空值表示继承部署默认。PATCH 写入时校验模型已登记且能力匹配，切换/清除都写入 `audit_logs`（`resource_type=model_binding`，原因包含 capability、新模型/版本和旧模型/版本）。
+- 请求路径先读取知识库绑定，再做供应商健康探测（`CHAT_HEALTH_URL`/`RERANK_HEALTH_URL`/`EMBEDDING_HEALTH_URL` 可覆盖推导出的默认探测地址，结果缓存 30 秒）、降级与租户级每能力每 1 分钟配额；绑定模型已下线或供应商不健康时降级到部署默认，并在解析结果中标记 `degraded` 与原因；默认也不可用时请求失败，不静默换模型。健康快照通过 `/ops/metrics.modelHealth` 与 `/ops/metrics/prometheus` 的 `model_health` gauge 暴露。
+- 生成的 `model` 通过 `ChatRequest.model` 覆盖适配器配置；空串表示沿用适配器默认，离线适配器忽略该字段。消息记录的 `model` 仍是实际生效模型。
+- Embedding 绑定继续不可热切换：已有文档的知识库不能更换模型/维度，仍由受管重建流程处理。
+- `model_binding` 审计包含版本，供应商就地升级模型版本不会从审计里消失。
+
+#### 4.5.4 切分与 Prompt 配置化
 
 切分参数从代码外置。不同文档类型（技术手册、制度文件、FAQ）需要不同粒度，必须可配置：
 
@@ -375,7 +396,7 @@ Prompt 模板在 M3 生成层落地时外置为 `config/prompt_templates/*.yaml`
 - 模板 ID 引用在启动时校验，缺失或重复的模板 ID 导致启动失败。
 - 模板内容变更走配置发布，不重新构建镜像；模板变量占位符与 Schema 契约一起版本化。
 
-#### 4.5.4 检索参数三级覆盖
+#### 4.5.5 检索参数三级覆盖
 
 检索参数（`embedding_top_k`、阈值、Rerank 开关和 `top_k`）采用 WeKnora 的三级覆盖模型：
 
@@ -406,10 +427,10 @@ Rerank 适配器由 `RERANK_SOURCE` 选择（`none` 直通 / `lexical` 离线词
 
 检索接口返回的 `score` 是 RRF 融合分，不是余弦相似度；真实余弦在 `vectorScore`、BM25 分在 `keywordScore`。
 
-#### 4.5.5 边界与不做的事
+#### 4.5.6 边界与不做的事
 
 - 不引入运行时配置中心（Nacos、Apollo、Consul）作为首期依赖。配置来源是环境变量 + 随镜像发布的 YAML + 数据库，足够覆盖当前阶段；确有热更新需求时再评估。
-- 不做模型热切换。Embedding 模型变更必须走「改配置 → 重建索引 → 全量重新 Embedding」的受管流程，不允许运行中混用两个模型的向量。
+- 不做 Embedding 模型热切换。Embedding 模型变更必须走「改配置 → 重建索引 → 全量重新 Embedding」的受管流程，不允许运行中混用两个模型的向量。Chat/Rerank 绑定可以按知识库运行时切换（4.5.3），因为它们不定义已持久化向量的可比性。
 - 不把所有配置项开放为运行时可改。会影响索引结构和已持久化数据的配置（Embedding 维度、切分粒度）必须走迁移或重建流程，不能当作普通设置项。
 - 密钥不入配置文件。模型 API Key 只从环境变量或密钥管理服务读取，YAML 中只允许 `${ENV_VAR}` 形式插值。
 
@@ -500,7 +521,7 @@ M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了
 | `vector_enabled` / `keyword_enabled` | 数据库 `IndexingStrategy` | 检索与索引 | `knowledge_base:write` | 下一次检索计划生效 | 关闭只停止对应召回通道，不删除已生成索引；重新开启可复用 |
 | `wiki_enabled` / `graph_enabled` | 数据库 `IndexingStrategy` | 检索与索引 | `knowledge_base:write` | 下一次入库/重建；关闭时清理派生查询 | 开启触发投影；关闭使派生页面/关系失效；保存前必须确认影响 |
 | `required_capabilities` | 数据库 `IndexingStrategy` | 检索与索引（只读派生） | 不单独编辑 | 随开关保存 | 默认仅 `evidence`；`wiki`/`relation`/`graph` 只有在对应投影开关开启时才能保留，关闭的投影由前端剪除、服务端返回 400；开启投影不会自动把该投影加入默认查询要求，避免 Evidence 问答被投影故障阻塞 |
-| 检索参数（`top_k`、阈值、Rerank、扩展、RRF 等） | 数据库 `retrieval_config` | 检索与索引 | `knowledge_base:write` | 下一次检索请求生效 | 区间见 4.5.4；当前 PATCH 是合并语义，清除覆盖需要整体替换接口 |
+| 检索参数（`top_k`、阈值、Rerank、扩展、RRF 等） | 数据库 `retrieval_config` | 检索与索引 | `knowledge_base:write` | 下一次检索请求生效 | 区间见 4.5.5；当前 PATCH 是合并语义，清除覆盖需要整体替换接口 |
 | Embedding 源/模型/维度 | 环境变量 | 系统信息（只读） | 无 | 重建索引 + 重启 | 维度是索引契约；禁止热切换；不展示 API Key |
 | 切分大小/重叠/标记 | 环境变量 | 系统信息（只读） | 无 | 重新入库 | 当前只有进程级配置，知识库级切分尚未实现，不提供可编辑表单 |
 | Chat / Rerank / Parser 源与模型 | 环境变量 | 系统信息（只读） | 无 | 重启或重新解析 | 只展示非敏感值和解析器版本；密钥、端点和对象存储键不返回 |

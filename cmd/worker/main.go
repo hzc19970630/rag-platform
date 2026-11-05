@@ -40,7 +40,8 @@ func main() {
 		defer cancel()
 		_ = shutdownTracing(shutdownCtx)
 	}()
-	application, err := app.Open(cfg)
+	metricsRegistry := observability.New()
+	application, err := app.Open(cfg, metricsRegistry)
 	if err != nil {
 		logger.Error("application_bootstrap_failed", "component", "worker", "error", err)
 		os.Exit(1)
@@ -53,7 +54,7 @@ func main() {
 	if metricsAddr := strings.TrimSpace(cfg.MetricsAddr); metricsAddr != "" {
 		metricsServer = &http.Server{
 			Addr:              metricsAddr,
-			Handler:           observability.Handler(),
+			Handler:           observability.HandlerFor(metricsRegistry),
 			ReadHeaderTimeout: 5 * time.Second,
 			IdleTimeout:       60 * time.Second,
 		}
@@ -111,7 +112,7 @@ func main() {
 		}),
 	})
 	mux := asynq.NewServeMux()
-	newTaskHandlers(pipeline, application, logger).register(mux)
+	newTaskHandlers(pipeline, application, logger, metricsRegistry).register(mux)
 	logger.Info("worker_bootstrap_ready", slog.String("redis", cfg.RedisAddr), slog.Int("concurrency", cfg.Limits.WorkerConcurrency))
 
 	go func() {
@@ -256,13 +257,13 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 			logger.Info("stream_event_purge_complete", "rows", streamPurged, "retention_days", cfg.Limits.StreamEventRetentionDays)
 		}
 	}
-	triggered, err := application.DataSources.ScheduleDue(ctx, 20)
+	triggered, err := application.DataSources.Maintenance().ScheduleDue(ctx, 20)
 	if err != nil {
 		logger.Error("connector_schedule_failed", "error", err)
 	} else if triggered > 0 {
 		logger.Info("connector_sync_scheduled", "runs", triggered)
 	}
-	expired, err := application.DataSources.ExpireStaleRuns(ctx, time.Now())
+	expired, err := application.DataSources.Maintenance().ExpireStaleRuns(ctx, time.Now())
 	if err != nil {
 		logger.Error("connector_run_expiry_failed", "error", err)
 	} else if expired > 0 {

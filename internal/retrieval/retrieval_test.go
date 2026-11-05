@@ -3,12 +3,10 @@ package retrieval
 import (
 	"context"
 	"testing"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 func baseParams() Params {
-	return config.RetrievalConfig{
+	return Params{
 		TopK: 8, EmbeddingTopK: 20, KeywordTopK: 20,
 		VectorThreshold: 0.2, KeywordThreshold: 0, RerankThreshold: -10,
 		ContextTokenLimit: 3000, AdjacentExpansion: 1, MaxAdjacentChunks: 2,

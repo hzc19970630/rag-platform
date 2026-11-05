@@ -205,9 +205,7 @@ func (i *TaskInspector) RetryDeadLetter(ctx context.Context, principal authz.Pri
 	}).Error; err != nil {
 		return err
 	}
-	if err := i.db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", row.IdempotencyKey).Updates(map[string]any{
-		"status": inboxFailed, "last_error": "", "lease_owner": "", "lease_until": nil, "updated_at": now,
-	}).Error; err != nil {
+	if err := pipeline.RequeueInbox(i.db.WithContext(ctx), row.IdempotencyKey, now); err != nil {
 		return err
 	}
 	if err := i.db.WithContext(ctx).Model(&models.StageRun{}).Where("idempotency_key = ?", row.IdempotencyKey).Updates(map[string]any{

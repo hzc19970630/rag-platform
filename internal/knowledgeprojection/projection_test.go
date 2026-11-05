@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/platform/llm"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/glebarez/sqlite"
@@ -20,11 +20,11 @@ import (
 
 type fakeChatter struct{ name string }
 
-func (f fakeChatter) Complete(_ context.Context, request llm.ChatRequest) (llm.ChatResponse, error) {
+func (f fakeChatter) Complete(_ context.Context, request model.ChatRequest) (model.ChatResponse, error) {
 	if len(request.Evidence) == 0 {
-		return llm.ChatResponse{}, nil
+		return model.ChatResponse{}, nil
 	}
-	return llm.ChatResponse{Text: "generated from " + request.Evidence[0].ChunkID}, nil
+	return model.ChatResponse{Text: "generated from " + request.Evidence[0].ChunkID}, nil
 }
 
 func (f fakeChatter) Name() string { return f.name }

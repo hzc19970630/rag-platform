@@ -8,6 +8,8 @@ import (
 
 	"github.com/example/rag-platform/internal/platform/cjk"
 	"github.com/example/rag-platform/internal/platform/token"
+
+	"github.com/example/rag-platform/internal/contracts/model"
 )
 
 // LocalChatter is a deterministic, offline generation adapter for local
@@ -26,10 +28,10 @@ func (c *LocalChatter) Name() string { return "local-extractive" }
 
 var sentenceSplitter = regexp.MustCompile(`[。！？!?\.\n]+`)
 
-func (c *LocalChatter) Complete(ctx context.Context, request ChatRequest) (ChatResponse, error) {
+func (c *LocalChatter) Complete(ctx context.Context, request model.ChatRequest) (model.ChatResponse, error) {
 	terms := queryTerms(request.Query)
 	if len(terms) == 0 || len(request.Evidence) == 0 {
-		return ChatResponse{Text: "", Model: c.Name()}, nil
+		return model.ChatResponse{Text: "", Model: c.Name()}, nil
 	}
 	type scored struct {
 		index int
@@ -64,7 +66,7 @@ func (c *LocalChatter) Complete(ctx context.Context, request ChatRequest) (ChatR
 		}
 	}
 	if len(candidates) == 0 {
-		return ChatResponse{Text: "", Model: c.Name()}, nil
+		return model.ChatResponse{Text: "", Model: c.Name()}, nil
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].score != candidates[j].score {
@@ -81,7 +83,7 @@ func (c *LocalChatter) Complete(ctx context.Context, request ChatRequest) (ChatR
 		parts = append(parts, candidate.text+" ["+itoa(candidate.index)+"]")
 	}
 	text := strings.Join(parts, " ")
-	return ChatResponse{Text: text, Model: c.Name(), CompletionTokens: token.Estimate(text)}, nil
+	return model.ChatResponse{Text: text, Model: c.Name(), CompletionTokens: token.Estimate(text)}, nil
 }
 
 var termPattern = regexp.MustCompile(`[\p{Han}\p{Latin}\p{N}]+`)

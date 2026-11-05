@@ -4,15 +4,14 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/example/rag-platform/internal/app"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/datasource"
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application *app.Application, logger *slog.Logger) {
+func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, deps DataSourceDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, application))
+	protected.Use(authenticationMiddleware(cfg, mw))
 
 	knowledgeBases := protected.Group("/knowledge-bases/:id")
 	knowledgeBases.POST("/connectors", func(c *gin.Context) {
@@ -21,7 +20,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 			writeError(c, err)
 			return
 		}
-		view, err := application.DataSources.Create(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input)
+		view, err := deps.DataSources.Connectors().Create(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -29,7 +28,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusCreated, view)
 	})
 	knowledgeBases.GET("/connectors", func(c *gin.Context) {
-		views, err := application.DataSources.List(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		views, err := deps.DataSources.Connectors().List(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -37,7 +36,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusOK, gin.H{"connectors": views})
 	})
 	knowledgeBases.POST("/sync/cancel", func(c *gin.Context) {
-		cancelled, err := application.DataSources.CancelKnowledgeBase(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		cancelled, err := deps.DataSources.Runs().CancelKnowledgeBase(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -47,7 +46,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 
 	connectors := protected.Group("/connectors/:id")
 	connectors.GET("", func(c *gin.Context) {
-		view, err := application.DataSources.Get(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		view, err := deps.DataSources.Connectors().Get(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -60,7 +59,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 			writeError(c, err)
 			return
 		}
-		view, err := application.DataSources.Update(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input)
+		view, err := deps.DataSources.Connectors().Update(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input)
 		if err != nil {
 			writeError(c, err)
 			return
@@ -68,14 +67,14 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusOK, view)
 	})
 	connectors.DELETE("", func(c *gin.Context) {
-		if err := application.DataSources.Delete(c.Request.Context(), accessContext(c).Principal, c.Param("id")); err != nil {
+		if err := deps.DataSources.Connectors().Delete(c.Request.Context(), accessContext(c).Principal, c.Param("id")); err != nil {
 			writeError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
 	})
 	connectors.POST("/sync", func(c *gin.Context) {
-		run, err := application.DataSources.TriggerSync(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		run, err := deps.DataSources.Runs().TriggerSync(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -83,7 +82,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusAccepted, run)
 	})
 	connectors.POST("/cancel", func(c *gin.Context) {
-		cancelled, err := application.DataSources.CancelConnector(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		cancelled, err := deps.DataSources.Runs().CancelConnector(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -91,7 +90,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusAccepted, gin.H{"cancelled": cancelled})
 	})
 	connectors.GET("/permissions", func(c *gin.Context) {
-		view, err := application.DataSources.Permissions(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		view, err := deps.DataSources.Connectors().Permissions(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -99,7 +98,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusOK, view)
 	})
 	connectors.GET("/runs", func(c *gin.Context) {
-		runs, err := application.DataSources.ListRuns(c.Request.Context(), accessContext(c).Principal, c.Param("id"), intQuery(c, "limit"))
+		runs, err := deps.DataSources.Runs().ListRuns(c.Request.Context(), accessContext(c).Principal, c.Param("id"), intQuery(c, "limit"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -107,7 +106,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusOK, gin.H{"runs": runs})
 	})
 	connectors.GET("/runs/:runId", func(c *gin.Context) {
-		run, err := application.DataSources.GetRun(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("runId"))
+		run, err := deps.DataSources.Runs().GetRun(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("runId"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -115,7 +114,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusOK, run)
 	})
 	connectors.POST("/runs/:runId/retry", func(c *gin.Context) {
-		run, err := application.DataSources.RetryRun(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("runId"))
+		run, err := deps.DataSources.Runs().RetryRun(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("runId"))
 		if err != nil {
 			writeError(c, err)
 			return
@@ -123,7 +122,7 @@ func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, application 
 		c.JSON(http.StatusAccepted, run)
 	})
 	connectors.POST("/runs/:runId/cancel", func(c *gin.Context) {
-		run, err := application.DataSources.CancelRun(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("runId"))
+		run, err := deps.DataSources.Runs().CancelRun(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("runId"))
 		if err != nil {
 			writeError(c, err)
 			return

@@ -63,7 +63,7 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 	if err != nil || !claimed {
 		return err
 	}
-	processCtx, releaseLease, leaseLost := s.beginInboxLease(ctx, task.IdempotencyKey)
+	processCtx, releaseLease, leaseLost := s.runtime().Heartbeat(ctx, task.IdempotencyKey)
 	defer releaseLease()
 	run, err := s.loadRun(ctx, task.ProjectionRunID)
 	if err != nil {
@@ -78,8 +78,7 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 	if err := ValidateStageTransition(run.Status, task.Stage); err != nil {
 		return s.finishInbox(ctx, task.IdempotencyKey, inboxFailed, err)
 	}
-	stage, err := s.markStageProcessing(ctx, task, run)
-	if err != nil {
+	if err := s.runtime().Start(ctx, projectionStage{task: task, run: run}); err != nil {
 		return err
 	}
 	if s.timeout > 0 {
@@ -101,7 +100,7 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 	}
 	if processErr != nil {
 		terminal := apperror.IsTerminal(processErr)
-		if err := s.failStage(ctx, run, stage, processErr); err != nil {
+		if err := s.failStage(ctx, task, run, processErr); err != nil {
 			return err
 		}
 		if terminal {
@@ -109,7 +108,7 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 		}
 		return processErr
 	}
-	return s.completeStage(ctx, task, run, stage)
+	return s.runtime().Complete(ctx, task.IdempotencyKey, projectionStage{task: task, run: run})
 }
 
 func (s *Service) collect(ctx context.Context, run *models.ProjectionRun) error {

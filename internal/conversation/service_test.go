@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/platform/llm"
+	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -239,7 +239,7 @@ func TestTrimHistoryKeepsNewestTurns(t *testing.T) {
 		long[index] = 'x'
 	}
 	text := string(long)
-	turns := []llm.Turn{
+	turns := []model.Turn{
 		{Role: MessageRoleUser, Content: text}, {Role: MessageRoleAssistant, Content: text},
 		{Role: MessageRoleUser, Content: text}, {Role: MessageRoleAssistant, Content: text},
 		{Role: MessageRoleUser, Content: text}, {Role: MessageRoleAssistant, Content: text},

@@ -6,8 +6,6 @@ package retrieval
 
 import (
 	"encoding/json"
-
-	"github.com/example/rag-platform/internal/config"
 )
 
 const (
@@ -44,17 +42,35 @@ type QueryPlan struct {
 	VectorEnabled             bool     `json:"vectorEnabled"`
 	KeywordEnabled            bool     `json:"keywordEnabled"`
 	RerankEnabled             bool     `json:"rerankEnabled"`
-	RequiredCapabilities      []string `json:"requiredCapabilities"`
-	Params                    Params   `json:"params"`
+	// Channels and Fusion make the plan executable: the executor runs exactly
+	// these recall channels and applies the named fusion strategy.
+	Channels             []string `json:"channels,omitempty"`
+	Fusion               string   `json:"fusion,omitempty"`
+	RequiredCapabilities []string `json:"requiredCapabilities"`
+	Params               Params   `json:"params"`
 	// HistoryTurns records how much conversation context was supplied. The
 	// content is never persisted in the plan.
 	HistoryTurns int `json:"historyTurns,omitempty"`
 }
 
 // Params is the resolved retrieval parameter set after the three-tier override.
-// It is an alias of the configuration type so the same validation applies to
-// every tier.
-type Params = config.RetrievalConfig
+// It is owned by the retrieval domain; the YAML configuration converts into it
+// at the application boundary instead of leaking the global config type.
+type Params struct {
+	TopK                 int
+	EmbeddingTopK        int
+	KeywordTopK          int
+	VectorThreshold      float64
+	KeywordThreshold     float64
+	RerankEnabled        bool
+	RerankTopK           int
+	RerankThreshold      float64
+	ContextTokenLimit    int
+	AdjacentExpansion    int
+	MaxAdjacentChunks    int
+	RRFK                 int
+	ExpansionScoreFactor float64
+}
 
 // Hit is a single recall result as returned by a search adapter.
 type Hit struct {

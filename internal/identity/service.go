@@ -15,7 +15,6 @@ import (
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
@@ -27,7 +26,7 @@ const (
 
 type Service struct {
 	db     *gorm.DB
-	cfg    config.AuthConfig
+	cfg    AuthOptions
 	signer *tokenSigner
 	oidc   *OIDCClient
 }
@@ -58,7 +57,7 @@ type APIKeyView struct {
 	CreatedAt        time.Time  `json:"createdAt"`
 }
 
-func NewService(db *gorm.DB, cfg config.AuthConfig) (*Service, error) {
+func NewService(db *gorm.DB, cfg AuthOptions) (*Service, error) {
 	signer, err := newTokenSigner(cfg)
 	if err != nil {
 		return nil, err

@@ -2,7 +2,6 @@ package knowledgeprojection
 
 import (
 	"github.com/example/rag-platform/internal/knowledgeprojection/wiki"
-	"github.com/example/rag-platform/internal/platform/llm"
 	"github.com/example/rag-platform/internal/prompts"
 )
 
@@ -11,6 +10,6 @@ import (
 type Generator = wiki.Generator
 type GeneratedPage = wiki.GeneratedPage
 
-func NewGenerator(chatter llm.Chatter, registry *prompts.Registry) (*Generator, error) {
+func NewGenerator(chatter Chatter, registry *prompts.Registry) (*Generator, error) {
 	return wiki.NewGenerator(chatter, registry)
 }

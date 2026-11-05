@@ -93,6 +93,13 @@ type KnowledgeBase struct {
 	// be changed once documents exist; the managed rebuild moves both together.
 	EmbeddingModel     string `gorm:"size:128;not null;default:''" json:"embeddingModel"`
 	EmbeddingDimension int    `gorm:"not null;default:0" json:"embeddingDimension"`
+	// ChatModel and RerankModel are runtime bindings resolved through the model
+	// registry. Empty means inherit the deployment default. The version columns
+	// make an in-place provider upgrade visible in the binding audit.
+	ChatModel          string `gorm:"size:128;not null;default:''" json:"-"`
+	ChatModelVersion   string `gorm:"size:64;not null;default:''" json:"-"`
+	RerankModel        string `gorm:"size:128;not null;default:''" json:"-"`
+	RerankModelVersion string `gorm:"size:64;not null;default:''" json:"-"`
 	ACLVersion         int64  `gorm:"not null;default:1" json:"aclVersion"`
 	// RetrievalConfig is the knowledge-base tier of the retrieval parameter
 	// override chain (YAML defaults -> knowledge base -> session). Stored in the

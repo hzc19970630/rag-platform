@@ -123,59 +123,39 @@ func (o ParamsOverride) Overlay(other ParamsOverride) ParamsOverride {
 // ValidateOverride range-checks only the fields a tier actually sets, so a
 // partial update is validated without needing the global defaults.
 func ValidateOverride(override ParamsOverride) error {
-	for name, value := range map[string]*int{
-		"top_k":           override.TopK,
-		"embedding_top_k": override.EmbeddingTopK,
-		"keyword_top_k":   override.KeywordTopK,
-		"rerank_top_k":    override.RerankTopK,
-	} {
-		if value != nil {
-			if err := param.IntRange(name, *value, 0, 200); err != nil {
-				return err
-			}
-		}
-	}
-	if override.VectorThreshold != nil {
-		if err := param.FloatRange("vector_threshold", *override.VectorThreshold, 0, 1); err != nil {
-			return err
-		}
-	}
-	if override.KeywordThreshold != nil {
-		if err := param.NonNegativeFloat("keyword_threshold", *override.KeywordThreshold); err != nil {
-			return err
-		}
-	}
-	if override.RerankThreshold != nil {
-		if err := param.FloatRange("rerank_threshold", *override.RerankThreshold, -10, 10); err != nil {
-			return err
-		}
-	}
-	if override.ContextTokenLimit != nil {
-		if err := param.PositiveInt("context_token_limit", *override.ContextTokenLimit); err != nil {
-			return err
-		}
-	}
-	if override.AdjacentExpansion != nil {
-		if err := param.NonNegativeInt("adjacent_expansion", *override.AdjacentExpansion); err != nil {
-			return err
-		}
-	}
-	if override.MaxAdjacentChunks != nil {
-		if err := param.NonNegativeInt("max_adjacent_chunks", *override.MaxAdjacentChunks); err != nil {
-			return err
-		}
-	}
-	if override.RRFK != nil {
-		if err := param.IntRange("rrf_k", *override.RRFK, 1, 200); err != nil {
-			return err
-		}
-	}
-	if override.ExpansionScoreFactor != nil {
-		if err := param.FloatRange("expansion_score_factor", *override.ExpansionScoreFactor, 0, 1); err != nil {
-			return err
-		}
-	}
-	return nil
+	return param.ValidateRetrieval(param.RetrievalValues{
+		TopK:                 override.TopK,
+		EmbeddingTopK:        override.EmbeddingTopK,
+		KeywordTopK:          override.KeywordTopK,
+		VectorThreshold:      override.VectorThreshold,
+		KeywordThreshold:     override.KeywordThreshold,
+		RerankTopK:           override.RerankTopK,
+		RerankThreshold:      override.RerankThreshold,
+		ContextTokenLimit:    override.ContextTokenLimit,
+		AdjacentExpansion:    override.AdjacentExpansion,
+		MaxAdjacentChunks:    override.MaxAdjacentChunks,
+		RRFK:                 override.RRFK,
+		ExpansionScoreFactor: override.ExpansionScoreFactor,
+	})
+}
+
+// Validate range-checks a fully resolved parameter set. It delegates to the
+// same schema as ValidateOverride so the two tiers cannot drift.
+func (p Params) Validate() error {
+	return param.ValidateRetrieval(param.RetrievalValues{
+		TopK:                 &p.TopK,
+		EmbeddingTopK:        &p.EmbeddingTopK,
+		KeywordTopK:          &p.KeywordTopK,
+		VectorThreshold:      &p.VectorThreshold,
+		KeywordThreshold:     &p.KeywordThreshold,
+		RerankTopK:           &p.RerankTopK,
+		RerankThreshold:      &p.RerankThreshold,
+		ContextTokenLimit:    &p.ContextTokenLimit,
+		AdjacentExpansion:    &p.AdjacentExpansion,
+		MaxAdjacentChunks:    &p.MaxAdjacentChunks,
+		RRFK:                 &p.RRFK,
+		ExpansionScoreFactor: &p.ExpansionScoreFactor,
+	})
 }
 
 // ParseOverride decodes a stored or request-supplied override. An empty value
