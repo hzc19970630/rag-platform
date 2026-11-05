@@ -290,6 +290,31 @@ func TestHealthCheckErrorsWhenNoHealthyProviderRemains(t *testing.T) {
 	}
 }
 
+type timeoutProbeError struct{}
+
+func (timeoutProbeError) Error() string   { return "probe: context deadline exceeded" }
+func (timeoutProbeError) Timeout() bool   { return true }
+func (timeoutProbeError) Temporary() bool { return true }
+
+func TestTransientProbeTimeoutDoesNotRejectSoleProvider(t *testing.T) {
+	db := openRegistryTestDB(t)
+	seedKnowledgeBase(t, db, "kb-default", "tenant-1", "")
+	registry := newTestRegistry(t, db, Options{
+		Models: catalogModels(map[string]func(context.Context) error{
+			"chat-default": func(context.Context) error { return timeoutProbeError{} },
+		}),
+		Defaults: map[model.Capability]string{model.CapabilityChat: "chat-default"},
+	})
+
+	resolution, err := registry.ResolveForKnowledgeBase(context.Background(), "tenant-1", "kb-default", model.CapabilityChat)
+	if err != nil {
+		t.Fatalf("a timed-out probe must not reject the only chat provider: %v", err)
+	}
+	if !resolution.Degraded || resolution.Effective.Model != "chat-default" {
+		t.Fatalf("expected the bound model to be attempted, got %+v", resolution)
+	}
+}
+
 func TestHealthProbeIsCachedForTTL(t *testing.T) {
 	db := openRegistryTestDB(t)
 	seedKnowledgeBase(t, db, "kb-a", "tenant-1", "chat-a")

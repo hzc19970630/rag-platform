@@ -6,7 +6,9 @@ package modelregistry
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -77,9 +79,10 @@ type Registry struct {
 }
 
 type healthEntry struct {
-	healthy bool
-	err     string
-	checked time.Time
+	healthy  bool
+	timedOut bool
+	err      string
+	checked  time.Time
 }
 
 type usageWindow struct {
@@ -212,15 +215,28 @@ func (r *Registry) resolve(ctx context.Context, capability model.Capability, req
 		}
 		return r.degraded(model.ModelRef{Model: requested}, bound, "bound model is not registered")
 	}
-	if r.healthy(ctx, bound) {
+	healthy, timedOut := r.probeHealth(ctx, bound)
+	if healthy {
 		return Resolution{Requested: bound.ref(), Effective: bound.ref()}, nil
 	}
 	fallbackName := r.defaults[capability]
 	fallback, ok := r.models[fallbackName]
 	if !ok || !fallback.supports(capability) || fallback.Name == bound.Name {
+		if timedOut {
+			// A probe timeout is inconclusive and must not become a request-path
+			// outage: attempt the real call and let it report its own failure.
+			return r.degraded(bound.ref(), bound, "provider health probe timed out; attempting the bound model")
+		}
 		return Resolution{}, fmt.Errorf("model registry: %s provider for model %q is unhealthy", capability, bound.Name)
 	}
-	if !r.healthy(ctx, fallback) {
+	fallbackHealthy, fallbackTimedOut := r.probeHealth(ctx, fallback)
+	if !fallbackHealthy {
+		if fallbackTimedOut {
+			return r.degraded(bound.ref(), fallback, "fallback provider health probe timed out; attempting it")
+		}
+		if timedOut {
+			return r.degraded(bound.ref(), bound, "fallback provider is unhealthy; attempting the bound model")
+		}
 		return Resolution{}, fmt.Errorf("model registry: no healthy %s provider is available", capability)
 	}
 	return r.degraded(bound.ref(), fallback, "bound provider is unhealthy")
@@ -250,26 +266,34 @@ func (r *Registry) RerankModel(ctx context.Context, tenantID, knowledgeBaseID st
 	return resolution.Effective.Model, nil
 }
 
-func (r *Registry) healthy(ctx context.Context, entry Model) bool {
+// probeHealth returns the cached provider state and whether the last failure
+// was a timeout. A timeout is treated as inconclusive: it may only be the
+// health endpoint being slow while completions still work.
+func (r *Registry) probeHealth(ctx context.Context, entry Model) (healthy, timedOut bool) {
 	if entry.Probe == nil {
-		return true
+		return true, false
 	}
 	r.mu.Lock()
 	cached, ok := r.health[entry.Name]
 	r.mu.Unlock()
 	now := r.now()
 	if ok && now.Sub(cached.checked) < r.healthTTL {
-		return cached.healthy
+		return cached.healthy, cached.timedOut
 	}
 	err := entry.Probe(ctx)
-	next := healthEntry{healthy: err == nil, checked: now}
+	next := healthEntry{healthy: err == nil, timedOut: probeTimedOut(err), checked: now}
 	if err != nil {
 		next.err = err.Error()
 	}
 	r.mu.Lock()
 	r.health[entry.Name] = next
 	r.mu.Unlock()
-	return next.healthy
+	return next.healthy, next.timedOut
+}
+
+func probeTimedOut(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func (r *Registry) consumeQuota(tenantID string, capability model.Capability) error {
@@ -303,7 +327,7 @@ func (r *Registry) Health(ctx context.Context) []HealthStatus {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 	statuses := make([]HealthStatus, 0, len(entries))
 	for _, entry := range entries {
-		healthy := r.healthy(ctx, entry)
+		healthy, _ := r.probeHealth(ctx, entry)
 		status := HealthStatus{Model: entry.Name, Provider: entry.Provider, Version: entry.Version, Healthy: healthy, CheckedAt: r.now()}
 		r.mu.Lock()
 		if cached, ok := r.health[entry.Name]; ok {
