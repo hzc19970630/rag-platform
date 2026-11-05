@@ -25,9 +25,8 @@ type SearchOptions struct {
 }
 
 type knowledgeCandidate struct {
-	hit     KnowledgeHit
-	sources []models.WikiPageSource
-	score   float64
+	hit   KnowledgeHit
+	score float64
 }
 
 const knowledgeBM25Query = `

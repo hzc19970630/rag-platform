@@ -39,9 +39,6 @@ func Invalidf(format string, args ...any) error {
 	return &ValidationError{Err: fmt.Errorf(format, args...)}
 }
 
-// Invalid wraps an existing error as a validation error.
-func Invalid(err error) error { return &ValidationError{Err: err} }
-
 // AsValidation reports whether err carries a validation error.
 func AsValidation(err error) (*ValidationError, bool) {
 	var validation *ValidationError

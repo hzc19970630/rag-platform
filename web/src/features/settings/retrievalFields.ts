@@ -1,6 +1,6 @@
 import type { IndexingStrategy, RetrievalParamsV1, RetrievalOverride } from "../../api/types";
 
-export type RetrievalFieldKey = keyof RetrievalParamsV1;
+type RetrievalFieldKey = keyof RetrievalParamsV1;
 export type BoolValue = "" | "true" | "false";
 
 type FieldBase = {

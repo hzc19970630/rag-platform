@@ -1,4 +1,4 @@
-export type Scope = {
+type Scope = {
   subjectId: string;
   tenantId: string;
   knowledgeBaseIds: string[];
@@ -55,7 +55,7 @@ export type DocumentView = {
   pipeline: { status: string; errorCode?: string; errorMessage?: string };
 };
 
-export type StageRun = {
+type StageRun = {
   stage: string;
   status: string;
   attempts: number;
@@ -121,7 +121,7 @@ export type DocumentVersionPage = {
   items: DocumentVersionView[];
 };
 
-export type PreviewBlock = {
+type PreviewBlock = {
   blockId: string;
   kind: string;
   text: string;
@@ -255,7 +255,7 @@ export type RetrievalParamsV1 = {
 
 export type RetrievalOverride = Partial<RetrievalParamsV1>;
 
-export type RetrievalConfigurationV1 = {
+type RetrievalConfigurationV1 = {
   globalDefaults: RetrievalParamsV1;
   knowledgeBaseOverride: RetrievalOverride;
   effective: RetrievalParamsV1;
@@ -277,7 +277,7 @@ export type KnowledgeBaseConfigurationV1 = {
   };
 };
 
-export type PageCounts = {
+type PageCounts = {
   total: number;
   published: number;
   pendingReview: number;
@@ -285,7 +285,7 @@ export type PageCounts = {
   indexed: number;
 };
 
-export type GraphCounts = {
+type GraphCounts = {
   snapshots: number;
   activeSnapshot?: string;
   entities: number;

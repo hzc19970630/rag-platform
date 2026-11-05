@@ -66,16 +66,6 @@ func (e *PlanExecutor) RegisterFusion(fusion FusionStrategy) {
 	e.fusions[strings.ToLower(fusion.Name())] = fusion
 }
 
-// Channels is the configured channel set, sorted for stable diagnostics.
-func (e *PlanExecutor) Channels() []string {
-	names := make([]string, 0, len(e.channels))
-	for name := range e.channels {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
 func (e *PlanExecutor) Execute(ctx context.Context, plan QueryPlan, params Params, request RecallRequest) ([]Candidate, error) {
 	selected := plan.recallChannels()
 	hits := map[string][]Hit{}

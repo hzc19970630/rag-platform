@@ -27,10 +27,6 @@ type Searcher struct {
 	metrics metrics.Recorder
 }
 
-func NewSearcher(db *gorm.DB) *Searcher {
-	return &Searcher{db: db, metrics: metrics.Nop{}}
-}
-
 // NewSearcherWithMetrics shares the process metrics registry with the vector
 // adapter so underfilled tenant-filtered scans are visible in /metrics.
 func NewSearcherWithMetrics(db *gorm.DB, recorder metrics.Recorder) *Searcher {

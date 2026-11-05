@@ -39,12 +39,6 @@ func (s *sseStream) started() bool {
 	return s.startedFlag
 }
 
-func (s *sseStream) start() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.startLocked()
-}
-
 func (s *sseStream) startLocked() {
 	if s.startedFlag {
 		return

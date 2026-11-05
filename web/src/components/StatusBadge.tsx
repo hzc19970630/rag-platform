@@ -4,7 +4,7 @@ const success = new Set(["EVIDENCE_READY", "SUCCEEDED", "COMPLETED", "PUBLISHED"
 const warning = new Set(["PENDING", "PENDING_REVIEW", "REVIEW_REQUIRED", "KNOWLEDGE_PARTIAL", "BUILDING", "RUNNING", "QUEUED"]);
 const danger = new Set(["FAILED", "CANCELLED", "DEAD", "DISCARDED", "STALE", "SUPERSEDED", "REJECTED"]);
 
-export function statusColor(status: string): string {
+function statusColor(status: string): string {
   if (success.has(status)) return "success";
   if (warning.has(status)) return "warning";
   if (danger.has(status)) return "error";

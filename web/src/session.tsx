@@ -7,13 +7,13 @@ export function SessionProvider({ value, children }: { value: MeResponse; childr
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
-export function useSession(): MeResponse {
+function useSession(): MeResponse {
   const value = useContext(SessionContext);
   if (!value) throw new Error("useSession must be used inside a protected route");
   return value;
 }
 
-export function hasCapability(me: MeResponse, capability: string): boolean {
+function hasCapability(me: MeResponse, capability: string): boolean {
   return me.scope.capabilities.includes(capability);
 }
 

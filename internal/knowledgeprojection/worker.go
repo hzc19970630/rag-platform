@@ -250,22 +250,3 @@ func stableID(prefix string, values ...string) string {
 	digest := sha256.Sum256([]byte(strings.Join(values, "\x00")))
 	return prefix + "-" + hex.EncodeToString(digest[:])[:48]
 }
-
-func itoa(value int) string {
-	if value == 0 {
-		return "0"
-	}
-	negative := value < 0
-	if negative {
-		value = -value
-	}
-	var digits []byte
-	for value > 0 {
-		digits = append([]byte{byte('0' + value%10)}, digits...)
-		value /= 10
-	}
-	if negative {
-		return "-" + string(digits)
-	}
-	return string(digits)
-}

@@ -2,7 +2,7 @@ import type { DocumentView, StreamEvent } from "./types";
 
 export const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8082/api/v1";
 
-export const devHeaders = { "X-Dev-User-ID": "dev-user", "X-Dev-Tenant-ID": "dev-tenant" };
+const devHeaders = { "X-Dev-User-ID": "dev-user", "X-Dev-Tenant-ID": "dev-tenant" };
 
 export class ApiError extends Error {
   status: number;
@@ -15,7 +15,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function errorText(response: Response): Promise<string> {
+async function errorText(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { error?: string; message?: string };
     return [body.error, body.message].filter(Boolean).join(": ") || `请求失败 (${response.status})`;
@@ -68,7 +68,7 @@ export async function openDocumentPreview(documentId: string): Promise<void> {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function parseSSEBlock(raw: string): StreamEvent | undefined {
+function parseSSEBlock(raw: string): StreamEvent | undefined {
   let eventType = "message";
   let eventId = "";
   const dataLines: string[] = [];

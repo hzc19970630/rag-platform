@@ -2,7 +2,7 @@ import { theme, type ThemeConfig } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { usePreferences } from "./store/preferences";
 
-export const brand = {
+const brand = {
   primary: "#067A3E",
   hover: "#056B36",
   active: "#045C2E",
@@ -30,7 +30,7 @@ const sharedToken = {
   wireframe: false,
 };
 
-export function buildAntdTheme(dark: boolean): ThemeConfig {
+function buildAntdTheme(dark: boolean): ThemeConfig {
   return {
     algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
