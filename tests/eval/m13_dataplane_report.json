@@ -1,0 +1,5745 @@
+{
+  "schemaVersion": "M13DataplaneReportV1",
+  "generatedAt": "2026-11-05T14:22:21Z",
+  "durationSeconds": 4449.8,
+  "parameters": {
+    "rows": 1000000,
+    "dimension": 1024,
+    "tenants": 16,
+    "knowledgeBasesPerTenant": 2,
+    "workers": 16,
+    "iterationsPerWorker": 20,
+    "topK": 20,
+    "efSearch": 40,
+    "iterativeScan": "relaxed_order",
+    "seed": 42,
+    "rls": false,
+    "recallSamples": 200,
+    "writeWorkers": 4,
+    "writeIntervalMs": 200.0,
+    "schema": "m13_dataplane",
+    "keep": true
+  },
+  "environment": {
+    "pgvectorVersion": "0.8.7",
+    "postgresVersion": "17.9 (Debian 17.9-1.pgdg13+1)",
+    "sharedBuffers": "128MB",
+    "workMem": "4MB",
+    "maintenanceWorkMem": "64MB",
+    "maxParallelMaintenanceWorkers": "2",
+    "maxConnections": "100",
+    "databaseSizeBytes": 74372787,
+    "platform": "macOS-26.3-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.9.6",
+    "cpuCount": 10,
+    "memoryBytes": 17179869184,
+    "diskFreeBytes": 40389713920,
+    "docker": {
+      "cpus": 10,
+      "memoryBytes": 8393289728
+    },
+    "resourceExpectation": [
+      "1M x 1024 halfvec heap is roughly 2.2 GB; the HNSW index is roughly 2.5-3 GB.",
+      "Leave at least 8 GB free on the Docker data volume: the heap, the index and WAL coexist during the build.",
+      "A CONCURRENTLY HNSW build over 1M rows takes roughly 10-25 minutes on a laptop-class machine."
+    ]
+  },
+  "corpus": {
+    "rows": 1000000,
+    "distinctSample": 1000,
+    "distinctSampleRows": 1000,
+    "tenants": 16,
+    "knowledgeBases": 32,
+    "wrongDimension": 0,
+    "queryRows": 416,
+    "expectedRows": 1000000,
+    "expectedTenants": 16,
+    "expectedKnowledgeBases": 32,
+    "heapBytes": 174268416
+  },
+  "indexBuild": {
+    "durationMs": 3569316.7,
+    "error": null,
+    "progressSamples": [
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 298,
+        "blocksTotal": 21273,
+        "tuplesDone": 15105,
+        "tuplesTotal": 0,
+        "elapsedMs": 5409.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 579,
+        "blocksTotal": 21273,
+        "tuplesDone": 27640,
+        "tuplesTotal": 0,
+        "elapsedMs": 10615.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 820,
+        "blocksTotal": 21273,
+        "tuplesDone": 39188,
+        "tuplesTotal": 0,
+        "elapsedMs": 15805.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 1075,
+        "blocksTotal": 21273,
+        "tuplesDone": 50289,
+        "tuplesTotal": 0,
+        "elapsedMs": 21050.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 1270,
+        "blocksTotal": 21273,
+        "tuplesDone": 59748,
+        "tuplesTotal": 0,
+        "elapsedMs": 26235.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 1504,
+        "blocksTotal": 21273,
+        "tuplesDone": 70329,
+        "tuplesTotal": 0,
+        "elapsedMs": 31375.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 1708,
+        "blocksTotal": 21273,
+        "tuplesDone": 81023,
+        "tuplesTotal": 0,
+        "elapsedMs": 36585.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 1941,
+        "blocksTotal": 21273,
+        "tuplesDone": 91255,
+        "tuplesTotal": 0,
+        "elapsedMs": 41778.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 2141,
+        "blocksTotal": 21273,
+        "tuplesDone": 101480,
+        "tuplesTotal": 0,
+        "elapsedMs": 46933.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 2386,
+        "blocksTotal": 21273,
+        "tuplesDone": 111213,
+        "tuplesTotal": 0,
+        "elapsedMs": 52132.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 2585,
+        "blocksTotal": 21273,
+        "tuplesDone": 121341,
+        "tuplesTotal": 0,
+        "elapsedMs": 57328.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 2817,
+        "blocksTotal": 21273,
+        "tuplesDone": 131515,
+        "tuplesTotal": 0,
+        "elapsedMs": 62483.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 3018,
+        "blocksTotal": 21273,
+        "tuplesDone": 141851,
+        "tuplesTotal": 0,
+        "elapsedMs": 67922.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 3248,
+        "blocksTotal": 21273,
+        "tuplesDone": 151763,
+        "tuplesTotal": 0,
+        "elapsedMs": 73110.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 3448,
+        "blocksTotal": 21273,
+        "tuplesDone": 161876,
+        "tuplesTotal": 0,
+        "elapsedMs": 78295.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 3643,
+        "blocksTotal": 21273,
+        "tuplesDone": 171397,
+        "tuplesTotal": 0,
+        "elapsedMs": 83664.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 3838,
+        "blocksTotal": 21273,
+        "tuplesDone": 180831,
+        "tuplesTotal": 0,
+        "elapsedMs": 88893.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 4065,
+        "blocksTotal": 21273,
+        "tuplesDone": 190377,
+        "tuplesTotal": 0,
+        "elapsedMs": 94043.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 4262,
+        "blocksTotal": 21273,
+        "tuplesDone": 200147,
+        "tuplesTotal": 0,
+        "elapsedMs": 99276.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 4458,
+        "blocksTotal": 21273,
+        "tuplesDone": 209693,
+        "tuplesTotal": 0,
+        "elapsedMs": 104534.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 4650,
+        "blocksTotal": 21273,
+        "tuplesDone": 218844,
+        "tuplesTotal": 0,
+        "elapsedMs": 109993.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 4845,
+        "blocksTotal": 21273,
+        "tuplesDone": 228227,
+        "tuplesTotal": 0,
+        "elapsedMs": 115239.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 5039,
+        "blocksTotal": 21273,
+        "tuplesDone": 237626,
+        "tuplesTotal": 0,
+        "elapsedMs": 120389.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 5270,
+        "blocksTotal": 21273,
+        "tuplesDone": 247561,
+        "tuplesTotal": 0,
+        "elapsedMs": 125614.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 5465,
+        "blocksTotal": 21273,
+        "tuplesDone": 257109,
+        "tuplesTotal": 0,
+        "elapsedMs": 130825.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 5661,
+        "blocksTotal": 21273,
+        "tuplesDone": 266624,
+        "tuplesTotal": 0,
+        "elapsedMs": 135979.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 5889,
+        "blocksTotal": 21273,
+        "tuplesDone": 276203,
+        "tuplesTotal": 0,
+        "elapsedMs": 141200.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 6083,
+        "blocksTotal": 21273,
+        "tuplesDone": 285518,
+        "tuplesTotal": 0,
+        "elapsedMs": 146366.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 6279,
+        "blocksTotal": 21273,
+        "tuplesDone": 295124,
+        "tuplesTotal": 0,
+        "elapsedMs": 151554.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 6478,
+        "blocksTotal": 21273,
+        "tuplesDone": 305148,
+        "tuplesTotal": 0,
+        "elapsedMs": 157018.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 6669,
+        "blocksTotal": 21273,
+        "tuplesDone": 314104,
+        "tuplesTotal": 0,
+        "elapsedMs": 162197.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 6862,
+        "blocksTotal": 21273,
+        "tuplesDone": 323205,
+        "tuplesTotal": 0,
+        "elapsedMs": 167369.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 7055,
+        "blocksTotal": 21273,
+        "tuplesDone": 332415,
+        "tuplesTotal": 0,
+        "elapsedMs": 172613.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 7284,
+        "blocksTotal": 21273,
+        "tuplesDone": 342132,
+        "tuplesTotal": 0,
+        "elapsedMs": 177804.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 7479,
+        "blocksTotal": 21273,
+        "tuplesDone": 351572,
+        "tuplesTotal": 0,
+        "elapsedMs": 182965.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 7676,
+        "blocksTotal": 21273,
+        "tuplesDone": 361310,
+        "tuplesTotal": 0,
+        "elapsedMs": 188152.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 7871,
+        "blocksTotal": 21273,
+        "tuplesDone": 370809,
+        "tuplesTotal": 0,
+        "elapsedMs": 193332.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8096,
+        "blocksTotal": 21273,
+        "tuplesDone": 379932,
+        "tuplesTotal": 0,
+        "elapsedMs": 198571.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8290,
+        "blocksTotal": 21273,
+        "tuplesDone": 389255,
+        "tuplesTotal": 0,
+        "elapsedMs": 203839.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8340,
+        "blocksTotal": 21273,
+        "tuplesDone": 391754,
+        "tuplesTotal": 0,
+        "elapsedMs": 209105.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8347,
+        "blocksTotal": 21273,
+        "tuplesDone": 392796,
+        "tuplesTotal": 0,
+        "elapsedMs": 214294.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8389,
+        "blocksTotal": 21273,
+        "tuplesDone": 394291,
+        "tuplesTotal": 0,
+        "elapsedMs": 219478.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8399,
+        "blocksTotal": 21273,
+        "tuplesDone": 395652,
+        "tuplesTotal": 0,
+        "elapsedMs": 224768.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8438,
+        "blocksTotal": 21273,
+        "tuplesDone": 396769,
+        "tuplesTotal": 0,
+        "elapsedMs": 230167.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8480,
+        "blocksTotal": 21273,
+        "tuplesDone": 398152,
+        "tuplesTotal": 0,
+        "elapsedMs": 235421.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8490,
+        "blocksTotal": 21273,
+        "tuplesDone": 399577,
+        "tuplesTotal": 0,
+        "elapsedMs": 240641.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8532,
+        "blocksTotal": 21273,
+        "tuplesDone": 401038,
+        "tuplesTotal": 0,
+        "elapsedMs": 246116.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8541,
+        "blocksTotal": 21273,
+        "tuplesDone": 402406,
+        "tuplesTotal": 0,
+        "elapsedMs": 251640.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8582,
+        "blocksTotal": 21273,
+        "tuplesDone": 403706,
+        "tuplesTotal": 0,
+        "elapsedMs": 256914.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8591,
+        "blocksTotal": 21273,
+        "tuplesDone": 405053,
+        "tuplesTotal": 0,
+        "elapsedMs": 262093.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8632,
+        "blocksTotal": 21273,
+        "tuplesDone": 406300,
+        "tuplesTotal": 0,
+        "elapsedMs": 267296.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8674,
+        "blocksTotal": 21273,
+        "tuplesDone": 407764,
+        "tuplesTotal": 0,
+        "elapsedMs": 272508.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8684,
+        "blocksTotal": 21273,
+        "tuplesDone": 409154,
+        "tuplesTotal": 0,
+        "elapsedMs": 277686.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8726,
+        "blocksTotal": 21273,
+        "tuplesDone": 410508,
+        "tuplesTotal": 0,
+        "elapsedMs": 282963.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8735,
+        "blocksTotal": 21273,
+        "tuplesDone": 411782,
+        "tuplesTotal": 0,
+        "elapsedMs": 288210.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8776,
+        "blocksTotal": 21273,
+        "tuplesDone": 412948,
+        "tuplesTotal": 0,
+        "elapsedMs": 293469.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8818,
+        "blocksTotal": 21273,
+        "tuplesDone": 414370,
+        "tuplesTotal": 0,
+        "elapsedMs": 298676.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8828,
+        "blocksTotal": 21273,
+        "tuplesDone": 415780,
+        "tuplesTotal": 0,
+        "elapsedMs": 303912.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8869,
+        "blocksTotal": 21273,
+        "tuplesDone": 417108,
+        "tuplesTotal": 0,
+        "elapsedMs": 309150.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8879,
+        "blocksTotal": 21273,
+        "tuplesDone": 418424,
+        "tuplesTotal": 0,
+        "elapsedMs": 314382.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8920,
+        "blocksTotal": 21273,
+        "tuplesDone": 419812,
+        "tuplesTotal": 0,
+        "elapsedMs": 319581.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8961,
+        "blocksTotal": 21273,
+        "tuplesDone": 420981,
+        "tuplesTotal": 0,
+        "elapsedMs": 324869.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 8970,
+        "blocksTotal": 21273,
+        "tuplesDone": 422301,
+        "tuplesTotal": 0,
+        "elapsedMs": 330109.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9012,
+        "blocksTotal": 21273,
+        "tuplesDone": 423731,
+        "tuplesTotal": 0,
+        "elapsedMs": 335357.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9023,
+        "blocksTotal": 21273,
+        "tuplesDone": 425229,
+        "tuplesTotal": 0,
+        "elapsedMs": 340859.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9064,
+        "blocksTotal": 21273,
+        "tuplesDone": 426520,
+        "tuplesTotal": 0,
+        "elapsedMs": 346130.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9105,
+        "blocksTotal": 21273,
+        "tuplesDone": 427723,
+        "tuplesTotal": 0,
+        "elapsedMs": 351427.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9115,
+        "blocksTotal": 21273,
+        "tuplesDone": 429100,
+        "tuplesTotal": 0,
+        "elapsedMs": 356705.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9157,
+        "blocksTotal": 21273,
+        "tuplesDone": 430510,
+        "tuplesTotal": 0,
+        "elapsedMs": 361977.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9167,
+        "blocksTotal": 21273,
+        "tuplesDone": 431927,
+        "tuplesTotal": 0,
+        "elapsedMs": 367173.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9208,
+        "blocksTotal": 21273,
+        "tuplesDone": 433238,
+        "tuplesTotal": 0,
+        "elapsedMs": 372418.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9250,
+        "blocksTotal": 21273,
+        "tuplesDone": 434579,
+        "tuplesTotal": 0,
+        "elapsedMs": 377648.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9259,
+        "blocksTotal": 21273,
+        "tuplesDone": 435875,
+        "tuplesTotal": 0,
+        "elapsedMs": 382921.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9301,
+        "blocksTotal": 21273,
+        "tuplesDone": 437249,
+        "tuplesTotal": 0,
+        "elapsedMs": 388165.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9311,
+        "blocksTotal": 21273,
+        "tuplesDone": 438634,
+        "tuplesTotal": 0,
+        "elapsedMs": 393322.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9353,
+        "blocksTotal": 21273,
+        "tuplesDone": 440051,
+        "tuplesTotal": 0,
+        "elapsedMs": 398523.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9394,
+        "blocksTotal": 21273,
+        "tuplesDone": 441367,
+        "tuplesTotal": 0,
+        "elapsedMs": 403815.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9402,
+        "blocksTotal": 21273,
+        "tuplesDone": 442427,
+        "tuplesTotal": 0,
+        "elapsedMs": 409372.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9444,
+        "blocksTotal": 21273,
+        "tuplesDone": 443770,
+        "tuplesTotal": 0,
+        "elapsedMs": 414601.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9453,
+        "blocksTotal": 21273,
+        "tuplesDone": 445091,
+        "tuplesTotal": 0,
+        "elapsedMs": 419843.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9495,
+        "blocksTotal": 21273,
+        "tuplesDone": 446472,
+        "tuplesTotal": 0,
+        "elapsedMs": 425068.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9537,
+        "blocksTotal": 21273,
+        "tuplesDone": 447846,
+        "tuplesTotal": 0,
+        "elapsedMs": 430483.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9546,
+        "blocksTotal": 21273,
+        "tuplesDone": 449125,
+        "tuplesTotal": 0,
+        "elapsedMs": 435654.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9588,
+        "blocksTotal": 21273,
+        "tuplesDone": 450487,
+        "tuplesTotal": 0,
+        "elapsedMs": 440927.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9597,
+        "blocksTotal": 21273,
+        "tuplesDone": 451831,
+        "tuplesTotal": 0,
+        "elapsedMs": 446189.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9638,
+        "blocksTotal": 21273,
+        "tuplesDone": 453129,
+        "tuplesTotal": 0,
+        "elapsedMs": 451443.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9647,
+        "blocksTotal": 21273,
+        "tuplesDone": 454405,
+        "tuplesTotal": 0,
+        "elapsedMs": 456681.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9689,
+        "blocksTotal": 21273,
+        "tuplesDone": 455751,
+        "tuplesTotal": 0,
+        "elapsedMs": 461985.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9730,
+        "blocksTotal": 21273,
+        "tuplesDone": 456939,
+        "tuplesTotal": 0,
+        "elapsedMs": 467231.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9736,
+        "blocksTotal": 21273,
+        "tuplesDone": 457799,
+        "tuplesTotal": 0,
+        "elapsedMs": 472646.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9778,
+        "blocksTotal": 21273,
+        "tuplesDone": 459184,
+        "tuplesTotal": 0,
+        "elapsedMs": 477932.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9787,
+        "blocksTotal": 21273,
+        "tuplesDone": 460488,
+        "tuplesTotal": 0,
+        "elapsedMs": 483158.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9829,
+        "blocksTotal": 21273,
+        "tuplesDone": 461829,
+        "tuplesTotal": 0,
+        "elapsedMs": 488358.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9838,
+        "blocksTotal": 21273,
+        "tuplesDone": 463068,
+        "tuplesTotal": 0,
+        "elapsedMs": 493567.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9879,
+        "blocksTotal": 21273,
+        "tuplesDone": 464379,
+        "tuplesTotal": 0,
+        "elapsedMs": 498796.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9920,
+        "blocksTotal": 21273,
+        "tuplesDone": 465646,
+        "tuplesTotal": 0,
+        "elapsedMs": 504044.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9929,
+        "blocksTotal": 21273,
+        "tuplesDone": 466913,
+        "tuplesTotal": 0,
+        "elapsedMs": 509246.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9970,
+        "blocksTotal": 21273,
+        "tuplesDone": 468130,
+        "tuplesTotal": 0,
+        "elapsedMs": 514534.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 9979,
+        "blocksTotal": 21273,
+        "tuplesDone": 469402,
+        "tuplesTotal": 0,
+        "elapsedMs": 520059.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10019,
+        "blocksTotal": 21273,
+        "tuplesDone": 470542,
+        "tuplesTotal": 0,
+        "elapsedMs": 525363.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10026,
+        "blocksTotal": 21273,
+        "tuplesDone": 471531,
+        "tuplesTotal": 0,
+        "elapsedMs": 530553.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10068,
+        "blocksTotal": 21273,
+        "tuplesDone": 472880,
+        "tuplesTotal": 0,
+        "elapsedMs": 535807.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10077,
+        "blocksTotal": 21273,
+        "tuplesDone": 474164,
+        "tuplesTotal": 0,
+        "elapsedMs": 541000.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10118,
+        "blocksTotal": 21273,
+        "tuplesDone": 475465,
+        "tuplesTotal": 0,
+        "elapsedMs": 546216.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10126,
+        "blocksTotal": 21273,
+        "tuplesDone": 476582,
+        "tuplesTotal": 0,
+        "elapsedMs": 551429.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10168,
+        "blocksTotal": 21273,
+        "tuplesDone": 477856,
+        "tuplesTotal": 0,
+        "elapsedMs": 556710.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10175,
+        "blocksTotal": 21273,
+        "tuplesDone": 478910,
+        "tuplesTotal": 0,
+        "elapsedMs": 562054.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10217,
+        "blocksTotal": 21273,
+        "tuplesDone": 480233,
+        "tuplesTotal": 0,
+        "elapsedMs": 567286.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10258,
+        "blocksTotal": 21273,
+        "tuplesDone": 481558,
+        "tuplesTotal": 0,
+        "elapsedMs": 572532.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10268,
+        "blocksTotal": 21273,
+        "tuplesDone": 482915,
+        "tuplesTotal": 0,
+        "elapsedMs": 577766.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10309,
+        "blocksTotal": 21273,
+        "tuplesDone": 484199,
+        "tuplesTotal": 0,
+        "elapsedMs": 583131.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10318,
+        "blocksTotal": 21273,
+        "tuplesDone": 485446,
+        "tuplesTotal": 0,
+        "elapsedMs": 588488.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10358,
+        "blocksTotal": 21273,
+        "tuplesDone": 486590,
+        "tuplesTotal": 0,
+        "elapsedMs": 593707.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10367,
+        "blocksTotal": 21273,
+        "tuplesDone": 487886,
+        "tuplesTotal": 0,
+        "elapsedMs": 598935.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10408,
+        "blocksTotal": 21273,
+        "tuplesDone": 489084,
+        "tuplesTotal": 0,
+        "elapsedMs": 604118.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10448,
+        "blocksTotal": 21273,
+        "tuplesDone": 490241,
+        "tuplesTotal": 0,
+        "elapsedMs": 609433.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10457,
+        "blocksTotal": 21273,
+        "tuplesDone": 491455,
+        "tuplesTotal": 0,
+        "elapsedMs": 614669.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10497,
+        "blocksTotal": 21273,
+        "tuplesDone": 492703,
+        "tuplesTotal": 0,
+        "elapsedMs": 619994.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10506,
+        "blocksTotal": 21273,
+        "tuplesDone": 493833,
+        "tuplesTotal": 0,
+        "elapsedMs": 625255.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10547,
+        "blocksTotal": 21273,
+        "tuplesDone": 495144,
+        "tuplesTotal": 0,
+        "elapsedMs": 630435.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10556,
+        "blocksTotal": 21273,
+        "tuplesDone": 496471,
+        "tuplesTotal": 0,
+        "elapsedMs": 635671.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10597,
+        "blocksTotal": 21273,
+        "tuplesDone": 497642,
+        "tuplesTotal": 0,
+        "elapsedMs": 640920.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10605,
+        "blocksTotal": 21273,
+        "tuplesDone": 498737,
+        "tuplesTotal": 0,
+        "elapsedMs": 646171.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10642,
+        "blocksTotal": 21273,
+        "tuplesDone": 499543,
+        "tuplesTotal": 0,
+        "elapsedMs": 651631.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10651,
+        "blocksTotal": 21273,
+        "tuplesDone": 500790,
+        "tuplesTotal": 0,
+        "elapsedMs": 656876.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10692,
+        "blocksTotal": 21273,
+        "tuplesDone": 502056,
+        "tuplesTotal": 0,
+        "elapsedMs": 662148.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10702,
+        "blocksTotal": 21273,
+        "tuplesDone": 503352,
+        "tuplesTotal": 0,
+        "elapsedMs": 667358.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10742,
+        "blocksTotal": 21273,
+        "tuplesDone": 504511,
+        "tuplesTotal": 0,
+        "elapsedMs": 672627.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10751,
+        "blocksTotal": 21273,
+        "tuplesDone": 505745,
+        "tuplesTotal": 0,
+        "elapsedMs": 677811.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10791,
+        "blocksTotal": 21273,
+        "tuplesDone": 506940,
+        "tuplesTotal": 0,
+        "elapsedMs": 683029.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10832,
+        "blocksTotal": 21273,
+        "tuplesDone": 508158,
+        "tuplesTotal": 0,
+        "elapsedMs": 688264.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10840,
+        "blocksTotal": 21273,
+        "tuplesDone": 509363,
+        "tuplesTotal": 0,
+        "elapsedMs": 693476.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10882,
+        "blocksTotal": 21273,
+        "tuplesDone": 510638,
+        "tuplesTotal": 0,
+        "elapsedMs": 698763.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10890,
+        "blocksTotal": 21273,
+        "tuplesDone": 511825,
+        "tuplesTotal": 0,
+        "elapsedMs": 704070.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10930,
+        "blocksTotal": 21273,
+        "tuplesDone": 512875,
+        "tuplesTotal": 0,
+        "elapsedMs": 709417.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10938,
+        "blocksTotal": 21273,
+        "tuplesDone": 514058,
+        "tuplesTotal": 0,
+        "elapsedMs": 714598.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10979,
+        "blocksTotal": 21273,
+        "tuplesDone": 515260,
+        "tuplesTotal": 0,
+        "elapsedMs": 719888.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 10988,
+        "blocksTotal": 21273,
+        "tuplesDone": 516496,
+        "tuplesTotal": 0,
+        "elapsedMs": 725118.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11028,
+        "blocksTotal": 21273,
+        "tuplesDone": 517720,
+        "tuplesTotal": 0,
+        "elapsedMs": 730363.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11037,
+        "blocksTotal": 21273,
+        "tuplesDone": 518875,
+        "tuplesTotal": 0,
+        "elapsedMs": 735583.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11077,
+        "blocksTotal": 21273,
+        "tuplesDone": 520004,
+        "tuplesTotal": 0,
+        "elapsedMs": 740858.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11085,
+        "blocksTotal": 21273,
+        "tuplesDone": 521179,
+        "tuplesTotal": 0,
+        "elapsedMs": 746168.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11126,
+        "blocksTotal": 21273,
+        "tuplesDone": 522419,
+        "tuplesTotal": 0,
+        "elapsedMs": 751402.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11135,
+        "blocksTotal": 21273,
+        "tuplesDone": 523649,
+        "tuplesTotal": 0,
+        "elapsedMs": 756648.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11175,
+        "blocksTotal": 21273,
+        "tuplesDone": 524836,
+        "tuplesTotal": 0,
+        "elapsedMs": 761879.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11216,
+        "blocksTotal": 21273,
+        "tuplesDone": 526023,
+        "tuplesTotal": 0,
+        "elapsedMs": 767133.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11222,
+        "blocksTotal": 21273,
+        "tuplesDone": 526909,
+        "tuplesTotal": 0,
+        "elapsedMs": 772446.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11231,
+        "blocksTotal": 21273,
+        "tuplesDone": 528124,
+        "tuplesTotal": 0,
+        "elapsedMs": 777706.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11272,
+        "blocksTotal": 21273,
+        "tuplesDone": 529354,
+        "tuplesTotal": 0,
+        "elapsedMs": 782999.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11313,
+        "blocksTotal": 21273,
+        "tuplesDone": 530662,
+        "tuplesTotal": 0,
+        "elapsedMs": 788381.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11321,
+        "blocksTotal": 21273,
+        "tuplesDone": 531838,
+        "tuplesTotal": 0,
+        "elapsedMs": 793623.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11362,
+        "blocksTotal": 21273,
+        "tuplesDone": 533034,
+        "tuplesTotal": 0,
+        "elapsedMs": 798871.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11370,
+        "blocksTotal": 21273,
+        "tuplesDone": 534143,
+        "tuplesTotal": 0,
+        "elapsedMs": 804088.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11395,
+        "blocksTotal": 21273,
+        "tuplesDone": 535392,
+        "tuplesTotal": 0,
+        "elapsedMs": 809327.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11403,
+        "blocksTotal": 21273,
+        "tuplesDone": 536558,
+        "tuplesTotal": 0,
+        "elapsedMs": 814542.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11444,
+        "blocksTotal": 21273,
+        "tuplesDone": 537787,
+        "tuplesTotal": 0,
+        "elapsedMs": 819808.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11452,
+        "blocksTotal": 21273,
+        "tuplesDone": 538958,
+        "tuplesTotal": 0,
+        "elapsedMs": 825031.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11491,
+        "blocksTotal": 21273,
+        "tuplesDone": 539943,
+        "tuplesTotal": 0,
+        "elapsedMs": 830244.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11499,
+        "blocksTotal": 21273,
+        "tuplesDone": 541076,
+        "tuplesTotal": 0,
+        "elapsedMs": 835507.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11539,
+        "blocksTotal": 21273,
+        "tuplesDone": 542187,
+        "tuplesTotal": 0,
+        "elapsedMs": 840941.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11548,
+        "blocksTotal": 21273,
+        "tuplesDone": 543434,
+        "tuplesTotal": 0,
+        "elapsedMs": 846147.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11589,
+        "blocksTotal": 21273,
+        "tuplesDone": 544712,
+        "tuplesTotal": 0,
+        "elapsedMs": 851428.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11597,
+        "blocksTotal": 21273,
+        "tuplesDone": 545823,
+        "tuplesTotal": 0,
+        "elapsedMs": 856736.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11637,
+        "blocksTotal": 21273,
+        "tuplesDone": 546914,
+        "tuplesTotal": 0,
+        "elapsedMs": 862137.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11646,
+        "blocksTotal": 21273,
+        "tuplesDone": 548184,
+        "tuplesTotal": 0,
+        "elapsedMs": 867347.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11687,
+        "blocksTotal": 21273,
+        "tuplesDone": 549404,
+        "tuplesTotal": 0,
+        "elapsedMs": 872544.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11728,
+        "blocksTotal": 21273,
+        "tuplesDone": 550600,
+        "tuplesTotal": 0,
+        "elapsedMs": 877958.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11736,
+        "blocksTotal": 21273,
+        "tuplesDone": 551757,
+        "tuplesTotal": 0,
+        "elapsedMs": 883236.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11761,
+        "blocksTotal": 21273,
+        "tuplesDone": 552955,
+        "tuplesTotal": 0,
+        "elapsedMs": 889058.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11767,
+        "blocksTotal": 21273,
+        "tuplesDone": 553880,
+        "tuplesTotal": 0,
+        "elapsedMs": 894497.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11808,
+        "blocksTotal": 21273,
+        "tuplesDone": 555094,
+        "tuplesTotal": 0,
+        "elapsedMs": 899785.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11816,
+        "blocksTotal": 21273,
+        "tuplesDone": 556241,
+        "tuplesTotal": 0,
+        "elapsedMs": 905218.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11857,
+        "blocksTotal": 21273,
+        "tuplesDone": 557500,
+        "tuplesTotal": 0,
+        "elapsedMs": 910444.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11866,
+        "blocksTotal": 21273,
+        "tuplesDone": 558757,
+        "tuplesTotal": 0,
+        "elapsedMs": 915708.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11906,
+        "blocksTotal": 21273,
+        "tuplesDone": 559872,
+        "tuplesTotal": 0,
+        "elapsedMs": 921060.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11914,
+        "blocksTotal": 21273,
+        "tuplesDone": 560904,
+        "tuplesTotal": 0,
+        "elapsedMs": 926301.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11955,
+        "blocksTotal": 21273,
+        "tuplesDone": 562247,
+        "tuplesTotal": 0,
+        "elapsedMs": 931555.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 11962,
+        "blocksTotal": 21273,
+        "tuplesDone": 563254,
+        "tuplesTotal": 0,
+        "elapsedMs": 936838.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12003,
+        "blocksTotal": 21273,
+        "tuplesDone": 564448,
+        "tuplesTotal": 0,
+        "elapsedMs": 942097.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12011,
+        "blocksTotal": 21273,
+        "tuplesDone": 565601,
+        "tuplesTotal": 0,
+        "elapsedMs": 947278.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12050,
+        "blocksTotal": 21273,
+        "tuplesDone": 566502,
+        "tuplesTotal": 0,
+        "elapsedMs": 952577.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12057,
+        "blocksTotal": 21273,
+        "tuplesDone": 567551,
+        "tuplesTotal": 0,
+        "elapsedMs": 957823.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12096,
+        "blocksTotal": 21273,
+        "tuplesDone": 568582,
+        "tuplesTotal": 0,
+        "elapsedMs": 963137.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12103,
+        "blocksTotal": 21273,
+        "tuplesDone": 569559,
+        "tuplesTotal": 0,
+        "elapsedMs": 968521.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12111,
+        "blocksTotal": 21273,
+        "tuplesDone": 570551,
+        "tuplesTotal": 0,
+        "elapsedMs": 973802.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12151,
+        "blocksTotal": 21273,
+        "tuplesDone": 571712,
+        "tuplesTotal": 0,
+        "elapsedMs": 979089.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12158,
+        "blocksTotal": 21273,
+        "tuplesDone": 572758,
+        "tuplesTotal": 0,
+        "elapsedMs": 984387.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12199,
+        "blocksTotal": 21273,
+        "tuplesDone": 573984,
+        "tuplesTotal": 0,
+        "elapsedMs": 989653.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12207,
+        "blocksTotal": 21273,
+        "tuplesDone": 575152,
+        "tuplesTotal": 0,
+        "elapsedMs": 994890.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12247,
+        "blocksTotal": 21273,
+        "tuplesDone": 576247,
+        "tuplesTotal": 0,
+        "elapsedMs": 1000192.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12255,
+        "blocksTotal": 21273,
+        "tuplesDone": 577347,
+        "tuplesTotal": 0,
+        "elapsedMs": 1005493.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12294,
+        "blocksTotal": 21273,
+        "tuplesDone": 578286,
+        "tuplesTotal": 0,
+        "elapsedMs": 1010791.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12301,
+        "blocksTotal": 21273,
+        "tuplesDone": 579330,
+        "tuplesTotal": 0,
+        "elapsedMs": 1016150.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12342,
+        "blocksTotal": 21273,
+        "tuplesDone": 580525,
+        "tuplesTotal": 0,
+        "elapsedMs": 1021422.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12350,
+        "blocksTotal": 21273,
+        "tuplesDone": 581741,
+        "tuplesTotal": 0,
+        "elapsedMs": 1026630.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12390,
+        "blocksTotal": 21273,
+        "tuplesDone": 582833,
+        "tuplesTotal": 0,
+        "elapsedMs": 1032005.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12399,
+        "blocksTotal": 21273,
+        "tuplesDone": 584035,
+        "tuplesTotal": 0,
+        "elapsedMs": 1037240.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12439,
+        "blocksTotal": 21273,
+        "tuplesDone": 585157,
+        "tuplesTotal": 0,
+        "elapsedMs": 1042591.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12447,
+        "blocksTotal": 21273,
+        "tuplesDone": 586284,
+        "tuplesTotal": 0,
+        "elapsedMs": 1047910.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12487,
+        "blocksTotal": 21273,
+        "tuplesDone": 587421,
+        "tuplesTotal": 0,
+        "elapsedMs": 1053260.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12495,
+        "blocksTotal": 21273,
+        "tuplesDone": 588547,
+        "tuplesTotal": 0,
+        "elapsedMs": 1058650.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12535,
+        "blocksTotal": 21273,
+        "tuplesDone": 589605,
+        "tuplesTotal": 0,
+        "elapsedMs": 1063977.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12543,
+        "blocksTotal": 21273,
+        "tuplesDone": 590697,
+        "tuplesTotal": 0,
+        "elapsedMs": 1069515.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12583,
+        "blocksTotal": 21273,
+        "tuplesDone": 591944,
+        "tuplesTotal": 0,
+        "elapsedMs": 1074741.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12590,
+        "blocksTotal": 21273,
+        "tuplesDone": 592830,
+        "tuplesTotal": 0,
+        "elapsedMs": 1080012.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12629,
+        "blocksTotal": 21273,
+        "tuplesDone": 593884,
+        "tuplesTotal": 0,
+        "elapsedMs": 1085247.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12638,
+        "blocksTotal": 21273,
+        "tuplesDone": 595153,
+        "tuplesTotal": 0,
+        "elapsedMs": 1090446.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12679,
+        "blocksTotal": 21273,
+        "tuplesDone": 596296,
+        "tuplesTotal": 0,
+        "elapsedMs": 1095745.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12687,
+        "blocksTotal": 21273,
+        "tuplesDone": 597431,
+        "tuplesTotal": 0,
+        "elapsedMs": 1101109.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12726,
+        "blocksTotal": 21273,
+        "tuplesDone": 598464,
+        "tuplesTotal": 0,
+        "elapsedMs": 1106503.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12734,
+        "blocksTotal": 21273,
+        "tuplesDone": 599609,
+        "tuplesTotal": 0,
+        "elapsedMs": 1111801.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12773,
+        "blocksTotal": 21273,
+        "tuplesDone": 600579,
+        "tuplesTotal": 0,
+        "elapsedMs": 1117178.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12782,
+        "blocksTotal": 21273,
+        "tuplesDone": 601838,
+        "tuplesTotal": 0,
+        "elapsedMs": 1122485.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12822,
+        "blocksTotal": 21273,
+        "tuplesDone": 602992,
+        "tuplesTotal": 0,
+        "elapsedMs": 1127675.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12830,
+        "blocksTotal": 21273,
+        "tuplesDone": 604000,
+        "tuplesTotal": 0,
+        "elapsedMs": 1132952.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12870,
+        "blocksTotal": 21273,
+        "tuplesDone": 605107,
+        "tuplesTotal": 0,
+        "elapsedMs": 1138281.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12877,
+        "blocksTotal": 21273,
+        "tuplesDone": 606215,
+        "tuplesTotal": 0,
+        "elapsedMs": 1143504.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12916,
+        "blocksTotal": 21273,
+        "tuplesDone": 607208,
+        "tuplesTotal": 0,
+        "elapsedMs": 1149146.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12923,
+        "blocksTotal": 21273,
+        "tuplesDone": 608093,
+        "tuplesTotal": 0,
+        "elapsedMs": 1154474.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12963,
+        "blocksTotal": 21273,
+        "tuplesDone": 609308,
+        "tuplesTotal": 0,
+        "elapsedMs": 1159709.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 12971,
+        "blocksTotal": 21273,
+        "tuplesDone": 610398,
+        "tuplesTotal": 0,
+        "elapsedMs": 1164956.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13012,
+        "blocksTotal": 21273,
+        "tuplesDone": 611633,
+        "tuplesTotal": 0,
+        "elapsedMs": 1170221.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13020,
+        "blocksTotal": 21273,
+        "tuplesDone": 612692,
+        "tuplesTotal": 0,
+        "elapsedMs": 1175533.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13059,
+        "blocksTotal": 21273,
+        "tuplesDone": 613665,
+        "tuplesTotal": 0,
+        "elapsedMs": 1180875.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13066,
+        "blocksTotal": 21273,
+        "tuplesDone": 614675,
+        "tuplesTotal": 0,
+        "elapsedMs": 1186115.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13069,
+        "blocksTotal": 21273,
+        "tuplesDone": 615068,
+        "tuplesTotal": 0,
+        "elapsedMs": 1192002.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13110,
+        "blocksTotal": 21273,
+        "tuplesDone": 616344,
+        "tuplesTotal": 0,
+        "elapsedMs": 1197272.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13118,
+        "blocksTotal": 21273,
+        "tuplesDone": 617474,
+        "tuplesTotal": 0,
+        "elapsedMs": 1202507.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13159,
+        "blocksTotal": 21273,
+        "tuplesDone": 618770,
+        "tuplesTotal": 0,
+        "elapsedMs": 1207696.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13201,
+        "blocksTotal": 21273,
+        "tuplesDone": 620109,
+        "tuplesTotal": 0,
+        "elapsedMs": 1212993.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13209,
+        "blocksTotal": 21273,
+        "tuplesDone": 621338,
+        "tuplesTotal": 0,
+        "elapsedMs": 1218233.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13248,
+        "blocksTotal": 21273,
+        "tuplesDone": 622217,
+        "tuplesTotal": 0,
+        "elapsedMs": 1223583.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13256,
+        "blocksTotal": 21273,
+        "tuplesDone": 623433,
+        "tuplesTotal": 0,
+        "elapsedMs": 1228820.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13297,
+        "blocksTotal": 21273,
+        "tuplesDone": 624631,
+        "tuplesTotal": 0,
+        "elapsedMs": 1234111.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13304,
+        "blocksTotal": 21273,
+        "tuplesDone": 625647,
+        "tuplesTotal": 0,
+        "elapsedMs": 1239394.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13345,
+        "blocksTotal": 21273,
+        "tuplesDone": 626888,
+        "tuplesTotal": 0,
+        "elapsedMs": 1244722.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13353,
+        "blocksTotal": 21273,
+        "tuplesDone": 627929,
+        "tuplesTotal": 0,
+        "elapsedMs": 1249981.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13394,
+        "blocksTotal": 21273,
+        "tuplesDone": 629253,
+        "tuplesTotal": 0,
+        "elapsedMs": 1255221.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13402,
+        "blocksTotal": 21273,
+        "tuplesDone": 630424,
+        "tuplesTotal": 0,
+        "elapsedMs": 1260521.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13443,
+        "blocksTotal": 21273,
+        "tuplesDone": 631662,
+        "tuplesTotal": 0,
+        "elapsedMs": 1265801.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13451,
+        "blocksTotal": 21273,
+        "tuplesDone": 632705,
+        "tuplesTotal": 0,
+        "elapsedMs": 1271040.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13489,
+        "blocksTotal": 21273,
+        "tuplesDone": 633644,
+        "tuplesTotal": 0,
+        "elapsedMs": 1276368.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13495,
+        "blocksTotal": 21273,
+        "tuplesDone": 634508,
+        "tuplesTotal": 0,
+        "elapsedMs": 1281655.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13502,
+        "blocksTotal": 21273,
+        "tuplesDone": 635426,
+        "tuplesTotal": 0,
+        "elapsedMs": 1287033.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13543,
+        "blocksTotal": 21273,
+        "tuplesDone": 636601,
+        "tuplesTotal": 0,
+        "elapsedMs": 1292422.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13550,
+        "blocksTotal": 21273,
+        "tuplesDone": 637654,
+        "tuplesTotal": 0,
+        "elapsedMs": 1297657.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13590,
+        "blocksTotal": 21273,
+        "tuplesDone": 638707,
+        "tuplesTotal": 0,
+        "elapsedMs": 1302962.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13596,
+        "blocksTotal": 21273,
+        "tuplesDone": 639637,
+        "tuplesTotal": 0,
+        "elapsedMs": 1308254.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13633,
+        "blocksTotal": 21273,
+        "tuplesDone": 640278,
+        "tuplesTotal": 0,
+        "elapsedMs": 1313610.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13641,
+        "blocksTotal": 21273,
+        "tuplesDone": 641376,
+        "tuplesTotal": 0,
+        "elapsedMs": 1318866.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13682,
+        "blocksTotal": 21273,
+        "tuplesDone": 642638,
+        "tuplesTotal": 0,
+        "elapsedMs": 1324037.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13691,
+        "blocksTotal": 21273,
+        "tuplesDone": 643916,
+        "tuplesTotal": 0,
+        "elapsedMs": 1329387.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13731,
+        "blocksTotal": 21273,
+        "tuplesDone": 645092,
+        "tuplesTotal": 0,
+        "elapsedMs": 1334646.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13740,
+        "blocksTotal": 21273,
+        "tuplesDone": 646264,
+        "tuplesTotal": 0,
+        "elapsedMs": 1339919.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13779,
+        "blocksTotal": 21273,
+        "tuplesDone": 647287,
+        "tuplesTotal": 0,
+        "elapsedMs": 1345267.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13786,
+        "blocksTotal": 21273,
+        "tuplesDone": 648290,
+        "tuplesTotal": 0,
+        "elapsedMs": 1350496.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13827,
+        "blocksTotal": 21273,
+        "tuplesDone": 649531,
+        "tuplesTotal": 0,
+        "elapsedMs": 1355726.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13836,
+        "blocksTotal": 21273,
+        "tuplesDone": 650703,
+        "tuplesTotal": 0,
+        "elapsedMs": 1361032.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13875,
+        "blocksTotal": 21273,
+        "tuplesDone": 651791,
+        "tuplesTotal": 0,
+        "elapsedMs": 1366347.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13881,
+        "blocksTotal": 21273,
+        "tuplesDone": 652595,
+        "tuplesTotal": 0,
+        "elapsedMs": 1371859.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13921,
+        "blocksTotal": 21273,
+        "tuplesDone": 653700,
+        "tuplesTotal": 0,
+        "elapsedMs": 1377244.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13927,
+        "blocksTotal": 21273,
+        "tuplesDone": 654580,
+        "tuplesTotal": 0,
+        "elapsedMs": 1382575.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13934,
+        "blocksTotal": 21273,
+        "tuplesDone": 655554,
+        "tuplesTotal": 0,
+        "elapsedMs": 1387870.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13975,
+        "blocksTotal": 21273,
+        "tuplesDone": 656740,
+        "tuplesTotal": 0,
+        "elapsedMs": 1393136.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 13983,
+        "blocksTotal": 21273,
+        "tuplesDone": 657925,
+        "tuplesTotal": 0,
+        "elapsedMs": 1398354.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14022,
+        "blocksTotal": 21273,
+        "tuplesDone": 658812,
+        "tuplesTotal": 0,
+        "elapsedMs": 1403638.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14029,
+        "blocksTotal": 21273,
+        "tuplesDone": 659878,
+        "tuplesTotal": 0,
+        "elapsedMs": 1408932.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14069,
+        "blocksTotal": 21273,
+        "tuplesDone": 660940,
+        "tuplesTotal": 0,
+        "elapsedMs": 1414220.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14075,
+        "blocksTotal": 21273,
+        "tuplesDone": 661817,
+        "tuplesTotal": 0,
+        "elapsedMs": 1419857.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14113,
+        "blocksTotal": 21273,
+        "tuplesDone": 662693,
+        "tuplesTotal": 0,
+        "elapsedMs": 1425108.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14121,
+        "blocksTotal": 21273,
+        "tuplesDone": 663694,
+        "tuplesTotal": 0,
+        "elapsedMs": 1430341.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14161,
+        "blocksTotal": 21273,
+        "tuplesDone": 664868,
+        "tuplesTotal": 0,
+        "elapsedMs": 1435543.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14169,
+        "blocksTotal": 21273,
+        "tuplesDone": 665988,
+        "tuplesTotal": 0,
+        "elapsedMs": 1440814.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14208,
+        "blocksTotal": 21273,
+        "tuplesDone": 666974,
+        "tuplesTotal": 0,
+        "elapsedMs": 1446074.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14215,
+        "blocksTotal": 21273,
+        "tuplesDone": 667927,
+        "tuplesTotal": 0,
+        "elapsedMs": 1451335.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14220,
+        "blocksTotal": 21273,
+        "tuplesDone": 668705,
+        "tuplesTotal": 0,
+        "elapsedMs": 1456755.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14258,
+        "blocksTotal": 21273,
+        "tuplesDone": 669597,
+        "tuplesTotal": 0,
+        "elapsedMs": 1462024.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14266,
+        "blocksTotal": 21273,
+        "tuplesDone": 670653,
+        "tuplesTotal": 0,
+        "elapsedMs": 1467462.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14306,
+        "blocksTotal": 21273,
+        "tuplesDone": 671807,
+        "tuplesTotal": 0,
+        "elapsedMs": 1472671.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14315,
+        "blocksTotal": 21273,
+        "tuplesDone": 672979,
+        "tuplesTotal": 0,
+        "elapsedMs": 1477993.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14354,
+        "blocksTotal": 21273,
+        "tuplesDone": 673958,
+        "tuplesTotal": 0,
+        "elapsedMs": 1483311.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14361,
+        "blocksTotal": 21273,
+        "tuplesDone": 674979,
+        "tuplesTotal": 0,
+        "elapsedMs": 1489149.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14367,
+        "blocksTotal": 21273,
+        "tuplesDone": 675797,
+        "tuplesTotal": 0,
+        "elapsedMs": 1494507.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14406,
+        "blocksTotal": 21273,
+        "tuplesDone": 676820,
+        "tuplesTotal": 0,
+        "elapsedMs": 1499736.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14412,
+        "blocksTotal": 21273,
+        "tuplesDone": 677677,
+        "tuplesTotal": 0,
+        "elapsedMs": 1505472.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14453,
+        "blocksTotal": 21273,
+        "tuplesDone": 678933,
+        "tuplesTotal": 0,
+        "elapsedMs": 1510836.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14462,
+        "blocksTotal": 21273,
+        "tuplesDone": 680137,
+        "tuplesTotal": 0,
+        "elapsedMs": 1516134.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14501,
+        "blocksTotal": 21273,
+        "tuplesDone": 681150,
+        "tuplesTotal": 0,
+        "elapsedMs": 1521632.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14506,
+        "blocksTotal": 21273,
+        "tuplesDone": 681842,
+        "tuplesTotal": 0,
+        "elapsedMs": 1526940.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14546,
+        "blocksTotal": 21273,
+        "tuplesDone": 682984,
+        "tuplesTotal": 0,
+        "elapsedMs": 1532162.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14553,
+        "blocksTotal": 21273,
+        "tuplesDone": 684029,
+        "tuplesTotal": 0,
+        "elapsedMs": 1537628.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14592,
+        "blocksTotal": 21273,
+        "tuplesDone": 684993,
+        "tuplesTotal": 0,
+        "elapsedMs": 1542898.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14600,
+        "blocksTotal": 21273,
+        "tuplesDone": 686015,
+        "tuplesTotal": 0,
+        "elapsedMs": 1548161.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14607,
+        "blocksTotal": 21273,
+        "tuplesDone": 687003,
+        "tuplesTotal": 0,
+        "elapsedMs": 1553585.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14646,
+        "blocksTotal": 21273,
+        "tuplesDone": 688060,
+        "tuplesTotal": 0,
+        "elapsedMs": 1558933.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14653,
+        "blocksTotal": 21273,
+        "tuplesDone": 689009,
+        "tuplesTotal": 0,
+        "elapsedMs": 1564177.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14692,
+        "blocksTotal": 21273,
+        "tuplesDone": 689940,
+        "tuplesTotal": 0,
+        "elapsedMs": 1569499.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14698,
+        "blocksTotal": 21273,
+        "tuplesDone": 690777,
+        "tuplesTotal": 0,
+        "elapsedMs": 1574916.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14736,
+        "blocksTotal": 21273,
+        "tuplesDone": 691646,
+        "tuplesTotal": 0,
+        "elapsedMs": 1580219.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14742,
+        "blocksTotal": 21273,
+        "tuplesDone": 692586,
+        "tuplesTotal": 0,
+        "elapsedMs": 1585572.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14751,
+        "blocksTotal": 21273,
+        "tuplesDone": 693806,
+        "tuplesTotal": 0,
+        "elapsedMs": 1590805.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14791,
+        "blocksTotal": 21273,
+        "tuplesDone": 694938,
+        "tuplesTotal": 0,
+        "elapsedMs": 1596073.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14799,
+        "blocksTotal": 21273,
+        "tuplesDone": 696005,
+        "tuplesTotal": 0,
+        "elapsedMs": 1601597.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14838,
+        "blocksTotal": 21273,
+        "tuplesDone": 696907,
+        "tuplesTotal": 0,
+        "elapsedMs": 1606991.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14843,
+        "blocksTotal": 21273,
+        "tuplesDone": 697690,
+        "tuplesTotal": 0,
+        "elapsedMs": 1612282.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14847,
+        "blocksTotal": 21273,
+        "tuplesDone": 698196,
+        "tuplesTotal": 0,
+        "elapsedMs": 1617567.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14884,
+        "blocksTotal": 21273,
+        "tuplesDone": 699000,
+        "tuplesTotal": 0,
+        "elapsedMs": 1622854.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14891,
+        "blocksTotal": 21273,
+        "tuplesDone": 699947,
+        "tuplesTotal": 0,
+        "elapsedMs": 1628127.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14930,
+        "blocksTotal": 21273,
+        "tuplesDone": 700961,
+        "tuplesTotal": 0,
+        "elapsedMs": 1633452.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14938,
+        "blocksTotal": 21273,
+        "tuplesDone": 702002,
+        "tuplesTotal": 0,
+        "elapsedMs": 1638706.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14977,
+        "blocksTotal": 21273,
+        "tuplesDone": 702965,
+        "tuplesTotal": 0,
+        "elapsedMs": 1644357.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14984,
+        "blocksTotal": 21273,
+        "tuplesDone": 703946,
+        "tuplesTotal": 0,
+        "elapsedMs": 1649706.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 14989,
+        "blocksTotal": 21273,
+        "tuplesDone": 704754,
+        "tuplesTotal": 0,
+        "elapsedMs": 1655042.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15028,
+        "blocksTotal": 21273,
+        "tuplesDone": 705742,
+        "tuplesTotal": 0,
+        "elapsedMs": 1660360.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15036,
+        "blocksTotal": 21273,
+        "tuplesDone": 706796,
+        "tuplesTotal": 0,
+        "elapsedMs": 1665672.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15074,
+        "blocksTotal": 21273,
+        "tuplesDone": 707604,
+        "tuplesTotal": 0,
+        "elapsedMs": 1670891.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15081,
+        "blocksTotal": 21273,
+        "tuplesDone": 708627,
+        "tuplesTotal": 0,
+        "elapsedMs": 1676225.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15121,
+        "blocksTotal": 21273,
+        "tuplesDone": 709711,
+        "tuplesTotal": 0,
+        "elapsedMs": 1681536.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15129,
+        "blocksTotal": 21273,
+        "tuplesDone": 710769,
+        "tuplesTotal": 0,
+        "elapsedMs": 1686973.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15134,
+        "blocksTotal": 21273,
+        "tuplesDone": 711588,
+        "tuplesTotal": 0,
+        "elapsedMs": 1692655.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15173,
+        "blocksTotal": 21273,
+        "tuplesDone": 712557,
+        "tuplesTotal": 0,
+        "elapsedMs": 1697921.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15181,
+        "blocksTotal": 21273,
+        "tuplesDone": 713625,
+        "tuplesTotal": 0,
+        "elapsedMs": 1703169.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15221,
+        "blocksTotal": 21273,
+        "tuplesDone": 714748,
+        "tuplesTotal": 0,
+        "elapsedMs": 1708523.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15229,
+        "blocksTotal": 21273,
+        "tuplesDone": 715886,
+        "tuplesTotal": 0,
+        "elapsedMs": 1713891.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15269,
+        "blocksTotal": 21273,
+        "tuplesDone": 716949,
+        "tuplesTotal": 0,
+        "elapsedMs": 1719158.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15275,
+        "blocksTotal": 21273,
+        "tuplesDone": 717833,
+        "tuplesTotal": 0,
+        "elapsedMs": 1724547.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15279,
+        "blocksTotal": 21273,
+        "tuplesDone": 718374,
+        "tuplesTotal": 0,
+        "elapsedMs": 1729858.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15318,
+        "blocksTotal": 21273,
+        "tuplesDone": 719376,
+        "tuplesTotal": 0,
+        "elapsedMs": 1735346.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15325,
+        "blocksTotal": 21273,
+        "tuplesDone": 720398,
+        "tuplesTotal": 0,
+        "elapsedMs": 1740723.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15366,
+        "blocksTotal": 21273,
+        "tuplesDone": 721566,
+        "tuplesTotal": 0,
+        "elapsedMs": 1746039.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15373,
+        "blocksTotal": 21273,
+        "tuplesDone": 722605,
+        "tuplesTotal": 0,
+        "elapsedMs": 1751476.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15413,
+        "blocksTotal": 21273,
+        "tuplesDone": 723650,
+        "tuplesTotal": 0,
+        "elapsedMs": 1756787.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15420,
+        "blocksTotal": 21273,
+        "tuplesDone": 724653,
+        "tuplesTotal": 0,
+        "elapsedMs": 1762321.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15458,
+        "blocksTotal": 21273,
+        "tuplesDone": 725450,
+        "tuplesTotal": 0,
+        "elapsedMs": 1767629.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15465,
+        "blocksTotal": 21273,
+        "tuplesDone": 726457,
+        "tuplesTotal": 0,
+        "elapsedMs": 1772856.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15489,
+        "blocksTotal": 21273,
+        "tuplesDone": 727589,
+        "tuplesTotal": 0,
+        "elapsedMs": 1778147.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15495,
+        "blocksTotal": 21273,
+        "tuplesDone": 728502,
+        "tuplesTotal": 0,
+        "elapsedMs": 1783613.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15502,
+        "blocksTotal": 21273,
+        "tuplesDone": 729402,
+        "tuplesTotal": 0,
+        "elapsedMs": 1789281.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15541,
+        "blocksTotal": 21273,
+        "tuplesDone": 730407,
+        "tuplesTotal": 0,
+        "elapsedMs": 1794607.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15548,
+        "blocksTotal": 21273,
+        "tuplesDone": 731387,
+        "tuplesTotal": 0,
+        "elapsedMs": 1799934.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15570,
+        "blocksTotal": 21273,
+        "tuplesDone": 732147,
+        "tuplesTotal": 0,
+        "elapsedMs": 1805313.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15574,
+        "blocksTotal": 21273,
+        "tuplesDone": 732830,
+        "tuplesTotal": 0,
+        "elapsedMs": 1810772.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15581,
+        "blocksTotal": 21273,
+        "tuplesDone": 733779,
+        "tuplesTotal": 0,
+        "elapsedMs": 1816124.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15619,
+        "blocksTotal": 21273,
+        "tuplesDone": 734629,
+        "tuplesTotal": 0,
+        "elapsedMs": 1821584.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15626,
+        "blocksTotal": 21273,
+        "tuplesDone": 735509,
+        "tuplesTotal": 0,
+        "elapsedMs": 1827024.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15665,
+        "blocksTotal": 21273,
+        "tuplesDone": 736486,
+        "tuplesTotal": 0,
+        "elapsedMs": 1832342.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15673,
+        "blocksTotal": 21273,
+        "tuplesDone": 737605,
+        "tuplesTotal": 0,
+        "elapsedMs": 1837575.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15679,
+        "blocksTotal": 21273,
+        "tuplesDone": 738452,
+        "tuplesTotal": 0,
+        "elapsedMs": 1842960.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15716,
+        "blocksTotal": 21273,
+        "tuplesDone": 739191,
+        "tuplesTotal": 0,
+        "elapsedMs": 1848304.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15722,
+        "blocksTotal": 21273,
+        "tuplesDone": 739992,
+        "tuplesTotal": 0,
+        "elapsedMs": 1853644.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15760,
+        "blocksTotal": 21273,
+        "tuplesDone": 740856,
+        "tuplesTotal": 0,
+        "elapsedMs": 1858892.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15768,
+        "blocksTotal": 21273,
+        "tuplesDone": 742064,
+        "tuplesTotal": 0,
+        "elapsedMs": 1864105.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15809,
+        "blocksTotal": 21273,
+        "tuplesDone": 743311,
+        "tuplesTotal": 0,
+        "elapsedMs": 1869457.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15815,
+        "blocksTotal": 21273,
+        "tuplesDone": 744168,
+        "tuplesTotal": 0,
+        "elapsedMs": 1874799.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15823,
+        "blocksTotal": 21273,
+        "tuplesDone": 745180,
+        "tuplesTotal": 0,
+        "elapsedMs": 1880128.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15861,
+        "blocksTotal": 21273,
+        "tuplesDone": 746014,
+        "tuplesTotal": 0,
+        "elapsedMs": 1885385.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15867,
+        "blocksTotal": 21273,
+        "tuplesDone": 746901,
+        "tuplesTotal": 0,
+        "elapsedMs": 1890707.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15906,
+        "blocksTotal": 21273,
+        "tuplesDone": 747861,
+        "tuplesTotal": 0,
+        "elapsedMs": 1896129.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15913,
+        "blocksTotal": 21273,
+        "tuplesDone": 748796,
+        "tuplesTotal": 0,
+        "elapsedMs": 1901407.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15919,
+        "blocksTotal": 21273,
+        "tuplesDone": 749694,
+        "tuplesTotal": 0,
+        "elapsedMs": 1906712.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15957,
+        "blocksTotal": 21273,
+        "tuplesDone": 750563,
+        "tuplesTotal": 0,
+        "elapsedMs": 1912028.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 15963,
+        "blocksTotal": 21273,
+        "tuplesDone": 751338,
+        "tuplesTotal": 0,
+        "elapsedMs": 1917371.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16000,
+        "blocksTotal": 21273,
+        "tuplesDone": 752061,
+        "tuplesTotal": 0,
+        "elapsedMs": 1922770.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16007,
+        "blocksTotal": 21273,
+        "tuplesDone": 753051,
+        "tuplesTotal": 0,
+        "elapsedMs": 1928274.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16013,
+        "blocksTotal": 21273,
+        "tuplesDone": 753885,
+        "tuplesTotal": 0,
+        "elapsedMs": 1933632.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16051,
+        "blocksTotal": 21273,
+        "tuplesDone": 754713,
+        "tuplesTotal": 0,
+        "elapsedMs": 1939068.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16056,
+        "blocksTotal": 21273,
+        "tuplesDone": 755364,
+        "tuplesTotal": 0,
+        "elapsedMs": 1944457.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16063,
+        "blocksTotal": 21273,
+        "tuplesDone": 756345,
+        "tuplesTotal": 0,
+        "elapsedMs": 1949683.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16103,
+        "blocksTotal": 21273,
+        "tuplesDone": 757511,
+        "tuplesTotal": 0,
+        "elapsedMs": 1954987.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16108,
+        "blocksTotal": 21273,
+        "tuplesDone": 758252,
+        "tuplesTotal": 0,
+        "elapsedMs": 1960475.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16147,
+        "blocksTotal": 21273,
+        "tuplesDone": 759266,
+        "tuplesTotal": 0,
+        "elapsedMs": 1965707.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16154,
+        "blocksTotal": 21273,
+        "tuplesDone": 760126,
+        "tuplesTotal": 0,
+        "elapsedMs": 1970951.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16192,
+        "blocksTotal": 21273,
+        "tuplesDone": 761096,
+        "tuplesTotal": 0,
+        "elapsedMs": 1976311.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16198,
+        "blocksTotal": 21273,
+        "tuplesDone": 761928,
+        "tuplesTotal": 0,
+        "elapsedMs": 1981685.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16205,
+        "blocksTotal": 21273,
+        "tuplesDone": 762841,
+        "tuplesTotal": 0,
+        "elapsedMs": 1987130.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16244,
+        "blocksTotal": 21273,
+        "tuplesDone": 763879,
+        "tuplesTotal": 0,
+        "elapsedMs": 1992551.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16250,
+        "blocksTotal": 21273,
+        "tuplesDone": 764701,
+        "tuplesTotal": 0,
+        "elapsedMs": 1997895.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16288,
+        "blocksTotal": 21273,
+        "tuplesDone": 765571,
+        "tuplesTotal": 0,
+        "elapsedMs": 2003179.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16296,
+        "blocksTotal": 21273,
+        "tuplesDone": 766615,
+        "tuplesTotal": 0,
+        "elapsedMs": 2008574.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16302,
+        "blocksTotal": 21273,
+        "tuplesDone": 767512,
+        "tuplesTotal": 0,
+        "elapsedMs": 2013980.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16341,
+        "blocksTotal": 21273,
+        "tuplesDone": 768496,
+        "tuplesTotal": 0,
+        "elapsedMs": 2019304.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16348,
+        "blocksTotal": 21273,
+        "tuplesDone": 769455,
+        "tuplesTotal": 0,
+        "elapsedMs": 2024670.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16386,
+        "blocksTotal": 21273,
+        "tuplesDone": 770284,
+        "tuplesTotal": 0,
+        "elapsedMs": 2029973.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16393,
+        "blocksTotal": 21273,
+        "tuplesDone": 771212,
+        "tuplesTotal": 0,
+        "elapsedMs": 2035246.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16432,
+        "blocksTotal": 21273,
+        "tuplesDone": 772227,
+        "tuplesTotal": 0,
+        "elapsedMs": 2040503.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16439,
+        "blocksTotal": 21273,
+        "tuplesDone": 773193,
+        "tuplesTotal": 0,
+        "elapsedMs": 2045758.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16445,
+        "blocksTotal": 21273,
+        "tuplesDone": 774062,
+        "tuplesTotal": 0,
+        "elapsedMs": 2051277.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16482,
+        "blocksTotal": 21273,
+        "tuplesDone": 774765,
+        "tuplesTotal": 0,
+        "elapsedMs": 2056522.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16492,
+        "blocksTotal": 21273,
+        "tuplesDone": 776087,
+        "tuplesTotal": 0,
+        "elapsedMs": 2061821.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16530,
+        "blocksTotal": 21273,
+        "tuplesDone": 777013,
+        "tuplesTotal": 0,
+        "elapsedMs": 2067075.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16538,
+        "blocksTotal": 21273,
+        "tuplesDone": 778130,
+        "tuplesTotal": 0,
+        "elapsedMs": 2072367.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16578,
+        "blocksTotal": 21273,
+        "tuplesDone": 779238,
+        "tuplesTotal": 0,
+        "elapsedMs": 2077647.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16585,
+        "blocksTotal": 21273,
+        "tuplesDone": 780221,
+        "tuplesTotal": 0,
+        "elapsedMs": 2083004.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16624,
+        "blocksTotal": 21273,
+        "tuplesDone": 781194,
+        "tuplesTotal": 0,
+        "elapsedMs": 2088366.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16631,
+        "blocksTotal": 21273,
+        "tuplesDone": 782228,
+        "tuplesTotal": 0,
+        "elapsedMs": 2093651.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16638,
+        "blocksTotal": 21273,
+        "tuplesDone": 783119,
+        "tuplesTotal": 0,
+        "elapsedMs": 2099021.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16678,
+        "blocksTotal": 21273,
+        "tuplesDone": 784276,
+        "tuplesTotal": 0,
+        "elapsedMs": 2104333.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16685,
+        "blocksTotal": 21273,
+        "tuplesDone": 785264,
+        "tuplesTotal": 0,
+        "elapsedMs": 2109559.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16724,
+        "blocksTotal": 21273,
+        "tuplesDone": 786261,
+        "tuplesTotal": 0,
+        "elapsedMs": 2114870.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16731,
+        "blocksTotal": 21273,
+        "tuplesDone": 787141,
+        "tuplesTotal": 0,
+        "elapsedMs": 2120114.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16768,
+        "blocksTotal": 21273,
+        "tuplesDone": 787889,
+        "tuplesTotal": 0,
+        "elapsedMs": 2125327.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16776,
+        "blocksTotal": 21273,
+        "tuplesDone": 788965,
+        "tuplesTotal": 0,
+        "elapsedMs": 2130684.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16782,
+        "blocksTotal": 21273,
+        "tuplesDone": 789852,
+        "tuplesTotal": 0,
+        "elapsedMs": 2136032.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16820,
+        "blocksTotal": 21273,
+        "tuplesDone": 790681,
+        "tuplesTotal": 0,
+        "elapsedMs": 2141520.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16826,
+        "blocksTotal": 21273,
+        "tuplesDone": 791588,
+        "tuplesTotal": 0,
+        "elapsedMs": 2146826.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16831,
+        "blocksTotal": 21273,
+        "tuplesDone": 792223,
+        "tuplesTotal": 0,
+        "elapsedMs": 2152117.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16872,
+        "blocksTotal": 21273,
+        "tuplesDone": 793471,
+        "tuplesTotal": 0,
+        "elapsedMs": 2157333.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16912,
+        "blocksTotal": 21273,
+        "tuplesDone": 794633,
+        "tuplesTotal": 0,
+        "elapsedMs": 2162504.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16920,
+        "blocksTotal": 21273,
+        "tuplesDone": 795669,
+        "tuplesTotal": 0,
+        "elapsedMs": 2167758.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16925,
+        "blocksTotal": 21273,
+        "tuplesDone": 796481,
+        "tuplesTotal": 0,
+        "elapsedMs": 2173038.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16963,
+        "blocksTotal": 21273,
+        "tuplesDone": 797263,
+        "tuplesTotal": 0,
+        "elapsedMs": 2178330.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 16970,
+        "blocksTotal": 21273,
+        "tuplesDone": 798238,
+        "tuplesTotal": 0,
+        "elapsedMs": 2183560.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17009,
+        "blocksTotal": 21273,
+        "tuplesDone": 799172,
+        "tuplesTotal": 0,
+        "elapsedMs": 2188888.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17016,
+        "blocksTotal": 21273,
+        "tuplesDone": 800184,
+        "tuplesTotal": 0,
+        "elapsedMs": 2194170.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17023,
+        "blocksTotal": 21273,
+        "tuplesDone": 801238,
+        "tuplesTotal": 0,
+        "elapsedMs": 2199459.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17062,
+        "blocksTotal": 21273,
+        "tuplesDone": 802118,
+        "tuplesTotal": 0,
+        "elapsedMs": 2204820.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17067,
+        "blocksTotal": 21273,
+        "tuplesDone": 802787,
+        "tuplesTotal": 0,
+        "elapsedMs": 2210180.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17104,
+        "blocksTotal": 21273,
+        "tuplesDone": 803566,
+        "tuplesTotal": 0,
+        "elapsedMs": 2215521.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17111,
+        "blocksTotal": 21273,
+        "tuplesDone": 804584,
+        "tuplesTotal": 0,
+        "elapsedMs": 2220884.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17119,
+        "blocksTotal": 21273,
+        "tuplesDone": 805664,
+        "tuplesTotal": 0,
+        "elapsedMs": 2226153.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17159,
+        "blocksTotal": 21273,
+        "tuplesDone": 806684,
+        "tuplesTotal": 0,
+        "elapsedMs": 2231716.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17165,
+        "blocksTotal": 21273,
+        "tuplesDone": 807541,
+        "tuplesTotal": 0,
+        "elapsedMs": 2237070.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17202,
+        "blocksTotal": 21273,
+        "tuplesDone": 808333,
+        "tuplesTotal": 0,
+        "elapsedMs": 2242636.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17209,
+        "blocksTotal": 21273,
+        "tuplesDone": 809280,
+        "tuplesTotal": 0,
+        "elapsedMs": 2247988.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17215,
+        "blocksTotal": 21273,
+        "tuplesDone": 810167,
+        "tuplesTotal": 0,
+        "elapsedMs": 2253231.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17256,
+        "blocksTotal": 21273,
+        "tuplesDone": 811354,
+        "tuplesTotal": 0,
+        "elapsedMs": 2258475.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17263,
+        "blocksTotal": 21273,
+        "tuplesDone": 812276,
+        "tuplesTotal": 0,
+        "elapsedMs": 2263712.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17302,
+        "blocksTotal": 21273,
+        "tuplesDone": 813260,
+        "tuplesTotal": 0,
+        "elapsedMs": 2269454.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17308,
+        "blocksTotal": 21273,
+        "tuplesDone": 814160,
+        "tuplesTotal": 0,
+        "elapsedMs": 2274871.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17346,
+        "blocksTotal": 21273,
+        "tuplesDone": 815070,
+        "tuplesTotal": 0,
+        "elapsedMs": 2280206.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17352,
+        "blocksTotal": 21273,
+        "tuplesDone": 815911,
+        "tuplesTotal": 0,
+        "elapsedMs": 2285499.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17358,
+        "blocksTotal": 21273,
+        "tuplesDone": 816658,
+        "tuplesTotal": 0,
+        "elapsedMs": 2290968.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17395,
+        "blocksTotal": 21273,
+        "tuplesDone": 817456,
+        "tuplesTotal": 0,
+        "elapsedMs": 2296248.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17401,
+        "blocksTotal": 21273,
+        "tuplesDone": 818259,
+        "tuplesTotal": 0,
+        "elapsedMs": 2301682.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17441,
+        "blocksTotal": 21273,
+        "tuplesDone": 819306,
+        "tuplesTotal": 0,
+        "elapsedMs": 2307071.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17447,
+        "blocksTotal": 21273,
+        "tuplesDone": 820250,
+        "tuplesTotal": 0,
+        "elapsedMs": 2312440.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17453,
+        "blocksTotal": 21273,
+        "tuplesDone": 821065,
+        "tuplesTotal": 0,
+        "elapsedMs": 2317722.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17490,
+        "blocksTotal": 21273,
+        "tuplesDone": 821789,
+        "tuplesTotal": 0,
+        "elapsedMs": 2323421.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17495,
+        "blocksTotal": 21273,
+        "tuplesDone": 822406,
+        "tuplesTotal": 0,
+        "elapsedMs": 2329120.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17501,
+        "blocksTotal": 21273,
+        "tuplesDone": 823353,
+        "tuplesTotal": 0,
+        "elapsedMs": 2334479.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17541,
+        "blocksTotal": 21273,
+        "tuplesDone": 824435,
+        "tuplesTotal": 0,
+        "elapsedMs": 2339735.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17548,
+        "blocksTotal": 21273,
+        "tuplesDone": 825455,
+        "tuplesTotal": 0,
+        "elapsedMs": 2344974.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17587,
+        "blocksTotal": 21273,
+        "tuplesDone": 826367,
+        "tuplesTotal": 0,
+        "elapsedMs": 2350252.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17593,
+        "blocksTotal": 21273,
+        "tuplesDone": 827257,
+        "tuplesTotal": 0,
+        "elapsedMs": 2355561.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17598,
+        "blocksTotal": 21273,
+        "tuplesDone": 827967,
+        "tuplesTotal": 0,
+        "elapsedMs": 2360896.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17635,
+        "blocksTotal": 21273,
+        "tuplesDone": 828583,
+        "tuplesTotal": 0,
+        "elapsedMs": 2366292.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17641,
+        "blocksTotal": 21273,
+        "tuplesDone": 829430,
+        "tuplesTotal": 0,
+        "elapsedMs": 2371616.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17647,
+        "blocksTotal": 21273,
+        "tuplesDone": 830290,
+        "tuplesTotal": 0,
+        "elapsedMs": 2376867.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17685,
+        "blocksTotal": 21273,
+        "tuplesDone": 831121,
+        "tuplesTotal": 0,
+        "elapsedMs": 2382153.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17691,
+        "blocksTotal": 21273,
+        "tuplesDone": 831958,
+        "tuplesTotal": 0,
+        "elapsedMs": 2387410.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17695,
+        "blocksTotal": 21273,
+        "tuplesDone": 832577,
+        "tuplesTotal": 0,
+        "elapsedMs": 2392710.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17733,
+        "blocksTotal": 21273,
+        "tuplesDone": 833402,
+        "tuplesTotal": 0,
+        "elapsedMs": 2398163.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17738,
+        "blocksTotal": 21273,
+        "tuplesDone": 834027,
+        "tuplesTotal": 0,
+        "elapsedMs": 2403528.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17742,
+        "blocksTotal": 21273,
+        "tuplesDone": 834701,
+        "tuplesTotal": 0,
+        "elapsedMs": 2408823.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17780,
+        "blocksTotal": 21273,
+        "tuplesDone": 835527,
+        "tuplesTotal": 0,
+        "elapsedMs": 2414197.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17786,
+        "blocksTotal": 21273,
+        "tuplesDone": 836373,
+        "tuplesTotal": 0,
+        "elapsedMs": 2419482.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17791,
+        "blocksTotal": 21273,
+        "tuplesDone": 837076,
+        "tuplesTotal": 0,
+        "elapsedMs": 2424814.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17831,
+        "blocksTotal": 21273,
+        "tuplesDone": 838185,
+        "tuplesTotal": 0,
+        "elapsedMs": 2430069.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17838,
+        "blocksTotal": 21273,
+        "tuplesDone": 839111,
+        "tuplesTotal": 0,
+        "elapsedMs": 2435427.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17875,
+        "blocksTotal": 21273,
+        "tuplesDone": 839756,
+        "tuplesTotal": 0,
+        "elapsedMs": 2440869.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17879,
+        "blocksTotal": 21273,
+        "tuplesDone": 840321,
+        "tuplesTotal": 0,
+        "elapsedMs": 2446231.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17886,
+        "blocksTotal": 21273,
+        "tuplesDone": 841286,
+        "tuplesTotal": 0,
+        "elapsedMs": 2451405.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17927,
+        "blocksTotal": 21273,
+        "tuplesDone": 842584,
+        "tuplesTotal": 0,
+        "elapsedMs": 2456722.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17968,
+        "blocksTotal": 21273,
+        "tuplesDone": 843824,
+        "tuplesTotal": 0,
+        "elapsedMs": 2461986.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17976,
+        "blocksTotal": 21273,
+        "tuplesDone": 845015,
+        "tuplesTotal": 0,
+        "elapsedMs": 2467244.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 17983,
+        "blocksTotal": 21273,
+        "tuplesDone": 845972,
+        "tuplesTotal": 0,
+        "elapsedMs": 2472594.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18021,
+        "blocksTotal": 21273,
+        "tuplesDone": 846782,
+        "tuplesTotal": 0,
+        "elapsedMs": 2477966.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18027,
+        "blocksTotal": 21273,
+        "tuplesDone": 847647,
+        "tuplesTotal": 0,
+        "elapsedMs": 2483223.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18066,
+        "blocksTotal": 21273,
+        "tuplesDone": 848651,
+        "tuplesTotal": 0,
+        "elapsedMs": 2488571.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18073,
+        "blocksTotal": 21273,
+        "tuplesDone": 849658,
+        "tuplesTotal": 0,
+        "elapsedMs": 2493925.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18112,
+        "blocksTotal": 21273,
+        "tuplesDone": 850630,
+        "tuplesTotal": 0,
+        "elapsedMs": 2499304.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18118,
+        "blocksTotal": 21273,
+        "tuplesDone": 851507,
+        "tuplesTotal": 0,
+        "elapsedMs": 2504839.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18125,
+        "blocksTotal": 21273,
+        "tuplesDone": 852376,
+        "tuplesTotal": 0,
+        "elapsedMs": 2510136.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18162,
+        "blocksTotal": 21273,
+        "tuplesDone": 853099,
+        "tuplesTotal": 0,
+        "elapsedMs": 2515438.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18169,
+        "blocksTotal": 21273,
+        "tuplesDone": 854073,
+        "tuplesTotal": 0,
+        "elapsedMs": 2520709.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18175,
+        "blocksTotal": 21273,
+        "tuplesDone": 854969,
+        "tuplesTotal": 0,
+        "elapsedMs": 2526053.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18215,
+        "blocksTotal": 21273,
+        "tuplesDone": 856069,
+        "tuplesTotal": 0,
+        "elapsedMs": 2531333.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18221,
+        "blocksTotal": 21273,
+        "tuplesDone": 856927,
+        "tuplesTotal": 0,
+        "elapsedMs": 2536683.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18258,
+        "blocksTotal": 21273,
+        "tuplesDone": 857680,
+        "tuplesTotal": 0,
+        "elapsedMs": 2542121.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18265,
+        "blocksTotal": 21273,
+        "tuplesDone": 858520,
+        "tuplesTotal": 0,
+        "elapsedMs": 2547617.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18269,
+        "blocksTotal": 21273,
+        "tuplesDone": 859174,
+        "tuplesTotal": 0,
+        "elapsedMs": 2553044.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18308,
+        "blocksTotal": 21273,
+        "tuplesDone": 860090,
+        "tuplesTotal": 0,
+        "elapsedMs": 2558255.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18315,
+        "blocksTotal": 21273,
+        "tuplesDone": 861036,
+        "tuplesTotal": 0,
+        "elapsedMs": 2563540.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18353,
+        "blocksTotal": 21273,
+        "tuplesDone": 861919,
+        "tuplesTotal": 0,
+        "elapsedMs": 2569341.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18360,
+        "blocksTotal": 21273,
+        "tuplesDone": 862878,
+        "tuplesTotal": 0,
+        "elapsedMs": 2574710.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18366,
+        "blocksTotal": 21273,
+        "tuplesDone": 863833,
+        "tuplesTotal": 0,
+        "elapsedMs": 2580127.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18404,
+        "blocksTotal": 21273,
+        "tuplesDone": 864569,
+        "tuplesTotal": 0,
+        "elapsedMs": 2585445.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18409,
+        "blocksTotal": 21273,
+        "tuplesDone": 865271,
+        "tuplesTotal": 0,
+        "elapsedMs": 2590954.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18414,
+        "blocksTotal": 21273,
+        "tuplesDone": 866052,
+        "tuplesTotal": 0,
+        "elapsedMs": 2596289.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18452,
+        "blocksTotal": 21273,
+        "tuplesDone": 866845,
+        "tuplesTotal": 0,
+        "elapsedMs": 2601923.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18460,
+        "blocksTotal": 21273,
+        "tuplesDone": 867897,
+        "tuplesTotal": 0,
+        "elapsedMs": 2607283.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18498,
+        "blocksTotal": 21273,
+        "tuplesDone": 868821,
+        "tuplesTotal": 0,
+        "elapsedMs": 2612588.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18504,
+        "blocksTotal": 21273,
+        "tuplesDone": 869657,
+        "tuplesTotal": 0,
+        "elapsedMs": 2618072.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18510,
+        "blocksTotal": 21273,
+        "tuplesDone": 870447,
+        "tuplesTotal": 0,
+        "elapsedMs": 2623425.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18546,
+        "blocksTotal": 21273,
+        "tuplesDone": 871042,
+        "tuplesTotal": 0,
+        "elapsedMs": 2629246.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18550,
+        "blocksTotal": 21273,
+        "tuplesDone": 871645,
+        "tuplesTotal": 0,
+        "elapsedMs": 2634573.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18557,
+        "blocksTotal": 21273,
+        "tuplesDone": 872574,
+        "tuplesTotal": 0,
+        "elapsedMs": 2640067.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18595,
+        "blocksTotal": 21273,
+        "tuplesDone": 873372,
+        "tuplesTotal": 0,
+        "elapsedMs": 2645312.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18602,
+        "blocksTotal": 21273,
+        "tuplesDone": 874363,
+        "tuplesTotal": 0,
+        "elapsedMs": 2650568.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18640,
+        "blocksTotal": 21273,
+        "tuplesDone": 875175,
+        "tuplesTotal": 0,
+        "elapsedMs": 2656122.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18646,
+        "blocksTotal": 21273,
+        "tuplesDone": 876109,
+        "tuplesTotal": 0,
+        "elapsedMs": 2661663.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18651,
+        "blocksTotal": 21273,
+        "tuplesDone": 876700,
+        "tuplesTotal": 0,
+        "elapsedMs": 2667179.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18688,
+        "blocksTotal": 21273,
+        "tuplesDone": 877423,
+        "tuplesTotal": 0,
+        "elapsedMs": 2672501.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18695,
+        "blocksTotal": 21273,
+        "tuplesDone": 878411,
+        "tuplesTotal": 0,
+        "elapsedMs": 2677816.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18701,
+        "blocksTotal": 21273,
+        "tuplesDone": 879207,
+        "tuplesTotal": 0,
+        "elapsedMs": 2683323.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18738,
+        "blocksTotal": 21273,
+        "tuplesDone": 879963,
+        "tuplesTotal": 0,
+        "elapsedMs": 2689150.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18745,
+        "blocksTotal": 21273,
+        "tuplesDone": 880994,
+        "tuplesTotal": 0,
+        "elapsedMs": 2694452.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18784,
+        "blocksTotal": 21273,
+        "tuplesDone": 881853,
+        "tuplesTotal": 0,
+        "elapsedMs": 2699673.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18788,
+        "blocksTotal": 21273,
+        "tuplesDone": 882476,
+        "tuplesTotal": 0,
+        "elapsedMs": 2705369.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18795,
+        "blocksTotal": 21273,
+        "tuplesDone": 883440,
+        "tuplesTotal": 0,
+        "elapsedMs": 2710634.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18833,
+        "blocksTotal": 21273,
+        "tuplesDone": 884250,
+        "tuplesTotal": 0,
+        "elapsedMs": 2715907.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18837,
+        "blocksTotal": 21273,
+        "tuplesDone": 884856,
+        "tuplesTotal": 0,
+        "elapsedMs": 2721319.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18842,
+        "blocksTotal": 21273,
+        "tuplesDone": 885526,
+        "tuplesTotal": 0,
+        "elapsedMs": 2726741.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18881,
+        "blocksTotal": 21273,
+        "tuplesDone": 886506,
+        "tuplesTotal": 0,
+        "elapsedMs": 2732127.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18888,
+        "blocksTotal": 21273,
+        "tuplesDone": 887496,
+        "tuplesTotal": 0,
+        "elapsedMs": 2737415.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18893,
+        "blocksTotal": 21273,
+        "tuplesDone": 888145,
+        "tuplesTotal": 0,
+        "elapsedMs": 2742774.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18930,
+        "blocksTotal": 21273,
+        "tuplesDone": 888901,
+        "tuplesTotal": 0,
+        "elapsedMs": 2748235.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18936,
+        "blocksTotal": 21273,
+        "tuplesDone": 889715,
+        "tuplesTotal": 0,
+        "elapsedMs": 2753494.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18942,
+        "blocksTotal": 21273,
+        "tuplesDone": 890612,
+        "tuplesTotal": 0,
+        "elapsedMs": 2758795.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18981,
+        "blocksTotal": 21273,
+        "tuplesDone": 891538,
+        "tuplesTotal": 0,
+        "elapsedMs": 2764229.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 18988,
+        "blocksTotal": 21273,
+        "tuplesDone": 892472,
+        "tuplesTotal": 0,
+        "elapsedMs": 2769479.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19025,
+        "blocksTotal": 21273,
+        "tuplesDone": 893201,
+        "tuplesTotal": 0,
+        "elapsedMs": 2774834.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19029,
+        "blocksTotal": 21273,
+        "tuplesDone": 893837,
+        "tuplesTotal": 0,
+        "elapsedMs": 2780256.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19033,
+        "blocksTotal": 21273,
+        "tuplesDone": 894408,
+        "tuplesTotal": 0,
+        "elapsedMs": 2785691.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19057,
+        "blocksTotal": 21273,
+        "tuplesDone": 895428,
+        "tuplesTotal": 0,
+        "elapsedMs": 2791169.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19064,
+        "blocksTotal": 21273,
+        "tuplesDone": 896473,
+        "tuplesTotal": 0,
+        "elapsedMs": 2796572.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19071,
+        "blocksTotal": 21273,
+        "tuplesDone": 897385,
+        "tuplesTotal": 0,
+        "elapsedMs": 2801933.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19108,
+        "blocksTotal": 21273,
+        "tuplesDone": 898180,
+        "tuplesTotal": 0,
+        "elapsedMs": 2807309.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19113,
+        "blocksTotal": 21273,
+        "tuplesDone": 898872,
+        "tuplesTotal": 0,
+        "elapsedMs": 2812631.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19118,
+        "blocksTotal": 21273,
+        "tuplesDone": 899514,
+        "tuplesTotal": 0,
+        "elapsedMs": 2817943.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19155,
+        "blocksTotal": 21273,
+        "tuplesDone": 900272,
+        "tuplesTotal": 0,
+        "elapsedMs": 2823185.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19162,
+        "blocksTotal": 21273,
+        "tuplesDone": 901225,
+        "tuplesTotal": 0,
+        "elapsedMs": 2828405.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19202,
+        "blocksTotal": 21273,
+        "tuplesDone": 902384,
+        "tuplesTotal": 0,
+        "elapsedMs": 2833661.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19210,
+        "blocksTotal": 21273,
+        "tuplesDone": 903382,
+        "tuplesTotal": 0,
+        "elapsedMs": 2839004.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19215,
+        "blocksTotal": 21273,
+        "tuplesDone": 904181,
+        "tuplesTotal": 0,
+        "elapsedMs": 2844307.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19253,
+        "blocksTotal": 21273,
+        "tuplesDone": 904912,
+        "tuplesTotal": 0,
+        "elapsedMs": 2849692.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19256,
+        "blocksTotal": 21273,
+        "tuplesDone": 905455,
+        "tuplesTotal": 0,
+        "elapsedMs": 2855075.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19262,
+        "blocksTotal": 21273,
+        "tuplesDone": 906212,
+        "tuplesTotal": 0,
+        "elapsedMs": 2860410.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19300,
+        "blocksTotal": 21273,
+        "tuplesDone": 907022,
+        "tuplesTotal": 0,
+        "elapsedMs": 2865787.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19305,
+        "blocksTotal": 21273,
+        "tuplesDone": 907789,
+        "tuplesTotal": 0,
+        "elapsedMs": 2871030.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19346,
+        "blocksTotal": 21273,
+        "tuplesDone": 908969,
+        "tuplesTotal": 0,
+        "elapsedMs": 2876288.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19352,
+        "blocksTotal": 21273,
+        "tuplesDone": 909898,
+        "tuplesTotal": 0,
+        "elapsedMs": 2881652.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19358,
+        "blocksTotal": 21273,
+        "tuplesDone": 910736,
+        "tuplesTotal": 0,
+        "elapsedMs": 2886933.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19395,
+        "blocksTotal": 21273,
+        "tuplesDone": 911419,
+        "tuplesTotal": 0,
+        "elapsedMs": 2892340.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19400,
+        "blocksTotal": 21273,
+        "tuplesDone": 912169,
+        "tuplesTotal": 0,
+        "elapsedMs": 2897619.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19407,
+        "blocksTotal": 21273,
+        "tuplesDone": 913015,
+        "tuplesTotal": 0,
+        "elapsedMs": 2902884.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19443,
+        "blocksTotal": 21273,
+        "tuplesDone": 913696,
+        "tuplesTotal": 0,
+        "elapsedMs": 2908309.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19450,
+        "blocksTotal": 21273,
+        "tuplesDone": 914672,
+        "tuplesTotal": 0,
+        "elapsedMs": 2913595.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19489,
+        "blocksTotal": 21273,
+        "tuplesDone": 915643,
+        "tuplesTotal": 0,
+        "elapsedMs": 2918903.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19495,
+        "blocksTotal": 21273,
+        "tuplesDone": 916429,
+        "tuplesTotal": 0,
+        "elapsedMs": 2924196.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19499,
+        "blocksTotal": 21273,
+        "tuplesDone": 917019,
+        "tuplesTotal": 0,
+        "elapsedMs": 2929765.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19536,
+        "blocksTotal": 21273,
+        "tuplesDone": 917733,
+        "tuplesTotal": 0,
+        "elapsedMs": 2935090.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19543,
+        "blocksTotal": 21273,
+        "tuplesDone": 918610,
+        "tuplesTotal": 0,
+        "elapsedMs": 2940471.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19550,
+        "blocksTotal": 21273,
+        "tuplesDone": 919627,
+        "tuplesTotal": 0,
+        "elapsedMs": 2945718.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19590,
+        "blocksTotal": 21273,
+        "tuplesDone": 920780,
+        "tuplesTotal": 0,
+        "elapsedMs": 2950975.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19596,
+        "blocksTotal": 21273,
+        "tuplesDone": 921588,
+        "tuplesTotal": 0,
+        "elapsedMs": 2956337.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19634,
+        "blocksTotal": 21273,
+        "tuplesDone": 922424,
+        "tuplesTotal": 0,
+        "elapsedMs": 2961706.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19639,
+        "blocksTotal": 21273,
+        "tuplesDone": 923128,
+        "tuplesTotal": 0,
+        "elapsedMs": 2967080.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19644,
+        "blocksTotal": 21273,
+        "tuplesDone": 923820,
+        "tuplesTotal": 0,
+        "elapsedMs": 2973012.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19681,
+        "blocksTotal": 21273,
+        "tuplesDone": 924608,
+        "tuplesTotal": 0,
+        "elapsedMs": 2978306.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19687,
+        "blocksTotal": 21273,
+        "tuplesDone": 925469,
+        "tuplesTotal": 0,
+        "elapsedMs": 2983647.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19728,
+        "blocksTotal": 21273,
+        "tuplesDone": 926726,
+        "tuplesTotal": 0,
+        "elapsedMs": 2988892.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19736,
+        "blocksTotal": 21273,
+        "tuplesDone": 927788,
+        "tuplesTotal": 0,
+        "elapsedMs": 2994141.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19778,
+        "blocksTotal": 21273,
+        "tuplesDone": 929111,
+        "tuplesTotal": 0,
+        "elapsedMs": 2999534.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19784,
+        "blocksTotal": 21273,
+        "tuplesDone": 929972,
+        "tuplesTotal": 0,
+        "elapsedMs": 3005275.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19790,
+        "blocksTotal": 21273,
+        "tuplesDone": 930777,
+        "tuplesTotal": 0,
+        "elapsedMs": 3010740.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19827,
+        "blocksTotal": 21273,
+        "tuplesDone": 931522,
+        "tuplesTotal": 0,
+        "elapsedMs": 3016053.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19832,
+        "blocksTotal": 21273,
+        "tuplesDone": 932184,
+        "tuplesTotal": 0,
+        "elapsedMs": 3021603.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19837,
+        "blocksTotal": 21273,
+        "tuplesDone": 932981,
+        "tuplesTotal": 0,
+        "elapsedMs": 3026913.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19875,
+        "blocksTotal": 21273,
+        "tuplesDone": 933753,
+        "tuplesTotal": 0,
+        "elapsedMs": 3032350.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19882,
+        "blocksTotal": 21273,
+        "tuplesDone": 934736,
+        "tuplesTotal": 0,
+        "elapsedMs": 3037631.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19887,
+        "blocksTotal": 21273,
+        "tuplesDone": 935421,
+        "tuplesTotal": 0,
+        "elapsedMs": 3043208.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19923,
+        "blocksTotal": 21273,
+        "tuplesDone": 936042,
+        "tuplesTotal": 0,
+        "elapsedMs": 3048921.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19930,
+        "blocksTotal": 21273,
+        "tuplesDone": 936964,
+        "tuplesTotal": 0,
+        "elapsedMs": 3054328.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19969,
+        "blocksTotal": 21273,
+        "tuplesDone": 938010,
+        "tuplesTotal": 0,
+        "elapsedMs": 3059610.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19976,
+        "blocksTotal": 21273,
+        "tuplesDone": 938998,
+        "tuplesTotal": 0,
+        "elapsedMs": 3064921.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 19982,
+        "blocksTotal": 21273,
+        "tuplesDone": 939761,
+        "tuplesTotal": 0,
+        "elapsedMs": 3070190.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20019,
+        "blocksTotal": 21273,
+        "tuplesDone": 940521,
+        "tuplesTotal": 0,
+        "elapsedMs": 3075526.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20024,
+        "blocksTotal": 21273,
+        "tuplesDone": 941203,
+        "tuplesTotal": 0,
+        "elapsedMs": 3080888.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20028,
+        "blocksTotal": 21273,
+        "tuplesDone": 941835,
+        "tuplesTotal": 0,
+        "elapsedMs": 3086159.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20065,
+        "blocksTotal": 21273,
+        "tuplesDone": 942487,
+        "tuplesTotal": 0,
+        "elapsedMs": 3091629.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20073,
+        "blocksTotal": 21273,
+        "tuplesDone": 943558,
+        "tuplesTotal": 0,
+        "elapsedMs": 3096897.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20112,
+        "blocksTotal": 21273,
+        "tuplesDone": 944594,
+        "tuplesTotal": 0,
+        "elapsedMs": 3102196.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20119,
+        "blocksTotal": 21273,
+        "tuplesDone": 945523,
+        "tuplesTotal": 0,
+        "elapsedMs": 3107427.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20124,
+        "blocksTotal": 21273,
+        "tuplesDone": 946251,
+        "tuplesTotal": 0,
+        "elapsedMs": 3112805.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20145,
+        "blocksTotal": 21273,
+        "tuplesDone": 946935,
+        "tuplesTotal": 0,
+        "elapsedMs": 3118222.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20150,
+        "blocksTotal": 21273,
+        "tuplesDone": 947660,
+        "tuplesTotal": 0,
+        "elapsedMs": 3123530.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20155,
+        "blocksTotal": 21273,
+        "tuplesDone": 948332,
+        "tuplesTotal": 0,
+        "elapsedMs": 3128902.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20192,
+        "blocksTotal": 21273,
+        "tuplesDone": 949106,
+        "tuplesTotal": 0,
+        "elapsedMs": 3134338.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20198,
+        "blocksTotal": 21273,
+        "tuplesDone": 949953,
+        "tuplesTotal": 0,
+        "elapsedMs": 3139628.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20203,
+        "blocksTotal": 21273,
+        "tuplesDone": 950560,
+        "tuplesTotal": 0,
+        "elapsedMs": 3144948.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20241,
+        "blocksTotal": 21273,
+        "tuplesDone": 951387,
+        "tuplesTotal": 0,
+        "elapsedMs": 3150319.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20244,
+        "blocksTotal": 21273,
+        "tuplesDone": 951926,
+        "tuplesTotal": 0,
+        "elapsedMs": 3155718.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20248,
+        "blocksTotal": 21273,
+        "tuplesDone": 952481,
+        "tuplesTotal": 0,
+        "elapsedMs": 3161049.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20253,
+        "blocksTotal": 21273,
+        "tuplesDone": 953117,
+        "tuplesTotal": 0,
+        "elapsedMs": 3166359.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20289,
+        "blocksTotal": 21273,
+        "tuplesDone": 953730,
+        "tuplesTotal": 0,
+        "elapsedMs": 3171590.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20295,
+        "blocksTotal": 21273,
+        "tuplesDone": 954581,
+        "tuplesTotal": 0,
+        "elapsedMs": 3176970.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20318,
+        "blocksTotal": 21273,
+        "tuplesDone": 955439,
+        "tuplesTotal": 0,
+        "elapsedMs": 3182447.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20340,
+        "blocksTotal": 21273,
+        "tuplesDone": 956371,
+        "tuplesTotal": 0,
+        "elapsedMs": 3187768.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20362,
+        "blocksTotal": 21273,
+        "tuplesDone": 957118,
+        "tuplesTotal": 0,
+        "elapsedMs": 3193091.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20366,
+        "blocksTotal": 21273,
+        "tuplesDone": 957767,
+        "tuplesTotal": 0,
+        "elapsedMs": 3198444.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20388,
+        "blocksTotal": 21273,
+        "tuplesDone": 958551,
+        "tuplesTotal": 0,
+        "elapsedMs": 3203652.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20408,
+        "blocksTotal": 21273,
+        "tuplesDone": 959129,
+        "tuplesTotal": 0,
+        "elapsedMs": 3208901.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20415,
+        "blocksTotal": 21273,
+        "tuplesDone": 960179,
+        "tuplesTotal": 0,
+        "elapsedMs": 3214120.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20439,
+        "blocksTotal": 21273,
+        "tuplesDone": 961279,
+        "tuplesTotal": 0,
+        "elapsedMs": 3219420.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20461,
+        "blocksTotal": 21273,
+        "tuplesDone": 962010,
+        "tuplesTotal": 0,
+        "elapsedMs": 3224897.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20481,
+        "blocksTotal": 21273,
+        "tuplesDone": 962600,
+        "tuplesTotal": 0,
+        "elapsedMs": 3230280.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20484,
+        "blocksTotal": 21273,
+        "tuplesDone": 963101,
+        "tuplesTotal": 0,
+        "elapsedMs": 3235617.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20506,
+        "blocksTotal": 21273,
+        "tuplesDone": 963824,
+        "tuplesTotal": 0,
+        "elapsedMs": 3240902.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20511,
+        "blocksTotal": 21273,
+        "tuplesDone": 964643,
+        "tuplesTotal": 0,
+        "elapsedMs": 3246237.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20532,
+        "blocksTotal": 21273,
+        "tuplesDone": 965347,
+        "tuplesTotal": 0,
+        "elapsedMs": 3251490.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20553,
+        "blocksTotal": 21273,
+        "tuplesDone": 966061,
+        "tuplesTotal": 0,
+        "elapsedMs": 3256857.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20559,
+        "blocksTotal": 21273,
+        "tuplesDone": 966781,
+        "tuplesTotal": 0,
+        "elapsedMs": 3262182.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20580,
+        "blocksTotal": 21273,
+        "tuplesDone": 967583,
+        "tuplesTotal": 0,
+        "elapsedMs": 3267521.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20600,
+        "blocksTotal": 21273,
+        "tuplesDone": 968117,
+        "tuplesTotal": 0,
+        "elapsedMs": 3273139.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20604,
+        "blocksTotal": 21273,
+        "tuplesDone": 968644,
+        "tuplesTotal": 0,
+        "elapsedMs": 3278577.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20625,
+        "blocksTotal": 21273,
+        "tuplesDone": 969341,
+        "tuplesTotal": 0,
+        "elapsedMs": 3284005.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20629,
+        "blocksTotal": 21273,
+        "tuplesDone": 970002,
+        "tuplesTotal": 0,
+        "elapsedMs": 3289454.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20653,
+        "blocksTotal": 21273,
+        "tuplesDone": 971095,
+        "tuplesTotal": 0,
+        "elapsedMs": 3294742.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20676,
+        "blocksTotal": 21273,
+        "tuplesDone": 972101,
+        "tuplesTotal": 0,
+        "elapsedMs": 3300069.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20698,
+        "blocksTotal": 21273,
+        "tuplesDone": 972921,
+        "tuplesTotal": 0,
+        "elapsedMs": 3305463.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20703,
+        "blocksTotal": 21273,
+        "tuplesDone": 973611,
+        "tuplesTotal": 0,
+        "elapsedMs": 3310848.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20724,
+        "blocksTotal": 21273,
+        "tuplesDone": 974248,
+        "tuplesTotal": 0,
+        "elapsedMs": 3316422.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20745,
+        "blocksTotal": 21273,
+        "tuplesDone": 974960,
+        "tuplesTotal": 0,
+        "elapsedMs": 3322083.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20751,
+        "blocksTotal": 21273,
+        "tuplesDone": 975852,
+        "tuplesTotal": 0,
+        "elapsedMs": 3327391.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20773,
+        "blocksTotal": 21273,
+        "tuplesDone": 976627,
+        "tuplesTotal": 0,
+        "elapsedMs": 3332903.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20790,
+        "blocksTotal": 21273,
+        "tuplesDone": 977310,
+        "tuplesTotal": 0,
+        "elapsedMs": 3338297.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20803,
+        "blocksTotal": 21273,
+        "tuplesDone": 978033,
+        "tuplesTotal": 0,
+        "elapsedMs": 3343736.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20814,
+        "blocksTotal": 21273,
+        "tuplesDone": 978539,
+        "tuplesTotal": 0,
+        "elapsedMs": 3349210.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20826,
+        "blocksTotal": 21273,
+        "tuplesDone": 979028,
+        "tuplesTotal": 0,
+        "elapsedMs": 3354600.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20849,
+        "blocksTotal": 21273,
+        "tuplesDone": 979991,
+        "tuplesTotal": 0,
+        "elapsedMs": 3360129.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20863,
+        "blocksTotal": 21273,
+        "tuplesDone": 980776,
+        "tuplesTotal": 0,
+        "elapsedMs": 3365476.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20884,
+        "blocksTotal": 21273,
+        "tuplesDone": 981502,
+        "tuplesTotal": 0,
+        "elapsedMs": 3370835.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20897,
+        "blocksTotal": 21273,
+        "tuplesDone": 982180,
+        "tuplesTotal": 0,
+        "elapsedMs": 3376186.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20910,
+        "blocksTotal": 21273,
+        "tuplesDone": 982868,
+        "tuplesTotal": 0,
+        "elapsedMs": 3381730.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20922,
+        "blocksTotal": 21273,
+        "tuplesDone": 983454,
+        "tuplesTotal": 0,
+        "elapsedMs": 3387233.9
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20933,
+        "blocksTotal": 21273,
+        "tuplesDone": 983925,
+        "tuplesTotal": 0,
+        "elapsedMs": 3392761.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20946,
+        "blocksTotal": 21273,
+        "tuplesDone": 984571,
+        "tuplesTotal": 0,
+        "elapsedMs": 3398160.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20959,
+        "blocksTotal": 21273,
+        "tuplesDone": 985299,
+        "tuplesTotal": 0,
+        "elapsedMs": 3403628.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 20982,
+        "blocksTotal": 21273,
+        "tuplesDone": 986323,
+        "tuplesTotal": 0,
+        "elapsedMs": 3409342.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21002,
+        "blocksTotal": 21273,
+        "tuplesDone": 987434,
+        "tuplesTotal": 0,
+        "elapsedMs": 3414602.1
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21026,
+        "blocksTotal": 21273,
+        "tuplesDone": 988478,
+        "tuplesTotal": 0,
+        "elapsedMs": 3419958.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21058,
+        "blocksTotal": 21273,
+        "tuplesDone": 989296,
+        "tuplesTotal": 0,
+        "elapsedMs": 3425208.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21071,
+        "blocksTotal": 21273,
+        "tuplesDone": 990013,
+        "tuplesTotal": 0,
+        "elapsedMs": 3430505.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21083,
+        "blocksTotal": 21273,
+        "tuplesDone": 990854,
+        "tuplesTotal": 0,
+        "elapsedMs": 3435742.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21094,
+        "blocksTotal": 21273,
+        "tuplesDone": 991655,
+        "tuplesTotal": 0,
+        "elapsedMs": 3441068.8
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21112,
+        "blocksTotal": 21273,
+        "tuplesDone": 992470,
+        "tuplesTotal": 0,
+        "elapsedMs": 3446361.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21131,
+        "blocksTotal": 21273,
+        "tuplesDone": 993453,
+        "tuplesTotal": 0,
+        "elapsedMs": 3451652.5
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21148,
+        "blocksTotal": 21273,
+        "tuplesDone": 994132,
+        "tuplesTotal": 0,
+        "elapsedMs": 3456957.6
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21165,
+        "blocksTotal": 21273,
+        "tuplesDone": 994914,
+        "tuplesTotal": 0,
+        "elapsedMs": 3462412.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21176,
+        "blocksTotal": 21273,
+        "tuplesDone": 995512,
+        "tuplesTotal": 0,
+        "elapsedMs": 3467713.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21193,
+        "blocksTotal": 21273,
+        "tuplesDone": 996285,
+        "tuplesTotal": 0,
+        "elapsedMs": 3473047.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21211,
+        "blocksTotal": 21273,
+        "tuplesDone": 997210,
+        "tuplesTotal": 0,
+        "elapsedMs": 3478457.4
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21229,
+        "blocksTotal": 21273,
+        "tuplesDone": 998004,
+        "tuplesTotal": 0,
+        "elapsedMs": 3483807.0
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21250,
+        "blocksTotal": 21273,
+        "tuplesDone": 998921,
+        "tuplesTotal": 0,
+        "elapsedMs": 3489202.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21262,
+        "blocksTotal": 21273,
+        "tuplesDone": 999572,
+        "tuplesTotal": 0,
+        "elapsedMs": 3494668.3
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21273,
+        "blocksTotal": 21273,
+        "tuplesDone": 1000012,
+        "tuplesTotal": 0,
+        "elapsedMs": 3500162.7
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21273,
+        "blocksTotal": 21273,
+        "tuplesDone": 1000012,
+        "tuplesTotal": 0,
+        "elapsedMs": 3505438.2
+      },
+      {
+        "phase": "building index: loading tuples",
+        "blocksDone": 21273,
+        "blocksTotal": 21273,
+        "tuplesDone": 1000012,
+        "tuplesTotal": 0,
+        "elapsedMs": 3510661.2
+      },
+      {
+        "phase": "index validation: scanning index",
+        "blocksDone": 0,
+        "blocksTotal": 0,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3515976.4
+      },
+      {
+        "phase": "index validation: scanning index",
+        "blocksDone": 0,
+        "blocksTotal": 0,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3521255.8
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 21437,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3526446.8
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 21552,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3531584.3
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 21680,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3536757.6
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 21807,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3541942.7
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 21930,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3547075.7
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 22061,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3552200.3
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 22191,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3557307.0
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 22319,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3562415.8
+      },
+      {
+        "phase": "index validation: scanning table",
+        "blocksDone": 22448,
+        "blocksTotal": 22496,
+        "tuplesDone": 0,
+        "tuplesTotal": 0,
+        "elapsedMs": 3567596.2
+      }
+    ],
+    "concurrentWrites": {
+      "workers": 4,
+      "intervalMs": 200.0,
+      "samples": 64395,
+      "latencyMs": {
+        "count": 64395,
+        "p50": 5.0,
+        "p95": 62.9,
+        "mean": 14.4,
+        "min": 1.0,
+        "max": 3557.2,
+        "p99": 101.2
+      },
+      "errors": []
+    },
+    "valid": true,
+    "definition": "CREATE INDEX chunks_vector_idx_1024_v1 ON m13_dataplane.chunks USING hnsw (((embedding)::halfvec(1024)) halfvec_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding_dimension = 1024)",
+    "indexBytes": 2885001216,
+    "tableBytes": 184418304,
+    "totalBytes": 6137774080,
+    "setupSeconds": 85.3
+  },
+  "keywordIndexBuild": {
+    "indexBytes": 39354368,
+    "definition": "CREATE INDEX chunks_bm25_idx ON m13_dataplane.chunks USING bm25 (id, content) WITH (key_field=id)"
+  },
+  "plans": {
+    "vector": {
+      "kind": "seq-scan",
+      "nodeTypes": [
+        "Index Scan",
+        "Limit",
+        "Nested Loop",
+        "Seq Scan",
+        "Sort"
+      ],
+      "indexes": [
+        "chunks_scope_idx",
+        "document_versions_pkey",
+        "queries_pkey"
+      ],
+      "executionMs": 4042.388,
+      "planningMs": 5.449
+    },
+    "vectorForced": {
+      "kind": "hnsw-index-scan",
+      "nodeTypes": [
+        "Index Scan",
+        "Limit",
+        "Materialize",
+        "Nested Loop"
+      ],
+      "indexes": [
+        "chunks_vector_idx_1024_v1",
+        "document_versions_pkey",
+        "documents_pkey",
+        "queries_pkey"
+      ],
+      "executionMs": 746.707,
+      "planningMs": 5.511
+    },
+    "keyword": {
+      "kind": "seq-scan",
+      "nodeTypes": [
+        "Custom Scan",
+        "Gather Merge",
+        "Hash",
+        "Hash Join",
+        "Limit",
+        "Seq Scan",
+        "Sort"
+      ],
+      "indexes": [],
+      "executionMs": 283.786,
+      "planningMs": 9.54
+    },
+    "exact": {
+      "kind": "bitmap-scan",
+      "nodeTypes": [
+        "Bitmap Heap Scan",
+        "Bitmap Index Scan",
+        "Limit",
+        "Nested Loop",
+        "Seq Scan",
+        "Sort"
+      ],
+      "indexes": [
+        "chunks_scope_idx",
+        "document_versions_pkey",
+        "queries_pkey"
+      ],
+      "executionMs": 369.415,
+      "planningMs": 2.215
+    }
+  },
+  "queryLoad": {
+    "vector": {
+      "samples": 320,
+      "latencyMs": {
+        "count": 320,
+        "p50": 1074.2,
+        "p95": 3874.0,
+        "mean": 1529.6,
+        "min": 221.5,
+        "max": 9445.1,
+        "p99": 9372.3
+      },
+      "underfillRate": 0.0
+    },
+    "keyword": {
+      "samples": 320,
+      "latencyMs": {
+        "count": 320,
+        "p50": 848.9,
+        "p95": 1976.4,
+        "mean": 1074.1,
+        "min": 244.2,
+        "max": 2390.1,
+        "p99": 2225.4
+      },
+      "underfillRate": 0.0
+    },
+    "combined": {
+      "samples": 640,
+      "qps": 11.7,
+      "wallSeconds": 54.69
+    },
+    "perWorker": [
+      {
+        "worker": 0,
+        "tenant": "tenant-1",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 1,
+        "tenant": "tenant-2",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 2,
+        "tenant": "tenant-3",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 3,
+        "tenant": "tenant-4",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 4,
+        "tenant": "tenant-5",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 5,
+        "tenant": "tenant-6",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 6,
+        "tenant": "tenant-7",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 7,
+        "tenant": "tenant-8",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 8,
+        "tenant": "tenant-9",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 9,
+        "tenant": "tenant-10",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 10,
+        "tenant": "tenant-11",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 11,
+        "tenant": "tenant-12",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 12,
+        "tenant": "tenant-13",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 13,
+        "tenant": "tenant-14",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 14,
+        "tenant": "tenant-15",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      },
+      {
+        "worker": 15,
+        "tenant": "tenant-16",
+        "vectorSamples": 20,
+        "keywordSamples": 20
+      }
+    ],
+    "errors": [],
+    "writeSamples": 64395
+  },
+  "recall": {
+    "samples": 200,
+    "topK": 20,
+    "efSearch": 40,
+    "iterativeScan": "relaxed_order",
+    "meanRecall": 0.1215,
+    "p10Recall": 0.05,
+    "minRecall": 0.0,
+    "maxRecall": 0.3,
+    "errors": []
+  },
+  "selfChecks": [
+    {
+      "id": "row-count",
+      "passed": true,
+      "detail": "1000000 / 1000000"
+    },
+    {
+      "id": "tenant-shape",
+      "passed": true,
+      "detail": "tenants=16 kbs=32"
+    },
+    {
+      "id": "vector-dimension",
+      "passed": true,
+      "detail": "wrongDimension=0"
+    },
+    {
+      "id": "vectors-distinct",
+      "passed": true,
+      "detail": "1000/1000 sampled rows"
+    },
+    {
+      "id": "index-valid",
+      "passed": true,
+      "detail": "CREATE INDEX chunks_vector_idx_1024_v1 ON m13_dataplane.chunks USING hnsw (((embedding)::halfvec(1024)) halfvec_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding_dimension = 1024)"
+    },
+    {
+      "id": "index-definition",
+      "passed": true,
+      "detail": "CREATE INDEX chunks_vector_idx_1024_v1 ON m13_dataplane.chunks USING hnsw (((embedding)::halfvec(1024)) halfvec_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding_dimension = 1024)"
+    },
+    {
+      "id": "index-usable",
+      "passed": true,
+      "detail": "{\"kind\": \"hnsw-index-scan\", \"nodeTypes\": [\"Index Scan\", \"Limit\", \"Materialize\", \"Nested Loop\"], \"indexes\": [\"chunks_vector_idx_1024_v1\", \"document_versions_pkey\", \"documents_pkey\", \"queries_pkey\"], \"executionMs\": 746.707, \"planningMs\": 5.511}"
+    },
+    {
+      "id": "vector-plan-natural",
+      "passed": null,
+      "detail": "natural plan: {\"kind\": \"seq-scan\", \"nodeTypes\": [\"Index Scan\", \"Limit\", \"Nested Loop\", \"Seq Scan\", \"Sort\"], \"indexes\": [\"chunks_scope_idx\", \"document_versions_pkey\", \"queries_pkey\"], \"executionMs\": 4042.388, \"planningMs\": 5.449}"
+    },
+    {
+      "id": "exact-plan-not-hnsw",
+      "passed": true,
+      "detail": "{\"kind\": \"bitmap-scan\", \"nodeTypes\": [\"Bitmap Heap Scan\", \"Bitmap Index Scan\", \"Limit\", \"Nested Loop\", \"Seq Scan\", \"Sort\"], \"indexes\": [\"chunks_scope_idx\", \"document_versions_pkey\", \"queries_pkey\"], \"executionMs\": 369.415, \"planningMs\": 2.215}"
+    },
+    {
+      "id": "keyword-index",
+      "passed": true,
+      "detail": "CREATE INDEX chunks_bm25_idx ON m13_dataplane.chunks USING bm25 (id, content) WITH (key_field=id)"
+    },
+    {
+      "id": "keyword-plan-captured",
+      "passed": true,
+      "detail": "{\"kind\": \"seq-scan\", \"nodeTypes\": [\"Custom Scan\", \"Gather Merge\", \"Hash\", \"Hash Join\", \"Limit\", \"Seq Scan\", \"Sort\"], \"indexes\": [], \"executionMs\": 283.786, \"planningMs\": 9.54}"
+    },
+    {
+      "id": "write-latency-during-build",
+      "passed": true,
+      "detail": "64395 insert samples"
+    },
+    {
+      "id": "recall-samples",
+      "passed": true,
+      "detail": "200 / 200"
+    }
+  ],
+  "limitations": [
+    "The planner chose a seq-scan for the production vector query at this scale, not the HNSW index; plans.vectorForced records the HNSW path and the query load reflects the natural plan.",
+    "Synthetic uniform random vectors are not semantic embeddings; this run measures the data-plane cost and ANN behavior, not answer quality.",
+    "The benchmark runs against the local PostgreSQL/pgvector container on one machine; results do not directly replace the M8 production threshold.",
+    "Query latency is psql client-observed \\timing inside the postgres container; it excludes the API/retrieval layer and network to a real client.",
+    "The vector list has one embedding size (1024) and one HNSW parameter set (m=16, ef_construction=64); other dimensions and parameters are not measured.",
+    "Recall compares ANN against an exact scan of the same tenant/knowledge-base scope; the ANN side is forced onto the HNSW index (enable_seqscan/bitmapscan/sort off), while plans.vector records the natural plan. It is a report value, not a 0.95 release gate.",
+    "halfvec values larger than the TOAST threshold are stored out of line: indexBuild.tableBytes is the main heap fork, while totalBytes includes TOAST and all indexes.",
+    "Writers during the build are throttled inserts that copy one existing vector; concurrent ingestion with model calls is not simulated.",
+    "The schema is dropped on exit unless --keep is set; application tables are never touched.",
+    "RLS was not enabled for this run; rerun with --rls to compare the enforce path (the roles must already exist).",
+    "Mean ANN recall against the exact scan is below 0.95 on this synthetic corpus; report it as measured, do not treat it as a tuning failure."
+  ]
+}
