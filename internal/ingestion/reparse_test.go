@@ -1,8 +1,10 @@
 package ingestion
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +34,14 @@ func (m *memoryObjects) Get(_ context.Context, key string) ([]byte, error) {
 		return nil, errors.New("object not found")
 	}
 	return content, nil
+}
+
+func (m *memoryObjects) Open(_ context.Context, key string) (io.ReadCloser, error) {
+	content, err := m.Get(context.Background(), key)
+	if err != nil {
+		return nil, err
+	}
+	return io.NopCloser(bytes.NewReader(content)), nil
 }
 
 func (m *memoryObjects) Delete(_ context.Context, key string) error {

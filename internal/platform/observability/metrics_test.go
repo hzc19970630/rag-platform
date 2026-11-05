@@ -41,6 +41,12 @@ func TestObserveAggregatesCountSumMaxAndAverage(t *testing.T) {
 	if timing.Count != 2 || timing.SumMS != 40 || timing.MaxMS != 30 {
 		t.Fatalf("timing = %+v, want count=2 sum=40 max=30", timing)
 	}
+	// Cumulative fixed buckets: 1,5,10,25,50,100,250,500,1000,2500,5000,10000.
+	for index, want := range map[int]int64{2: 1, 3: 1, 4: 2, 11: 2} {
+		if timing.Buckets[index] != want {
+			t.Fatalf("bucket %d = %d, want %d (buckets: %v)", index, timing.Buckets[index], want, timing.Buckets)
+		}
+	}
 	if _, ok := registry.Snapshot()["startedAt"]; !ok {
 		t.Fatal("snapshot must expose the collection start time")
 	}
@@ -49,7 +55,8 @@ func TestObserveAggregatesCountSumMaxAndAverage(t *testing.T) {
 func TestWritePrometheusRendersCountersAndTimings(t *testing.T) {
 	registry := New()
 	registry.Inc("ingestion_stage_total", Labels("stage", "embed", "result", "success"))
-	registry.Observe("retrieval_duration_ms", 20*time.Millisecond, nil)
+	registry.Observe("retrieval_duration_ms", 10*time.Millisecond, nil)
+	registry.Observe("retrieval_duration_ms", 30*time.Millisecond, nil)
 
 	var buffer bytes.Buffer
 	if err := registry.WritePrometheus(&buffer); err != nil {
@@ -59,14 +66,21 @@ func TestWritePrometheusRendersCountersAndTimings(t *testing.T) {
 	for _, fragment := range []string{
 		"# TYPE ingestion_stage_total counter",
 		`ingestion_stage_total{result="success",stage="embed"} 1`,
-		"# TYPE retrieval_duration_ms summary",
-		"retrieval_duration_ms_count 1",
-		"retrieval_duration_ms_sum 20",
-		"retrieval_duration_ms_max 20",
+		"# TYPE retrieval_duration_ms histogram",
+		`retrieval_duration_ms_bucket{le="25"} 1`,
+		`retrieval_duration_ms_bucket{le="50"} 2`,
+		`retrieval_duration_ms_bucket{le="+Inf"} 2`,
+		"retrieval_duration_ms_count 2",
+		"retrieval_duration_ms_sum 40",
+		"# TYPE retrieval_duration_ms_max gauge",
+		"retrieval_duration_ms_max 30",
 	} {
 		if !strings.Contains(output, fragment) {
 			t.Fatalf("prometheus output is missing %q:\n%s", fragment, output)
 		}
+	}
+	if strings.Contains(output, "# TYPE retrieval_duration_ms summary") {
+		t.Fatalf("timings must no longer be exported as summaries:\n%s", output)
 	}
 }
 

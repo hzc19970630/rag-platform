@@ -408,7 +408,7 @@ connector_id="$(json_field "$tmp_dir/connector.json" id)"
 assert_json "$tmp_dir/connector.json" 'data["id"].startswith("conn-") and data["tenantId"] == "dev-tenant" and data["knowledgeBaseId"] == "kb-dev" and data["type"] == "http_manifest" and data["hasCredential"] is True and data["config"]["aclMode"] == "knowledge_base" and "credential" not in data and "credentialRef" not in data'
 
 credential_ref="$(psql_value "SELECT credential_ref FROM connectors WHERE id = '$connector_id';")"
-[[ "$credential_ref" == v1:* ]] || fail "connector credential is not stored as a v1 envelope"
+[[ "$credential_ref" == v2:* ]] || fail "connector credential is not stored as a v2 envelope"
 [[ "$credential_ref" != *"$fixture_token"* ]] || fail "the raw connector token was stored"
 [[ "$(psql_value "SELECT count(*) FROM connectors WHERE credential_ref LIKE '%$fixture_token%';")" == "0" ]] || fail "the raw connector token is present in the database"
 

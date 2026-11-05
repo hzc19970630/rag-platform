@@ -56,6 +56,28 @@ type Application struct {
 	Limiter       *ratelimit.Limiter
 }
 
+// Readiness reports the live state of the database and the object store for
+// /readyz. TCP reachability alone is not enough: a stopped PostgreSQL still
+// accepts connections until it fails the handshake, and a missing bucket makes
+// every upload fail while MinIO itself is healthy.
+func (a *Application) Readiness(ctx context.Context) (string, string) {
+	database := "unreachable"
+	if a.DB != nil {
+		if sqlDB, err := a.DB.DB(); err == nil {
+			if err := sqlDB.PingContext(ctx); err == nil {
+				database = "ok"
+			}
+		}
+	}
+	objects := "unreachable"
+	if a.Objects != nil {
+		if err := a.Objects.Ready(ctx); err == nil {
+			objects = "ok"
+		}
+	}
+	return database, objects
+}
+
 // Open builds the process-wide object graph. The metrics recorder is supplied
 // by the command so the API, worker and the dedicated /metrics listener share
 // one registry instead of reaching for a package-level default.
@@ -100,7 +122,7 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 		return nil, err
 	}
 	knowledgeBaseService := knowledgebase.NewService(database, authorization, binding)
-	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle)
+	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle, cfg.MaxFileBytes)
 	if err != nil {
 		closeDatabase(database)
 		return nil, err
@@ -119,7 +141,7 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 	indexWriter := evidenceindex.New(database)
 	ingestionService := ingestion.NewService(database, authorization, objects, publisher, cfg.MaxFileBytes, cfg.Limits.DocumentRetentionDays, ingestion.Quota{MaxDocuments: cfg.Limits.TenantMaxDocuments, MaxStorageBytes: cfg.Limits.TenantMaxStorageBytes})
 	ingestionService.SetIndexWriter(indexWriter)
-	credentialCipher, err := secrets.NewCipher(cfg.Connector.EncryptionKey)
+	credentialCipher, err := secrets.NewKeyring(cfg.Connector.EncryptionKeys, cfg.Connector.EncryptionKey, cfg.Connector.ActiveKeyID)
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()

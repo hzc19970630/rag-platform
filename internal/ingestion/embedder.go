@@ -6,8 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"strings"
@@ -144,13 +146,85 @@ func (e *RemoteEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 		if end > len(texts) {
 			end = len(texts)
 		}
-		batch, err := e.embedBatch(ctx, texts[start:end])
+		batch, err := e.embedBatchWithRetry(ctx, texts[start:end])
 		if err != nil {
 			return nil, err
 		}
 		result = append(result, batch...)
 	}
 	return result, nil
+}
+
+const embedMaxAttempts = 3
+
+const embedRetryMaxDelay = 2 * time.Second
+
+// embedRetryBaseDelay is a variable so tests can shorten the backoff without
+// sleeping through the production schedule.
+var embedRetryBaseDelay = 250 * time.Millisecond
+
+// embeddingTransportError marks a failure to reach the provider, which is worth
+// retrying. Deterministic failures (bad status, malformed body, dimension
+// mismatch) are left unmarked and fail after one attempt.
+type embeddingTransportError struct {
+	err error
+}
+
+func (e *embeddingTransportError) Error() string { return "call embedding provider: " + e.err.Error() }
+
+func (e *embeddingTransportError) Unwrap() error { return e.err }
+
+// embedStatusError carries the provider status so retries can distinguish a
+// transient 429/5xx from a deterministic 4xx.
+type embedStatusError struct {
+	Status int
+	Body   string
+}
+
+func (e *embedStatusError) Error() string {
+	return fmt.Sprintf("embedding provider returned %d: %s", e.Status, e.Body)
+}
+
+func (e *RemoteEmbedder) embedBatchWithRetry(ctx context.Context, batch []string) ([][]float32, error) {
+	var lastErr error
+	for attempt := 1; attempt <= embedMaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		vectors, err := e.embedBatch(ctx, batch)
+		if err == nil {
+			return vectors, nil
+		}
+		lastErr = err
+		if attempt == embedMaxAttempts || !retryableEmbedError(err) {
+			break
+		}
+		delay := embedRetryBaseDelay << (attempt - 1)
+		if delay > embedRetryMaxDelay {
+			delay = embedRetryMaxDelay
+		}
+		slog.Warn("embedding_batch_retry", "attempt", attempt, "delay_ms", delay.Milliseconds(), "error", err)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return nil, lastErr
+}
+
+func retryableEmbedError(err error) bool {
+	var transport *embeddingTransportError
+	if errors.As(err, &transport) {
+		return true
+	}
+	var status *embedStatusError
+	if errors.As(err, &status) {
+		return status.Status == http.StatusTooManyRequests || status.Status >= 500
+	}
+	return false
 }
 
 func (e *RemoteEmbedder) embedBatch(ctx context.Context, batch []string) ([][]float32, error) {
@@ -169,7 +243,7 @@ func (e *RemoteEmbedder) embedBatch(ctx context.Context, batch []string) ([][]fl
 
 	response, err := e.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("call embedding provider: %w", err)
+		return nil, &embeddingTransportError{err: err}
 	}
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 32<<20))
@@ -177,7 +251,7 @@ func (e *RemoteEmbedder) embedBatch(ctx context.Context, batch []string) ([][]fl
 		return nil, fmt.Errorf("read embedding response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("embedding provider returned %d: %s", response.StatusCode, strings.TrimSpace(string(raw)))
+		return nil, &embedStatusError{Status: response.StatusCode, Body: strings.TrimSpace(string(raw))}
 	}
 
 	var decoded embeddingResponse

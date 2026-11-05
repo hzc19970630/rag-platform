@@ -138,22 +138,23 @@ func main() {
 }
 
 const (
-	retentionPurgeInterval   = time.Hour
-	retentionPurgeBatchSize  = 1000
-	retentionPurgeMaxBatches = 10
+	retentionPurgeInterval    = time.Hour
+	retentionPurgeBatchSize   = 1000
+	taskHistoryPurgeBatchSize = 200
+	retentionPurgeMaxBatches  = 10
 )
 
 // purgeInBatches drains at most retentionPurgeMaxBatches batches so a backlog
 // shrinks without one long transaction per table.
-func purgeInBatches(ctx context.Context, before time.Time, purge func(context.Context, time.Time, int) (int64, error)) (int64, error) {
+func purgeInBatches(ctx context.Context, before time.Time, batchSize int, purge func(context.Context, time.Time, int) (int64, error)) (int64, error) {
 	var total int64
 	for batch := 0; batch < retentionPurgeMaxBatches; batch++ {
-		count, err := purge(ctx, before, retentionPurgeBatchSize)
+		count, err := purge(ctx, before, batchSize)
 		if err != nil {
 			return total, err
 		}
 		total += count
-		if count < int64(retentionPurgeBatchSize) {
+		if count < int64(batchSize) {
 			break
 		}
 	}
@@ -225,6 +226,8 @@ type maintenanceRunner struct {
 
 	lastAuditPurge       time.Time
 	lastStreamEventPurge time.Time
+	lastTaskHistoryPurge time.Time
+	projectionCursor     string
 }
 
 func (m *maintenanceRunner) tick(ctx context.Context) {
@@ -238,7 +241,7 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 	if cfg.Limits.AuditRetentionDays > 0 && time.Since(m.lastAuditPurge) >= retentionPurgeInterval {
 		m.lastAuditPurge = time.Now()
 		cutoff := m.lastAuditPurge.Add(-time.Duration(cfg.Limits.AuditRetentionDays) * 24 * time.Hour)
-		auditPurged, err := purgeInBatches(ctx, cutoff, application.Authorization.PurgeAuditLogs)
+		auditPurged, err := purgeInBatches(ctx, cutoff, retentionPurgeBatchSize, application.Authorization.PurgeAuditLogs)
 		if err != nil {
 			logger.Error("audit_purge_failed", "error", err)
 		}
@@ -249,12 +252,23 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 	if cfg.Limits.StreamEventRetentionDays > 0 && time.Since(m.lastStreamEventPurge) >= retentionPurgeInterval {
 		m.lastStreamEventPurge = time.Now()
 		cutoff := m.lastStreamEventPurge.Add(-time.Duration(cfg.Limits.StreamEventRetentionDays) * 24 * time.Hour)
-		streamPurged, err := purgeInBatches(ctx, cutoff, application.Conversation.PurgeStreamEvents)
+		streamPurged, err := purgeInBatches(ctx, cutoff, retentionPurgeBatchSize, application.Conversation.PurgeStreamEvents)
 		if err != nil {
 			logger.Error("stream_event_purge_failed", "error", err)
 		}
 		if streamPurged > 0 {
 			logger.Info("stream_event_purge_complete", "rows", streamPurged, "retention_days", cfg.Limits.StreamEventRetentionDays)
+		}
+	}
+	if cfg.Limits.TaskHistoryRetentionDays > 0 && time.Since(m.lastTaskHistoryPurge) >= retentionPurgeInterval {
+		m.lastTaskHistoryPurge = time.Now()
+		cutoff := m.lastTaskHistoryPurge.Add(-time.Duration(cfg.Limits.TaskHistoryRetentionDays) * 24 * time.Hour)
+		historyPurged, err := purgeInBatches(ctx, cutoff, taskHistoryPurgeBatchSize, application.Ingestion.PurgeTaskHistory)
+		if err != nil {
+			logger.Error("task_history_purge_failed", "error", err)
+		}
+		if historyPurged > 0 {
+			logger.Info("task_history_purge_complete", "rows", historyPurged, "retention_days", cfg.Limits.TaskHistoryRetentionDays)
 		}
 	}
 	triggered, err := application.DataSources.Maintenance().ScheduleDue(ctx, 20)
@@ -274,10 +288,13 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 		logger.Error("maintenance_reconcile_failed", "error", err)
 		return
 	}
-	if scheduled, err := application.Projection.ScheduleMissing(ctx, 20); err != nil {
+	if scheduled, nextCursor, err := application.Projection.ScheduleMissing(ctx, 20, m.projectionCursor); err != nil {
 		logger.Error("projection_schedule_failed", "error", err)
-	} else if scheduled > 0 {
-		logger.Info("projection_scheduled", "runs", scheduled)
+	} else {
+		m.projectionCursor = nextCursor
+		if scheduled > 0 {
+			logger.Info("projection_scheduled", "runs", scheduled)
+		}
 	}
 	if reconciled, err := application.Projection.Reconcile(ctx); err != nil {
 		logger.Error("projection_reconcile_failed", "error", err)

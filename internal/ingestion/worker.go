@@ -127,6 +127,22 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	return w.completeStage(ctx, task)
 }
 
+// readNormalizedDocument decodes the stored normalized document as a stream.
+// Normalized JSON can approach the source file size, so it must not be buffered
+// whole just to be decoded.
+func readNormalizedDocument(ctx context.Context, objects ObjectStore, key string) (NormalizedDocument, error) {
+	reader, err := objects.Open(ctx, key)
+	if err != nil {
+		return NormalizedDocument{}, fmt.Errorf("load normalized document: %w", err)
+	}
+	defer reader.Close()
+	var normalized NormalizedDocument
+	if err := json.NewDecoder(reader).Decode(&normalized); err != nil {
+		return NormalizedDocument{}, fmt.Errorf("decode normalized document: %w", err)
+	}
+	return normalized, nil
+}
+
 func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	var version models.DocumentVersion
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
@@ -167,13 +183,9 @@ func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
 	}
-	data, err := w.objects.Get(ctx, version.NormalizedKey)
+	normalized, err := readNormalizedDocument(ctx, w.objects, version.NormalizedKey)
 	if err != nil {
-		return fmt.Errorf("load normalized document: %w", err)
-	}
-	var normalized NormalizedDocument
-	if err := json.Unmarshal(data, &normalized); err != nil {
-		return fmt.Errorf("decode normalized document: %w", err)
+		return err
 	}
 	blocks := normalized.Blocks[:0]
 	for _, block := range normalized.Blocks {
@@ -187,7 +199,7 @@ func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
 		return apperror.Terminalf("empty_document", "normalized document has no text")
 	}
 	normalized.Blocks = blocks
-	data, err = json.Marshal(normalized)
+	data, err := json.Marshal(normalized)
 	if err != nil {
 		return fmt.Errorf("marshal cleaned document: %w", err)
 	}
@@ -221,18 +233,52 @@ func chunkDocuments(rows []chunkRow) []ChunkDocument {
 	return documents
 }
 
+// chunkInsertBatchSize bounds how many chunk rows share one INSERT statement.
+// Each row binds 17 parameters, so the default stays far below PostgreSQL's
+// 65535-parameter limit.
+var chunkInsertBatchSize = 500
+
+const (
+	chunkInsertColumns     = 17
+	chunkInsertPlaceholder = "(?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)"
+)
+
+// insertChunks writes rows in multi-row INSERT batches. The explicit timestamps
+// keep SQLite test schemas (which have no column defaults) aligned with
+// PostgreSQL without depending on database-side defaults.
+func insertChunks(tx *gorm.DB, version models.DocumentVersion, rows []chunkRow, now time.Time) error {
+	for start := 0; start < len(rows); start += chunkInsertBatchSize {
+		end := start + chunkInsertBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[start:end]
+		placeholders := make([]string, 0, len(batch))
+		args := make([]any, 0, len(batch)*chunkInsertColumns)
+		for _, item := range batch {
+			chunkStatus := StatusParent
+			if item.ParentID != "" {
+				chunkStatus = StatusChunked
+			}
+			placeholders = append(placeholders, chunkInsertPlaceholder)
+			args = append(args, item.ID, version.TenantID, version.KnowledgeBaseID, version.ID, item.ParentID, item.Ordinal, item.Content, item.ContentHash, item.HeadingPath, item.PageNumber, item.SourcePath, item.StartOffset, item.EndOffset, chunkStatus, now, now)
+		}
+		query := `INSERT INTO chunks (id, tenant_id, knowledge_base_id, document_version_id, parent_id, ordinal, content, content_hash, heading_path, page_number, source_path, start_offset, end_offset, embedding_dimension, status, created_at, updated_at) VALUES ` + strings.Join(placeholders, ", ")
+		if err := tx.Exec(query, args...).Error; err != nil {
+			return fmt.Errorf("insert chunk batch: %w", err)
+		}
+	}
+	return nil
+}
+
 func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	var version models.DocumentVersion
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
 	}
-	data, err := w.objects.Get(ctx, version.NormalizedKey)
+	normalized, err := readNormalizedDocument(ctx, w.objects, version.NormalizedKey)
 	if err != nil {
-		return fmt.Errorf("load normalized document: %w", err)
-	}
-	var normalized NormalizedDocument
-	if err := json.Unmarshal(data, &normalized); err != nil {
-		return fmt.Errorf("decode normalized document: %w", err)
+		return err
 	}
 	rows := make([]chunkRow, 0, len(normalized.Blocks)*2)
 	childOrdinal := 0
@@ -263,15 +309,8 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.Chunk{}).Error; err != nil {
 			return err
 		}
-		for _, item := range rows {
-			chunkStatus := StatusParent
-			if item.ParentID != "" {
-				chunkStatus = StatusChunked
-			}
-			query := `INSERT INTO chunks (id, tenant_id, knowledge_base_id, document_version_id, parent_id, ordinal, content, content_hash, heading_path, page_number, source_path, start_offset, end_offset, embedding_dimension, status) VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
-			if err := tx.Exec(query, item.ID, version.TenantID, version.KnowledgeBaseID, version.ID, item.ParentID, item.Ordinal, item.Content, item.ContentHash, item.HeadingPath, item.PageNumber, item.SourcePath, item.StartOffset, item.EndOffset, chunkStatus).Error; err != nil {
-				return err
-			}
+		if err := insertChunks(tx, version, rows, time.Now()); err != nil {
+			return err
 		}
 		return tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusChunked, nil)).Error
 	}); err != nil {
@@ -561,8 +600,10 @@ func (w *PipelineWorker) isCurrent(ctx context.Context, task Task) (bool, error)
 	return count == 1, nil
 }
 
+var whitespaceRun = regexp.MustCompile(`\s+`)
+
 func cleanText(value string) string {
-	return strings.TrimSpace(regexp.MustCompile(`\s+`).ReplaceAllString(value, " "))
+	return strings.TrimSpace(whitespaceRun.ReplaceAllString(value, " "))
 }
 
 func stableID(prefix string, values ...string) string {

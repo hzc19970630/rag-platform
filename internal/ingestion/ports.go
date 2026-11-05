@@ -1,10 +1,16 @@
 package ingestion
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 type ObjectStore interface {
 	Put(ctx context.Context, key string, content []byte, contentType string) error
 	Get(ctx context.Context, key string) ([]byte, error)
+	// Open streams an object without buffering it. Callers that decode JSON
+	// documents use this so a large object is not read whole into memory.
+	Open(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
 }
 

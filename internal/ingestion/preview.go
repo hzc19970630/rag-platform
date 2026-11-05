@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -153,13 +152,9 @@ func (s *Service) Preview(ctx context.Context, principal authz.Principal, docume
 	if version.NormalizedKey == "" {
 		return DocumentPreview{}, apperror.ErrNotReady
 	}
-	raw, err := s.objects.Get(ctx, version.NormalizedKey)
+	normalized, err := readNormalizedDocument(ctx, s.objects, version.NormalizedKey)
 	if err != nil {
 		return DocumentPreview{}, err
-	}
-	var normalized NormalizedDocument
-	if err := json.Unmarshal(raw, &normalized); err != nil {
-		return DocumentPreview{}, fmt.Errorf("decode normalized document: %w", err)
 	}
 	blocks := make([]PreviewBlock, 0, len(normalized.Blocks))
 	for _, block := range normalized.Blocks {

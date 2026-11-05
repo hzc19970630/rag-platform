@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,6 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ReadinessCheck reports the live state of the backing stores. Redis and
+// DocReader stay TCP probes because they own no state the API can query.
+type ReadinessCheck func(ctx context.Context) (database, objects string)
+
 func NewRouter(cfg config.Config) *gin.Engine {
 	return NewRouterWithLogger(cfg, slog.Default())
 }
@@ -25,6 +30,12 @@ func NewRouterWithLogger(cfg config.Config, logger *slog.Logger) *gin.Engine {
 // NewRouterWithMetrics is the composition-root constructor: the request
 // middleware and the application services must record into the same registry.
 func NewRouterWithMetrics(cfg config.Config, logger *slog.Logger, registry *observability.Registry) *gin.Engine {
+	return NewRouterWithReadiness(cfg, logger, registry, nil)
+}
+
+// NewRouterWithReadiness wires /readyz to real database and bucket checks. A
+// nil check keeps the TCP-only behavior used by tests and lightweight builds.
+func NewRouterWithReadiness(cfg config.Config, logger *slog.Logger, registry *observability.Registry, check ReadinessCheck) *gin.Engine {
 	if cfg.AppEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -46,10 +57,18 @@ func NewRouterWithMetrics(cfg config.Config, logger *slog.Logger, registry *obse
 	})
 	r.GET("/readyz", func(c *gin.Context) {
 		checks := map[string]string{
-			"postgres":  probeTCP(cfg.DatabaseURL),
 			"redis":     probeTCP(cfg.RedisAddr),
 			"docreader": probeTCP(cfg.DocreaderAddr),
-			"minio":     probeTCP(cfg.S3Endpoint),
+		}
+		if check != nil {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 800*time.Millisecond)
+			database, objects := check(ctx)
+			cancel()
+			checks["postgres"] = readinessStatus(database)
+			checks["minio"] = readinessStatus(objects)
+		} else {
+			checks["postgres"] = probeTCP(cfg.DatabaseURL)
+			checks["minio"] = probeTCP(cfg.S3Endpoint)
 		}
 		ready := true
 		for _, result := range checks {
@@ -174,6 +193,13 @@ func requestLogger(logger *slog.Logger) gin.HandlerFunc {
 		}
 		logger.Info("http_request", fields...)
 	}
+}
+
+func readinessStatus(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "unreachable"
+	}
+	return status
 }
 
 func probeTCP(raw string) string {

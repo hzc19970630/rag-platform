@@ -322,6 +322,22 @@ func TestConnectorConfigValidation(t *testing.T) {
 			t.Fatalf("rate %v must be rejected", rate)
 		}
 	}
+
+	keyring := valid
+	keyring.EncryptionKey = ""
+	keyring.EncryptionKeys = "k1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+	if err := keyring.Validate("development"); err == nil || !strings.Contains(err.Error(), "CONNECTOR_ENCRYPTION_ACTIVE_KID") {
+		t.Fatalf("keyring without an active kid must be rejected, got %v", err)
+	}
+	keyring.ActiveKeyID = "k1"
+	if err := keyring.Validate("development"); err != nil {
+		t.Fatalf("keyring with an active kid must pass: %v", err)
+	}
+	noKeys := valid
+	noKeys.EncryptionKey = ""
+	if err := noKeys.Validate("development"); err == nil || !strings.Contains(err.Error(), "CONNECTOR_ENCRYPTION_KEYS") {
+		t.Fatalf("missing connector keys must be rejected, got %v", err)
+	}
 }
 
 func TestValidateEmbedctlRequiresDatabaseAndEmbedding(t *testing.T) {
@@ -491,6 +507,24 @@ func TestInvalidTypedSettingsSurfaceAsConfigError(t *testing.T) {
 	if zero.Limits.AuditRetentionDays != 0 || zero.Limits.StreamEventRetentionDays != 0 ||
 		zero.Limits.RateLimitPerMinute != 0 || zero.Chunk.Overlap != 0 {
 		t.Fatalf("zero values were not preserved: %+v", zero)
+	}
+}
+
+func TestTaskHistoryRetentionConfig(t *testing.T) {
+	defaults := LoadFrom(lookupFrom(map[string]string{}))
+	if defaults.Limits.TaskHistoryRetentionDays != 90 {
+		t.Fatalf("default task history retention = %d, want 90 days", defaults.Limits.TaskHistoryRetentionDays)
+	}
+	disabled := LoadFrom(lookupFrom(map[string]string{"TASK_HISTORY_RETENTION_DAYS": "0"}))
+	if disabled.ConfigError != nil {
+		t.Fatalf("zero must disable retention: %v", disabled.ConfigError)
+	}
+	if disabled.Limits.TaskHistoryRetentionDays != 0 {
+		t.Fatalf("retention = %d, want 0", disabled.Limits.TaskHistoryRetentionDays)
+	}
+	negative := LoadFrom(lookupFrom(map[string]string{"TASK_HISTORY_RETENTION_DAYS": "-1"}))
+	if negative.ConfigError == nil || !strings.Contains(negative.ConfigError.Error(), "TASK_HISTORY_RETENTION_DAYS") {
+		t.Fatalf("negative retention error = %v", negative.ConfigError)
 	}
 }
 

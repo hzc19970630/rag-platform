@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -352,15 +353,30 @@ func (s *Service) InvalidateKnowledgeBase(ctx context.Context, tenantID, knowled
 // created a run leaves no durable projection intent, so maintenance periodically
 // compares the current evidence hash with the latest run and starts one when
 // wiki is enabled. Failed runs are deliberately left to the operator retry path.
-func (s *Service) ScheduleMissing(ctx context.Context, limit int) (int, error) {
+//
+// The sweep pages by (updated_at, id) instead of always taking the first
+// `limit` rows: otherwise a backlog larger than one page would starve every
+// knowledge base past the first page forever. nextCursor is empty once the
+// sweep is exhausted so the following call starts from the beginning again.
+func (s *Service) ScheduleMissing(ctx context.Context, limit int, cursor string) (int, string, error) {
 	if limit <= 0 {
 		limit = 20
 	}
+	// SQLite renders JSON true as 1, PostgreSQL as 'true'; cast both to text so
+	// the SQLite-backed tests exercise the real query.
+	query := s.db.WithContext(ctx).
+		Where("CAST(indexing_strategy->>'wiki_enabled' AS TEXT) IN ('true', '1') OR CAST(indexing_strategy->>'graph_enabled' AS TEXT) IN ('true', '1')")
+	position := cursor
+	if position != "" {
+		decoded, err := decodeProjectionCursor(position)
+		if err != nil {
+			return 0, "", err
+		}
+		query = query.Where("updated_at > ? OR (updated_at = ? AND id > ?)", decoded.UpdatedAt, decoded.UpdatedAt, decoded.ID)
+	}
 	var knowledgeBases []models.KnowledgeBase
-	if err := s.db.WithContext(ctx).
-		Where("indexing_strategy->>'wiki_enabled' = 'true' OR indexing_strategy->>'graph_enabled' = 'true'").
-		Order("updated_at").Limit(limit).Find(&knowledgeBases).Error; err != nil {
-		return 0, fmt.Errorf("list projection-enabled knowledge bases: %w", err)
+	if err := query.Order("updated_at, id").Limit(limit).Find(&knowledgeBases).Error; err != nil {
+		return 0, "", fmt.Errorf("list projection-enabled knowledge bases: %w", err)
 	}
 	started := 0
 	for _, knowledgeBase := range knowledgeBases {
@@ -375,7 +391,7 @@ func (s *Service) ScheduleMissing(ctx context.Context, limit int) (int, error) {
 		if strategy.WikiEnabled {
 			created, err := s.scheduleProjection(ctx, knowledgeBase, packages, ProjectionTypeWiki, s.generator.PromptVersion(), s.generator.Model())
 			if err != nil {
-				return started, err
+				return started, position, err
 			}
 			if created {
 				started++
@@ -384,14 +400,41 @@ func (s *Service) ScheduleMissing(ctx context.Context, limit int) (int, error) {
 		if strategy.GraphEnabled && s.relation != nil {
 			created, err := s.scheduleProjection(ctx, knowledgeBase, packages, ProjectionTypeRelation, s.relation.PromptVersion(), s.relation.Model())
 			if err != nil {
-				return started, err
+				return started, position, err
 			}
 			if created {
 				started++
 			}
 		}
 	}
-	return started, nil
+	nextCursor := ""
+	if len(knowledgeBases) == limit {
+		last := knowledgeBases[len(knowledgeBases)-1]
+		nextCursor = encodeProjectionCursor(last.UpdatedAt, last.ID)
+	}
+	return started, nextCursor, nil
+}
+
+// projectionCursor is the keyset position of the missing-projection sweep.
+type projectionCursor struct {
+	UpdatedAt time.Time
+	ID        string
+}
+
+func encodeProjectionCursor(updatedAt time.Time, id string) string {
+	return fmt.Sprintf("%d-%s", updatedAt.UTC().UnixNano(), id)
+}
+
+func decodeProjectionCursor(raw string) (projectionCursor, error) {
+	separator := strings.IndexByte(raw, '-')
+	if separator <= 0 || separator == len(raw)-1 {
+		return projectionCursor{}, fmt.Errorf("invalid projection sweep cursor")
+	}
+	nanos, err := strconv.ParseInt(raw[:separator], 10, 64)
+	if err != nil {
+		return projectionCursor{}, fmt.Errorf("invalid projection sweep cursor")
+	}
+	return projectionCursor{UpdatedAt: time.Unix(0, nanos).UTC(), ID: raw[separator+1:]}, nil
 }
 
 func (s *Service) scheduleProjection(ctx context.Context, knowledgeBase models.KnowledgeBase, packages []ingestion.EvidencePackage, projectionType, promptVersion, model string) (bool, error) {

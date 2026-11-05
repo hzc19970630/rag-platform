@@ -85,6 +85,13 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 			return
 		}
 		stream := newSSEStream(c)
+		// A started stream must always stop its heartbeat, including the error
+		// paths below. A pre-flight failure never starts it and stays plain JSON.
+		defer func() {
+			if stream.started() {
+				stream.finish()
+			}
+		}()
 		result, err := deps.Conversation.Ask(c.Request.Context(), accessContext(c).Principal, conversation.AskInput{
 			ConversationID: c.Param("id"), Query: input.Query, RequestID: requestIDOrDefault(c, input.RequestID), SessionOverride: input.SessionOverride,
 		}, stream.emit)
@@ -117,12 +124,12 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 			return
 		}
 		stream := newSSEStream(c)
+		defer stream.finish()
 		for _, event := range events {
 			if err := stream.emit(event); err != nil {
 				return
 			}
 		}
-		stream.finish()
 	})
 }
 

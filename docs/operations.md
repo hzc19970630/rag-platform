@@ -141,7 +141,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | `operations.outboxBacklog` | `published_at IS NULL AND attempts < OUTBOX_MAX_ATTEMPTS` | 持续 > 0 且不下降 |
 
 - `operations` 来自数据库，跨进程重启保留；`counters`/`timings`/`queues` 是进程级或实时 Redis 状态，API 重启后归零。
-- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（如 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`，把进程内 counters 与 timings 转成 `_count`/`_sum`/`_max`。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target `api:9091` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
+- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（如 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`。进程内 counters 输出为 `_total`，timings 输出为固定毫秒桶的 histogram（`_bucket{le="1|5|10|25|50|100|250|500|1000|2500|5000|10000|+Inf"}`、`_count`、`_sum`），另外保留 `<name>_max` gauge 供既有面板使用。P95 用 `histogram_quantile(0.95, sum by (le) (rate(<name>_bucket[5m])))` 计算。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target `api:9091` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
 - `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
 - 独立监听器只包含本进程的指标，不包含数据库窗口内的 `operations`；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
@@ -175,6 +175,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 - **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键。
 - **API Key**：数据库只保存 `sha256(pepper + raw)`；明文只在创建响应返回一次。轮换 `API_KEY_PEPPER` 会让全部已签发 key 立即失效，需重新签发并通知调用方。
+- **连接器凭据密钥**：新信封固定为 `v2:<kid>:<base64(nonce||sealed)>`，AAD 绑定 `v2:<kid>`。单键模式继续使用 `CONNECTOR_ENCRYPTION_KEY`（kid 固定为 `legacy`）；轮换时改用 `CONNECTOR_ENCRYPTION_KEYS=kid1:key1,kid2:key2` + `CONNECTOR_ENCRYPTION_ACTIVE_KID=kid2`，新写入用 active kid，旧 kid 保留用于解密历史信封。移除某个 kid 会让引用它的连接器立即不可解密（本轮没有批量重加密），所以轮换只加不删；历史的 `v1:` 信封始终用 `legacy` 键解密。设置 `CONNECTOR_ENCRYPTION_KEYS` 时 `CONNECTOR_ENCRYPTION_ACTIVE_KID` 必填，重复/空 kid、非法 key 和缺失的 active kid 都会让启动失败。
 - **OIDC**：`OIDC_ISSUER` 必须指向可发现（discovery）的 issuer；`OIDC_AUTO_PROVISION=false` 时只允许已存在的 membership 登录。登出会撤销 `auth_sessions` 行并清除 HttpOnly cookie；刷新沿用同一 `token_id`，不延长会话 TTL。
 - **反向代理与客户端 IP**：`HTTP_TRUSTED_PROXIES` 是逗号分隔的代理 IP/CIDR 列表，只有来自这些地址的 `X-Forwarded-For`/`X-Real-IP` 会被用于审计、限流和配额的客户端 IP。留空表示不信任任何代理，审计 IP 取 TCP 对端；`0.0.0.0/0` 与 `::/0` 会在启动校验被拒绝，避免把客户端 IP 重新交给调用方控制。部署在 Nginx/网关之后时，把实际的代理网段填入该变量，不要使用通配网段。
 - **CSRF**：会话 cookie 为 `HttpOnly` + `SameSite=Lax`；此外，携带会话 cookie 的写请求（POST/PUT/PATCH/DELETE）要求 `Origin`（缺失时回退 `Referer`）与请求 Host、`WEB_PUBLIC_URL` 或开发工作台源一致，否则返回 403。Bearer/API Key 请求不依赖 cookie，不受该检查影响。
@@ -186,6 +187,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - `DOCUMENT_RETENTION_DAYS`（默认 30）决定 `purge_after`。到期后 Worker 维护循环硬删除版本、Chunk、证据包、流水线、Outbox/Inbox 行、死信和对象存储文件。
 - `AUDIT_RETENTION_DAYS`（默认 180，0 表示永久保留）只作用于 `audit_logs`。Worker 每小时按 `created_at` 批量删除过期行（每批 1000 条，每轮最多 10 批），并由 `audit_logs_created_at_idx` 支撑。
 - `STREAM_EVENT_RETENTION_DAYS`（默认 7，0 表示永久保留）只作用于 `stream_events`。它保存的是 SSE 断线续传缓冲，不是问答历史；回答正文、引用和证据集都在 `messages` / `message_citations` / `evidence_set` 中。Worker 用同一套每小时批量清理（每批 1000 条，每轮最多 10 批），索引为 `stream_events_created_at_idx`。超过保留期后，旧请求的 `ReplayEvents` 返回空事件列表，但消息历史仍可正常读取；不建议从 `messages` 反向重建事件。
+- `TASK_HISTORY_RETENTION_DAYS`（默认 90，0 表示永久保留）只作用于入库任务历史：状态为 `EVIDENCE_READY`/`FAILED`/`CANCELLED` 且 `updated_at` 超过保留期的 `evidence` 流水线，以及状态为 `RESOLVED`/`DISCARDED` 且 `resolved_at` 超过保留期的死信。每轮每小时清理，每批 200 条、最多 10 批；删除顺序为 `stage_runs` → `outbox_events`（按流水线 ID 与文档版本 ID 两种聚合）→ `task_inbox`（`<pipelineID>:%`）→ `pipeline_runs`，死信按 `id` 删除。索引为 `pipeline_runs_status_updated_idx` 与 `task_dead_letters_status_resolved_idx`（迁移 0022）。`PENDING`/`RETRYING` 死信、未终态流水线以及文档版本/Chunk/证据包永远不会被这条规则删除；投影运行（`projection_runs`）也不受影响。保留期后若旧 Asynq 任务被重新投递，对应 `task_inbox` 键已不存在，worker 会重新校验版本并幂等重跑。
+- SSE 回答流在空闲时每 15 秒写入一行 `: ping` 注释帧。EventSource 与 Web 端的 `parseSSEBlock` 都会忽略注释帧，但反向代理会把它当作流量，不再因等待模型输出期间没有数据而断开连接。
 - 恢复（`POST /documents/:id/restore`）清空删除标记并按最新版本是否完整恢复为 `EVIDENCE_READY` 或 `STORED`；超过保留窗口返回冲突。
 - 硬清理（`POST /documents/:id/purge`）只允许针对已软删除文档，立即删除全部派生数据与 S3 对象，不可恢复。
 - 版本回滚（`POST /documents/:id/versions/:versionID/activate`）会复用被替换版本的 STALE 证据包与 Chunk，不重新 Embedding；前一版本标记 `CANCELLED`。

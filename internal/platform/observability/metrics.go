@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,10 +22,16 @@ type Registry struct {
 }
 
 type Timing struct {
-	Count int64   `json:"count"`
-	SumMS float64 `json:"sumMs"`
-	MaxMS float64 `json:"maxMs"`
+	Count   int64   `json:"count"`
+	SumMS   float64 `json:"sumMs"`
+	MaxMS   float64 `json:"maxMs"`
+	Buckets []int64 `json:"buckets"`
 }
+
+// timingBucketBoundsMS is the fixed histogram ladder. Buckets are cumulative:
+// every observation increments each bound it falls into, so le="+Inf" equals
+// Count.
+var timingBucketBoundsMS = []int64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000}
 
 var defaultRegistry = New()
 
@@ -69,13 +76,18 @@ func (r *Registry) Observe(name string, duration time.Duration, labels map[strin
 	r.mu.Lock()
 	timing, ok := r.timings[key]
 	if !ok {
-		timing = &Timing{}
+		timing = &Timing{Buckets: make([]int64, len(timingBucketBoundsMS))}
 		r.timings[key] = timing
 	}
 	timing.Count++
 	timing.SumMS += milliseconds
 	if milliseconds > timing.MaxMS {
 		timing.MaxMS = milliseconds
+	}
+	for index, bound := range timingBucketBoundsMS {
+		if milliseconds <= float64(bound) {
+			timing.Buckets[index]++
+		}
 	}
 	r.mu.Unlock()
 }
@@ -88,7 +100,10 @@ func (r *Registry) Snapshot() map[string]any {
 	}
 	timings := make(map[string]any, len(r.timings))
 	for key, value := range r.timings {
-		entry := map[string]any{"count": value.Count, "sumMs": round(value.SumMS), "maxMs": round(value.MaxMS)}
+		entry := map[string]any{
+			"count": value.Count, "sumMs": round(value.SumMS), "maxMs": round(value.MaxMS),
+			"buckets": append([]int64(nil), value.Buckets...),
+		}
 		if value.Count > 0 {
 			entry["avgMs"] = round(value.SumMS / float64(value.Count))
 		}
@@ -124,8 +139,9 @@ func round(value float64) float64 {
 }
 
 // WritePrometheus renders the process-local registry in the Prometheus text
-// exposition format. Timings have no quantiles, so they are exported as a
-// summary count/sum plus a max gauge rather than a histogram.
+// exposition format. Timings are histograms with a fixed millisecond ladder, so
+// P95 can be computed with histogram_quantile; the legacy max value stays
+// exported as a separate gauge for existing panels.
 func (r *Registry) WritePrometheus(writer io.Writer) error {
 	r.mu.Lock()
 	counters := make(map[string]int64, len(r.counters))
@@ -134,7 +150,9 @@ func (r *Registry) WritePrometheus(writer io.Writer) error {
 	}
 	timings := make(map[string]Timing, len(r.timings))
 	for key, value := range r.timings {
-		timings[key] = *value
+		copied := *value
+		copied.Buckets = append([]int64(nil), value.Buckets...)
+		timings[key] = copied
 	}
 	r.mu.Unlock()
 
@@ -159,19 +177,32 @@ func (r *Registry) WritePrometheus(writer io.Writer) error {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	declaredMax := map[string]bool{}
 	for _, key := range keys {
 		name, labels := splitMetricKey(key)
 		timing := timings[key]
 		if !declared[name] {
-			lines = append(lines, "# TYPE "+name+" summary")
+			lines = append(lines, "# TYPE "+name+" histogram")
 			declared[name] = true
 		}
-		rendered := renderLabels(labels)
+		for index, bound := range timingBucketBoundsMS {
+			var count int64
+			if index < len(timing.Buckets) {
+				count = timing.Buckets[index]
+			}
+			lines = append(lines, fmt.Sprintf("%s_bucket%s %d", name,
+				renderLabels(mergeLabels(labels, "le", strconv.FormatInt(bound, 10))), count))
+		}
 		lines = append(lines,
-			fmt.Sprintf("%s_count%s %d", name, rendered, timing.Count),
-			fmt.Sprintf("%s_sum%s %v", name, rendered, round(timing.SumMS)),
-			fmt.Sprintf("%s_max%s %v", name, rendered, round(timing.MaxMS)),
+			fmt.Sprintf("%s_bucket%s %d", name, renderLabels(mergeLabels(labels, "le", "+Inf")), timing.Count),
+			fmt.Sprintf("%s_count%s %d", name, renderLabels(labels), timing.Count),
+			fmt.Sprintf("%s_sum%s %v", name, renderLabels(labels), round(timing.SumMS)),
 		)
+		if !declaredMax[name] {
+			lines = append(lines, "# TYPE "+name+"_max gauge")
+			declaredMax[name] = true
+		}
+		lines = append(lines, fmt.Sprintf("%s_max%s %v", name, renderLabels(labels), round(timing.MaxMS)))
 	}
 	_, err := io.WriteString(writer, strings.Join(lines, "\n")+"\n")
 	return err
@@ -191,6 +222,15 @@ func splitMetricKey(key string) (string, map[string]string) {
 		}
 	}
 	return name, labels
+}
+
+func mergeLabels(labels map[string]string, key, value string) map[string]string {
+	merged := make(map[string]string, len(labels)+1)
+	for name, existing := range labels {
+		merged[name] = existing
+	}
+	merged[key] = value
+	return merged
 }
 
 func renderLabels(labels map[string]string) string {

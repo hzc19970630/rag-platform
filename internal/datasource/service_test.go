@@ -81,7 +81,7 @@ func TestSealCredentialRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seal bearer: %v", err)
 	}
-	if !strings.HasPrefix(sealed, "v1:") || strings.Contains(sealed, "secret-token") {
+	if !strings.HasPrefix(sealed, "v2:legacy:") || strings.Contains(sealed, "secret-token") {
 		t.Fatalf("credential must be sealed, got %q", sealed)
 	}
 	raw, err := service.cipher.Decrypt(sealed)

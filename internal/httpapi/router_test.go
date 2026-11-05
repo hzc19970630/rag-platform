@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
+	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/gin-gonic/gin"
 )
 
@@ -40,6 +43,90 @@ func TestReadinessReportsUnavailableDependencies(t *testing.T) {
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", recorder.Code)
+	}
+}
+
+// startTCPProbe listens on a loopback port so probeTCP reports the dependency
+// as reachable without standing up the real service.
+func startTCPProbe(t *testing.T) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	return listener.Addr().String()
+}
+
+func TestReadinessUsesInjectedChecks(t *testing.T) {
+	cfg := config.Config{
+		AppEnv:        "test",
+		RedisAddr:     startTCPProbe(t),
+		DocreaderAddr: startTCPProbe(t),
+	}
+	calls := 0
+	router := NewRouterWithReadiness(cfg, slog.Default(), observability.New(), func(ctx context.Context) (string, string) {
+		calls++
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("readiness check must run under a deadline")
+		}
+		return "unreachable", "ok"
+	})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{`"postgres":"unreachable"`, `"minio":"ok"`, `"redis":"ok"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("readyz body is missing %s: %s", want, body)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("expected one readiness probe, got %d", calls)
+	}
+}
+
+func TestReadinessPassesWhenInjectedChecksSucceed(t *testing.T) {
+	cfg := config.Config{
+		AppEnv:        "test",
+		RedisAddr:     startTCPProbe(t),
+		DocreaderAddr: startTCPProbe(t),
+	}
+	router := NewRouterWithReadiness(cfg, slog.Default(), observability.New(), func(context.Context) (string, string) {
+		return "ok", "ok"
+	})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, `"postgres":"ok"`) || !strings.Contains(body, `"minio":"ok"`) {
+		t.Fatalf("readyz body must report the injected checks: %s", body)
+	}
+}
+
+func TestReadinessMergesUnconfiguredDependencies(t *testing.T) {
+	router := NewRouterWithReadiness(config.Config{AppEnv: "test"}, slog.Default(), observability.New(), func(context.Context) (string, string) {
+		return "ok", "ok"
+	})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 while redis and docreader are unconfigured, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	body := recorder.Body.String()
+	for _, want := range []string{`"redis":"not_configured"`, `"docreader":"not_configured"`, `"postgres":"ok"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("readyz body is missing %s: %s", want, body)
+		}
 	}
 }
 

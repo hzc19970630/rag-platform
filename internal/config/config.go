@@ -436,18 +436,26 @@ type LimitsConfig struct {
 	DocumentRetentionDays        int
 	AuditRetentionDays           int
 	StreamEventRetentionDays     int
-	OutboxMaxAttempts            int
-	OutboxBatchSize              int
-	ReconcileIntervalSeconds     int
-	WorkerConcurrency            int
-	ShutdownTimeoutSeconds       int
+	// TaskHistoryRetentionDays bounds finished ingestion pipeline runs and
+	// resolved dead letters. Zero keeps them forever.
+	TaskHistoryRetentionDays int
+	OutboxMaxAttempts        int
+	OutboxBatchSize          int
+	ReconcileIntervalSeconds int
+	WorkerConcurrency        int
+	ShutdownTimeoutSeconds   int
 }
 
 // ConnectorConfig is the M5 external-source baseline. Credentials are sealed
-// with AES-GCM using EncryptionKey; URL fetching is SSRF-guarded, and private
-// networks are never reachable in production.
+// with AES-GCM using the active connector key (single EncryptionKey or the
+// EncryptionKeys keyring); URL fetching is SSRF-guarded, and private networks
+// are never reachable in production.
 type ConnectorConfig struct {
-	EncryptionKey        string
+	EncryptionKey string
+	// EncryptionKeys is a comma-separated kid:key keyring. Keys stay usable for
+	// decrypting existing envelopes after ActiveKeyID moves to a new kid.
+	EncryptionKeys       string
+	ActiveKeyID          string
 	AllowPrivateNetworks bool
 	RequestTimeoutSec    int
 	MaxManifestBytes     int64
@@ -462,8 +470,11 @@ type ProjectionConfig struct {
 }
 
 func (c ConnectorConfig) Validate(appEnv string) error {
-	if strings.TrimSpace(c.EncryptionKey) == "" {
-		return fmt.Errorf("CONNECTOR_ENCRYPTION_KEY is required")
+	if strings.TrimSpace(c.EncryptionKey) == "" && strings.TrimSpace(c.EncryptionKeys) == "" {
+		return fmt.Errorf("CONNECTOR_ENCRYPTION_KEY or CONNECTOR_ENCRYPTION_KEYS is required")
+	}
+	if strings.TrimSpace(c.EncryptionKeys) != "" && strings.TrimSpace(c.ActiveKeyID) == "" {
+		return fmt.Errorf("CONNECTOR_ENCRYPTION_ACTIVE_KID is required when CONNECTOR_ENCRYPTION_KEYS is set")
 	}
 	if appEnv == "production" && c.AllowPrivateNetworks {
 		return fmt.Errorf("CONNECTOR_ALLOW_PRIVATE_NETWORKS must be false in production")
@@ -508,6 +519,7 @@ func (l LimitsConfig) Validate() error {
 		"DOCUMENT_RETENTION_DAYS":      l.DocumentRetentionDays,
 		"AUDIT_RETENTION_DAYS":         l.AuditRetentionDays,
 		"STREAM_EVENT_RETENTION_DAYS":  l.StreamEventRetentionDays,
+		"TASK_HISTORY_RETENTION_DAYS":  l.TaskHistoryRetentionDays,
 		"OUTBOX_MAX_ATTEMPTS":          l.OutboxMaxAttempts,
 		"OUTBOX_BATCH_SIZE":            l.OutboxBatchSize,
 		"RECONCILE_INTERVAL_SECONDS":   l.ReconcileIntervalSeconds,
@@ -660,6 +672,7 @@ func LoadFrom(lookup Lookup) Config {
 			DocumentRetentionDays:        int(reader.positive("DOCUMENT_RETENTION_DAYS", 30)),
 			AuditRetentionDays:           int(reader.nonNegative("AUDIT_RETENTION_DAYS", 180)),
 			StreamEventRetentionDays:     int(reader.nonNegative("STREAM_EVENT_RETENTION_DAYS", 7)),
+			TaskHistoryRetentionDays:     int(reader.nonNegative("TASK_HISTORY_RETENTION_DAYS", 90)),
 			OutboxMaxAttempts:            int(reader.positive("OUTBOX_MAX_ATTEMPTS", 10)),
 			OutboxBatchSize:              int(reader.positive("OUTBOX_BATCH_SIZE", 64)),
 			ReconcileIntervalSeconds:     int(reader.positive("RECONCILE_INTERVAL_SECONDS", 60)),
@@ -671,6 +684,8 @@ func LoadFrom(lookup Lookup) Config {
 		},
 		Connector: ConnectorConfig{
 			EncryptionKey:        value(lookup, "CONNECTOR_ENCRYPTION_KEY", ""),
+			EncryptionKeys:       value(lookup, "CONNECTOR_ENCRYPTION_KEYS", ""),
+			ActiveKeyID:          value(lookup, "CONNECTOR_ENCRYPTION_ACTIVE_KID", ""),
 			AllowPrivateNetworks: reader.boolean("CONNECTOR_ALLOW_PRIVATE_NETWORKS", false),
 			RequestTimeoutSec:    int(reader.positive("CONNECTOR_REQUEST_TIMEOUT_SECONDS", 30)),
 			MaxManifestBytes:     reader.positive("CONNECTOR_MAX_MANIFEST_BYTES", 2*1024*1024),

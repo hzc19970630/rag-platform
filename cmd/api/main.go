@@ -38,13 +38,15 @@ func main() {
 	// One registry is shared by HTTP middleware and the application services so
 	// the scrape endpoint and /ops/metrics report the same process counters.
 	metricsRegistry := observability.New()
-	r := httpapi.NewRouterWithMetrics(cfg, logger, metricsRegistry)
 	application, err := app.Open(cfg, metricsRegistry)
 	if err != nil {
 		logger.Error("application_bootstrap_failed", "error", err)
 		os.Exit(1)
 	}
 	defer application.Close()
+	// /readyz asks the live database and bucket rather than dialing TCP ports,
+	// so it must be built from the opened application.
+	r := httpapi.NewRouterWithReadiness(cfg, logger, metricsRegistry, application.Readiness)
 	httpapi.RegisterRoutes(r, cfg, httpapi.RouteDeps{
 		Identity: application.Identity, Authorization: application.Authorization, Limiter: application.Limiter,
 		KnowledgeBase: application.KnowledgeBase, Ingestion: application.Ingestion, Conversation: application.Conversation,
