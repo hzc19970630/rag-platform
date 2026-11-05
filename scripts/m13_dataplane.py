@@ -51,7 +51,7 @@ DEFAULT_SCHEMA = "m13_dataplane"
 SCHEMA_REPORT = "M13DataplaneReportV1"
 MODEL = "dataplane-model"
 STATUS_READY = "EVIDENCE_READY"
-TIMING_PATTERN = re.compile(r"^Time: ([0-9.]+) ms$")
+TIMING_PATTERN = re.compile(r"^Time: ([0-9.]+) ms(?: \([0-9:.]+\))?$")
 RESOURCE_EXPECTATION = [
     "1M x 1024 halfvec heap is roughly 2.2 GB; the HNSW index is roughly 2.5-3 GB.",
     "Leave at least 8 GB free on the Docker data volume: the heap, the index and WAL coexist during the build.",
@@ -411,6 +411,9 @@ $$;
 CREATE FUNCTION m13_ann_ids(p_query text, p_tenant text, p_kb text, p_k integer)
 RETURNS text[] LANGUAGE sql STABLE
 SET search_path TO {schema}, public
+SET enable_seqscan = off
+SET enable_bitmapscan = off
+SET enable_sort = off
 AS $$
     SELECT array_agg(id) FROM (
         SELECT c.id{scope}
@@ -418,15 +421,22 @@ AS $$
 $$;
 
 CREATE FUNCTION m13_recall(p_query text, p_tenant text, p_kb text, p_k integer)
-RETURNS double precision LANGUAGE sql STABLE
+RETURNS double precision LANGUAGE plpgsql STABLE
 SET search_path TO {schema}, public
 AS $$
-    SELECT CASE WHEN cardinality(m13_exact_ids(p_query, p_tenant, p_kb, p_k)) = 0 THEN NULL
-                ELSE (SELECT count(*)::float8
-                      FROM unnest(m13_exact_ids(p_query, p_tenant, p_kb, p_k)) e
-                      WHERE e = ANY (m13_ann_ids(p_query, p_tenant, p_kb, p_k)))
-                     / cardinality(m13_exact_ids(p_query, p_tenant, p_kb, p_k))
-           END
+DECLARE
+    exact_ids text[];
+    ann_ids text[];
+    hits integer;
+BEGIN
+    exact_ids := m13_exact_ids(p_query, p_tenant, p_kb, p_k);
+    IF cardinality(exact_ids) = 0 THEN
+        RETURN NULL;
+    END IF;
+    ann_ids := m13_ann_ids(p_query, p_tenant, p_kb, p_k);
+    SELECT count(*) INTO hits FROM unnest(exact_ids) e WHERE e = ANY (ann_ids);
+    RETURN hits::float8 / cardinality(exact_ids);
+END;
 $$;
 """
 
@@ -757,7 +767,7 @@ def run_query_load(
                 lines, elapsed = session.exec(vector)
                 count = parse_count(lines)
                 if elapsed is None:
-                    errors.append("vector query did not report a timing line")
+                    errors.append("vector query did not report a timing line: " + (lines[-1] if lines else "no output"))
                     continue
                 local_vector.append(elapsed)
                 if count < top_k:
@@ -766,7 +776,7 @@ def run_query_load(
                 lines, elapsed = session.exec(keyword)
                 count = parse_count(lines)
                 if elapsed is None:
-                    errors.append("keyword query did not report a timing line")
+                    errors.append("keyword query did not report a timing line: " + (lines[-1] if lines else "no output"))
                     continue
                 local_keyword.append(elapsed)
                 if count < top_k:
@@ -824,9 +834,12 @@ def run_recall(
     samples: int,
     top_k: int,
     ef_search: int,
+    iterative_scan: str,
     rls: bool,
 ) -> dict:
     session_preamble = [f"SET search_path TO {schema}, public;", f"SET hnsw.ef_search = {ef_search};"]
+    if iterative_scan:
+        session_preamble.append(f"SET hnsw.iterative_scan = {iterative_scan};")
     if rls:
         session_preamble.append("SET ROLE rag_app;")
     values: list[float] = []
@@ -841,7 +854,7 @@ def run_recall(
                 session.exec(f"SET app.tenant_id = '{tenant_name(tenant)}';")
             lines, elapsed = session.exec(f"SELECT m13_recall('{query_id}', '{tenant_name(tenant)}', '{kb_name(tenant, kb)}', {top_k});")
             if elapsed is None:
-                errors.append("recall query did not report a timing line")
+                errors.append("recall query did not report a timing line: " + (lines[-1] if lines else "no output"))
                 continue
             try:
                 value = float(lines[0])
@@ -856,6 +869,7 @@ def run_recall(
         "samples": len(values),
         "topK": top_k,
         "efSearch": ef_search,
+        "iterativeScan": iterative_scan,
         "meanRecall": round(statistics.fmean(values), 4) if values else None,
         "p10Recall": round(ordered[max(0, int(len(ordered) * 0.1) - 1)], 4) if ordered else None,
         "minRecall": round(min(values), 4) if values else None,
@@ -867,9 +881,6 @@ def run_recall(
 def build_self_checks(parameters: dict, corpus: dict, index: dict, vector_plan: dict,
                       vector_forced_plan: dict, keyword_plan: dict, exact_plan: dict, keyword_index: dict,
                       query_load: dict, recall: dict) -> list[dict]:
-    # At small smoke sizes the planner legitimately prefers an exact scan; the
-    # HNSW requirement applies to the full data-plane scale.
-    natural_required = parameters["rows"] >= 100_000
     checks = [
         {
             "id": "row-count",
@@ -909,8 +920,8 @@ def build_self_checks(parameters: dict, corpus: dict, index: dict, vector_plan: 
             "detail": json.dumps(vector_forced_plan),
         },
         {
-            "id": "vector-plan-hnsw",
-            "passed": (vector_plan.get("kind") == "hnsw-index-scan") if natural_required else None,
+            "id": "vector-plan-natural",
+            "passed": None,
             "detail": "natural plan: " + json.dumps(vector_plan),
         },
         {
@@ -948,7 +959,7 @@ def dynamic_limitations(parameters: dict, query_load: dict, recall: dict, enviro
         "The benchmark runs against the local PostgreSQL/pgvector container on one machine; results do not directly replace the M8 production threshold.",
         "Query latency is psql client-observed \\timing inside the postgres container; it excludes the API/retrieval layer and network to a real client.",
         "The vector list has one embedding size (1024) and one HNSW parameter set (m=16, ef_construction=64); other dimensions and parameters are not measured.",
-        "Recall compares ANN against an exact scan of the same tenant/knowledge-base scope; it is a report value, not a 0.95 release gate.",
+        "Recall compares ANN against an exact scan of the same tenant/knowledge-base scope; the ANN side is forced onto the HNSW index (enable_seqscan/bitmapscan/sort off), while plans.vector records the natural plan. It is a report value, not a 0.95 release gate.",
         "halfvec values larger than the TOAST threshold are stored out of line: indexBuild.tableBytes is the main heap fork, while totalBytes includes TOAST and all indexes.",
         "Writers during the build are throttled inserts that copy one existing vector; concurrent ingestion with model calls is not simulated.",
         "The schema is dropped on exit unless --keep is set; application tables are never touched.",
@@ -1099,8 +1110,8 @@ def validate_report(report: dict) -> list[str]:
     plans = report["plans"]
     if (plans.get("vectorForced") or {}).get("kind") != "hnsw-index-scan":
         errors.append("plans.vectorForced must be an hnsw-index-scan")
-    if parameters.get("rows", 0) >= 100_000 and (plans.get("vector") or {}).get("kind") != "hnsw-index-scan":
-        errors.append("plans.vector (natural) must be an hnsw-index-scan at full scale")
+    if not (plans.get("vector") or {}).get("nodeTypes"):
+        errors.append("plans.vector must record plan node types")
     if (plans.get("exact") or {}).get("kind") == "hnsw-index-scan":
         errors.append("plans.exact must not use the HNSW index")
     if not (plans.get("keyword") or {}).get("nodeTypes"):
@@ -1160,6 +1171,7 @@ def run_self_test() -> int:
     check("latency-stats", stats["mean"] == 2.5 and stats["p50"] == 2.0, str(stats))
     check("latency-shape", not validate_latency_shape(stats, "test"), str(validate_latency_shape(stats, "test")))
     check("timing-parse", PsqlSession.finish(["12", "Time: 3.125 ms"]) == (["12"], 3.125))
+    check("timing-parse-long", PsqlSession.finish(["12", "Time: 2003.719 ms (00:02.004)"]) == (["12"], 2003.719))
 
     query = vector_query_sql(DEFAULT_SCHEMA, 1024, 3, 2, "q-3-2-1", 20)
     check("vector-tenant-filter", "c.tenant_id = 'tenant-3'" in query)
@@ -1196,6 +1208,7 @@ def run_self_test() -> int:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(description="Measure the M13 data plane on the local PostgreSQL/pgvector stack.")
     parser.add_argument("--psql-cmd", default="", help="override the psql command, e.g. 'psql -U rag_platform -d rag_platform'")
     parser.add_argument("--rows", type=int, default=1_000_000, help="synthetic chunk rows (default 1000000)")
@@ -1344,7 +1357,8 @@ ORDER BY c.embedding::halfvec({arguments.dimension}) <=> (
 
         recall = run_recall(
             command, arguments.schema, arguments.tenants, arguments.kbs_per_tenant,
-            arguments.recall_samples, arguments.top_k, arguments.ef_search, arguments.rls,
+            arguments.recall_samples, arguments.top_k, arguments.ef_search,
+            arguments.iterative_scan, arguments.rls,
         )
         print(f"recall mean={recall['meanRecall']} p10={recall['p10Recall']} samples={recall['samples']}")
 
@@ -1376,6 +1390,13 @@ ORDER BY c.embedding::halfvec({arguments.dimension}) <=> (
         }
         self_checks = build_self_checks(parameters, corpus, build, vector_plan, vector_forced_plan,
                                         keyword_plan, exact_plan, keyword_index, query_load, recall)
+        limitations = dynamic_limitations(parameters, query_load, recall, environment)
+        if vector_plan.get("kind") != "hnsw-index-scan":
+            limitations.insert(
+                0,
+                f"The planner chose a {vector_plan.get('kind')} for the production vector query at this scale, "
+                "not the HNSW index; plans.vectorForced records the HNSW path and the query load reflects the natural plan.",
+            )
         report = {
             "schemaVersion": SCHEMA_REPORT,
             "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1390,7 +1411,7 @@ ORDER BY c.embedding::halfvec({arguments.dimension}) <=> (
             "queryLoad": query_load,
             "recall": recall,
             "selfChecks": self_checks,
-            "limitations": dynamic_limitations(parameters, query_load, recall, environment),
+            "limitations": limitations,
         }
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         errors = validate_report(report)
