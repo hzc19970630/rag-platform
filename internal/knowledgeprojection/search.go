@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/search"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/vecutil"
 	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/example/rag-platform/internal/status"
@@ -128,7 +129,7 @@ func (s *Service) Search(ctx context.Context, principal authz.Principal, options
 		versionIDs = append(versionIDs, candidate.hit.VersionID)
 	}
 	var rows []models.WikiPageSource
-	if err := s.db.WithContext(ctx).Where("wiki_page_version_id IN ?", versionIDs).Order("wiki_page_version_id, chunk_id").Find(&rows).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("wiki_page_version_id IN ?", versionIDs).Order("wiki_page_version_id, chunk_id").Find(&rows).Error; err != nil {
 		return SearchResult{}, err
 	}
 	sourcesByVersion := map[string][]models.WikiPageSource{}
@@ -140,7 +141,7 @@ func (s *Service) Search(ctx context.Context, principal authz.Principal, options
 	for _, candidate := range candidates {
 		sources := sourcesByVersion[candidate.hit.VersionID]
 		if len(sources) == 0 {
-			s.invalidatePage(ctx, candidate.hit.PageID)
+			s.invalidatePage(ctx, principal.TenantID, candidate.hit.PageID)
 			continue
 		}
 		valid, err := s.validSourceChunks(ctx, sources)
@@ -148,7 +149,7 @@ func (s *Service) Search(ctx context.Context, principal authz.Principal, options
 			return SearchResult{}, err
 		}
 		if len(valid) != len(sources) {
-			s.invalidatePage(ctx, candidate.hit.PageID)
+			s.invalidatePage(ctx, principal.TenantID, candidate.hit.PageID)
 			continue
 		}
 		refs := make([]authz.ResourceRef, 0, len(sources))

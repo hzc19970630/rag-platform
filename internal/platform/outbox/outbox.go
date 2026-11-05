@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -106,7 +107,10 @@ func (p *Publisher) PublishPending(ctx context.Context) error {
 func (p *Publisher) claimBatch(ctx context.Context) ([]models.OutboxEvent, error) {
 	var events []models.OutboxEvent
 	now := time.Now()
-	err := p.options.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	// The outbox is a deployment-wide fan-out: one publisher drains every
+	// tenant's events by design.
+	base := tenantdb.Unscoped(p.options.DB.WithContext(ctx), "outbox publisher: drain events across tenants")
+	err := base.Transaction(func(tx *gorm.DB) error {
 		args := append([]any{}, p.options.FilterArgs...)
 		args = append(args, p.options.MaxAttempts, now)
 		query := tx.Where(p.options.Filter+` AND published_at IS NULL AND attempts < ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?)`, args...)
@@ -143,11 +147,12 @@ func (p *Publisher) publishBatch(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	now := time.Now()
+	base := tenantdb.Unscoped(p.options.DB.WithContext(ctx), "outbox publisher: drain events across tenants")
 	publishedIDs := make([]uint64, 0, len(events))
 	for _, event := range events {
 		task, decodeErr := p.options.Decode([]byte(event.Payload))
 		if decodeErr != nil {
-			if markErr := p.options.DB.WithContext(ctx).Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{
+			if markErr := base.Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{
 				"attempts": p.options.MaxAttempts, "last_error": "malformed payload: " + decodeErr.Error(),
 			}).Error; markErr != nil {
 				return len(publishedIDs), fmt.Errorf("%s: park malformed event %d: %w", p.options.Label, event.ID, markErr)
@@ -158,7 +163,7 @@ func (p *Publisher) publishBatch(ctx context.Context) (int, error) {
 			attempts := event.Attempts + 1
 			backoff := time.Duration(1<<min(attempts, 6)) * time.Second
 			next := now.Add(backoff)
-			if markErr := p.options.DB.WithContext(ctx).Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{
+			if markErr := base.Model(&models.OutboxEvent{}).Where("id = ?", event.ID).Updates(map[string]any{
 				"attempts": attempts, "next_attempt_at": &next, "last_error": publishErr.Error(),
 			}).Error; markErr != nil {
 				return len(publishedIDs), fmt.Errorf("%s: record failure for event %d: %w", p.options.Label, event.ID, markErr)
@@ -168,7 +173,7 @@ func (p *Publisher) publishBatch(ctx context.Context) (int, error) {
 		publishedIDs = append(publishedIDs, event.ID)
 	}
 	if len(publishedIDs) > 0 {
-		if err := p.options.DB.WithContext(ctx).Model(&models.OutboxEvent{}).Where("id IN ?", publishedIDs).Updates(map[string]any{
+		if err := base.Model(&models.OutboxEvent{}).Where("id IN ?", publishedIDs).Updates(map[string]any{
 			"published_at": &now, "attempts": gorm.Expr("attempts + 1"), "last_error": "", "next_attempt_at": nil,
 		}).Error; err != nil {
 			return len(publishedIDs), fmt.Errorf("%s: mark published: %w", p.options.Label, err)

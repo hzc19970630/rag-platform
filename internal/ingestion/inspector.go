@@ -12,6 +12,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -67,27 +68,18 @@ func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, 
 	}
 	if stageFound {
 		var pipeline models.PipelineRun
-		if err := i.db.WithContext(ctx).First(&pipeline, "id = ?", stage.PipelineRunID).Error; err == nil {
-			if pipeline.TenantID != principal.TenantID {
-				return TaskInspection{}, apperror.ErrNotFound
-			}
+		if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).First(&pipeline, "id = ?", stage.PipelineRunID).Error; err == nil {
 			inspection.Pipeline = &pipeline
 		}
 	}
 	var event models.OutboxEvent
-	if err := i.db.WithContext(ctx).Where("idempotency_key = ?", idempotencyKey).First(&event).Error; err == nil {
-		if event.TenantID != principal.TenantID {
-			return TaskInspection{}, apperror.ErrNotFound
-		}
+	if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).Where("idempotency_key = ?", idempotencyKey).First(&event).Error; err == nil {
 		inspection.Outbox = append(inspection.Outbox, event)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return TaskInspection{}, fmt.Errorf("load task outbox event: %w", err)
 	}
 	var dead models.TaskDeadLetter
-	if err := i.db.WithContext(ctx).Where("idempotency_key = ?", idempotencyKey).First(&dead).Error; err == nil {
-		if dead.TenantID != principal.TenantID {
-			return TaskInspection{}, apperror.ErrNotFound
-		}
+	if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).Where("idempotency_key = ?", idempotencyKey).First(&dead).Error; err == nil {
 		inspection.DeadLetter = &dead
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return TaskInspection{}, fmt.Errorf("load task dead letter: %w", err)
@@ -256,11 +248,12 @@ func (i *TaskInspector) CancelPipeline(ctx context.Context, principal authz.Prin
 		}
 		return fmt.Errorf("load pipeline: %w", err)
 	}
-	if err := i.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := tenantdb.InTx(ctx, i.db, principal.TenantID, func(tx *gorm.DB) error {
 		if err := cancelStages(tx, pipeline.ID, "cancelled by operator"); err != nil {
 			return err
 		}
-		return tx.Model(&pipeline).Updates(map[string]any{"status": StatusCancelled, "error_code": "cancelled", "error_message": "cancelled by operator", "updated_at": time.Now()}).Error
+		return tenantdb.MustScoped(tx, principal.TenantID).Model(&models.PipelineRun{}).Where("id = ?", pipeline.ID).
+			Updates(map[string]any{"status": StatusCancelled, "error_code": "cancelled", "error_message": "cancelled by operator", "updated_at": time.Now()}).Error
 	}); err != nil {
 		return fmt.Errorf("cancel pipeline: %w", err)
 	}

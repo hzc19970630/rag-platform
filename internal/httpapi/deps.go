@@ -14,6 +14,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/queue"
 	"github.com/example/rag-platform/internal/platform/ratelimit"
 	"github.com/example/rag-platform/internal/retrieval"
+	"gorm.io/gorm"
 )
 
 // Each resource handler receives only the services it calls. The transport
@@ -61,6 +62,9 @@ type MiddlewareDeps struct {
 	Identity      *identity.Service
 	Authorization *authz.Service
 	Limiter       *ratelimit.Limiter
+	// DB is the runtime handle used to open the per-request tenant transaction.
+	// Nil keeps the middleware single-statement behavior (tests, SQLite).
+	DB *gorm.DB
 }
 
 // RouteDeps is the full wiring surface passed to RegisterRoutes. It is built
@@ -69,6 +73,7 @@ type RouteDeps struct {
 	Identity      *identity.Service
 	Authorization *authz.Service
 	Limiter       *ratelimit.Limiter
+	DB            *gorm.DB
 	KnowledgeBase *knowledgebase.Service
 	Ingestion     *ingestion.Service
 	Conversation  *conversation.Service

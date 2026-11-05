@@ -11,6 +11,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 )
@@ -25,14 +26,16 @@ func (s *Service) ReplayEvents(ctx context.Context, principal authz.Principal, r
 		return nil, apperror.Invalidf("request id is required")
 	}
 	var message models.Message
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND request_id = ?", principal.TenantID, principal.SubjectID, requestID).First(&message).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("user_id = ? AND request_id = ?", principal.SubjectID, requestID).First(&message).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apperror.ErrNotFound
 		}
 		return nil, fmt.Errorf("load request messages: %w", err)
 	}
 	var rows []models.StreamEvent
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND request_id = ? AND sequence > ?", principal.TenantID, principal.SubjectID, requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("user_id = ? AND request_id = ? AND sequence > ?", principal.SubjectID, requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load stream events: %w", err)
 	}
 	events := make([]Event, 0, len(rows))
@@ -58,7 +61,7 @@ func (s *Service) PurgeStreamEvents(ctx context.Context, before time.Time, limit
 	if limit <= 0 {
 		limit = 1000
 	}
-	result := s.db.WithContext(ctx).Exec(`
+	result := tenantdb.Unscoped(s.db.WithContext(ctx), "retention: purge expired stream events across tenants").Exec(`
 		DELETE FROM stream_events
 		WHERE id IN (
 			SELECT id FROM stream_events WHERE created_at < ? ORDER BY created_at, id LIMIT ?
@@ -74,11 +77,18 @@ func (s *Service) PurgeStreamEvents(ctx context.Context, before time.Time, limit
 
 func (s *Service) appendEvent(ctx context.Context, requestID, tenantID, userID string, sequence *int, eventType string, data map[string]any, emit Emitter) error {
 	*sequence++
+	return s.appendEventAt(ctx, requestID, tenantID, userID, *sequence, eventType, data, emit)
+}
+
+// appendEventAt persists one event at an explicit sequence. Async runs
+// allocate the sequence from answer_jobs, so the API's pre-flight events and
+// the worker's events share one counter even across processes.
+func (s *Service) appendEventAt(ctx context.Context, requestID, tenantID, userID string, sequence int, eventType string, data map[string]any, emit Emitter) error {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal stream event: %w", err)
 	}
-	row := models.StreamEvent{RequestID: requestID, TenantID: tenantID, UserID: userID, Sequence: *sequence, EventType: eventType, Payload: string(payload)}
+	row := models.StreamEvent{RequestID: requestID, TenantID: tenantID, UserID: userID, Sequence: sequence, EventType: eventType, Payload: string(payload)}
 	// Events are persisted before they are emitted so a reconnect can replay
 	// them. The client may already be gone (ctx canceled); that must not stop
 	// the terminal events from being recorded.
@@ -90,7 +100,7 @@ func (s *Service) appendEvent(ctx context.Context, requestID, tenantID, userID s
 	if emit == nil {
 		return nil
 	}
-	return emit(Event{EventID: eventID(requestID, *sequence), RequestID: requestID, Sequence: *sequence, Type: eventType, Data: data})
+	return emit(Event{EventID: eventID(requestID, sequence), RequestID: requestID, Sequence: sequence, Type: eventType, Data: data})
 }
 
 func eventID(requestID string, sequence int) string {
@@ -127,9 +137,10 @@ func (s *Service) persistCitations(ctx context.Context, messageID string, princi
 	return nil
 }
 
-func (s *Service) loadCitations(ctx context.Context, messageID string) ([]CitationView, error) {
+func (s *Service) loadCitations(ctx context.Context, tenantID, messageID string) ([]CitationView, error) {
 	var rows []models.MessageCitation
-	if err := s.db.WithContext(ctx).Where("message_id = ?", messageID).Order("citation_index").Find(&rows).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).
+		Where("message_id = ?", messageID).Order("citation_index").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load citations: %w", err)
 	}
 	views := make([]CitationView, 0, len(rows))
@@ -152,16 +163,16 @@ func (s *Service) loadCitations(ctx context.Context, messageID string) ([]Citati
 // ReplayEvents: tenant + user + conversation, not the global request id alone.
 func (s *Service) loadAnswer(ctx context.Context, principal authz.Principal, conversationID, requestID string) (AnswerResult, bool, error) {
 	var message models.Message
-	if err := s.db.WithContext(ctx).
-		Where("tenant_id = ? AND user_id = ? AND conversation_id = ? AND request_id = ? AND role = ?",
-			principal.TenantID, principal.SubjectID, conversationID, requestID, MessageRoleAssistant).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("user_id = ? AND conversation_id = ? AND request_id = ? AND role = ?",
+			principal.SubjectID, conversationID, requestID, MessageRoleAssistant).
 		First(&message).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return AnswerResult{}, false, nil
 		}
 		return AnswerResult{}, false, fmt.Errorf("load recorded answer: %w", err)
 	}
-	citations, err := s.loadCitations(ctx, message.ID)
+	citations, err := s.loadCitations(ctx, principal.TenantID, message.ID)
 	if err != nil {
 		return AnswerResult{}, false, err
 	}

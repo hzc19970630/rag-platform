@@ -9,6 +9,7 @@ import (
 
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
@@ -51,30 +52,29 @@ func (s *Service) reconcile(ctx context.Context, tenantID string, staleAfter tim
 	report := ReconcileReport{}
 	now := time.Now()
 	cutoff := now.Add(-staleAfter)
-
-	documents, err := s.repairDocumentStatuses(ctx, tenantID, now)
+	documents, err := s.repairDocumentStatuses(ctx, s.reconcileBase(ctx, tenantID), tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.DocumentsRepaired = documents
-	versions, err := s.repairVersionStatuses(ctx, tenantID, now)
+	versions, err := s.repairVersionStatuses(ctx, s.reconcileBase(ctx, tenantID), tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.VersionsRepaired = versions
 
-	inboxes, err := s.expireInboxLeases(ctx, tenantID, now)
+	inboxes, err := s.expireInboxLeases(ctx, s.reconcileBase(ctx, tenantID), tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.InboxesExpired = inboxes
-	deadLetters, err := s.resolveRecoveredDeadLetters(ctx, tenantID, now)
+	deadLetters, err := s.resolveRecoveredDeadLetters(ctx, s.reconcileBase(ctx, tenantID), tenantID, now)
 	if err != nil {
 		return report, err
 	}
 	report.DeadLettersResolved = deadLetters
 
-	requeued, cancelled, err := s.requeueStaleStages(ctx, tenantID, cutoff)
+	requeued, cancelled, err := s.requeueStaleStages(ctx, s.reconcileBase(ctx, tenantID), tenantID, cutoff)
 	if err != nil {
 		return report, err
 	}
@@ -83,7 +83,17 @@ func (s *Service) reconcile(ctx context.Context, tenantID string, staleAfter tim
 	return report, nil
 }
 
-func (s *Service) repairDocumentStatuses(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+// reconcileBase returns the session for one sweep step. The all-tenant pass is
+// the only unscoped sweep; the per-tenant pass scopes every by-tenant query.
+func (s *Service) reconcileBase(ctx context.Context, tenantID string) *gorm.DB {
+	base := s.db.WithContext(ctx)
+	if tenantID == "" {
+		return tenantdb.Unscoped(base, "reconcile-all-tenants")
+	}
+	return base
+}
+
+func (s *Service) repairDocumentStatuses(ctx context.Context, base *gorm.DB, tenantID string, now time.Time) (int64, error) {
 	tenantFilter := ""
 	args := []any{status.EvidenceReady, now}
 	if tenantID != "" {
@@ -91,7 +101,7 @@ func (s *Service) repairDocumentStatuses(ctx context.Context, tenantID string, n
 		args = append(args, tenantID)
 	}
 	args = append(args, status.EvidenceReady, status.EvidenceReady)
-	result := s.db.WithContext(ctx).Exec(`
+	result := base.WithContext(ctx).Exec(`
 UPDATE documents
 SET status = ?, updated_at = ?
 WHERE documents.deleted_at IS NULL
@@ -101,6 +111,7 @@ WHERE documents.deleted_at IS NULL
   AND EXISTS (
       SELECT 1 FROM evidence_packages p
       WHERE p.document_version_id = documents.latest_version_id AND p.status = ?
+        AND p.tenant_id = documents.tenant_id
   )`, args...)
 	if result.Error != nil {
 		return 0, fmt.Errorf("repair document status: %w", result.Error)
@@ -108,7 +119,7 @@ WHERE documents.deleted_at IS NULL
 	return result.RowsAffected, nil
 }
 
-func (s *Service) repairVersionStatuses(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+func (s *Service) repairVersionStatuses(ctx context.Context, base *gorm.DB, tenantID string, now time.Time) (int64, error) {
 	tenantFilter := ""
 	args := []any{status.EvidenceReady, now, status.EvidenceReady}
 	if tenantID != "" {
@@ -116,13 +127,14 @@ func (s *Service) repairVersionStatuses(ctx context.Context, tenantID string, no
 		args = append(args, tenantID)
 	}
 	args = append(args, status.EvidenceReady)
-	result := s.db.WithContext(ctx).Exec(`
+	result := base.WithContext(ctx).Exec(`
 UPDATE document_versions
 SET status = ?, error_code = '', error_message = '', updated_at = ?
 WHERE document_versions.status <> ? `+tenantFilter+`
   AND EXISTS (
       SELECT 1 FROM evidence_packages p
       WHERE p.document_version_id = document_versions.id AND p.status = ?
+        AND p.tenant_id = document_versions.tenant_id
   )`, args...)
 	if result.Error != nil {
 		return 0, fmt.Errorf("repair version status: %w", result.Error)
@@ -133,8 +145,8 @@ WHERE document_versions.status <> ? `+tenantFilter+`
 // expireInboxLeases reclaims only rows whose lease actually expired. Row age
 // (updated_at) is not evidence of a dead worker: a live worker keeps renewing
 // lease_until, and a task with an old updated_at may still be heartbeating.
-func (s *Service) expireInboxLeases(ctx context.Context, tenantID string, now time.Time) (int64, error) {
-	query := s.db.WithContext(ctx).Model(&models.TaskInbox{}).
+func (s *Service) expireInboxLeases(ctx context.Context, base *gorm.DB, tenantID string, now time.Time) (int64, error) {
+	query := base.WithContext(ctx).Model(&models.TaskInbox{}).
 		Where("status = ? AND lease_until IS NOT NULL AND lease_until <= ?", inboxProcessing, now)
 	if tenantID != "" {
 		query = query.Where(`(EXISTS (
@@ -157,14 +169,14 @@ func (s *Service) expireInboxLeases(ctx context.Context, tenantID string, now ti
 	return result.RowsAffected, nil
 }
 
-func (s *Service) resolveRecoveredDeadLetters(ctx context.Context, tenantID string, now time.Time) (int64, error) {
+func (s *Service) resolveRecoveredDeadLetters(ctx context.Context, base *gorm.DB, tenantID string, now time.Time) (int64, error) {
 	tenantFilter := ""
 	args := []any{now, now}
 	if tenantID != "" {
 		tenantFilter = "AND task_dead_letters.tenant_id = ?"
 		args = append(args, tenantID)
 	}
-	result := s.db.WithContext(ctx).Exec(`
+	result := base.WithContext(ctx).Exec(`
 UPDATE task_dead_letters
 SET status = 'RESOLVED', resolved_at = ?, updated_at = ?
 WHERE task_dead_letters.status IN ('PENDING', 'RETRYING') `+tenantFilter+`
@@ -178,8 +190,8 @@ WHERE task_dead_letters.status IN ('PENDING', 'RETRYING') `+tenantFilter+`
 	return result.RowsAffected, nil
 }
 
-func (s *Service) requeueStaleStages(ctx context.Context, tenantID string, cutoff time.Time) (int, int, error) {
-	query := s.db.WithContext(ctx).
+func (s *Service) requeueStaleStages(ctx context.Context, base *gorm.DB, tenantID string, cutoff time.Time) (int, int, error) {
+	query := base.WithContext(ctx).
 		Joins("JOIN pipeline_runs p ON p.id = stage_runs.pipeline_run_id").
 		Where("stage_runs.status IN ? AND stage_runs.updated_at < ? AND p.status NOT IN ?", []string{StagePending, StageProcessing}, cutoff, []string{StatusEvidenceReady, StatusFailed, StatusCancelled})
 	if tenantID != "" {
@@ -192,18 +204,22 @@ func (s *Service) requeueStaleStages(ctx context.Context, tenantID string, cutof
 	requeued, cancelled := 0, 0
 	for _, stage := range stages {
 		var pipeline models.PipelineRun
-		if err := s.db.WithContext(ctx).First(&pipeline, "id = ?", stage.PipelineRunID).Error; err != nil {
+		pipelineQuery := base.WithContext(ctx)
+		if tenantID != "" {
+			pipelineQuery = tenantdb.MustScoped(pipelineQuery, tenantID)
+		}
+		if err := pipelineQuery.First(&pipeline, "id = ?", stage.PipelineRunID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				continue
 			}
 			return requeued, cancelled, err
 		}
 		var version models.DocumentVersion
-		if err := s.db.WithContext(ctx).First(&version, "id = ?", pipeline.DocumentVersionID).Error; err != nil {
+		if err := tenantdb.MustScoped(base.WithContext(ctx), pipeline.TenantID).First(&version, "id = ?", pipeline.DocumentVersionID).Error; err != nil {
 			return requeued, cancelled, fmt.Errorf("load stage version: %w", err)
 		}
 		var document models.Document
-		if err := s.db.WithContext(ctx).First(&document, "id = ?", version.DocumentID).Error; err != nil {
+		if err := tenantdb.MustScoped(base.WithContext(ctx), pipeline.TenantID).First(&document, "id = ?", version.DocumentID).Error; err != nil {
 			return requeued, cancelled, fmt.Errorf("load stage document: %w", err)
 		}
 		if document.DeletedAt != nil || document.LatestVersionID != version.ID {
@@ -211,7 +227,7 @@ func (s *Service) requeueStaleStages(ctx context.Context, tenantID string, cutof
 				if err := cancelStages(tx, pipeline.ID, "superseded"); err != nil {
 					return err
 				}
-				return tx.Model(&models.PipelineRun{}).Where("id = ? AND status NOT IN ?", pipeline.ID, []string{StatusEvidenceReady, StatusFailed, StatusCancelled}).
+				return tenantdb.MustScoped(tx, pipeline.TenantID).Model(&models.PipelineRun{}).Where("id = ? AND status NOT IN ?", pipeline.ID, []string{StatusEvidenceReady, StatusFailed, StatusCancelled}).
 					Updates(map[string]any{"status": StatusCancelled, "error_code": "superseded", "error_message": "document deleted or version superseded", "updated_at": time.Now()}).Error
 			}); err != nil {
 				return requeued, cancelled, err

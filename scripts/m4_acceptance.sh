@@ -261,7 +261,8 @@ revision_after="$(psql_value "SELECT COALESCE((SELECT revision FROM authorizatio
 
 search "$viewer_token" "$marker" "kb-dev" 403 "$tmp_dir/viewer-revoked.json"
 request GET /api/v1/me 200 "$tmp_dir/viewer-me-revoked.json" -H "Authorization: Bearer $viewer_token"
-assert_json "$tmp_dir/viewer-me-revoked.json" '"kb-dev" not in data["scope"]["knowledgeBaseIds"]'
+# An empty scope serializes as null, so the negative assertion must be null-safe.
+assert_json "$tmp_dir/viewer-me-revoked.json" 'not data["scope"]["knowledgeBaseIds"] or "kb-dev" not in data["scope"]["knowledgeBaseIds"]'
 
 request POST /api/v1/knowledge-bases/kb-dev/members 201 "$tmp_dir/readd-viewer.json" \
   -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \

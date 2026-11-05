@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"gorm.io/gorm"
 )
 
 type fakeChannel struct {
@@ -37,6 +42,50 @@ func (f fixedFusion) Fuse(channels map[string][]Hit, _ Params) []Candidate {
 	}
 	SortCandidates(result)
 	return result
+}
+
+// probeChannel records how many channels execute at the same time.
+type probeChannel struct {
+	name    string
+	current *atomic.Int32
+	peak    *atomic.Int32
+}
+
+func (c probeChannel) Name() string { return c.name }
+
+func (c probeChannel) Recall(context.Context, RecallRequest, Params) ([]Hit, error) {
+	active := c.current.Add(1)
+	defer c.current.Add(-1)
+	for {
+		observed := c.peak.Load()
+		if active <= observed || c.peak.CompareAndSwap(observed, active) {
+			break
+		}
+	}
+	time.Sleep(20 * time.Millisecond)
+	return []Hit{{ChunkID: c.name, Score: 1}}, nil
+}
+
+func TestPlanExecutorSerializesChannelsWithRequestTransaction(t *testing.T) {
+	run := func(ctx context.Context) int32 {
+		var current, peak atomic.Int32
+		executor := NewPlanExecutor([]RecallChannel{
+			probeChannel{name: ChannelKeyword, current: &current, peak: &peak},
+			probeChannel{name: ChannelVector, current: &current, peak: &peak},
+		}, nil)
+		plan := QueryPlan{Channels: []string{ChannelKeyword, ChannelVector}}
+		if _, err := executor.Execute(ctx, plan, Params{RRFK: 60}, RecallRequest{Query: "q", TenantID: "t"}); err != nil {
+			t.Fatalf("execute: %v", err)
+		}
+		return peak.Load()
+	}
+
+	if peak := run(context.Background()); peak < 2 {
+		t.Fatalf("channels did not overlap without a request transaction: peak=%d", peak)
+	}
+	if peak := run(tenantdb.WithTx(context.Background(), &gorm.DB{})); peak != 1 {
+		t.Fatalf("channels overlapped under a request transaction: peak=%d", peak)
+	}
 }
 
 func TestPlanExecutorRunsOnlyPlannedChannels(t *testing.T) {

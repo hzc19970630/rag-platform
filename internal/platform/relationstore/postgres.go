@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/relationstore"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
@@ -385,12 +386,12 @@ func (s *Store) UpdateReview(ctx context.Context, snapshotID string, update rela
 		}).Error
 }
 
-func (s *Store) Approve(ctx context.Context, snapshotID, knowledgeBaseID string, update relationstore.ReviewUpdate) error {
+func (s *Store) Approve(ctx context.Context, tenantID, snapshotID, knowledgeBaseID string, update relationstore.ReviewUpdate) error {
 	now := update.At
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Model(&models.GraphSnapshot{}).
 			Where("knowledge_base_id = ? AND status = ? AND id <> ?", knowledgeBaseID, models.GraphSnapshotActive, snapshotID).
 			Updates(map[string]any{"status": models.GraphSnapshotSuperseded, "updated_at": now}).Error; err != nil {

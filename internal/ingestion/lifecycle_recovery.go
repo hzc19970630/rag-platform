@@ -10,13 +10,14 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	pipelineruntime "github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
 // lifecycle_recovery.go owns this slice of the service. Behavior and external contracts are
 // unchanged; the split only narrows each file's responsibility.
 
-func (s *Service) readyPackages(ctx context.Context, versions []models.DocumentVersion) (map[string]bool, error) {
+func (s *Service) readyPackages(ctx context.Context, tenantID string, versions []models.DocumentVersion) (map[string]bool, error) {
 	ready := map[string]bool{}
 	ids := make([]string, 0, len(versions))
 	for _, version := range versions {
@@ -29,7 +30,7 @@ func (s *Service) readyPackages(ctx context.Context, versions []models.DocumentV
 	// restorable: rollback reactivates the existing chunks instead of
 	// re-embedding them.
 	var packages []models.EvidencePackage
-	if err := s.db.WithContext(ctx).Where("document_version_id IN ? AND status IN ?", ids, []string{StatusEvidenceReady, StatusStale}).Find(&packages).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("document_version_id IN ? AND status IN ?", ids, []string{StatusEvidenceReady, StatusStale}).Find(&packages).Error; err != nil {
 		return nil, fmt.Errorf("load evidence packages: %w", err)
 	}
 	for _, pkg := range packages {
@@ -38,12 +39,12 @@ func (s *Service) readyPackages(ctx context.Context, versions []models.DocumentV
 	return ready, nil
 }
 
-func (s *Service) versionReady(ctx context.Context, version models.DocumentVersion) (bool, error) {
+func (s *Service) versionReady(ctx context.Context, tenantID string, version models.DocumentVersion) (bool, error) {
 	if version.Status == StatusEvidenceReady {
 		return true, nil
 	}
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&models.EvidencePackage{}).Where("document_version_id = ? AND status IN ?", version.ID, []string{StatusEvidenceReady, StatusStale}).Count(&count).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.EvidencePackage{}).Where("document_version_id = ? AND status IN ?", version.ID, []string{StatusEvidenceReady, StatusStale}).Count(&count).Error; err != nil {
 		return false, fmt.Errorf("check evidence package: %w", err)
 	}
 	return count > 0, nil
@@ -80,7 +81,7 @@ func restartTargetStage(stages []models.StageRun) string {
 // only its stale cancelled records are settled.
 func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principal authz.Principal, pipelineID string) (bool, error) {
 	var pipeline models.PipelineRun
-	if err := s.db.WithContext(ctx).First(&pipeline, "id = ?", pipelineID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&pipeline, "id = ?", pipelineID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return false, nil
 		}
@@ -90,17 +91,17 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 		return false, nil
 	}
 	var document models.Document
-	if err := s.db.WithContext(ctx).First(&document, "id = ?", pipeline.DocumentID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&document, "id = ?", pipeline.DocumentID).Error; err != nil {
 		return false, fmt.Errorf("load document for pipeline restart: %w", err)
 	}
-	if document.DeletedAt != nil || document.TenantID != principal.TenantID || document.LatestVersionID != pipeline.DocumentVersionID {
+	if document.DeletedAt != nil || document.LatestVersionID != pipeline.DocumentVersionID {
 		return false, nil
 	}
 	var version models.DocumentVersion
-	if err := s.db.WithContext(ctx).First(&version, "id = ?", pipeline.DocumentVersionID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&version, "id = ?", pipeline.DocumentVersionID).Error; err != nil {
 		return false, fmt.Errorf("load version for pipeline restart: %w", err)
 	}
-	ready, err := s.versionReady(ctx, version)
+	ready, err := s.versionReady(ctx, principal.TenantID, version)
 	if err != nil {
 		return false, err
 	}
@@ -122,7 +123,7 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 	// between the index transaction and its stage completion; settle the records
 	// instead of re-running work that already happened.
 	if ready {
-		err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 			for _, stage := range stageOrder {
 				current, ok := byStage[stage]
 				if !ok {
@@ -140,13 +141,13 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 					return err
 				}
 			}
-			if err := tx.Model(&models.PipelineRun{}).Where("id = ?", pipeline.ID).Updates(statusFields(StatusEvidenceReady, map[string]any{"updated_at": now})).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.PipelineRun{}).Where("id = ?", pipeline.ID).Updates(statusFields(StatusEvidenceReady, map[string]any{"updated_at": now})).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusEvidenceReady, map[string]any{"updated_at": now})).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusEvidenceReady, map[string]any{"updated_at": now})).Error; err != nil {
 				return err
 			}
-			return tx.Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{"status": StatusEvidenceReady, "updated_at": now}).Error
+			return tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{"status": StatusEvidenceReady, "updated_at": now}).Error
 		})
 		if err != nil {
 			return false, fmt.Errorf("finish restored pipeline: %w", err)
@@ -154,7 +155,7 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 		return true, nil
 	}
 	predecessor := StatusBeforeStage(target)
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		rewinding := false
 		for _, stage := range stageOrder {
 			if stage == target {
@@ -181,14 +182,14 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 			}
 		}
 		pipelineFields := statusFields(predecessor, map[string]any{"updated_at": now})
-		if err := tx.Model(&models.PipelineRun{}).Where("id = ?", pipeline.ID).Updates(pipelineFields).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.PipelineRun{}).Where("id = ?", pipeline.ID).Updates(pipelineFields).Error; err != nil {
 			return err
 		}
 		versionFields := statusFields(predecessor, map[string]any{"updated_at": now})
-		if err := tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(versionFields).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(versionFields).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{"status": StatusStored, "updated_at": now}).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{"status": StatusStored, "updated_at": now}).Error; err != nil {
 			return err
 		}
 		targetStage, ok := byStage[target]
@@ -214,9 +215,10 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 	return true, nil
 }
 
-func cancelOtherPipelines(tx *gorm.DB, documentID, keepVersionID string) error {
+func cancelOtherPipelines(tx *gorm.DB, tenantID, documentID, keepVersionID string) error {
 	now := time.Now()
-	return tx.Model(&models.PipelineRun{}).Where("document_id = ? AND document_version_id <> ? AND status NOT IN ?", documentID, keepVersionID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).
+	scoped := tenantdb.MustScoped(tx, tenantID)
+	return scoped.Model(&models.PipelineRun{}).Where("document_id = ? AND document_version_id <> ? AND status NOT IN ?", documentID, keepVersionID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).
 		Updates(map[string]any{"status": StatusCancelled, "error_code": "superseded", "error_message": "superseded by another version", "updated_at": now}).Error
 }
 
@@ -224,7 +226,8 @@ func cancelOtherPipelines(tx *gorm.DB, documentID, keepVersionID string) error {
 // means processing stopped before it was created. An empty result means the
 // pipeline already finished every stage.
 
-func cancelPendingOutbox(tx *gorm.DB, versionIDs []string) error {
+func cancelPendingOutbox(tx *gorm.DB, tenantID string, versionIDs []string) error {
 	now := time.Now()
-	return tx.Model(&models.OutboxEvent{}).Where("aggregate_id IN ? AND published_at IS NULL", versionIDs).Updates(map[string]any{"published_at": &now, "last_error": "cancelled"}).Error
+	scoped := tenantdb.MustScoped(tx, tenantID)
+	return scoped.Model(&models.OutboxEvent{}).Where("aggregate_id IN ? AND published_at IS NULL", versionIDs).Updates(map[string]any{"published_at": &now, "last_error": "cancelled"}).Error
 }

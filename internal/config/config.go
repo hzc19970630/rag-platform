@@ -30,6 +30,14 @@ type Config struct {
 	AppEnv               string
 	LogLevel             string
 	DatabaseURL          string
+	// MaintenanceDatabaseURL points at the BYPASSRLS maintenance role. The API
+	// uses it for pre-tenant authentication lookups, and in enforce mode the
+	// worker runs its cross-tenant jobs on it. Empty keeps DatabaseURL, which is
+	// only safe while RLS policies are permissive.
+	MaintenanceDatabaseURL string
+	// AdminDatabaseURL is the table-owner role for migrate, seed and embedctl.
+	// DDL and bulk maintenance must not depend on the runtime role's grants.
+	AdminDatabaseURL string
 	// Pool limits bound one process's share of PostgreSQL connections. They are
 	// applied after opening the database, not through the DSN.
 	DatabaseMaxOpenConns           int
@@ -56,6 +64,7 @@ type Config struct {
 	Chunk            ChunkConfig
 	Retrieval        RetrievalConfig
 	Chat             ChatConfig
+	Answer           AnswerConfig
 	Rerank           RerankConfig
 	Auth             AuthConfig
 	Limits           LimitsConfig
@@ -76,6 +85,11 @@ type Config struct {
 	// time. Validate surfaces it so a bad file fails startup instead of being
 	// silently replaced by code defaults.
 	ConfigError error
+	// TenantRLSMode selects how tenantdb marks the PostgreSQL session for
+	// row-level security: off skips the app.tenant_id GUC, shadow (default)
+	// sets it so triggers can audit writes, and enforce requires strict
+	// policies. Enforcement is a deployment decision; the default never blocks.
+	TenantRLSMode string
 }
 
 // RetrievalConfig is the global tier of retrieval parameters. The values are
@@ -164,6 +178,38 @@ type ChatConfig struct {
 	QueryRewriteEnabled bool
 	// QueryRewriteTimeoutSec bounds one rewrite call.
 	QueryRewriteTimeoutSec int
+}
+
+// AnswerConfig controls the async answer path: the API enqueues a job and tails
+// the persisted stream events instead of generating inside the HTTP request.
+type AnswerConfig struct {
+	// AsyncEnabled routes POST /sessions/:id/messages through the worker queue.
+	// False keeps the synchronous path as the rollback switch.
+	AsyncEnabled bool
+	// TailTimeoutSec bounds how long one HTTP request tails a job before it
+	// gives up and relies on replay after reconnect.
+	TailTimeoutSec int
+	// PollIntervalMS is the replay polling interval for an open tail.
+	PollIntervalMS int
+	// LeaseSeconds is how long a claimed job is reserved before the maintenance
+	// sweep treats the worker as lost.
+	LeaseSeconds int
+}
+
+func (c AnswerConfig) Validate() error {
+	if !c.AsyncEnabled {
+		return nil
+	}
+	if c.TailTimeoutSec <= 0 {
+		return fmt.Errorf("ANSWER_TAIL_TIMEOUT_SECONDS must be a positive integer")
+	}
+	if c.PollIntervalMS <= 0 {
+		return fmt.Errorf("ANSWER_ASYNC_POLL_INTERVAL_MS must be a positive integer")
+	}
+	if c.LeaseSeconds <= 0 {
+		return fmt.Errorf("ANSWER_ASYNC_LEASE_SECONDS must be a positive integer")
+	}
+	return nil
 }
 
 func (c ChatConfig) Validate(appEnv string) error {
@@ -301,6 +347,12 @@ type EmbeddingConfig struct {
 	// HealthURL is the provider liveness endpoint used by the model catalog.
 	// Empty derives it from BaseURL (/models); a non-empty value must be a URL.
 	HealthURL string
+	// IndexLockTimeoutSec bounds how long embedctl waits for locks while it
+	// builds the chunks HNSW index CONCURRENTLY. Zero disables the timeout.
+	IndexLockTimeoutSec int
+	// IndexStatementTimeoutSec bounds one CREATE INDEX CONCURRENTLY statement.
+	// Zero leaves it unlimited, which suits long builds on large tables.
+	IndexStatementTimeoutSec int
 }
 
 func (e EmbeddingConfig) Validate(appEnv string) error {
@@ -691,8 +743,13 @@ func LoadFrom(lookup Lookup) Config {
 			MaxManifestBytes:     reader.positive("CONNECTOR_MAX_MANIFEST_BYTES", 2*1024*1024),
 			DefaultRatePerSecond: reader.rate("CONNECTOR_REQUESTS_PER_SECOND", 2),
 		},
-		LogLevel:    value(lookup, "APP_LOG_LEVEL", "info"),
-		DatabaseURL: value(lookup, "DATABASE_URL", ""),
+		LogLevel:      value(lookup, "APP_LOG_LEVEL", "info"),
+		TenantRLSMode: value(lookup, "TENANT_RLS_MODE", "shadow"),
+		DatabaseURL:   value(lookup, "DATABASE_URL", ""),
+		// The role-split URLs have no default: an unset value means the process
+		// keeps running on DATABASE_URL, which only enforce mode rejects.
+		MaintenanceDatabaseURL: value(lookup, "MAINTENANCE_DATABASE_URL", ""),
+		AdminDatabaseURL:       value(lookup, "ADMIN_DATABASE_URL", ""),
 		// Pool limits keep one replica from exhausting PostgreSQL connections.
 		DatabaseMaxOpenConns:           int(reader.positive("DATABASE_MAX_OPEN_CONNS", 20)),
 		DatabaseMaxIdleConns:           int(reader.nonNegative("DATABASE_MAX_IDLE_CONNS", 10)),
@@ -729,6 +786,12 @@ func LoadFrom(lookup Lookup) Config {
 			QueryRewriteEnabled:    reader.boolean("CHAT_QUERY_REWRITE_ENABLED", true),
 			QueryRewriteTimeoutSec: int(reader.positive("CHAT_QUERY_REWRITE_TIMEOUT_SECONDS", 8)),
 		},
+		Answer: AnswerConfig{
+			AsyncEnabled:   reader.boolean("ANSWER_ASYNC_ENABLED", true),
+			TailTimeoutSec: int(reader.positive("ANSWER_TAIL_TIMEOUT_SECONDS", 180)),
+			PollIntervalMS: int(reader.positive("ANSWER_ASYNC_POLL_INTERVAL_MS", 250)),
+			LeaseSeconds:   int(reader.positive("ANSWER_ASYNC_LEASE_SECONDS", 300)),
+		},
 		Rerank: RerankConfig{
 			Source:     strings.ToLower(value(lookup, "RERANK_SOURCE", "none")),
 			BaseURL:    value(lookup, "RERANK_BASE_URL", value(lookup, "LLM_BASE_URL", "")),
@@ -747,6 +810,9 @@ func LoadFrom(lookup Lookup) Config {
 			BatchSize:  int(reader.positive("EMBEDDING_BATCH_SIZE", 32)),
 			TimeoutSec: int(reader.positive("EMBEDDING_TIMEOUT_SECONDS", 60)),
 			HealthURL:  value(lookup, "EMBEDDING_HEALTH_URL", ""),
+
+			IndexLockTimeoutSec:      int(reader.nonNegative("EMBED_INDEX_LOCK_TIMEOUT_SECONDS", 10)),
+			IndexStatementTimeoutSec: int(reader.nonNegative("EMBED_INDEX_STATEMENT_TIMEOUT_SECONDS", 0)),
 		},
 		Chunk: ChunkConfig{
 			Size:    int(reader.nonNegative("CHUNK_SIZE", 900)),
@@ -806,6 +872,36 @@ func (c Config) Validate(component string) error {
 	if c.ConfigError != nil {
 		return c.ConfigError
 	}
+	switch strings.ToLower(strings.TrimSpace(c.TenantRLSMode)) {
+	case "off", "shadow", "enforce":
+	default:
+		return fmt.Errorf("TENANT_RLS_MODE must be one of off, shadow, enforce")
+	}
+	if strings.EqualFold(strings.TrimSpace(c.TenantRLSMode), "enforce") {
+		switch component {
+		case "api", "worker":
+			if strings.TrimSpace(c.MaintenanceDatabaseURL) == "" {
+				return fmt.Errorf("MAINTENANCE_DATABASE_URL is required for %s when TENANT_RLS_MODE=enforce", component)
+			}
+			role, err := databaseURLRole(c.DatabaseURL)
+			if err != nil {
+				return err
+			}
+			if role != "rag_app" {
+				return fmt.Errorf("DATABASE_URL must use the rag_app role when TENANT_RLS_MODE=enforce, got %q", role)
+			}
+			if _, err := databaseURLRole(c.MaintenanceDatabaseURL); err != nil {
+				return fmt.Errorf("MAINTENANCE_DATABASE_URL: %w", err)
+			}
+		case "migrate", "seed", "embedctl":
+			if strings.TrimSpace(c.AdminDatabaseURL) == "" {
+				return fmt.Errorf("ADMIN_DATABASE_URL is required for %s when TENANT_RLS_MODE=enforce", component)
+			}
+			if _, err := databaseURLRole(c.AdminDatabaseURL); err != nil {
+				return fmt.Errorf("ADMIN_DATABASE_URL: %w", err)
+			}
+		}
+	}
 	// Pool limits apply to every process that opens the database, so validate
 	// them before the component split.
 	if c.DatabaseMaxOpenConns <= 0 {
@@ -854,6 +950,9 @@ func (c Config) Validate(component string) error {
 		if err := c.Chat.Validate(c.AppEnv); err != nil {
 			return err
 		}
+		if err := c.Answer.Validate(); err != nil {
+			return err
+		}
 		if err := c.Rerank.Validate(); err != nil {
 			return err
 		}
@@ -875,6 +974,9 @@ func (c Config) Validate(component string) error {
 			return err
 		}
 		if err := c.Chat.Validate(c.AppEnv); err != nil {
+			return err
+		}
+		if err := c.Answer.Validate(); err != nil {
 			return err
 		}
 		if err := c.Chunk.Validate(); err != nil {
@@ -900,6 +1002,30 @@ func value(lookup Lookup, key, fallback string) string {
 		return current
 	}
 	return fallback
+}
+
+// databaseURLRole returns the login role from a database URL. Enforce mode
+// checks it here so a swapped role fails before any connection is opened; the
+// role's actual RLS attributes are still verified against pg_roles at startup.
+func databaseURLRole(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("must be a valid database URL")
+	}
+	if parsed.User == nil || strings.TrimSpace(parsed.User.Username()) == "" {
+		return "", fmt.Errorf("must name a login role")
+	}
+	return parsed.User.Username(), nil
+}
+
+// AdminDBURL is the connection migrate, seed and embedctl use. Without a split
+// role it stays on DATABASE_URL, which is the only mode where DDL and runtime
+// traffic sharing one owner role is acceptable.
+func (c Config) AdminDBURL() string {
+	if admin := strings.TrimSpace(c.AdminDatabaseURL); admin != "" {
+		return admin
+	}
+	return c.DatabaseURL
 }
 
 // envReader parses typed settings and records every malformed value. Falling

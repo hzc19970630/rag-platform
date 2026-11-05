@@ -135,7 +135,7 @@ func (s *Service) ReviewGraphSnapshot(ctx context.Context, principal authz.Princ
 	now := time.Now()
 	update := relationstore.ReviewUpdate{Status: status, Note: input.Note, Reviewer: principal.SubjectID, At: now}
 	if action == "approve" {
-		err = s.store.Approve(ctx, snapshot.ID, snapshot.KnowledgeBaseID, update)
+		err = s.store.Approve(ctx, principal.TenantID, snapshot.ID, snapshot.KnowledgeBaseID, update)
 	} else {
 		err = s.store.UpdateReview(ctx, snapshot.ID, update)
 	}

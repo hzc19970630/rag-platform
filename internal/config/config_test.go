@@ -95,6 +95,55 @@ func TestValidateRequiresInfrastructureForAPI(t *testing.T) {
 	}
 }
 
+func TestValidateEnforceRequiresSplitRoles(t *testing.T) {
+	base := map[string]string{
+		"DATABASE_URL":             "postgres://rag_app:app@localhost:5432/rag",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "key",
+		"S3_SECRET_KEY":            "secret",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"TENANT_RLS_MODE":          "enforce",
+	}
+	with := func(key, value string) Config {
+		env := make(map[string]string, len(base)+1)
+		for k, v := range base {
+			env[k] = v
+		}
+		env[key] = value
+		return LoadFrom(lookupFrom(env))
+	}
+
+	if err := with("REDIS_ADDR", "redis:6379").Validate("api"); err == nil || !strings.Contains(err.Error(), "MAINTENANCE_DATABASE_URL") {
+		t.Fatalf("expected a missing maintenance URL to be rejected, got %v", err)
+	}
+	maintenance := "postgres://rag_maintenance:maintenance@localhost:5432/rag"
+	if err := with("MAINTENANCE_DATABASE_URL", maintenance).Validate("api"); err != nil {
+		t.Fatalf("expected enforce api config to pass, got %v", err)
+	}
+	if err := with("MAINTENANCE_DATABASE_URL", maintenance).Validate("worker"); err != nil {
+		t.Fatalf("expected enforce worker config to pass, got %v", err)
+	}
+	owner := with("MAINTENANCE_DATABASE_URL", maintenance)
+	owner.DatabaseURL = "postgres://rag_platform:owner@localhost:5432/rag"
+	if err := owner.Validate("api"); err == nil || !strings.Contains(err.Error(), "rag_app") {
+		t.Fatalf("expected an owner runtime role to be rejected, got %v", err)
+	}
+	if err := with("MAINTENANCE_DATABASE_URL", maintenance).Validate("migrate"); err == nil || !strings.Contains(err.Error(), "ADMIN_DATABASE_URL") {
+		t.Fatalf("expected a missing admin URL to be rejected, got %v", err)
+	}
+	admin := "postgres://rag_platform:owner@localhost:5432/rag"
+	if err := with("ADMIN_DATABASE_URL", admin).Validate("migrate"); err != nil {
+		t.Fatalf("expected enforce migrate config to pass, got %v", err)
+	}
+	shadow := LoadFrom(lookupFrom(map[string]string{"DATABASE_URL": "postgres://user:pass@localhost:5432/rag"}))
+	if shadow.AdminDBURL() != shadow.DatabaseURL {
+		t.Fatalf("shadow AdminDBURL must fall back to DATABASE_URL, got %q", shadow.AdminDBURL())
+	}
+}
+
 func TestValidateMetricsAddr(t *testing.T) {
 	valid := map[string]string{
 		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
@@ -637,5 +686,34 @@ func TestValidateRejectsMalformedTrustedProxies(t *testing.T) {
 		if err := LoadFrom(lookupFrom(env)).Validate("api"); err == nil {
 			t.Fatalf("expected HTTP_TRUSTED_PROXIES %q to be rejected", proxy)
 		}
+	}
+}
+
+func TestAnswerConfigDefaultsAndValidation(t *testing.T) {
+	defaults := LoadFrom(lookupFrom(map[string]string{}))
+	if !defaults.Answer.AsyncEnabled || defaults.Answer.TailTimeoutSec != 180 ||
+		defaults.Answer.PollIntervalMS != 250 || defaults.Answer.LeaseSeconds != 300 {
+		t.Fatalf("answer defaults: %+v", defaults.Answer)
+	}
+
+	overrides := LoadFrom(lookupFrom(map[string]string{
+		"ANSWER_ASYNC_ENABLED":          "false",
+		"ANSWER_TAIL_TIMEOUT_SECONDS":   "60",
+		"ANSWER_ASYNC_POLL_INTERVAL_MS": "100",
+		"ANSWER_ASYNC_LEASE_SECONDS":    "120",
+	}))
+	if overrides.Answer.AsyncEnabled || overrides.Answer.TailTimeoutSec != 60 ||
+		overrides.Answer.PollIntervalMS != 100 || overrides.Answer.LeaseSeconds != 120 {
+		t.Fatalf("answer overrides: %+v", overrides.Answer)
+	}
+
+	if err := (AnswerConfig{}).Validate(); err != nil {
+		t.Fatalf("a disabled async path must not require tail settings: %v", err)
+	}
+	if err := (AnswerConfig{AsyncEnabled: true}).Validate(); err == nil {
+		t.Fatalf("an enabled async path with zero bounds must fail startup")
+	}
+	if err := (AnswerConfig{AsyncEnabled: true, TailTimeoutSec: 1, PollIntervalMS: 1, LeaseSeconds: 1}).Validate(); err != nil {
+		t.Fatalf("valid async settings rejected: %v", err)
 	}
 }

@@ -97,9 +97,11 @@ request GET /api/v1/audit/authorization 200 "$tmp_dir/audit.json" \
     -H 'X-Dev-User-ID: viewer-a' -H 'X-Dev-Tenant-ID: dev-tenant'
 grep -q 'policy_denied' "$tmp_dir/audit.json"
 
-sql="SELECT count(*) FROM casbin_rule WHERE ptype IN ('p', 'g');"
-policy_count=$($compose exec -T postgres psql -U rag_platform -d rag_platform -Atc "$sql")
-test "$policy_count" -gt 0
+# Authorization policies are projected in memory from memberships; casbin_rule
+# is a retired legacy table, so assert on the real source of truth.
+sql="SELECT count(*) FROM memberships;"
+membership_count=$($compose exec -T postgres psql -U rag_platform -d rag_platform -Atc "$sql")
+test "$membership_count" -gt 0
 audit_count=$($compose exec -T postgres psql -U rag_platform -d rag_platform -Atc "SELECT count(*) FROM audit_logs WHERE allowed = false;")
 test "$audit_count" -gt 0
 worker_status=$($compose ps --format '{{.Service}} {{.State}}' worker)

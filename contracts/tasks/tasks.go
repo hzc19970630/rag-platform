@@ -16,11 +16,13 @@ const (
 	TypeSync      = "connector.sync.v1"
 	TypeWiki      = "knowledge.projection.wiki.v1"
 	TypeRelation  = "knowledge.projection.relation.v1"
+	TypeAnswer    = "answer.generate.v1"
 
 	SchemaIngestion = "IngestionTaskV1"
 	SchemaSync      = "connector.sync.v1"
 	SchemaWiki      = "WikiProjectionTaskV1"
 	SchemaRelation  = "RelationProjectionTaskV1"
+	SchemaAnswer    = "AnswerTaskV1"
 )
 
 // Ingestion is one Evidence pipeline stage. It carries ids and an object key,
@@ -66,4 +68,21 @@ type Projection struct {
 
 func (t Projection) QueueID() string {
 	return t.IdempotencyKey + ":" + strconv.Itoa(t.Attempt)
+}
+
+// Answer asks a worker to generate one recorded question. It carries the
+// durable job id and identity ids only: credentials, the principal and the
+// authorization scope stay in PostgreSQL (answer_jobs.scope_json), so a queue
+// message cannot be replayed into a wider scope. JobID doubles as the Asynq
+// task id, which makes redelivery idempotent without colliding on a
+// client-supplied request id.
+type Answer struct {
+	SchemaVersion   string `json:"schema_version"`
+	JobID           string `json:"job_id"`
+	TenantID        string `json:"tenant_id"`
+	SubjectID       string `json:"subject_id"`
+	ConversationID  string `json:"conversation_id"`
+	RequestID       string `json:"request_id"`
+	SessionOverride string `json:"session_override,omitempty"`
+	TimeoutSeconds  int    `json:"timeout_seconds,omitempty"`
 }

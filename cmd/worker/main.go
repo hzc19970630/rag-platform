@@ -41,7 +41,7 @@ func main() {
 		_ = shutdownTracing(shutdownCtx)
 	}()
 	metricsRegistry := observability.New()
-	application, err := app.Open(cfg, metricsRegistry)
+	application, err := app.Open(cfg, metricsRegistry, app.RoleWorker)
 	if err != nil {
 		logger.Error("application_bootstrap_failed", "component", "worker", "error", err)
 		os.Exit(1)
@@ -106,6 +106,10 @@ func main() {
 		ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, taskErr error) {
 			if task.Type() == queue.TaskTypeSync {
 				recordSyncFailure(logger, application, ctx, task, taskErr)
+				return
+			}
+			if task.Type() == queue.TaskTypeAnswer {
+				recordAnswerFailure(logger, application, ctx, task, taskErr)
 				return
 			}
 			recordDeadLetter(logger, application, ctx, task, taskErr)
@@ -282,6 +286,13 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 		logger.Error("connector_run_expiry_failed", "error", err)
 	} else if expired > 0 {
 		logger.Warn("connector_runs_expired", "runs", expired)
+	}
+	// An answer job whose worker disappeared must end with a terminal event,
+	// otherwise the HTTP tail (and every reconnect) waits forever.
+	if staleAnswers, err := application.Conversation.SweepStaleAnswers(ctx, time.Now(), 100); err != nil {
+		logger.Error("answer_job_sweep_failed", "error", err)
+	} else if staleAnswers > 0 {
+		logger.Warn("answer_jobs_expired", "jobs", staleAnswers)
 	}
 	report, err := application.Ingestion.Reconcile(ctx, m.staleAfter)
 	if err != nil {

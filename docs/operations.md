@@ -48,7 +48,7 @@ compose logs --no-color worker | grep worker_shutting_down
 2. 启动一个一次性 `paradedb/paradedb:v0.22.6-pg17` 容器（随机容器名，不映射宿主机端口），等待镜像完成 initdb 的“初始化→重启”两阶段。
 3. 过滤掉目标镜像已内置的 `paradedb` schema 与 `pg_search`/`vector` 扩展条目后 `pg_restore --exit-on-error`。
 4. 对比全部 42 张 public 表的行数、`schema_migrations` 的版本与校验和、`authorization_revisions`、`kb-dev` 及其 owner 成员关系。
-5. 对比 `chunks` 的全部索引定义，确认 `chunks_bm25_idx` 与 `chunks_vector_idx`（`halfvec(1024)` HNSW）随备份恢复。
+5. 对比 `chunks` 的全部索引定义，确认 `chunks_bm25_idx` 与 `chunks_vector_idx*`（`halfvec(1024)` HNSW，当前实现为版本化名 `chunks_vector_idx_<dim>_v<N>`）随备份恢复。
 6. 结束时删除一次性容器和临时文件；源栈只读。
 
 ```bash
@@ -220,6 +220,69 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 - `vector_ef_search`（默认 40）、`vector_oversample`（默认 1）、`vector_iterative_scan`（默认 true → pgvector `relaxed_order`）是三级可覆盖的检索参数；`0` 的 ef_search 表示使用 pgvector 服务端默认。
 - 本地验证：`make vector-recall-probe` 在临时 schema 中构造 100:1 租户语料，输出 `tests/eval/vector_recall_report.json`，不触碰业务表。报告同时记录自然计划与强制 HNSW 计划的返回数、relevant recall、P95 和执行计划节点。
+- Enforce 演练：`python3 scripts/vector_recall_probe.py --rls --report tests/eval/vector_recall_report_rls.json` 在临时 `chunks` 表上安装与 0024 相同的严格策略，并以 `rag_app`（`SET LOCAL ROLE`）执行测量；与不带 `--rls` 的基线报告比较计划节点和 P95，要求仍为 HNSW 且 P95 不超过基线 1.5×。
 - 2026-11-05 结论（pgvector 0.8.7）：自然计划选择精确过滤扫描时返回 20/20；强制 HNSW 且 iterative scan=off 时只返回 4–6/20，提高 ef_search 或过采样都无法补齐；`relaxed_order` 补到 20/20、recall 1.0、P95 10–32ms。若生产 pgvector 版本低于 0.8，把 `vector_iterative_scan` 设为 false，否则 `SET LOCAL` 会失败并在检索阶段暴露清晰错误。
 - 2026-11-05 真实语料只读复核（1463 条 1024 维；小 KB 选择性约 2.6%–6.1%，以 chunk 自身 embedding 查询、精确扫描 Top-20 为基准并排除自身）：自然计划走 HNSW；`ef_search=40`、过采样 1 且关闭迭代扫描仅返回 7.0–8.7/20，过采样 1/4/10 无改善；`relaxed_order` 在 ef_search=40 恢复 20/20，recall 0.982–1.000，P95 1.3–2.2ms。与合成探针结论一致。
 - 监控：`vector_recall_underfill_total{ef_search,oversample}` 非零表示过滤后的 ANN 扫描未填满 TopK；同时检查 `vector_recall_underfill` 日志中的 tenant、KB 数和 requested/returned。该指标出现时，优先确认 `vector_iterative_scan=true`，再评估分区或外部向量库。
+
+## 15. 租户 RLS（M13 A1）
+
+- `TENANT_RLS_MODE=off|shadow|enforce`，默认 `shadow`。`off` 不设置 `app.tenant_id`，可用 `./scripts/m13_rls_mode.sh off` 关闭 RLS；`shadow` 使用允许策略并在租户作用域查询中设置该 GUC，写路径触发器据此审计；`enforce` 使用迁移 0024 的严格策略。代码只提供开关与验收，是否切换是部署决策。
+- API 在 enforce 下把每个已认证请求放进一个数据库事务：`tenantdb.BeginRequestTx` 开启事务并执行 `SELECT set_config('app.tenant_id', <tenant>, true)`，普通查询与 `tenantdb.InTx` 服务事务都加入该事务（GORM 的显式 `Transaction` 不经过重定向回调，因此服务层必须用 `InTx`）。handler 返回 5xx、panic 或任一嵌套事务失败时整体回滚；事务级 GUC 随连接归还自动清空。worker 在 enforce 下整体使用 `MAINTENANCE_DATABASE_URL`，跨租户任务不依赖 GUC；API 只对认证前的身份查询使用维护连接。
+- 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`；0026 新增 `answer_jobs` 后总数为 37 张（33 张租户表 + 4 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
+- 角色：`rag_app`（`NOSUPERUSER NOBYPASSRLS`，API 租户流量）与 `rag_maintenance`（`BYPASSRLS`，worker 与跨租户维护）。enforce 下 API/worker 的 `DATABASE_URL` 必须是 `rag_app`，且 `MAINTENANCE_DATABASE_URL` 必填；migrate/seed/embedctl 使用 `ADMIN_DATABASE_URL`（所有者角色，缺省回退 `DATABASE_URL`）。启动时查询 `pg_roles` 校验：API 运行时角色不得是超级用户或 `BYPASSRLS`，worker 维护角色必须具备 `BYPASSRLS`，否则拒绝启动。密码与授权由 `make m13-rls-setup` 设置，需先导出 `RAG_APP_DB_PASSWORD`、`RAG_MAINTENANCE_DB_PASSWORD`；脚本幂等，可对已有库重复执行。全新数据卷由 `deploy/docker-compose/initdb/01-roles.sh` 自动创建角色。
+- 影子审计范围：触发器只记录写操作。仅当 `current_user = 'rag_app'` 或 GUC 已设置时写入 `rls_shadow_violations`；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 A1.1 的应用 guard、静态门禁 `cmd/checktenancy` 与 `tests/postgres/tenantrls_test.go` 承担，**不承诺对生产读流量做数据库级拦截采样**。
+- 审计 SQL：
+
+  ```sql
+  SELECT table_name, operation, db_user, count(*)
+  FROM rls_shadow_violations
+  WHERE observed_at > NOW() - INTERVAL '1 hour'
+  GROUP BY 1, 2, 3 ORDER BY 4 DESC;
+
+  SELECT * FROM rls_shadow_violations
+  WHERE row_tenant_id IS DISTINCT FROM session_tenant_id
+  ORDER BY observed_at DESC LIMIT 50;
+  ```
+
+- 切换到 enforce（按顺序）：
+  1. `make m13-rls-setup` 创建或更新角色与授权。
+  2. 以所有者身份应用 0024：`make migrate`。0024 只替换策略、不改表结构，可重复执行。
+  3. 设置 `TENANT_RLS_MODE=enforce`、`DATABASE_URL`（`rag_app`）、`MAINTENANCE_DATABASE_URL`（`rag_maintenance`）与 `ADMIN_DATABASE_URL`（所有者）。容器只在创建时读取环境变量，需要重建 api/worker。
+  4. 启动后确认没有角色校验错误，运行 `make m13-rls-acceptance` 与 m1–m4；跨租户负向、直连 SQL 绕过探测、向量/BM25 执行计划与 P95 都通过后才保留 enforce。
+  5. 回滚：`./scripts/m13_rls_mode.sh shadow` 恢复允许策略，把 `TENANT_RLS_MODE` 改回 `shadow` 并重建 api/worker；`./scripts/m13_rls_mode.sh off` 会同时关闭 RLS。迁移历史仍记录 0024 已应用，如需再次 enforce，手动重放 `migrations/postgres/0024_tenant_rls_strict.sql`（幂等）。
+- Enforce 前置检查（缺一不可）：`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user` 中 `current_user = rag_app` 且两项均为 false；`task_inbox` 无 `tenant_id IS NULL` 行；`rls_shadow_violations` 无跨租户（`row_tenant_id` 与 `session_tenant_id` 不一致）记录；m1–m4 以 `rag_app` 通过。任何一项不满足都保持 shadow。
+- 验收：`make m13-rls-acceptance` 校验 37 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 `tenant_shadow_allow`（shadow）或 `tenant_isolation`（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。该脚本不切换运行角色。
+
+## 16. 在线 HNSW 索引变更（M13 A2）
+
+- 索引契约：一个索引名只服务一个 `halfvec(N)` 维度。当前实现使用版本化名 `chunks_vector_idx_<dim>_v<N>`，旧的无版本名 `chunks_vector_idx` 仍被识别并可作为服务索引复用。
+- `embedctl create-index` 的执行顺序：读取 `pgvector` 版本（要求 ≥ 0.7.0）、应用会话超时、清理 `indisvalid=false` 的残留候选、在独立连接上执行 `CREATE INDEX CONCURRENTLY`、校验 `indisvalid` 与 `halfvec(dim)`/`embedding_dimension = dim`、最后 `DROP INDEX CONCURRENTLY` 删除被替换的旧索引。会话超时必须在第一次目录读取之前设置，因为 `pg_get_indexdef` 会持有 `chunks` 的表锁；否则一个已运行的 `ACCESS EXCLUSIVE` 事务会在超时生效前把构建挂住。CONCURRENTLY 不能在事务块内运行，因此不要把它塞进迁移；迁移只负责表结构与策略。
+- 失败语义：构建失败会删除本次产生的 INVALID 索引并保留原服务索引；重跑是安全的。若旧索引因锁超时未被删除，新索引已经有效，重跑会继续清理多余索引。
+- 观测：`make embed-check`（只读）输出 pgvector 版本、每个 chunks 向量索引的名称/维度/是否有效/大小/定义、每个 `embedding_dimension` 的 chunk 数量、数据库与 `chunks` 堆大小，以及 embedctl 容器根文件系统的剩余空间（不是 PostgreSQL 数据卷的剩余空间，容器内无法直接读取后者）。
+- 超时：`EMBED_INDEX_LOCK_TIMEOUT_SECONDS`（默认 10）限制等待表锁的时间，覆盖目录读取与 `CREATE INDEX CONCURRENTLY` 的加锁阶段；被阻塞时命令在超时后失败退出，旧索引保持不变。`EMBED_INDEX_STATEMENT_TIMEOUT_SECONDS`（默认 0，不限制）限制整条 `CREATE INDEX`（含并发扫描）的执行时间；取消后会留下 INVALID 索引，由本次失败清理或下次运行清理。`--dry-run` 同样受锁超时保护。大表构建前先用 `df` 确认数据库卷有约 2× 新索引大小的空闲空间，因为新旧索引会短暂并存。
+- 确认：`create-index` 是非日常的受管操作。运行时会提示输入 `y`；非交互调用（stdin 立即 EOF，包括 `docker run` 未加 `-i`）会直接失败，必须传 `--confirm` 或设置 `EMBED_INDEX_CONFIRM=1`；`--dry-run` 只输出“将创建/将删除”的计划，不修改目录。
+- 验收：`make embed-acceptance` 在 3↔4 维之间切换，断言新索引生效、旧维度索引已删除、reembed/verify 无残留；`tests/postgres/vectorindex_test.go`（需 `TEST_POSTGRES_URL`）在 20 万行合成表上于构建期间持续写入，要求写 P99 ≤ 2× 基线（低于 5ms 的基线按 5ms 计，避免调度噪声误报），并验证查询计划命中新索引。
+
+## 17. 异步答案生成（M13 A3）
+
+- 默认 `ANSWER_ASYNC_ENABLED=true`：`POST /sessions/:id/messages` 只做预检（会话、scope、配额、模型、历史），在同一事务内写入 user message、`RECEIVED/AUTHORIZED/PLANNED` 三条事件和 `answer_jobs` 行（`QUEUED`），然后把 `answer.generate.v1` 投递到 Asynq 交互队列。检索、生成、引用校验与终态事件都在 worker 执行。API 进程不再承载长耗时的生成。
+- 事件序列：`answer_jobs.next_sequence` 由 `UPDATE ... RETURNING` 原子分配，API 预检与 worker 共用同一计数器，因此跨进程仍保持 `1..N` 连续，`ReplayEvents` 与 `Last-Event-ID` 续流不会因序列冲突丢事件。
+- 幂等：`(tenant_id, user_id, conversation_id, request_id)` 唯一。重复请求命中已有 job 时不会再次入队，也不会重复写 user message 与事件；已存在答案时直接重放终态。Asynq 重复投递由条件 `UPDATE` claim 拦截，只有 lease 持有者执行。
+- 租约：worker claim 时写入 `lease_owner/lease_until`（默认 300 秒，`ANSWER_ASYNC_LEASE_SECONDS`）。worker 维护循环把租约过期仍为 `RUNNING` 的 job 置 `FAILED`（`worker_lost`）并追加终态 `error` + `complete` 事件，SSE 客户端因此不会无限等待。生成超时受请求超时约束（≤ 60 秒），正常结束远早于 lease 过期。
+- SSE：`GET /api/v1/requests/:request_id/events` 默认仍是一次性 JSON 回放；加 `?stream=1` 后每 `ANSWER_ASYNC_POLL_INTERVAL_MS`（默认 250ms）轮询 `ReplayEvents`，直到 `complete`/`error` 或 `ANSWER_TAIL_TIMEOUT_SECONDS`（默认 180）。超时返回 `tail_timeout` 错误事件，客户端可以带 `after`/`Last-Event-ID` 再次续流。同一请求可以有多个并发 tail。
+- 回滚：设置 `ANSWER_ASYNC_ENABLED=false` 并重建 api（worker 保留新版本也可）。API 回到同步路径，`answer_jobs` 表保留但不再新增行；已在队列中的异步任务仍会被新 worker 正常执行。
+- 升级顺序：**先 worker 后 API**。旧 worker 不认识 `answer.generate.v1`，会在 API 开始入队后把任务记为失败。回滚顺序相反：先 API 回同步，再降级 worker。
+- 观测：`answer_job_total{result}` 与 `answer_job_duration_ms` 在 worker 记录；`answer_jobs_expired` 日志给出本轮回收数量；`answer_preflight` 日志记录入队结果。排障 SQL：
+
+  ```sql
+  SELECT status, count(*) FROM answer_jobs GROUP BY 1;
+  SELECT id, tenant_id, status, attempts, lease_until, error_code
+  FROM answer_jobs WHERE status = 'RUNNING' AND lease_until < NOW();
+  SELECT id, status, attempts, lease_until, error_code
+  FROM answer_jobs WHERE request_id = '<id>';
+  ```
+
+  再对照该请求在 `stream_events` 中的 `sequence` 是否连续。
+- 验收：`make m13-async-acceptance` 在真实栈上验证正常异步答案（终态 `complete`、job `COMPLETED`、事件连续）与 worker 停机演练（任务保留、worker 恢复后仍得到终态或明确错误）。
+

@@ -22,6 +22,8 @@ const (
 	// projection queue with Wiki but is an independent task type so one
 	// pipeline's failures cannot be retried as the other.
 	TaskTypeRelation = tasks.TypeRelation
+	// TaskTypeAnswer carries one async answer job from the API to a worker.
+	TaskTypeAnswer = tasks.TypeAnswer
 
 	QueueIngestion   = "ingestion"
 	QueueInteractive = "interactive"
@@ -99,6 +101,22 @@ func (p *Publisher) PublishRelation(ctx context.Context, task tasks.Projection) 
 	_, err = p.client.EnqueueContext(ctx, asynq.NewTask(TaskTypeRelation, payload), asynq.Queue(QueueProjection), asynq.TaskID(task.QueueID()), asynq.MaxRetry(5))
 	if err != nil && err != asynq.ErrTaskIDConflict {
 		return fmt.Errorf("enqueue relation projection task: %w", err)
+	}
+	return nil
+}
+
+// PublishAnswer enqueues one recorded answer job on the interactive pool, so a
+// user waiting on a chat answer is not stuck behind bulk ingestion. JobID is the
+// task id: redelivery of the same job is absorbed by Asynq, while two
+// conversations that happen to use the same client request id stay distinct.
+func (p *Publisher) PublishAnswer(ctx context.Context, task tasks.Answer) error {
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("marshal answer task: %w", err)
+	}
+	_, err = p.client.EnqueueContext(ctx, asynq.NewTask(TaskTypeAnswer, payload), asynq.Queue(QueueInteractive), asynq.TaskID(task.JobID), asynq.MaxRetry(3))
+	if err != nil && err != asynq.ErrTaskIDConflict {
+		return fmt.Errorf("enqueue answer task: %w", err)
 	}
 	return nil
 }

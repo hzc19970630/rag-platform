@@ -50,7 +50,7 @@ func (s *Service) processRelation(ctx context.Context, task Task) error {
 	}
 	processCtx, releaseLease, leaseLost := s.runtime().Heartbeat(ctx, task.IdempotencyKey)
 	defer releaseLease()
-	run, err := s.loadRun(ctx, task.ProjectionRunID)
+	run, err := s.loadRun(ctx, task.TenantID, task.ProjectionRunID)
 	if err != nil {
 		return s.finishInbox(ctx, task.IdempotencyKey, inboxFailed, err)
 	}

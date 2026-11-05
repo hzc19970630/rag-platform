@@ -14,6 +14,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 )
@@ -115,7 +116,7 @@ func (s *Service) Create(ctx context.Context, principal authz.Principal, input C
 		return models.KnowledgeBase{}, err
 	}
 	knowledgeBase := models.KnowledgeBase{ID: id, TenantID: principal.TenantID, OwnerID: principal.SubjectID, Name: input.Name, Description: input.Description, EmbeddingModel: s.embedding.Model, EmbeddingDimension: s.embedding.Dimension, ACLVersion: 1}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Create(&knowledgeBase).Error; err != nil {
 			return err
 		}
@@ -137,7 +138,8 @@ func BackfillEmbeddingBinding(ctx context.Context, db *gorm.DB, binding Embeddin
 	if binding.Model == "" || binding.Dimension <= 0 {
 		return 0, nil
 	}
-	result := db.WithContext(ctx).Model(&models.KnowledgeBase{}).
+	result := tenantdb.Unscoped(db.WithContext(ctx), "startup: backfill embedding binding for pre-upgrade knowledge bases").
+		Model(&models.KnowledgeBase{}).
 		Where("embedding_model = ''").
 		Updates(map[string]any{
 			"embedding_model":     binding.Model,
@@ -460,11 +462,11 @@ func (s *Service) AddMember(ctx context.Context, principal authz.Principal, id s
 		return models.KnowledgeBaseMember{}, fmt.Errorf("load tenant member: %w", err)
 	}
 	member := models.KnowledgeBaseMember{KnowledgeBaseID: id, UserID: input.UserID, Role: input.Role}
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := tenantdb.InTx(ctx, s.db, knowledgeBase.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Save(&member).Error; err != nil {
 			return err
 		}
-		return tx.Model(&knowledgeBase).UpdateColumn("acl_version", gorm.Expr("acl_version + 1")).Error
+		return tenantdb.MustScoped(tx, principal.TenantID).Model(&models.KnowledgeBase{}).Where("id = ?", knowledgeBase.ID).UpdateColumn("acl_version", gorm.Expr("acl_version + 1")).Error
 	}); err != nil {
 		return models.KnowledgeBaseMember{}, fmt.Errorf("add knowledge base member: %w", err)
 	}
@@ -495,7 +497,7 @@ func (s *Service) RemoveMember(ctx context.Context, principal authz.Principal, i
 	if result.RowsAffected == 0 {
 		return apperror.ErrNotFound
 	}
-	if err := s.db.WithContext(ctx).Model(&knowledgeBase).UpdateColumn("acl_version", gorm.Expr("acl_version + 1")).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.KnowledgeBase{}).Where("id = ?", knowledgeBase.ID).UpdateColumn("acl_version", gorm.Expr("acl_version + 1")).Error; err != nil {
 		return fmt.Errorf("update acl version: %w", err)
 	}
 	if err := s.authz.BumpRevision(ctx, principal.TenantID); err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -98,7 +99,7 @@ func (p projectionStage) Start(tx *gorm.DB, now time.Time) error {
 	if stage.ProjectionRunID != p.run.ID || stage.Stage != p.task.Stage || stage.ProjectionType != p.run.ProjectionType {
 		return fmt.Errorf("projection stage does not belong to run")
 	}
-	if err := tx.Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
+	if err := tenantdb.MustScoped(tx, p.run.TenantID).Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
 		"status": stageStatusFor(p.run.ProjectionType, p.task.Stage), "error_code": "", "error_message": "", "updated_at": now,
 	}).Error; err != nil {
 		return err
@@ -145,7 +146,7 @@ func (p projectionStage) Fail(tx *gorm.DB, code, message string, now time.Time) 
 	}).Error; err != nil {
 		return err
 	}
-	return tx.Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
+	return tenantdb.MustScoped(tx, p.run.TenantID).Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
 		"status": failedStatusFor(p.run.ProjectionType), "error_code": code, "error_message": message, "updated_at": now,
 	}).Error
 }
@@ -196,9 +197,9 @@ func (s *Service) finishInbox(ctx context.Context, key, status string, processEr
 	return s.runtime().FinishInbox(ctx, key, status, processErr)
 }
 
-func (s *Service) loadRun(ctx context.Context, id string) (*models.ProjectionRun, error) {
+func (s *Service) loadRun(ctx context.Context, tenantID, id string) (*models.ProjectionRun, error) {
 	var run models.ProjectionRun
-	if err := s.db.WithContext(ctx).First(&run, "id = ?", id).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&run, "id = ?", id).Error; err != nil {
 		return nil, fmt.Errorf("load projection run: %w", err)
 	}
 	return &run, nil

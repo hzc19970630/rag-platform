@@ -15,6 +15,7 @@ import (
 	"github.com/casbin/casbin/v3/model"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -196,11 +197,11 @@ func (s *Service) buildTenantPolicy(ctx context.Context, tenantID string) (*casb
 	}
 
 	var memberships []models.Membership
-	if err := s.db.WithContext(ctx).Where("tenant_id = ?", tenantID).Find(&memberships).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Find(&memberships).Error; err != nil {
 		return nil, fmt.Errorf("load tenant memberships: %w", err)
 	}
 	var knowledgeBases []models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ?", tenantID).Find(&knowledgeBases).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Find(&knowledgeBases).Error; err != nil {
 		return nil, fmt.Errorf("load tenant knowledge bases: %w", err)
 	}
 	kbByID := make(map[string]models.KnowledgeBase, len(knowledgeBases))
@@ -262,12 +263,12 @@ func (s *Service) buildTenantPolicy(ctx context.Context, tenantID string) (*casb
 
 func (s *Service) currentRevision(ctx context.Context, tenantID string) (int64, error) {
 	var row models.AuthorizationRevision
-	if err := s.db.WithContext(ctx).First(&row, "tenant_id = ?", tenantID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			row = models.AuthorizationRevision{TenantID: tenantID, Revision: 1}
 			if createErr := s.db.WithContext(ctx).Create(&row).Error; createErr != nil {
 				var existing models.AuthorizationRevision
-				if lookupErr := s.db.WithContext(ctx).First(&existing, "tenant_id = ?", tenantID).Error; lookupErr == nil {
+				if lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&existing).Error; lookupErr == nil {
 					return existing.Revision, nil
 				}
 				return 0, fmt.Errorf("create authorization revision: %w", createErr)
@@ -319,8 +320,8 @@ func (s *Service) authorizeState(ctx context.Context, tenantID string) (int64, *
 // the others. Call it after the business relationship change commits.
 func (s *Service) BumpRevision(ctx context.Context, tenantID string) error {
 	var revision int64
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&models.AuthorizationRevision{}).Where("tenant_id = ?", tenantID).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": nowUTC()})
+	err := tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
+		result := tenantdb.MustScoped(tx, tenantID).Model(&models.AuthorizationRevision{}).Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": nowUTC()})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -333,7 +334,7 @@ func (s *Service) BumpRevision(ctx context.Context, tenantID string) error {
 			return nil
 		}
 		var row models.AuthorizationRevision
-		if err := tx.First(&row, "tenant_id = ?", tenantID).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, tenantID).First(&row).Error; err != nil {
 			return err
 		}
 		revision = row.Revision
@@ -407,7 +408,8 @@ func (s *Service) BuildScope(ctx context.Context, principal Principal, target Qu
 		return cached, nil
 	}
 	var membership models.Membership
-	if err := s.db.WithContext(ctx).First(&membership, "tenant_id = ? AND user_id = ?", principal.TenantID, principal.SubjectID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		First(&membership, "user_id = ?", principal.SubjectID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return AuthorizationScope{}, apperror.ErrForbidden
 		}
@@ -416,7 +418,7 @@ func (s *Service) BuildScope(ctx context.Context, principal Principal, target Qu
 	var ids []string
 	if membership.Role == "owner" || membership.Role == "admin" {
 		var knowledgeBases []models.KnowledgeBase
-		if err := s.db.WithContext(ctx).Where("tenant_id = ?", principal.TenantID).Find(&knowledgeBases).Error; err != nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Find(&knowledgeBases).Error; err != nil {
 			return AuthorizationScope{}, fmt.Errorf("list tenant knowledge bases: %w", err)
 		}
 		for _, knowledgeBase := range knowledgeBases {
@@ -590,10 +592,11 @@ func (s *Service) ListAudit(ctx context.Context, principal Principal, limit int)
 // retrieval leaves a trace.
 func (s *Service) QueryAudit(ctx context.Context, principal Principal, query AuditQuery) ([]models.AuditLog, error) {
 	var membership models.Membership
-	if err := s.db.WithContext(ctx).First(&membership, "tenant_id = ? AND user_id = ?", principal.TenantID, principal.SubjectID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		First(&membership, "user_id = ?", principal.SubjectID).Error; err != nil {
 		return nil, apperror.ErrForbidden
 	}
-	dbQuery := s.db.WithContext(ctx).Where("tenant_id = ?", principal.TenantID)
+	dbQuery := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID)
 	if membership.Role != "owner" && membership.Role != "admin" {
 		dbQuery = dbQuery.Where("actor_id = ?", principal.SubjectID)
 	} else if query.ActorID != "" {
@@ -632,7 +635,7 @@ func (s *Service) PurgeAuditLogs(ctx context.Context, before time.Time, limit in
 	if limit <= 0 {
 		limit = 1000
 	}
-	result := s.db.WithContext(ctx).Exec(`
+	result := tenantdb.Unscoped(s.db.WithContext(ctx), "retention: purge expired audit logs across tenants").Exec(`
 		DELETE FROM audit_logs
 		WHERE id IN (
 			SELECT id FROM audit_logs WHERE created_at < ? ORDER BY created_at, id LIMIT ?
@@ -738,7 +741,7 @@ func (s *Service) RemoveTenantMember(ctx context.Context, principal Principal, u
 			return fmt.Errorf("the last tenant owner cannot be removed")
 		}
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Where("tenant_id = ? AND user_id = ?", principal.TenantID, userID).Delete(&models.Membership{}).Error; err != nil {
 			return err
 		}

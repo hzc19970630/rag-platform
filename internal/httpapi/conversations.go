@@ -84,6 +84,8 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 			writeError(c, err)
 			return
 		}
+		principal := accessContext(c).Principal
+		requestID := requestIDOrDefault(c, input.RequestID)
 		stream := newSSEStream(c)
 		// A started stream must always stop its heartbeat, including the error
 		// paths below. A pre-flight failure never starts it and stays plain JSON.
@@ -92,8 +94,54 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 				stream.finish()
 			}
 		}()
-		result, err := deps.Conversation.Ask(c.Request.Context(), accessContext(c).Principal, conversation.AskInput{
-			ConversationID: c.Param("id"), Query: input.Query, RequestID: requestIDOrDefault(c, input.RequestID), SessionOverride: input.SessionOverride,
+
+		if deps.Conversation.AsyncEnabled() {
+			started := time.Now()
+			prepared, err := deps.Conversation.PrepareAnswer(c.Request.Context(), principal, conversation.AskInput{
+				ConversationID: c.Param("id"), Query: input.Query, RequestID: requestID, SessionOverride: input.SessionOverride,
+			})
+			if err != nil {
+				if !stream.started() {
+					writeError(c, err)
+					return
+				}
+				_ = stream.emit(conversation.Event{Type: conversation.EventError, Data: map[string]any{"code": "internal_error", "message": err.Error()}})
+				return
+			}
+			if prepared.Existing != nil {
+				events, replayErr := deps.Conversation.ReplayEvents(c.Request.Context(), principal, prepared.RequestID, 0)
+				if replayErr != nil {
+					if !stream.started() {
+						writeError(c, replayErr)
+						return
+					}
+					_ = stream.emit(conversation.Event{Type: conversation.EventError, Data: map[string]any{"code": "internal_error", "message": replayErr.Error()}})
+					return
+				}
+				after := 0
+				terminal := false
+				for _, event := range events {
+					if err := stream.emit(event); err != nil {
+						return
+					}
+					after = event.Sequence
+					if event.Type == conversation.EventComplete || event.Type == conversation.EventError {
+						terminal = true
+					}
+				}
+				if !terminal {
+					streamRecordedAnswer(stream, *prepared.Existing, after)
+				}
+				logAnswerStream(logger, prepared.RequestID, started)
+				return
+			}
+			tailAnswerStream(c.Request.Context(), deps.Conversation, principal, prepared.RequestID, 0, cfg, stream)
+			logAnswerStream(logger, prepared.RequestID, started)
+			return
+		}
+
+		result, err := deps.Conversation.Ask(c.Request.Context(), principal, conversation.AskInput{
+			ConversationID: c.Param("id"), Query: input.Query, RequestID: requestID, SessionOverride: input.SessionOverride,
 		}, stream.emit)
 		if err != nil {
 			// Nothing was streamed yet, so a regular error response is still
@@ -110,7 +158,9 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 	})
 
 	// Resume: replay the persisted stream events for a request so a client that
-	// dropped the connection can continue from the last event it saw.
+	// dropped the connection can continue from the last event it saw. With
+	// ?stream=1 the replay keeps polling until a terminal event, which is the
+	// async connect/reconnect path; the default remains a one-shot replay.
 	protected.GET("/requests/:requestID/events", func(c *gin.Context) {
 		after := intQuery(c, "after")
 		if after == 0 {
@@ -118,7 +168,14 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 				after = sequenceFromEventID(lastEventID)
 			}
 		}
-		events, err := deps.Conversation.ReplayEvents(c.Request.Context(), accessContext(c).Principal, c.Param("requestID"), after)
+		principal := accessContext(c).Principal
+		if c.Query("stream") == "1" {
+			stream := newSSEStream(c)
+			defer stream.finish()
+			tailAnswerStream(c.Request.Context(), deps.Conversation, principal, c.Param("requestID"), after, cfg, stream)
+			return
+		}
+		events, err := deps.Conversation.ReplayEvents(c.Request.Context(), principal, c.Param("requestID"), after)
 		if err != nil {
 			writeError(c, err)
 			return

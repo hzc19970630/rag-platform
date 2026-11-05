@@ -165,7 +165,7 @@ type RelationStore interface {
 	ReplaceRunSnapshot(ctx context.Context, write SnapshotWrite) error
 	Update(ctx context.Context, snapshotID string, update SnapshotUpdate) error
 	UpdateReview(ctx context.Context, snapshotID string, update ReviewUpdate) error
-	Approve(ctx context.Context, snapshotID, knowledgeBaseID string, update ReviewUpdate) error
+	Approve(ctx context.Context, tenantID, snapshotID, knowledgeBaseID string, update ReviewUpdate) error
 	MarkStale(ctx context.Context, snapshotIDs []string, now time.Time) error
 	MarkStaleByKnowledgeBase(ctx context.Context, tenantID, knowledgeBaseID string, now time.Time) error
 	StaleSnapshotIDs(ctx context.Context) ([]string, error)

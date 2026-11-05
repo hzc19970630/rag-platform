@@ -27,7 +27,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	database, err := sql.Open("pgx", cfg.DatabaseURL)
+	database, err := sql.Open("pgx", cfg.AdminDBURL())
 	if err != nil {
 		logger.Error("seed_database_open_failed", "error", err)
 		os.Exit(1)

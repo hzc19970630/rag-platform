@@ -93,7 +93,7 @@ func TestReplaceRunSnapshotAndActivate(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	if err := store.Approve(ctx, snapshot.ID, "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
+	if err := store.Approve(ctx, "t1", snapshot.ID, "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	active, err := store.ActiveSnapshot(ctx, "t1", "kb1", 1)
@@ -121,13 +121,13 @@ func TestApproveSupersedesPreviousActive(t *testing.T) {
 	if err := store.ReplaceRunSnapshot(ctx, testWrite("run1", "gs1")); err != nil {
 		t.Fatalf("write first snapshot: %v", err)
 	}
-	if err := store.Approve(ctx, "gs1", "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
+	if err := store.Approve(ctx, "t1", "gs1", "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
 		t.Fatalf("approve first snapshot: %v", err)
 	}
 	if err := store.ReplaceRunSnapshot(ctx, testWrite("run2", "gs2")); err != nil {
 		t.Fatalf("write second snapshot: %v", err)
 	}
-	if err := store.Approve(ctx, "gs2", "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
+	if err := store.Approve(ctx, "t1", "gs2", "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
 		t.Fatalf("approve second snapshot: %v", err)
 	}
 
@@ -194,7 +194,7 @@ func TestStaleSnapshotIDsDetectsACLAndSourceDrift(t *testing.T) {
 	if err := store.ReplaceRunSnapshot(ctx, testWrite("run1", "gs1")); err != nil {
 		t.Fatalf("replace run snapshot: %v", err)
 	}
-	if err := store.Approve(ctx, "gs1", "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
+	if err := store.Approve(ctx, "t1", "gs1", "kb1", port.ReviewUpdate{Status: models.GraphSnapshotActive, Reviewer: "u1", At: now}); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	stale, err := store.StaleSnapshotIDs(ctx)

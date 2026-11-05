@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -23,10 +24,10 @@ func (s *Service) ListVersions(ctx context.Context, principal authz.Principal, d
 		return DocumentVersionPage{}, err
 	}
 	var versions []models.DocumentVersion
-	if err := s.db.WithContext(ctx).Where("document_id = ?", document.ID).Order("version DESC").Find(&versions).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("document_id = ?", document.ID).Order("version DESC").Find(&versions).Error; err != nil {
 		return DocumentVersionPage{}, fmt.Errorf("list document versions: %w", err)
 	}
-	packages, err := s.readyPackages(ctx, versions)
+	packages, err := s.readyPackages(ctx, principal.TenantID, versions)
 	if err != nil {
 		return DocumentVersionPage{}, err
 	}
@@ -69,7 +70,7 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 		return UploadResult{}, apperror.ErrNotReady
 	}
 	var current models.DocumentVersion
-	if err := s.db.WithContext(ctx).First(&current, "id = ?", document.LatestVersionID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&current, "id = ?", document.LatestVersionID).Error; err != nil {
 		return UploadResult{}, fmt.Errorf("load current version: %w", err)
 	}
 	if current.SourceObjectKey == "" {
@@ -88,7 +89,7 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 	if existing, found, err := findPipelineByIdempotencyKey(s.db.WithContext(ctx), principal.TenantID, idempotencyKey); err != nil {
 		return UploadResult{}, err
 	} else if found {
-		return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+		return s.loadResult(ctx, principal.TenantID, existing.DocumentID, existing.DocumentVersionID, existing.ID)
 	}
 	if err := s.checkQuota(ctx, s.db, principal.TenantID, int64(len(content))); err != nil {
 		return UploadResult{}, err
@@ -115,7 +116,7 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 	pipeline := models.PipelineRun{ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, DocumentID: document.ID, DocumentVersionID: versionID, RequestID: "reparse:" + versionID, TraceID: "reparse:" + versionID, IdempotencyKey: idempotencyKey, Status: StatusStored}
 	stage := models.StageRun{PipelineRunID: pipelineID, Stage: StageParse, Status: StagePending, IdempotencyKey: stageKey}
 	version := models.DocumentVersion{ID: versionID, DocumentID: document.ID, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, ContentHash: hash, SizeBytes: int64(len(content)), SourceObjectKey: objectKey, Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		if err := lockTenantQuota(tx, principal.TenantID); err != nil {
 			return err
 		}
@@ -129,21 +130,21 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 		if err := s.checkQuota(ctx, tx, principal.TenantID, int64(len(content))); err != nil {
 			return err
 		}
-		if err := supersedeVersion(tx, current.ID, "superseded by reparse"); err != nil {
+		if err := supersedeVersion(tx, principal.TenantID, current.ID, "superseded by reparse"); err != nil {
 			return err
 		}
-		if err := cancelOtherPipelines(tx, document.ID, versionID); err != nil {
+		if err := cancelOtherPipelines(tx, principal.TenantID, document.ID, versionID); err != nil {
 			return err
 		}
 		var count int64
-		if err := tx.Model(&models.DocumentVersion{}).Where("document_id = ?", document.ID).Count(&count).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.DocumentVersion{}).Where("document_id = ?", document.ID).Count(&count).Error; err != nil {
 			return err
 		}
 		version.Version = int(count) + 1
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{"status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
+		if err := tx.Model(&models.Document{}).Where("tenant_id = ? AND id = ?", principal.TenantID, document.ID).Updates(map[string]any{"status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&pipeline).Error; err != nil {
@@ -168,19 +169,19 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 			return UploadResult{}, lookupErr
 		}
 		if found {
-			return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+			return s.loadResult(ctx, principal.TenantID, existing.DocumentID, existing.DocumentVersionID, existing.ID)
 		}
 		return UploadResult{}, fmt.Errorf("reparse document: reused run disappeared")
 	}
 	if err != nil {
 		if existing, found, lookupErr := findPipelineByIdempotencyKey(s.db.WithContext(ctx), principal.TenantID, idempotencyKey); lookupErr == nil && found {
 			cleanupObject = false
-			return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+			return s.loadResult(ctx, principal.TenantID, existing.DocumentID, existing.DocumentVersionID, existing.ID)
 		}
 		return UploadResult{}, fmt.Errorf("reparse document: %w", err)
 	}
 	cleanupObject = false
-	return s.loadResult(ctx, document.ID, versionID, pipelineID)
+	return s.loadResult(ctx, principal.TenantID, document.ID, versionID, pipelineID)
 }
 
 // findPipelineByIdempotencyKey loads the run a prior request created under the
@@ -218,13 +219,13 @@ func (s *Service) ActivateVersion(ctx context.Context, principal authz.Principal
 		return DocumentView{}, err
 	}
 	var target models.DocumentVersion
-	if err := s.db.WithContext(ctx).Where("document_id = ? AND id = ?", document.ID, versionID).First(&target).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("document_id = ? AND id = ?", document.ID, versionID).First(&target).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return DocumentView{}, apperror.ErrNotFound
 		}
 		return DocumentView{}, fmt.Errorf("load target version: %w", err)
 	}
-	ready, err := s.versionReady(ctx, target)
+	ready, err := s.versionReady(ctx, principal.TenantID, target)
 	if err != nil {
 		return DocumentView{}, err
 	}
@@ -234,28 +235,28 @@ func (s *Service) ActivateVersion(ctx context.Context, principal authz.Principal
 	if document.LatestVersionID == target.ID {
 		return s.Get(ctx, principal, document.ID)
 	}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		if document.LatestVersionID != "" {
-			if err := supersedeVersion(tx, document.LatestVersionID, "superseded by rollback"); err != nil {
+			if err := supersedeVersion(tx, principal.TenantID, document.LatestVersionID, "superseded by rollback"); err != nil {
 				return err
 			}
 		}
-		if err := tx.Model(&models.DocumentVersion{}).Where("id = ?", target.ID).Updates(map[string]any{"status": StatusEvidenceReady, "error_code": "", "error_message": "", "updated_at": time.Now()}).Error; err != nil {
+		if err := tx.Model(&models.DocumentVersion{}).Where("tenant_id = ? AND id = ?", principal.TenantID, target.ID).Updates(map[string]any{"status": StatusEvidenceReady, "error_code": "", "error_message": "", "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Chunk{}).Where("document_version_id = ? AND parent_id IS NULL", target.ID).Update("status", StatusParent).Error; err != nil {
+		if err := tx.Model(&models.Chunk{}).Where("tenant_id = ? AND document_version_id = ? AND parent_id IS NULL", principal.TenantID, target.ID).Update("status", StatusParent).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.Chunk{}).Where("document_version_id = ? AND parent_id IS NOT NULL", target.ID).Update("status", StatusEvidenceReady).Error; err != nil {
+		if err := tx.Model(&models.Chunk{}).Where("tenant_id = ? AND document_version_id = ? AND parent_id IS NOT NULL", principal.TenantID, target.ID).Update("status", StatusEvidenceReady).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", target.ID).Updates(map[string]any{"status": StatusEvidenceReady, "updated_at": time.Now()}).Error; err != nil {
+		if err := tx.Model(&models.EvidencePackage{}).Where("tenant_id = ? AND document_version_id = ?", principal.TenantID, target.ID).Updates(map[string]any{"status": StatusEvidenceReady, "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
-		if err := cancelOtherPipelines(tx, document.ID, target.ID); err != nil {
+		if err := cancelOtherPipelines(tx, principal.TenantID, document.ID, target.ID); err != nil {
 			return err
 		}
-		return tx.Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{"status": StatusEvidenceReady, "latest_version_id": target.ID, "updated_at": time.Now()}).Error
+		return tx.Model(&models.Document{}).Where("tenant_id = ? AND id = ?", principal.TenantID, document.ID).Updates(map[string]any{"status": StatusEvidenceReady, "latest_version_id": target.ID, "updated_at": time.Now()}).Error
 	})
 	if err != nil {
 		return DocumentView{}, fmt.Errorf("activate document version: %w", err)

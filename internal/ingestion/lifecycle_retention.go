@@ -7,6 +7,7 @@ import (
 
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -30,8 +31,11 @@ func (s *Service) PurgeTaskHistory(ctx context.Context, before time.Time, limit 
 		ID                string
 		DocumentVersionID string
 	}
+	// Retention runs for every tenant by design; it is the explicit unscoped
+	// sweep rather than a query that merely forgot its tenant. Each query gets
+	// its own session so a chained model cannot leak into the next one.
 	var pipelines []expiredPipeline
-	if err := s.db.WithContext(ctx).
+	if err := tenantdb.Unscoped(s.db.WithContext(ctx), "retention: purge finished task history across tenants").
 		Model(&models.PipelineRun{}).
 		Select("id", "document_version_id").
 		Where("pipeline_type = ? AND status IN ? AND updated_at < ?", PipelineTypeEvidence, terminalPipelineStatuses, before).
@@ -41,7 +45,7 @@ func (s *Service) PurgeTaskHistory(ctx context.Context, before time.Time, limit 
 		return 0, fmt.Errorf("list expired pipeline runs: %w", err)
 	}
 	var deadLetterIDs []uint64
-	if err := s.db.WithContext(ctx).
+	if err := tenantdb.Unscoped(s.db.WithContext(ctx), "retention: purge finished task history across tenants").
 		Model(&models.TaskDeadLetter{}).
 		Where("status IN ? AND resolved_at IS NOT NULL AND resolved_at < ?", []string{pipeline.DeadLetterResolved, pipeline.DeadLetterDiscarded}, before).
 		Order("resolved_at, id").

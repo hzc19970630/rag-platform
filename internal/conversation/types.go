@@ -53,6 +53,17 @@ const (
 	CodeTimeout              = "timeout"
 	CodeClientDisconnected   = "client_disconnected"
 	CodeCancelled            = "cancelled"
+	// CodeWorkerLost marks a job whose worker lease expired; the answer will
+	// never complete and the stream receives a terminal error.
+	CodeWorkerLost = "worker_lost"
+	// CodeWorkerError marks a retryable worker failure; the job is requeued.
+	CodeWorkerError = "worker_error"
+	// CodeQueueUnavailable means the question was accepted but never enqueued.
+	CodeQueueUnavailable = "queue_unavailable"
+	// CodeJobInvalid means the durable job could not be reconstructed.
+	CodeJobInvalid = "job_invalid"
+	// CodeForbidden marks a job whose scope no longer authorizes the question.
+	CodeForbidden = "forbidden"
 )
 
 // Event is one stream message. Data becomes the JSON payload.

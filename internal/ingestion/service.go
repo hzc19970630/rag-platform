@@ -17,6 +17,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/formats"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -167,7 +168,7 @@ func (s *Service) IngestExternal(ctx context.Context, input ExternalUploadInput)
 		upload.IdempotencyKey = "connector:" + input.ActorID + ":" + contentHash(input.Content)
 	}
 	var knowledgeBase models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", input.TenantID, input.KnowledgeBaseID).First(&knowledgeBase).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), input.TenantID).Where("id = ?", input.KnowledgeBaseID).First(&knowledgeBase).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return UploadResult{}, apperror.ErrNotFound
 		}
@@ -209,7 +210,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 	}
 
 	var existing models.PipelineRun
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND idempotency_key = ?", principal.TenantID, input.IdempotencyKey).First(&existing).Error; err == nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("idempotency_key = ?", input.IdempotencyKey).First(&existing).Error; err == nil {
 		if restoreDeleted {
 			if err := s.clearTombstone(ctx, principal.TenantID, existing.DocumentID); err != nil {
 				return UploadResult{}, err
@@ -218,7 +219,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 				return UploadResult{}, err
 			}
 		}
-		return s.loadResult(ctx, existing.DocumentID, existing.DocumentVersionID, existing.ID)
+		return s.loadResult(ctx, principal.TenantID, existing.DocumentID, existing.DocumentVersionID, existing.ID)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return UploadResult{}, fmt.Errorf("check upload idempotency: %w", err)
 	}
@@ -231,7 +232,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 	var document models.Document
 	isNewDocument := documentID == ""
 	if !isNewDocument {
-		if err := s.db.WithContext(ctx).Where("tenant_id = ? AND knowledge_base_id = ? AND id = ?", principal.TenantID, input.KnowledgeBaseID, documentID).First(&document).Error; err != nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("knowledge_base_id = ? AND id = ?", input.KnowledgeBaseID, documentID).First(&document).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) && createMissing {
 				document = models.Document{
 					ID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID,
@@ -256,9 +257,9 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 			document.Status = StatusStored
 		}
 		var duplicate models.DocumentVersion
-		if err := s.db.WithContext(ctx).Where("document_id = ? AND content_hash = ?", documentID, hash).First(&duplicate).Error; err == nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("document_id = ? AND content_hash = ?", documentID, hash).First(&duplicate).Error; err == nil {
 			var pipeline models.PipelineRun
-			if err := s.db.WithContext(ctx).Where("document_version_id = ?", duplicate.ID).Order("created_at DESC").First(&pipeline).Error; err != nil {
+			if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("document_version_id = ?", duplicate.ID).Order("created_at DESC").First(&pipeline).Error; err != nil {
 				return UploadResult{}, fmt.Errorf("load duplicate pipeline: %w", err)
 			}
 			if restoreDeleted {
@@ -266,7 +267,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 					return UploadResult{}, err
 				}
 			}
-			return s.loadResult(ctx, duplicate.DocumentID, duplicate.ID, pipeline.ID)
+			return s.loadResult(ctx, principal.TenantID, duplicate.DocumentID, duplicate.ID, pipeline.ID)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return UploadResult{}, fmt.Errorf("check document duplicate: %w", err)
 		}
@@ -302,7 +303,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 	version := models.DocumentVersion{ID: versionID, DocumentID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, Version: 1, ContentHash: hash, SizeBytes: int64(len(input.Content)), SourceObjectKey: objectKey, Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion}
 	pipeline := models.PipelineRun{ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, DocumentID: documentID, DocumentVersionID: versionID, RequestID: input.RequestID, TraceID: input.TraceID, IdempotencyKey: input.IdempotencyKey, Status: StatusStored}
 	stage := models.StageRun{PipelineRunID: pipelineID, Stage: StageParse, Status: StagePending, IdempotencyKey: stageKey}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		// The pre-transaction check can race with another upload. Re-check under
 		// a tenant-scoped lock so the count and the insert are one serial unit.
 		if err := lockTenantQuota(tx, principal.TenantID); err != nil {
@@ -317,30 +318,30 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 			}
 		} else {
 			var currentVersion models.DocumentVersion
-			if document.LatestVersionID != "" && tx.First(&currentVersion, "id = ?", document.LatestVersionID).Error == nil {
+			if document.LatestVersionID != "" && tenantdb.MustScoped(tx, principal.TenantID).First(&currentVersion, "id = ?", document.LatestVersionID).Error == nil {
 				if err := tx.Model(&currentVersion).Updates(map[string]any{"status": StatusCancelled, "error_code": "superseded", "error_message": "superseded by a newer document version"}).Error; err != nil {
 					return err
 				}
-				if err := tx.Model(&models.Chunk{}).Where("document_version_id = ?", currentVersion.ID).Update("status", StatusStale).Error; err != nil {
+				if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Chunk{}).Where("document_version_id = ?", currentVersion.ID).Update("status", StatusStale).Error; err != nil {
 					return err
 				}
-				if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", currentVersion.ID).Update("status", StatusStale).Error; err != nil {
+				if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.EvidencePackage{}).Where("document_version_id = ?", currentVersion.ID).Update("status", StatusStale).Error; err != nil {
 					return err
 				}
 			}
-			if err := tx.Model(&document).Updates(map[string]any{"filename": input.Filename, "mime_type": mimeType, "status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
+			if err := tx.Model(&document).Where("tenant_id = ?", principal.TenantID).Updates(map[string]any{"filename": input.Filename, "mime_type": mimeType, "status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
 				return err
 			}
 		}
 		var count int64
-		if err := tx.Model(&models.DocumentVersion{}).Where("document_id = ?", documentID).Count(&count).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.DocumentVersion{}).Where("document_id = ?", documentID).Count(&count).Error; err != nil {
 			return err
 		}
 		version.Version = int(count) + 1
 		if err := tx.Create(&version).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&document).Updates(map[string]any{"status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
+		if err := tx.Model(&document).Where("tenant_id = ?", principal.TenantID).Updates(map[string]any{"status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
 			return err
 		}
 		if err := tx.Create(&pipeline).Error; err != nil {
@@ -360,7 +361,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 		return UploadResult{}, fmt.Errorf("create ingestion transaction: %w", err)
 	}
 	cleanupObject = false
-	return s.loadResult(ctx, documentID, versionID, pipelineID)
+	return s.loadResult(ctx, principal.TenantID, documentID, versionID, pipelineID)
 }
 
 // clearTombstone reactivates a document when the same connector item appears
@@ -370,7 +371,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 // without evidence comes back STORED and must be processed again.
 func (s *Service) clearTombstone(ctx context.Context, tenantID, documentID string) error {
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", tenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("id = ?", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
@@ -382,8 +383,8 @@ func (s *Service) clearTombstone(ctx context.Context, tenantID, documentID strin
 	status := StatusStored
 	if document.LatestVersionID != "" {
 		var version models.DocumentVersion
-		if err := s.db.WithContext(ctx).First(&version, "id = ?", document.LatestVersionID).Error; err == nil {
-			ready, readyErr := s.versionReady(ctx, version)
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&version, "id = ?", document.LatestVersionID).Error; err == nil {
+			ready, readyErr := s.versionReady(ctx, tenantID, version)
 			if readyErr != nil {
 				return readyErr
 			}
@@ -395,14 +396,14 @@ func (s *Service) clearTombstone(ctx context.Context, tenantID, documentID strin
 		}
 	}
 	now := time.Now()
-	return s.db.WithContext(ctx).Model(&models.Document{}).
-		Where("tenant_id = ? AND id = ? AND deleted_at IS NOT NULL", tenantID, documentID).
+	return tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.Document{}).
+		Where("id = ? AND deleted_at IS NOT NULL", documentID).
 		Updates(map[string]any{"status": status, "deleted_at": nil, "deleted_by": "", "purge_after": nil, "restored_at": &now, "updated_at": now}).Error
 }
 
 func (s *Service) Get(ctx context.Context, principal authz.Principal, documentID string) (DocumentView, error) {
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ? AND deleted_at IS NULL", principal.TenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ? AND deleted_at IS NULL", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return DocumentView{}, apperror.ErrNotFound
 		}
@@ -415,11 +416,11 @@ func (s *Service) Get(ctx context.Context, principal authz.Principal, documentID
 		return DocumentView{Document: document}, nil
 	}
 	var version models.DocumentVersion
-	if err := s.db.WithContext(ctx).First(&version, "id = ?", document.LatestVersionID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&version, "id = ?", document.LatestVersionID).Error; err != nil {
 		return DocumentView{}, fmt.Errorf("load document version: %w", err)
 	}
 	var pipeline models.PipelineRun
-	if err := s.db.WithContext(ctx).Where("document_version_id = ?", version.ID).Order("created_at DESC").First(&pipeline).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("document_version_id = ?", version.ID).Order("created_at DESC").First(&pipeline).Error; err != nil {
 		return DocumentView{}, fmt.Errorf("load pipeline: %w", err)
 	}
 	var stages []models.StageRun
@@ -441,7 +442,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 		return models.KnowledgeBase{}, apperror.ErrForbidden
 	}
 	var knowledgeBase models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&knowledgeBase).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&knowledgeBase).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.KnowledgeBase{}, apperror.ErrNotFound
 		}
@@ -454,17 +455,17 @@ func (s *Service) taskFor(principal authz.Principal, document models.Document, v
 	return Task{Envelope: Envelope{SchemaVersion: SchemaTask, TenantID: principal.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: pipeline.ID, StageRunID: fmt.Sprint(stage.ID), TraceID: pipeline.TraceID, RequestID: pipeline.RequestID, ActorID: principal.SubjectID, IdempotencyKey: stage.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, TaskType: TypeTask, Stage: stageName, ObjectKey: version.SourceObjectKey, PackageID: stableID("pkg", version.ID)}
 }
 
-func (s *Service) loadResult(ctx context.Context, documentID, versionID, pipelineID string) (UploadResult, error) {
+func (s *Service) loadResult(ctx context.Context, tenantID, documentID, versionID, pipelineID string) (UploadResult, error) {
 	var document models.Document
 	var version models.DocumentVersion
 	var pipeline models.PipelineRun
-	if err := s.db.WithContext(ctx).First(&document, "id = ?", documentID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&document, "id = ?", documentID).Error; err != nil {
 		return UploadResult{}, err
 	}
-	if err := s.db.WithContext(ctx).First(&version, "id = ?", versionID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&version, "id = ?", versionID).Error; err != nil {
 		return UploadResult{}, err
 	}
-	if err := s.db.WithContext(ctx).First(&pipeline, "id = ?", pipelineID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&pipeline, "id = ?", pipelineID).Error; err != nil {
 		return UploadResult{}, err
 	}
 	var stages []models.StageRun

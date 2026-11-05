@@ -16,6 +16,7 @@ import (
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/secrets"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -220,7 +221,7 @@ func (s *Service) createRun(ctx context.Context, connector models.Connector, mod
 	if err != nil {
 		return models.SyncRun{}, fmt.Errorf("marshal sync task: %w", err)
 	}
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = tenantdb.InTx(ctx, s.db, connector.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Create(&run).Error; err != nil {
 			return err
 		}

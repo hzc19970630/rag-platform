@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -57,8 +58,8 @@ func (s *Service) Snapshot(ctx context.Context, tenantID string, since time.Time
 	}
 
 	var modelErrors int64
-	if err := s.db.WithContext(ctx).Model(&models.Message{}).
-		Where("tenant_id = ? AND role = ? AND status = ? AND created_at >= ?", tenantID, "assistant", "FAILED", since).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.Message{}).
+		Where("role = ? AND status = ? AND created_at >= ?", "assistant", "FAILED", since).
 		Count(&modelErrors).Error; err != nil {
 		return Snapshot{}, err
 	}
@@ -67,10 +68,10 @@ func (s *Service) Snapshot(ctx context.Context, tenantID string, since time.Time
 		Status string
 		Total  int64
 	}
-	if err := s.db.WithContext(ctx).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).
 		Table("task_dead_letters").
 		Select("status, count(*) AS total").
-		Where("tenant_id = ? AND status IN ?", tenantID, []string{"PENDING", "RETRYING"}).
+		Where("status IN ?", []string{"PENDING", "RETRYING"}).
 		Group("status").
 		Scan(&letterRows).Error; err != nil {
 		return Snapshot{}, err
@@ -81,8 +82,8 @@ func (s *Service) Snapshot(ctx context.Context, tenantID string, since time.Time
 	}
 
 	var backlog int64
-	if err := s.db.WithContext(ctx).Model(&models.OutboxEvent{}).
-		Where("tenant_id = ? AND published_at IS NULL AND attempts < ?", tenantID, outboxMaxAttempts).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.OutboxEvent{}).
+		Where("published_at IS NULL AND attempts < ?", outboxMaxAttempts).
 		Count(&backlog).Error; err != nil {
 		return Snapshot{}, err
 	}

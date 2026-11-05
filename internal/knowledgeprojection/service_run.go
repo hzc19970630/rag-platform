@@ -13,6 +13,7 @@ import (
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
@@ -43,7 +44,7 @@ func (s *Service) TriggerWiki(ctx context.Context, tenantID, knowledgeBaseID, ev
 	sourceHash, _ := packagesSourceHash(packages, knowledgeBase.ACLVersion, s.generator.PromptVersion(), s.generator.Model())
 	_ = s.upsertWikiExpectedHash(ctx, knowledgeBase, sourceHash)
 	var latest models.ProjectionRun
-	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
+	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
 		Order("created_at DESC, id DESC").First(&latest).Error
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return lookupErr
@@ -87,7 +88,7 @@ func (s *Service) RebuildKnowledgeBase(ctx context.Context, tenantID, knowledgeB
 		return 0, nil
 	}
 	var active models.ProjectionRun
-	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBaseID, ProjectionTypeWiki,
+	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBaseID, ProjectionTypeWiki,
 		[]string{ProjectionPending, ProjectionRunning, ProjectionRetrying}).First(&active).Error
 	if lookupErr == nil {
 		return 1, nil
@@ -133,7 +134,7 @@ func (s *Service) RebuildRelations(ctx context.Context, tenantID, knowledgeBaseI
 		return 0, nil
 	}
 	var active models.ProjectionRun
-	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBaseID, ProjectionTypeRelation,
+	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBaseID, ProjectionTypeRelation,
 		activeStatusesFor(ProjectionTypeRelation)).First(&active).Error
 	if lookupErr == nil {
 		return 1, nil
@@ -181,7 +182,7 @@ func (s *Service) TriggerRelation(ctx context.Context, tenantID, knowledgeBaseID
 	sourceHash := s.relationSourceHash(packages, knowledgeBase.ACLVersion)
 	_ = s.upsertRelationExpectedHash(ctx, knowledgeBase, sourceHash)
 	var latest models.ProjectionRun
-	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeRelation).
+	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeRelation).
 		Order("created_at DESC, id DESC").First(&latest).Error
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return lookupErr
@@ -209,14 +210,14 @@ func (s *Service) createRun(ctx context.Context, knowledgeBase models.KnowledgeB
 func (s *Service) createRunFor(ctx context.Context, knowledgeBase models.KnowledgeBase, projectionType, evidencePackageID, sourceHash string) error {
 	now := time.Now()
 	activeStatuses := activeStatusesFor(projectionType)
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := tenantdb.InTx(ctx, s.db, knowledgeBase.TenantID, func(tx *gorm.DB) error {
 		return s.insertRunFor(tx, knowledgeBase, projectionType, evidencePackageID, sourceHash, now)
 	})
 	if err != nil {
 		// A concurrent trigger may have won the one-active-run index. That is the
 		// intended coalescing outcome, not a request failure.
 		var active models.ProjectionRun
-		if lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBase.ID, projectionType,
+		if lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), knowledgeBase.TenantID).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBase.ID, projectionType,
 			activeStatuses).First(&active).Error; lookupErr == nil {
 			return nil
 		}
@@ -273,7 +274,7 @@ func (s *Service) insertRunFor(tx *gorm.DB, knowledgeBase models.KnowledgeBase, 
 
 func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRun) error {
 	now := time.Now()
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return tenantdb.InTx(ctx, s.db, run.TenantID, func(tx *gorm.DB) error {
 		var stages []models.ProjectionStageRun
 		if err := tx.Where("projection_run_id = ?", run.ID).Order("id").Find(&stages).Error; err != nil {
 			return err
@@ -293,7 +294,7 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 		}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		if err := tenantdb.MustScoped(tx, run.TenantID).Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
 			"status": retryStatusFor(run.ProjectionType), "error_code": "", "error_message": "", "updated_at": now,
 		}).Error; err != nil {
 			return err
@@ -326,7 +327,7 @@ func (s *Service) InvalidateKnowledgeBase(ctx context.Context, tenantID, knowled
 			return fmt.Errorf("invalidate graph snapshots: %w", err)
 		}
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
 		if err := tx.Model(&models.WikiPage{}).
 			Where("tenant_id = ? AND knowledge_base_id = ? AND status <> ? AND status <> ?", tenantID, knowledgeBaseID, PageArchived, PageStale).
 			Updates(map[string]any{"status": PageStale, "updated_at": now}).Error; err != nil {
@@ -364,7 +365,7 @@ func (s *Service) ScheduleMissing(ctx context.Context, limit int, cursor string)
 	}
 	// SQLite renders JSON true as 1, PostgreSQL as 'true'; cast both to text so
 	// the SQLite-backed tests exercise the real query.
-	query := s.db.WithContext(ctx).
+	query := tenantdb.Unscoped(s.db.WithContext(ctx), "projection sweep: schedule missing projections across tenants").
 		Where("CAST(indexing_strategy->>'wiki_enabled' AS TEXT) IN ('true', '1') OR CAST(indexing_strategy->>'graph_enabled' AS TEXT) IN ('true', '1')")
 	position := cursor
 	if position != "" {
@@ -448,7 +449,7 @@ func (s *Service) scheduleProjection(ctx context.Context, knowledgeBase models.K
 		_ = s.upsertWikiExpectedHash(ctx, knowledgeBase, sourceHash)
 	}
 	var latest models.ProjectionRun
-	lookupErr := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBase.ID, projectionType).
+	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), knowledgeBase.TenantID).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBase.ID, projectionType).
 		Order("created_at DESC, id DESC").First(&latest).Error
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -488,12 +489,12 @@ func (s *Service) Status(ctx context.Context, principal authz.Principal, knowled
 		return ProjectionStatus{}, err
 	}
 	var runs []models.ProjectionRun
-	if err := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
 		Order("created_at DESC, id DESC").Limit(20).Find(&runs).Error; err != nil {
 		return ProjectionStatus{}, err
 	}
 	var relationRuns []models.ProjectionRun
-	if err := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeRelation).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeRelation).
 		Order("created_at DESC, id DESC").Limit(20).Find(&relationRuns).Error; err != nil {
 		return ProjectionStatus{}, err
 	}
@@ -524,7 +525,7 @@ func (s *Service) ListRuns(ctx context.Context, principal authz.Principal, knowl
 		limit = 20
 	}
 	var runs []models.ProjectionRun
-	if err := s.db.WithContext(ctx).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("knowledge_base_id = ? AND projection_type = ?", knowledgeBaseID, ProjectionTypeWiki).
 		Order("created_at DESC, id DESC").Limit(limit).Find(&runs).Error; err != nil {
 		return nil, err
 	}
@@ -588,7 +589,7 @@ func (s *Service) Reconcile(ctx context.Context) (int, error) {
 func (s *Service) reconcileWiki(ctx context.Context) (int, error) {
 	now := time.Now()
 	var staleIDs []string
-	if err := s.db.WithContext(ctx).Table("wiki_pages p").
+	if err := tenantdb.Unscoped(s.db.WithContext(ctx), "projection reconcile: stale wiki pages across tenants").Table("wiki_pages p").
 		Select("p.id").
 		Where("p.status IN ?", []string{PagePublished, PageReviewRequired, PageDraft}).
 		Where(`p.acl_version <> (SELECT kb.acl_version FROM knowledge_bases kb WHERE kb.id = p.knowledge_base_id)

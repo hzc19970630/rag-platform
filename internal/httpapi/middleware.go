@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -9,7 +10,9 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/identity"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const (
@@ -40,7 +43,7 @@ func authenticationMiddleware(cfg config.Config, deps MiddlewareDeps) gin.Handle
 				return
 			}
 			c.Set(accessContextKey, authz.AccessContext{Principal: principal, RequestID: requestID})
-			c.Next()
+			runWithTenantTx(c, deps.DB, principal.TenantID)
 			return
 		}
 		if !cfg.Auth.DevAuthEnabled || (cfg.AppEnv != "development" && cfg.AppEnv != "test") {
@@ -67,8 +70,37 @@ func authenticationMiddleware(cfg config.Config, deps MiddlewareDeps) gin.Handle
 			return
 		}
 		c.Set(accessContextKey, authz.AccessContext{Principal: principal, RequestID: requestID, DevIdentity: true})
-		c.Next()
+		runWithTenantTx(c, deps.DB, principal.TenantID)
 	}
+}
+
+// runWithTenantTx continues the chain inside the request-scoped tenant
+// transaction when RLS is enforced. Outside enforce mode BeginRequestTx is a
+// no-op, so shadow deployments and tests keep the pooled behavior.
+func runWithTenantTx(c *gin.Context, db *gorm.DB, tenantID string) {
+	if db == nil {
+		c.Next()
+		return
+	}
+	ctx, finish, err := tenantdb.BeginRequestTx(c.Request.Context(), db, tenantID)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Request = c.Request.WithContext(ctx)
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			finish(fmt.Errorf("handler panic: %v", recovered))
+			panic(recovered)
+		}
+		// A failed request must not leave half a tenant's writes committed.
+		var cause error
+		if status := c.Writer.Status(); status >= http.StatusInternalServerError {
+			cause = fmt.Errorf("request finished with status %d", status)
+		}
+		finish(cause)
+	}()
+	c.Next()
 }
 
 // withRequestMetadata copies the request correlation and client origin onto the

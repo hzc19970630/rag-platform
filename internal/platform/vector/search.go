@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/vecutil"
 	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/example/rag-platform/internal/status"
@@ -112,7 +113,7 @@ func (s *Searcher) SearchVector(ctx context.Context, request retrieval.RecallReq
 	literal := vecutil.Literal(embedding)
 
 	var hits []retrieval.Hit
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := tenantdb.InTx(ctx, s.db, request.TenantID, func(tx *gorm.DB) error {
 		if efSearch > 0 {
 			// efSearch is a validated non-negative int, so inlining is safe.
 			if err := tx.Exec(fmt.Sprintf(vectorEFSearchStatement, efSearch)).Error; err != nil {

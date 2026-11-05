@@ -37,6 +37,56 @@ func loadLeaseRow(t *testing.T, db *gorm.DB, key string) models.TaskInbox {
 	return row
 }
 
+func TestClaimCopiesOwningRunTenant(t *testing.T) {
+	db := newLeaseDB(t)
+	if err := db.AutoMigrate(&models.PipelineRun{}); err != nil {
+		t.Fatalf("migrate pipeline runs: %v", err)
+	}
+	now := time.Now()
+	run := models.PipelineRun{
+		ID: "pipe-tenant-a", PipelineType: "ingestion", TenantID: "tenant-a",
+		KnowledgeBaseID: "kb-1", DocumentID: "doc-1", DocumentVersionID: "dv-1",
+		RequestID: "req-1", TraceID: "trace-1", IdempotencyKey: "pipe-tenant-a",
+		Status: "QUEUED", CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(&run).Error; err != nil {
+		t.Fatalf("create pipeline run: %v", err)
+	}
+	ctx := context.Background()
+	key := "pipe-tenant-a:parse"
+	if claimed, err := Claim(ctx, db, key, "document.ingestion.v1", 0, New("owner-a", time.Minute)); err != nil || !claimed {
+		t.Fatalf("claim = %v, %v", claimed, err)
+	}
+	row := loadLeaseRow(t, db, key)
+	if row.TenantID == nil || *row.TenantID != "tenant-a" {
+		t.Fatalf("new inbox row did not copy the run tenant: %v", row.TenantID)
+	}
+
+	legacyKey := "pipe-tenant-a:chunk"
+	if err := db.Create(&models.TaskInbox{
+		IdempotencyKey: legacyKey, TaskType: "document.ingestion.v1", Status: "FAILED",
+		CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("create legacy inbox row: %v", err)
+	}
+	if claimed, err := Claim(ctx, db, legacyKey, "document.ingestion.v1", 0, New("owner-a", time.Minute)); err != nil || !claimed {
+		t.Fatalf("legacy claim = %v, %v", claimed, err)
+	}
+	row = loadLeaseRow(t, db, legacyKey)
+	if row.TenantID == nil || *row.TenantID != "tenant-a" {
+		t.Fatalf("legacy inbox row was not backfilled with the run tenant: %v", row.TenantID)
+	}
+
+	unknownKey := "orphan:parse"
+	if claimed, err := Claim(ctx, db, unknownKey, "document.ingestion.v1", 0, New("owner-a", time.Minute)); err != nil || !claimed {
+		t.Fatalf("orphan claim = %v, %v", claimed, err)
+	}
+	row = loadLeaseRow(t, db, unknownKey)
+	if row.TenantID != nil {
+		t.Fatalf("unresolvable key must keep tenant_id NULL, got %q", *row.TenantID)
+	}
+}
+
 func TestRenewExtendsOnlyTheOwnerLease(t *testing.T) {
 	db := newLeaseDB(t)
 	ctx := context.Background()

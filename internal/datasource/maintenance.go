@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func (s *MaintenanceManager) ScheduleDue(ctx context.Context, limit int) (int, e
 	}
 	now := time.Now()
 	var connectors []models.Connector
-	if err := s.db.WithContext(ctx).
+	if err := tenantdb.Unscoped(s.db.WithContext(ctx), "connector scheduler: list due connectors across tenants").
 		Where("enabled = TRUE AND next_sync_at IS NOT NULL AND next_sync_at <= ?", now).
 		Order("next_sync_at").Limit(limit).Find(&connectors).Error; err != nil {
 		return 0, fmt.Errorf("list due connectors: %w", err)
@@ -44,7 +45,7 @@ func (s *MaintenanceManager) ScheduleDue(ctx context.Context, limit int) (int, e
 			value := now.Add(time.Duration(connector.SyncIntervalSeconds) * time.Second)
 			next = &value
 		}
-		if err := s.db.WithContext(ctx).Model(&models.Connector{}).Where("id = ?", connector.ID).
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), connector.TenantID).Model(&models.Connector{}).Where("id = ?", connector.ID).
 			Updates(map[string]any{"next_sync_at": next, "updated_at": now}).Error; err != nil && firstErr == nil {
 			firstErr = fmt.Errorf("reschedule connector %s: %w", connector.ID, err)
 		}
@@ -55,14 +56,15 @@ func (s *MaintenanceManager) ScheduleDue(ctx context.Context, limit int) (int, e
 // ExpireStaleRuns recovers work that Redis lost after the run row was written.
 // Without it the one-active-run index would block that connector forever.
 func (s *MaintenanceManager) ExpireStaleRuns(ctx context.Context, now time.Time) (int, error) {
-	result := s.db.WithContext(ctx).Model(&models.SyncRun{}).
+	base := tenantdb.Unscoped(s.db.WithContext(ctx), "connector maintenance: expire stale sync runs across tenants")
+	result := base.Model(&models.SyncRun{}).
 		Where("status = ? AND lease_until IS NOT NULL AND lease_until < ?", StatusRunning, now.Add(-5*time.Minute)).
 		Updates(map[string]any{"status": StatusFailed, "error_summary": "worker lease expired", "finished_at": &now, "updated_at": now})
 	if result.Error != nil {
 		return 0, fmt.Errorf("expire stale sync runs: %w", result.Error)
 	}
 	expired := int(result.RowsAffected)
-	stalePending := s.db.WithContext(ctx).Model(&models.SyncRun{}).
+	stalePending := tenantdb.Unscoped(s.db.WithContext(ctx), "connector maintenance: expire stale sync runs across tenants").Model(&models.SyncRun{}).
 		Where("status = ? AND created_at < ?", StatusPending, now.Add(-time.Hour)).
 		Updates(map[string]any{"status": StatusFailed, "error_summary": "sync dispatch timed out", "finished_at": &now, "updated_at": now})
 	if stalePending.Error != nil {

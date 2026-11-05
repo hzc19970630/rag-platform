@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"sort"
 	"strings"
 	"sync"
@@ -84,6 +85,20 @@ func (e *PlanExecutor) Execute(ctx context.Context, plan QueryPlan, params Param
 		errs      []string
 		attempted int
 	)
+	run := func(channel RecallChannel) {
+		result, err := channel.Recall(ctx, request, params)
+		mu.Lock()
+		defer mu.Unlock()
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", channel.Name(), err))
+			return
+		}
+		hits[channel.Name()] = result
+	}
+	// A request transaction pins one driver connection, and that connection
+	// cannot execute two statements at once. Channels run one after another in
+	// that mode; without it they stay parallel.
+	serialized := tenantdb.RequestTxActive(ctx)
 	for _, name := range selected {
 		channel, ok := e.channels[strings.ToLower(name)]
 		if !ok {
@@ -92,17 +107,14 @@ func (e *PlanExecutor) Execute(ctx context.Context, plan QueryPlan, params Param
 			continue
 		}
 		attempted++
+		if serialized {
+			run(channel)
+			continue
+		}
 		wait.Add(1)
 		go func(channel RecallChannel) {
 			defer wait.Done()
-			result, err := channel.Recall(ctx, request, params)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				errs = append(errs, fmt.Sprintf("%s: %v", channel.Name(), err))
-				return
-			}
-			hits[channel.Name()] = result
+			run(channel)
 		}(channel)
 	}
 	wait.Wait()

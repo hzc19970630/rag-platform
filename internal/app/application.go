@@ -28,6 +28,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/search"
 	"github.com/example/rag-platform/internal/platform/secrets"
 	"github.com/example/rag-platform/internal/platform/storage"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/vector"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
@@ -35,7 +36,11 @@ import (
 )
 
 type Application struct {
-	DB            *gorm.DB
+	DB *gorm.DB
+	// MaintenanceDB bypasses row-level security for pre-tenant work: login and
+	// API-key resolution in the API, and, in enforce mode, every worker job.
+	// It is the same handle as DB unless the process runs with RLS enforced.
+	MaintenanceDB *gorm.DB
 	Identity      *identity.Service
 	Authorization *authz.Service
 	KnowledgeBase *knowledgebase.Service
@@ -55,6 +60,16 @@ type Application struct {
 	Docreader     *docreader.Client
 	Limiter       *ratelimit.Limiter
 }
+
+// Role selects the process wiring. The API runs tenant requests on the
+// non-bypass role and keeps a maintenance handle for authentication; the worker
+// owns cross-tenant sweeps and runs entirely on the maintenance role.
+type Role string
+
+const (
+	RoleAPI    Role = "api"
+	RoleWorker Role = "worker"
+)
 
 // Readiness reports the live state of the database and the object store for
 // /readyz. TCP reachability alone is not enough: a stopped PostgreSQL still
@@ -81,24 +96,67 @@ func (a *Application) Readiness(ctx context.Context) (string, string) {
 // Open builds the process-wide object graph. The metrics recorder is supplied
 // by the command so the API, worker and the dedicated /metrics listener share
 // one registry instead of reaching for a package-level default.
-func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
+func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application, error) {
 	if recorder == nil {
 		recorder = metrics.Nop{}
 	}
-	database, err := persistence.Open(cfg.DatabaseURL, persistence.PoolOptions{
+	if err := tenantdb.ConfigureRLSMode(cfg.TenantRLSMode); err != nil {
+		return nil, err
+	}
+	pool := persistence.PoolOptions{
 		MaxOpenConns:    cfg.DatabaseMaxOpenConns,
 		MaxIdleConns:    cfg.DatabaseMaxIdleConns,
 		ConnMaxLifetime: time.Duration(cfg.DatabaseConnMaxLifetimeSeconds) * time.Second,
-	})
+	}
+	enforced := tenantdb.CurrentRLSMode() == tenantdb.RLSModeEnforce
+	runtimeURL := cfg.DatabaseURL
+	if enforced && role == RoleWorker {
+		// Worker jobs (outbox fanout, reconcile, retention) are cross-tenant by
+		// design; strict policies would hide the rows they exist to process.
+		runtimeURL = cfg.MaintenanceDatabaseURL
+	}
+	database, err := persistence.Open(runtimeURL, pool)
 	if err != nil {
 		return nil, err
 	}
+	maintenance := database
+	closeAll := func() {
+		closeDatabase(database)
+		if maintenance != database {
+			closeDatabase(maintenance)
+		}
+	}
+	if enforced {
+		if role == RoleAPI {
+			if err := tenantdb.VerifyRuntimeRole(context.Background(), database); err != nil {
+				closeAll()
+				return nil, err
+			}
+			maintenance, err = persistence.Open(cfg.MaintenanceDatabaseURL, pool)
+			if err != nil {
+				closeAll()
+				return nil, err
+			}
+			if err := tenantdb.VerifyMaintenanceRole(context.Background(), maintenance); err != nil {
+				closeAll()
+				return nil, err
+			}
+			// Redirect pooled API statements onto the per-request tenant
+			// transaction. Enablement is still runtime-checked per request, so
+			// the callbacks are inert until BeginRequestTx succeeds.
+			tenantdb.InstallRequestTxCallbacks(database)
+		} else if err := tenantdb.VerifyMaintenanceRole(context.Background(), database); err != nil {
+			closeAll()
+			return nil, err
+		}
+	}
 	authorization, err := authz.NewService(database)
 	if err != nil {
+		closeAll()
 		return nil, fmt.Errorf("initialize authorization: %w", err)
 	}
 	if err := authorization.StartInvalidation(context.Background(), cfg.RedisAddr, cfg.RedisPassword); err != nil {
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	// Resolve the embedder before the knowledge-base service so a knowledge
@@ -106,36 +164,36 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 	embedder, err := NewEmbedder(cfg)
 	if err != nil {
 		_ = authorization.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
-	identityService, err := identity.NewService(database, identityOptions(cfg.Auth))
+	identityService, err := identity.NewService(maintenance, identityOptions(cfg.Auth))
 	if err != nil {
 		_ = authorization.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, fmt.Errorf("initialize identity: %w", err)
 	}
 	binding := knowledgebase.EmbeddingBinding{Model: embedder.Name(), Dimension: embedder.Dimension()}
-	if _, err := knowledgebase.BackfillEmbeddingBinding(context.Background(), database, binding); err != nil {
+	if _, err := knowledgebase.BackfillEmbeddingBinding(context.Background(), maintenance, binding); err != nil {
 		_ = authorization.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	knowledgeBaseService := knowledgebase.NewService(database, authorization, binding)
 	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle, cfg.MaxFileBytes)
 	if err != nil {
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	if err := objects.EnsureBucket(context.Background()); err != nil {
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword)
 	reader, err := docreader.New(cfg.DocreaderAddr)
 	if err != nil {
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	indexWriter := evidenceindex.New(database)
@@ -145,7 +203,7 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, fmt.Errorf("initialize connector credentials: %w", err)
 	}
 	dataSourceService := datasource.NewService(database, authorization, credentialCipher, ingestionService, datasource.FetchOptions{
@@ -162,28 +220,28 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, fmt.Errorf("load prompt templates: %w", err)
 	}
 	chatter, err := NewChatter(cfg)
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	reranker, err := NewReranker(cfg)
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	modelCatalog, err := newModelRegistry(database, cfg, chatter.Name(), reranker.Name(), embedder.Name(), probeOf(chatter), probeOf(reranker), probeOf(embedder))
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	knowledgeBaseService.SetModelCatalog(modelCatalog)
@@ -191,14 +249,14 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	relationExtractor, err := knowledgeprojection.NewExtractor(chatter, registry)
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
-		closeDatabase(database)
+		closeAll()
 		return nil, err
 	}
 	var generationCache projectioncache.Cache
@@ -231,8 +289,11 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 		HistoryTurns:       cfg.Chat.HistoryTurns,
 		HistoryTokenLimit:  cfg.Chat.HistoryTokenLimit,
 		Metrics:            recorder,
+		AnswerPublisher:    publisher,
+		AsyncEnabled:       cfg.Answer.AsyncEnabled,
+		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {
@@ -257,6 +318,9 @@ func (a *Application) Close() error {
 	}
 	if a.Queue != nil {
 		_ = a.Queue.Close()
+	}
+	if a.MaintenanceDB != nil && a.MaintenanceDB != a.DB {
+		closeDatabase(a.MaintenanceDB)
 	}
 	if a.DB == nil {
 		return nil

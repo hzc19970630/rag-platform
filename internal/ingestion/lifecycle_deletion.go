@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +23,7 @@ import (
 // In-flight work is cancelled so a late worker cannot publish a deleted version.
 func (s *Service) Delete(ctx context.Context, principal authz.Principal, documentID string) error {
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return apperror.ErrNotFound
 		}
@@ -45,7 +46,7 @@ func (s *Service) Delete(ctx context.Context, principal authz.Principal, documen
 // a user delete so a late ingestion task cannot publish deleted content.
 func (s *Service) TombstoneExternal(ctx context.Context, tenantID, documentID, actorID string) error {
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", tenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("id = ?", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
@@ -60,15 +61,15 @@ func (s *Service) softDelete(ctx context.Context, document models.Document, acto
 	}
 	now := time.Now()
 	purgeAfter := now.Add(s.retention)
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
+	err := tenantdb.InTx(ctx, s.db, document.TenantID, func(tx *gorm.DB) error {
+		if err := tenantdb.MustScoped(tx, document.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
 			"status": StatusCancelled, "deleted_at": &now, "deleted_by": actorID,
 			"purge_after": &purgeAfter, "restored_at": nil, "updated_at": now,
 		}).Error; err != nil {
 			return err
 		}
 		var versions []models.DocumentVersion
-		if err := tx.Where("document_id = ?", document.ID).Find(&versions).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, document.TenantID).Where("document_id = ?", document.ID).Find(&versions).Error; err != nil {
 			return err
 		}
 		versionIDs := make([]string, 0, len(versions))
@@ -76,11 +77,11 @@ func (s *Service) softDelete(ctx context.Context, document models.Document, acto
 			versionIDs = append(versionIDs, version.ID)
 		}
 		if len(versionIDs) > 0 {
-			if err := cancelPendingOutbox(tx, versionIDs); err != nil {
+			if err := cancelPendingOutbox(tx, document.TenantID, versionIDs); err != nil {
 				return err
 			}
 		}
-		return cancelDocumentPipelines(tx, document.ID)
+		return cancelDocumentPipelines(tx, document.TenantID, document.ID)
 	})
 	if err != nil {
 		return fmt.Errorf("delete document: %w", err)
@@ -97,7 +98,7 @@ func (s *Service) softDelete(ctx context.Context, document models.Document, acto
 // reparsed; a ready version comes back searchable immediately.
 func (s *Service) Restore(ctx context.Context, principal authz.Principal, documentID string) (models.Document, error) {
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Document{}, apperror.ErrNotFound
 		}
@@ -115,8 +116,8 @@ func (s *Service) Restore(ctx context.Context, principal authz.Principal, docume
 	status := StatusStored
 	if document.LatestVersionID != "" {
 		var version models.DocumentVersion
-		if err := s.db.WithContext(ctx).First(&version, "id = ?", document.LatestVersionID).Error; err == nil {
-			if ready, readyErr := s.versionReady(ctx, version); readyErr != nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&version, "id = ?", document.LatestVersionID).Error; err == nil {
+			if ready, readyErr := s.versionReady(ctx, principal.TenantID, version); readyErr != nil {
 				return models.Document{}, readyErr
 			} else if ready {
 				status = StatusEvidenceReady
@@ -124,7 +125,7 @@ func (s *Service) Restore(ctx context.Context, principal authz.Principal, docume
 		}
 	}
 	now := time.Now()
-	if err := s.db.WithContext(ctx).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
 		"status": status, "deleted_at": nil, "deleted_by": "", "purge_after": nil, "restored_at": &now, "updated_at": now,
 	}).Error; err != nil {
 		return models.Document{}, fmt.Errorf("restore document: %w", err)
@@ -132,7 +133,7 @@ func (s *Service) Restore(ctx context.Context, principal authz.Principal, docume
 	// Read into a fresh value: reusing the loaded struct keeps the pre-restore
 	// deleted_at/purge_after in the response.
 	var restored models.Document
-	if err := s.db.WithContext(ctx).First(&restored, "id = ?", document.ID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&restored, "id = ?", document.ID).Error; err != nil {
 		return models.Document{}, err
 	}
 	return restored, nil
@@ -150,7 +151,7 @@ func (s *Service) Purge(ctx context.Context, principal authz.Principal, document
 		return err
 	}
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return apperror.ErrNotFound
 		}
@@ -162,7 +163,7 @@ func (s *Service) Purge(ctx context.Context, principal authz.Principal, document
 	if document.DeletedAt == nil {
 		return apperror.Invalidf("document must be deleted before it can be purged")
 	}
-	if err := s.purgeDocument(ctx, document.ID); err != nil {
+	if err := s.purgeDocument(ctx, document.TenantID, document.ID); err != nil {
 		return err
 	}
 	return s.recordDocumentAudit(ctx, principal, "purge", document.ID)
@@ -203,12 +204,14 @@ func (s *Service) PurgeExpired(ctx context.Context, limit int) (int, error) {
 		limit = 50
 	}
 	var documents []models.Document
-	if err := s.db.WithContext(ctx).Where("deleted_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?", time.Now()).Order("purge_after").Limit(limit).Find(&documents).Error; err != nil {
+	if err := tenantdb.Unscoped(s.db.WithContext(ctx), "retention: purge expired documents across tenants").
+		Where("deleted_at IS NOT NULL AND purge_after IS NOT NULL AND purge_after <= ?", time.Now()).
+		Order("purge_after").Limit(limit).Find(&documents).Error; err != nil {
 		return 0, fmt.Errorf("list expired documents: %w", err)
 	}
 	purged := 0
 	for _, document := range documents {
-		if err := s.purgeDocument(ctx, document.ID); err != nil {
+		if err := s.purgeDocument(ctx, document.TenantID, document.ID); err != nil {
 			return purged, err
 		}
 		purged++
@@ -216,9 +219,9 @@ func (s *Service) PurgeExpired(ctx context.Context, limit int) (int, error) {
 	return purged, nil
 }
 
-func (s *Service) purgeDocument(ctx context.Context, documentID string) error {
+func (s *Service) purgeDocument(ctx context.Context, tenantID, documentID string) error {
 	var versions []models.DocumentVersion
-	if err := s.db.WithContext(ctx).Where("document_id = ?", documentID).Find(&versions).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("document_id = ?", documentID).Find(&versions).Error; err != nil {
 		return fmt.Errorf("load versions for purge: %w", err)
 	}
 	versionIDs := make([]string, 0, len(versions))
@@ -235,20 +238,20 @@ func (s *Service) purgeDocument(ctx context.Context, documentID string) error {
 			}
 		}
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
 		if len(versionIDs) > 0 {
-			if err := tx.Where("document_version_id IN ?", versionIDs).Delete(&models.Chunk{}).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, tenantID).Where("document_version_id IN ?", versionIDs).Delete(&models.Chunk{}).Error; err != nil {
 				return err
 			}
-			if err := tx.Where("document_version_id IN ?", versionIDs).Delete(&models.EvidencePackage{}).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, tenantID).Where("document_version_id IN ?", versionIDs).Delete(&models.EvidencePackage{}).Error; err != nil {
 				return err
 			}
-			if err := tx.Where("document_version_id IN ?", versionIDs).Delete(&models.TaskDeadLetter{}).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, tenantID).Where("document_version_id IN ?", versionIDs).Delete(&models.TaskDeadLetter{}).Error; err != nil {
 				return err
 			}
 		}
 		var pipelines []models.PipelineRun
-		if err := tx.Where("document_id = ?", documentID).Find(&pipelines).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, tenantID).Where("document_id = ?", documentID).Find(&pipelines).Error; err != nil {
 			return err
 		}
 		pipelineIDs := make([]string, 0, len(pipelines))
@@ -261,7 +264,7 @@ func (s *Service) purgeDocument(ctx context.Context, documentID string) error {
 			}
 			// Later stages are published with the pipeline run as their
 			// aggregate, so both aggregate kinds must be purged.
-			if err := tx.Where("aggregate_id IN ?", append(append([]string{}, versionIDs...), pipelineIDs...)).Delete(&models.OutboxEvent{}).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, tenantID).Where("aggregate_id IN ?", append(append([]string{}, versionIDs...), pipelineIDs...)).Delete(&models.OutboxEvent{}).Error; err != nil {
 				return err
 			}
 			for _, pipelineID := range pipelineIDs {
@@ -270,17 +273,17 @@ func (s *Service) purgeDocument(ctx context.Context, documentID string) error {
 				}
 			}
 		} else if len(versionIDs) > 0 {
-			if err := tx.Where("aggregate_id IN ?", versionIDs).Delete(&models.OutboxEvent{}).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, tenantID).Where("aggregate_id IN ?", versionIDs).Delete(&models.OutboxEvent{}).Error; err != nil {
 				return err
 			}
 		}
-		if err := tx.Where("document_id = ?", documentID).Delete(&models.PipelineRun{}).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, tenantID).Where("document_id = ?", documentID).Delete(&models.PipelineRun{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("document_id = ?", documentID).Delete(&models.DocumentVersion{}).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, tenantID).Where("document_id = ?", documentID).Delete(&models.DocumentVersion{}).Error; err != nil {
 			return err
 		}
-		return tx.Where("id = ?", documentID).Delete(&models.Document{}).Error
+		return tenantdb.MustScoped(tx, tenantID).Where("id = ?", documentID).Delete(&models.Document{}).Error
 	})
 	if err != nil {
 		return fmt.Errorf("purge document: %w", err)
@@ -303,7 +306,7 @@ func (s *Service) loadActiveDocument(ctx context.Context, principal authz.Princi
 		return models.Document{}, apperror.ErrNotFound
 	}
 	var document models.Document
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, documentID).First(&document).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", documentID).First(&document).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Document{}, apperror.ErrNotFound
 		}
@@ -318,25 +321,25 @@ func (s *Service) loadActiveDocument(ctx context.Context, principal authz.Princi
 	return document, nil
 }
 
-func supersedeVersion(tx *gorm.DB, versionID, reason string) error {
-	if err := tx.Model(&models.DocumentVersion{}).Where("id = ?", versionID).Updates(map[string]any{
+func supersedeVersion(tx *gorm.DB, tenantID, versionID, reason string) error {
+	if err := tenantdb.MustScoped(tx, tenantID).Model(&models.DocumentVersion{}).Where("id = ?", versionID).Updates(map[string]any{
 		"status": StatusCancelled, "error_code": "superseded", "error_message": reason, "updated_at": time.Now(),
 	}).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&models.Chunk{}).Where("document_version_id = ?", versionID).Update("status", StatusStale).Error; err != nil {
+	if err := tenantdb.MustScoped(tx, tenantID).Model(&models.Chunk{}).Where("document_version_id = ?", versionID).Update("status", StatusStale).Error; err != nil {
 		return err
 	}
-	if err := tx.Model(&models.EvidencePackage{}).Where("document_version_id = ?", versionID).Update("status", StatusStale).Error; err != nil {
+	if err := tenantdb.MustScoped(tx, tenantID).Model(&models.EvidencePackage{}).Where("document_version_id = ?", versionID).Update("status", StatusStale).Error; err != nil {
 		return err
 	}
-	return cancelPendingOutbox(tx, []string{versionID})
+	return cancelPendingOutbox(tx, tenantID, []string{versionID})
 }
 
-func cancelDocumentPipelines(tx *gorm.DB, documentID string) error {
+func cancelDocumentPipelines(tx *gorm.DB, tenantID, documentID string) error {
 	now := time.Now()
 	var pipelines []models.PipelineRun
-	if err := tx.Where("document_id = ? AND status NOT IN ?", documentID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).Find(&pipelines).Error; err != nil {
+	if err := tenantdb.MustScoped(tx, tenantID).Where("document_id = ? AND status NOT IN ?", documentID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).Find(&pipelines).Error; err != nil {
 		return err
 	}
 	if len(pipelines) == 0 {
@@ -349,5 +352,5 @@ func cancelDocumentPipelines(tx *gorm.DB, documentID string) error {
 	if err := tx.Model(&models.StageRun{}).Where("pipeline_run_id IN ? AND status IN ?", pipelineIDs, []string{StagePending, StageProcessing}).Updates(map[string]any{"status": StageCancelled, "error_code": "deleted", "error_message": "document deleted", "updated_at": now}).Error; err != nil {
 		return err
 	}
-	return tx.Model(&models.PipelineRun{}).Where("id IN ?", pipelineIDs).Updates(map[string]any{"status": StatusCancelled, "error_code": "deleted", "error_message": "document deleted", "updated_at": now}).Error
+	return tenantdb.MustScoped(tx, tenantID).Model(&models.PipelineRun{}).Where("id IN ?", pipelineIDs).Updates(map[string]any{"status": StatusCancelled, "error_code": "deleted", "error_message": "document deleted", "updated_at": now}).Error
 }

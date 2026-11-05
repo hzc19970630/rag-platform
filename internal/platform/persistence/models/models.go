@@ -303,6 +303,10 @@ type TaskInbox struct {
 	TaskType       string `gorm:"size:128;not null" json:"taskType"`
 	Status         string `gorm:"size:32;not null" json:"status"`
 	StageRunID     uint64 `json:"stageRunId"`
+	// TenantID mirrors the owning pipeline or projection run so RLS can scope
+	// the inbox without a join. It stays NULL only for rows whose key does not
+	// resolve to a run.
+	TenantID *string `gorm:"size:64" json:"tenantId,omitempty"`
 	// LeaseOwner identifies the worker executing the task. A row with a live
 	// lease must never be claimed by a second worker; only the owner may renew
 	// or release it.
@@ -457,3 +461,25 @@ type StreamEvent struct {
 }
 
 func (StreamEvent) TableName() string { return "stream_events" }
+
+// AnswerJob is the durable hand-off between the API request that accepted a
+// question and the worker that generates the answer. It also owns the stream
+// event sequence, so both processes append without colliding after a restart.
+type AnswerJob struct {
+	ID             string     `gorm:"primaryKey;size:64" json:"id"`
+	TenantID       string     `gorm:"size:64;not null;index;uniqueIndex:answer_jobs_request_unique" json:"tenantId"`
+	UserID         string     `gorm:"size:64;not null;uniqueIndex:answer_jobs_request_unique" json:"userId"`
+	ConversationID string     `gorm:"size:64;not null;uniqueIndex:answer_jobs_request_unique" json:"conversationId"`
+	RequestID      string     `gorm:"size:128;not null;uniqueIndex:answer_jobs_request_unique" json:"requestId"`
+	Status         string     `gorm:"size:16;not null;index" json:"status"`
+	Attempts       int        `gorm:"not null;default:0" json:"attempts"`
+	LeaseOwner     string     `gorm:"size:128;not null;default:''" json:"leaseOwner"`
+	LeaseUntil     *time.Time `json:"leaseUntil,omitempty"`
+	NextSequence   int        `gorm:"not null;default:0" json:"nextSequence"`
+	ScopeJSON      *string    `gorm:"type:jsonb" json:"-"`
+	ErrorCode      string     `gorm:"size:64;not null;default:''" json:"errorCode"`
+	CreatedAt      time.Time  `gorm:"not null" json:"createdAt"`
+	UpdatedAt      time.Time  `gorm:"not null" json:"updatedAt"`
+}
+
+func (AnswerJob) TableName() string { return "answer_jobs" }

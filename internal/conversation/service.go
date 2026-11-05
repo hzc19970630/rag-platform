@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
@@ -39,12 +40,21 @@ type Service struct {
 	dailyCap    int
 	historyTurn int
 	historyMax  int
+	answers     AnswerPublisher
+	async       bool
+	leaseTTL    time.Duration
 }
 
 // ChatModelResolver resolves the knowledge-base chat binding to the model this
 // request must use. The registry applies provider health, fallback and quota.
 type ChatModelResolver interface {
 	ChatModel(ctx context.Context, tenantID, knowledgeBaseID string) (string, error)
+}
+
+// AnswerPublisher enqueues one async answer job. The port keeps the domain
+// independent of Asynq and lets tests assert the exact payload.
+type AnswerPublisher interface {
+	PublishAnswer(ctx context.Context, task tasks.Answer) error
 }
 
 type Options struct {
@@ -64,6 +74,12 @@ type Options struct {
 	HistoryTurns int
 	// HistoryTokenLimit bounds the replayed history.
 	HistoryTokenLimit int
+	// AnswerPublisher is required when AsyncEnabled is true.
+	AnswerPublisher AnswerPublisher
+	// AsyncEnabled moves generation to a worker. False keeps Ask synchronous.
+	AsyncEnabled bool
+	// AnswerLease bounds how long a claimed job stays reserved for one worker.
+	AnswerLease time.Duration
 }
 
 func NewService(options Options) *Service {
@@ -74,6 +90,10 @@ func NewService(options Options) *Service {
 	recorder := options.Metrics
 	if recorder == nil {
 		recorder = metrics.Nop{}
+	}
+	lease := options.AnswerLease
+	if lease <= 0 {
+		lease = 5 * time.Minute
 	}
 	return &Service{
 		db:          options.DB,
@@ -87,6 +107,9 @@ func NewService(options Options) *Service {
 		dailyCap:    options.ChatRequestsPerDay,
 		historyTurn: options.HistoryTurns,
 		historyMax:  options.HistoryTokenLimit,
+		answers:     options.AnswerPublisher,
+		async:       options.AsyncEnabled,
+		leaseTTL:    lease,
 	}
 }
 

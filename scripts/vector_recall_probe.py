@@ -9,7 +9,9 @@ touches the application's chunks/documents tables and drops its schema on exit.
 
 The output is a schema-versioned JSON report. `EXPLAIN (ANALYZE, BUFFERS,
 FORMAT JSON)` is captured for every sample so a result that looks good only
-because the planner chose a sequential scan is visible as such.
+because the planner chose a sequential scan is visible as such. `--rls` adds
+the M13 strict policy to the probe table and runs the measured statements as
+`rag_app`, so the enforce plan and latency can be compared with the baseline.
 """
 
 from __future__ import annotations
@@ -155,7 +157,23 @@ FROM (
 """.strip()
 
 
-def setup_sql(schema: str, dimension: int, majority: int, minority: int) -> str:
+def setup_sql(schema: str, dimension: int, majority: int, minority: int, rls: bool) -> str:
+    isolation = ""
+    if rls:
+        # Mirror migration 0024 on the probe table. The probe session is a
+        # superuser, so the measured runs switch to rag_app with SET LOCAL ROLE
+        # to make the policy effective. Parent tables are not tenant-scoped in
+        # this synthetic corpus; the production query still filters chunks by
+        # tenant before the joins.
+        isolation = f"""
+ALTER TABLE chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chunks FORCE ROW LEVEL SECURITY;
+CREATE POLICY probe_tenant_isolation ON chunks
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), ''))
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), ''));
+GRANT USAGE ON SCHEMA {schema} TO rag_app;
+GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO rag_app;
+"""
     return f"""
 SET search_path TO {schema}, public;
 CREATE TABLE documents (
@@ -207,7 +225,7 @@ CREATE INDEX probe_chunks_vector_idx ON chunks
     WHERE embedding_dimension = {dimension};
 CREATE INDEX probe_chunks_scope_idx ON chunks(tenant_id, knowledge_base_id, document_version_id, status);
 CREATE INDEX probe_chunks_embedding_model_idx ON chunks(embedding_model, embedding_dimension);
-ANALYZE chunks;
+{isolation}ANALYZE chunks;
 SELECT json_build_object(
     'rows', (SELECT count(*) FROM chunks),
     'distinctMajorityVectors', (SELECT count(DISTINCT md5(embedding::text)) FROM chunks WHERE tenant_id = '{MAJORITY_TENANT}'),
@@ -217,10 +235,16 @@ SELECT json_build_object(
 
 
 def probe_sql(schema: str, dimension: int, top_k: int, limit: int, relevant_ids: list[str],
-              ef_search: int, oversample: int, iterative_scan: str, force_hnsw: bool) -> str:
+              ef_search: int, oversample: int, iterative_scan: str, force_hnsw: bool,
+              rls: bool) -> str:
     del oversample  # encoded in limit by the caller
     recall = build_recall_sql(dimension, limit, relevant_ids)
     settings = [f"SET search_path TO {schema}, public;", "SELECT '[0]'::vector;"]
+    if rls:
+        # SET LOCAL ROLE makes the strict policy apply even though the session
+        # connected as the owner/superuser.
+        settings.append("SET LOCAL ROLE rag_app;")
+        settings.append(f"SET LOCAL app.tenant_id = '{MINORITY_TENANT}';")
     if ef_search > 0:
         settings.append(f"SET LOCAL hnsw.ef_search = {ef_search};")
     if iterative_scan:
@@ -301,6 +325,7 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--report", default=str(repo_root() / "tests/eval/vector_recall_report.json"))
     parser.add_argument("--keep", action="store_true", help="keep the probe schema for inspection")
+    parser.add_argument("--rls", action="store_true", help="enforce the strict tenant policy as rag_app (requires the M13 roles)")
     arguments = parser.parse_args()
 
     command = shlex.split(arguments.psql_cmd) if arguments.psql_cmd else default_psql_command()
@@ -320,7 +345,7 @@ def main() -> int:
         version_output = run_sql(command, "SELECT extversion FROM pg_extension WHERE extname = 'vector';")
         pgvector_version = version_output.strip().splitlines()[-1] if version_output.strip() else "unknown"
         run_sql(command, f"CREATE SCHEMA {schema};")
-        setup_output = run_sql(command, setup_sql(schema, arguments.dimension, arguments.majority, arguments.minority))
+        setup_output = run_sql(command, setup_sql(schema, arguments.dimension, arguments.majority, arguments.minority, arguments.rls))
         setup = json.loads(setup_output.strip().splitlines()[-1])
         if setup["distinctMajorityVectors"] < arguments.majority * 0.9:
             raise RuntimeError(
@@ -339,6 +364,7 @@ def main() -> int:
                             sql = probe_sql(
                                 schema, arguments.dimension, top_k, limit, relevant_ids,
                                 ef_search, oversample, iterative_scan, force_hnsw,
+                                arguments.rls,
                             )
                             plan_json, result = parse_probe_output(run_sql(command, sql))
                             plan = plan_kinds(plan_json)
@@ -408,6 +434,7 @@ def main() -> int:
                 "oversample": oversample_values,
                 "iterativeScan": iterative_values,
                 "repeats": repeats,
+                "tenantRLS": arguments.rls,
             },
             "results": results,
             "recommendation": recommended,
@@ -417,6 +444,7 @@ def main() -> int:
                 "EXPLAIN ANALYZE Execution Time is used as latency; it excludes client/network and psql overhead.",
                 "A natural-plan result may be an exact scan. Tuning conclusions use the forced-HNSW rows; natural plan kinds are recorded separately.",
                 "The schema is dropped on exit unless --keep is set; the application's tables are never touched.",
+                "With --rls the probe runs as rag_app under a strict policy on chunks only; parent tables are not tenant-scoped in this synthetic corpus.",
             ],
         }
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

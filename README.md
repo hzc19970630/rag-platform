@@ -74,7 +74,8 @@ M3 新增的只读与问答接口：
 - `POST /api/v1/search`：只检索不生成。返回 `EvidenceSetV1`，包含 `QueryPlanV1`、融合分数和各通道排名。
 - `POST /api/v1/sessions`、`GET /api/v1/sessions`、`GET /api/v1/sessions/:id/messages`：会话与消息历史。
 - `POST /api/v1/sessions/:id/messages`：在线问答，SSE 输出 `status`、`references`、`thinking`、`answer`、`complete`、`error` 事件，每条事件带 `event_id`/`request_id`/`sequence`。
-- `GET /api/v1/requests/:request_id/events?after=N`（或 `Last-Event-ID`）：断线后按 sequence 续传已持久化的事件。客户端在生成中断开时，服务端仍会落库终止答案（状态 `cancelled`）及 `answer`/`complete` 事件，续传不会停在半截。
+- 异步答案（M13 A3）：默认 `ANSWER_ASYNC_ENABLED=true`，API 只做预检与持久化（user message、`RECEIVED`/`AUTHORIZED`/`PLANNED` 事件、`answer_jobs` 行），随后 worker 在 `interactive` 队列生成答案；SSE 事件契约与同步路径完全一致。`answer_jobs.next_sequence` 由 `UPDATE ... RETURNING` 原子分配，API 与 worker 共用同一序列，进程重启后续写不冲突。作业以租约认领，重复投递只生成一次；worker 丢失后维护循环把过期 `RUNNING` 置 `FAILED` 并追加 `error`/`complete` 终态事件。`ANSWER_ASYNC_ENABLED=false` 是回滚开关（回到请求内同步生成）；`ANSWER_TAIL_TIMEOUT_SECONDS`、`ANSWER_ASYNC_POLL_INTERVAL_MS`、`ANSWER_ASYNC_LEASE_SECONDS` 控制尾部等待、轮询与租约。升级顺序为先 worker 后 API，避免旧 worker 收到未知任务类型。
+- `GET /api/v1/requests/:request_id/events?after=N`（或 `Last-Event-ID`）：断线后按 sequence 续传已持久化的事件；加 `?stream=1` 时持续轮询直到 `complete`/`error` 或 `ANSWER_TAIL_TIMEOUT_SECONDS`（超时返回 `tail_timeout` 错误，客户端可再次续流）。客户端在生成中断开时，worker 仍会落库终止答案及 `answer`/`complete` 事件，续传不会停在半截。
 - 请求体上限：除文档上传外的请求 1 MiB，超限返回 `413 payload_too_large`；文档上传按 `DOCREADER_MAX_FILE_MB`（默认 100 MiB）限制，multipart 封装另留 1 MiB 开销。API 的 `ReadTimeout` 为 5 分钟，用于约束慢速 body；SSE 响应不受影响。
 
 检索链路为 BM25 与向量并行召回 → RRF 融合（常数 `rrf_k`，默认 60）→ 去重 → 可配置 Rerank → 父块/邻块扩展 → Top-K 与上下文 Token 限制 → 最终权限二次校验。所有召回查询在 SQL 层就带 `tenant_id`、知识库和"当前版本 + `EVIDENCE_READY`"过滤。向量召回支持按知识库/请求调整 `vector_ef_search`（默认 40）、`vector_oversample`（默认 1）和 `vector_iterative_scan`（默认 true，映射 pgvector `relaxed_order`）；2026-11-05 的 100:1 租户探针显示，仅提高 ef_search/过采样无法补齐小租户，迭代扫描把 4–6/20 条补齐到 20/20，P95 10–32ms。Rerank 默认关闭，需离线评估后再开启；开启后由 `RERANK_SOURCE` 选择适配器（`none` 直通 / `lexical` 离线词面重叠 / `remote` OpenAI 兼容 `/rerank`），`rerank_threshold` 与 `rerank_top_k` 只在 Rerank 实际运行时生效。父块始终补齐，两个相邻块计数只约束邻居块。接口里返回的 `score` 是 RRF 融合分（量级由 `rrf_k` 决定，默认 60 时靠前的条目落在 0.016-0.033），向量余弦在 `vectorScore`、关键词分在 `keywordScore`。
@@ -212,12 +213,13 @@ M7 在同一个 `IndexingStrategy` 上使用 `graph_enabled`（默认 false）�
 Embedding 维度与模型是索引契约的一部分，切换必须走受管流程，不允许运行中混用两个模型的向量：
 
 ```bash
-make embed-index     # 按 EMBEDDING_DIMENSION 创建/重建 chunks 的 halfvec(N) HNSW 索引
+make embed-check     # 只读：pgvector 版本、有效/无效索引、维度直方图与占用
+make embed-index     # 按 EMBEDDING_DIMENSION 在线创建/替换 halfvec(N) HNSW 索引
 make embed-rebuild   # 对模型或维度不匹配的活跃 Chunk 全量重新 Embedding
 make embed-verify    # 校验无旧维度 Chunk 残留，有残留则非零退出
 ```
 
-顺序固定为：改配置 → `make embed-index` → `make embed-rebuild` → `make embed-verify` → 再切检索流量并人工确认无旧维度残留。`chunks_vector_idx` 的维度由该命令按配置创建，迁移不再写死维度。端到端验收：
+顺序固定为：改配置 → `make embed-check` → `make embed-index` → `make embed-rebuild` → `make embed-verify` → 再切检索流量并人工确认无旧维度残留。索引以 `chunks_vector_idx_<dim>_v<N>` 版本化命名，用 `CREATE INDEX CONCURRENTLY` 构建，写入在构建期间保持可用；只有新索引通过 `indisvalid` 与维度校验后，旧索引才会被并发删除。构建失败会清理残留的 INVALID 索引并保留旧索引，`EMBED_INDEX_LOCK_TIMEOUT_SECONDS` 限制等锁（被阻塞时快速失败），`EMBED_INDEX_STATEMENT_TIMEOUT_SECONDS` 限制总时长。`create-index` 是非日常操作，运行时会要求输入 `y`；非交互调用必须带 `--confirm` 或 `EMBED_INDEX_CONFIRM=1`，否则立即失败；`--dry-run` 只打印计划。端到端验收：
 
 ```bash
 ./scripts/embed_rebuild_acceptance.sh
@@ -245,6 +247,15 @@ make vector-recall-probe   # 在本地栈的临时 schema 中跑 100:1 租户矩
 探针不触碰 `chunks`/`documents`，默认 10k 多数租户 + 100 少数租户、1024 维，矩阵覆盖 `ef_search` 40/100/200/500、过采样 1/4/10、iterative scan off/relaxed_order，并分别记录自然计划与强制 HNSW 计划。2026-11-05 结果（pgvector 0.8.7）：自然计划选择精确过滤扫描，返回 20/20；强制 HNSW 且 iterative scan=off 时只返回 4–6/20，单纯提高 ef_search/过采样无法补齐；`relaxed_order` 把返回数补到 20/20、relevant recall 1.0，P95 10–32ms。因此默认值定为 `vector_ef_search=40`、`vector_oversample=1`、`vector_iterative_scan=true`。
 
 同日另做了一次本地真实语料只读复核（1463 条 1024 维可检索向量）：以现有 chunk 自身 embedding 作查询向量、精确扫描 Top-20 为基准并排除自身，小 KB 的选择性约 2.6%–6.1%。自然计划同样走 HNSW；`ef_search=40`、过采样 1 且关闭迭代扫描时只返回 7.0–8.7/20，过采样 1/4/10 均无改善，把 ef_search 提到 200 也只到 18.7–19.2/20；`relaxed_order` 在 ef_search=40 即恢复 20/20，召回 0.982–1.000，P95 约 1.3–2.2ms。该复核与合成探针结论一致，默认值保持不变。
+
+M13 B1 数据面压测（M8 容量证据输入，不是发布门槛）：
+
+```bash
+make m13-dataplane            # 1M x 1024 合成向量，写入 tests/eval/m13_dataplane_report.json
+make m13-dataplane-validate   # 只校验报告 schema 与内部一致性，不联系服务栈
+```
+
+脚本在独立的 `m13_dataplane` schema 中用 SQL 生成 100 万条 1024 维确定性向量（16 个租户 × 2 个 KB，无模型调用），按 A2 的在线索引定义执行 `CREATE INDEX CONCURRENTLY`，构建期间用限速写入采样写延迟，随后以 16 个并发客户端执行与 `vector/search.go`、`search/bm25.go` 同形的租户绑定查询，记录 P50/P95/P99、QPS、underfill 与执行计划节点，并抽样 200 条查询与精确扫描对比召回。`--rls` 会在合成表上安装 0024 的严格策略并以 `rag_app` + `app.tenant_id` 运行测量，用于对比 enforce 路径。默认结束后 `DROP SCHEMA ... CASCADE`；`--keep` 保留现场，`--rows/--workers/--iterations` 可缩小规模做冒烟。报告版本为 `M13DataplaneReportV1`，包含 pgvector/PostgreSQL 版本、主机与磁盘资源、资源预估和 limitations。单机结果只作为容量证据，不替代 M8 的启动门槛。
 
 关闭环境：
 

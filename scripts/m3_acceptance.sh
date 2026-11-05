@@ -159,7 +159,9 @@ import re
 import sys
 
 raw = open(sys.argv[1], encoding="utf-8").read()
-blocks = [block for block in raw.split("\n\n") if block.strip()]
+# Comment frames (": ping") are heartbeats, not events; they can appear when
+# generation outlasts the idle interval.
+blocks = [block for block in raw.split("\n\n") if block.strip() and not block.startswith(":")]
 sequences = []
 event_types = []
 states = []

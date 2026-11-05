@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -81,13 +83,14 @@ func Claim(ctx context.Context, db *gorm.DB, key, taskType string, stageRunID ui
 	}
 	now := time.Now()
 	until := now.Add(lease.ttl())
-	claimed, err := take(ctx, db, key, lease, now, until)
+	tenantID := resolveTenant(ctx, db, key)
+	claimed, err := take(ctx, db, key, tenantID, lease, now, until)
 	if err != nil || claimed {
 		return claimed, err
 	}
 
 	var count int64
-	if err := db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Count(&count).Error; err != nil {
+	if err := inboxDB(db).WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Count(&count).Error; err != nil {
 		return false, err
 	}
 	if count > 0 {
@@ -96,19 +99,19 @@ func Claim(ctx context.Context, db *gorm.DB, key, taskType string, stageRunID ui
 
 	row := models.TaskInbox{
 		IdempotencyKey: key, TaskType: taskType, Status: StatusProcessing, StageRunID: stageRunID,
-		LeaseOwner: lease.Owner, LeaseUntil: &until, CreatedAt: now, UpdatedAt: now,
+		TenantID: tenantID, LeaseOwner: lease.Owner, LeaseUntil: &until, CreatedAt: now, UpdatedAt: now,
 	}
-	if createErr := db.WithContext(ctx).Create(&row).Error; createErr != nil {
+	if createErr := inboxDB(db).WithContext(ctx).Create(&row).Error; createErr != nil {
 		// Another delivery inserted first. Re-running the conditional take either
 		// wins against a live row that is already gone or reports the row exists.
-		claimed, takeErr := take(ctx, db, key, lease, now, until)
+		claimed, takeErr := take(ctx, db, key, tenantID, lease, now, until)
 		if takeErr != nil {
 			return false, fmt.Errorf("claim inbox after insert race: %w", takeErr)
 		}
 		if claimed {
 			return true, nil
 		}
-		if countErr := db.WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Count(&count).Error; countErr != nil {
+		if countErr := inboxDB(db).WithContext(ctx).Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Count(&count).Error; countErr != nil {
 			return false, countErr
 		}
 		if count == 0 {
@@ -119,14 +122,55 @@ func Claim(ctx context.Context, db *gorm.DB, key, taskType string, stageRunID ui
 	return true, nil
 }
 
-func take(ctx context.Context, db *gorm.DB, key string, lease Lease, now, until time.Time) (bool, error) {
-	result := db.WithContext(ctx).Model(&models.TaskInbox{}).
+// inboxDB marks the deliberate bypass: task_inbox is a child table keyed by
+// idempotency key, so its rows are reached through the owning pipeline or
+// projection run rather than a tenant column.
+func inboxDB(db *gorm.DB) *gorm.DB {
+	return tenantdb.Unscoped(db, "inbox lease: task_inbox is scoped by idempotency key")
+}
+
+// resolveTenant maps an idempotency key back to the tenant of its owning run.
+// Claim runs outside any request scope, so the value is copied onto the inbox
+// row instead of being read from app.tenant_id. An unresolvable key is left
+// NULL rather than failing the claim: attribution is an audit concern and RLS
+// enforcement reports these rows separately.
+func resolveTenant(ctx context.Context, db *gorm.DB, key string) *string {
+	runID, _, ok := strings.Cut(key, ":")
+	if !ok || runID == "" {
+		return nil
+	}
+	// pipeline_runs and projection_runs are tenant tables, but resolution is
+	// the deliberate cross-tenant lookup that precedes knowing the tenant.
+	owner := tenantdb.Unscoped(db, "inbox lease: resolve owning run tenant")
+	for _, table := range []string{"pipeline_runs", "projection_runs"} {
+		if !owner.Migrator().HasTable(table) {
+			continue
+		}
+		var row struct{ TenantID string }
+		if err := owner.WithContext(ctx).Table(table).Select("tenant_id").Where("id = ?", runID).Limit(1).Scan(&row).Error; err != nil {
+			slog.Warn("inbox_tenant_resolve_failed", "idempotency_key", key, "table", table, "error", err)
+			return nil
+		}
+		if row.TenantID != "" {
+			tenantID := row.TenantID
+			return &tenantID
+		}
+	}
+	return nil
+}
+
+func take(ctx context.Context, db *gorm.DB, key string, tenantID *string, lease Lease, now, until time.Time) (bool, error) {
+	values := map[string]any{
+		"status": StatusProcessing, "lease_owner": lease.Owner, "lease_until": until,
+		"last_error": "", "updated_at": now,
+	}
+	if tenantID != nil {
+		values["tenant_id"] = *tenantID
+	}
+	result := inboxDB(db).WithContext(ctx).Model(&models.TaskInbox{}).
 		Where("idempotency_key = ? AND status <> ?", key, StatusSucceeded).
 		Where("(status <> ? OR lease_until IS NULL OR lease_until <= ?)", StatusProcessing, now).
-		Updates(map[string]any{
-			"status": StatusProcessing, "lease_owner": lease.Owner, "lease_until": until,
-			"last_error": "", "updated_at": now,
-		})
+		Updates(values)
 	if result.Error != nil {
 		return false, result.Error
 	}
@@ -140,7 +184,7 @@ func Renew(ctx context.Context, db *gorm.DB, key string, lease Lease) (bool, err
 		return false, errors.New("inbox lease owner is required")
 	}
 	now := time.Now()
-	result := db.WithContext(ctx).Model(&models.TaskInbox{}).
+	result := inboxDB(db).WithContext(ctx).Model(&models.TaskInbox{}).
 		Where("idempotency_key = ? AND status = ? AND lease_owner = ?", key, StatusProcessing, lease.Owner).
 		Updates(map[string]any{"lease_until": now.Add(lease.ttl()), "updated_at": now})
 	if result.Error != nil {
@@ -155,7 +199,7 @@ func Release(ctx context.Context, db *gorm.DB, key, owner string) error {
 	if owner == "" {
 		return nil
 	}
-	return db.WithContext(ctx).Model(&models.TaskInbox{}).
+	return inboxDB(db).WithContext(ctx).Model(&models.TaskInbox{}).
 		Where("idempotency_key = ? AND lease_owner = ?", key, owner).
 		Updates(map[string]any{"lease_owner": "", "lease_until": nil}).Error
 }

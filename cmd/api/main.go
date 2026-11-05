@@ -38,7 +38,7 @@ func main() {
 	// One registry is shared by HTTP middleware and the application services so
 	// the scrape endpoint and /ops/metrics report the same process counters.
 	metricsRegistry := observability.New()
-	application, err := app.Open(cfg, metricsRegistry)
+	application, err := app.Open(cfg, metricsRegistry, app.RoleAPI)
 	if err != nil {
 		logger.Error("application_bootstrap_failed", "error", err)
 		os.Exit(1)
@@ -49,6 +49,7 @@ func main() {
 	r := httpapi.NewRouterWithReadiness(cfg, logger, metricsRegistry, application.Readiness)
 	httpapi.RegisterRoutes(r, cfg, httpapi.RouteDeps{
 		Identity: application.Identity, Authorization: application.Authorization, Limiter: application.Limiter,
+		DB:            application.DB,
 		KnowledgeBase: application.KnowledgeBase, Ingestion: application.Ingestion, Conversation: application.Conversation,
 		Retrieval: application.Retrieval, DataSources: application.DataSources, Projection: application.Projection,
 		Ops: application.Ops, Queue: application.Queue, Tasks: application.Tasks,

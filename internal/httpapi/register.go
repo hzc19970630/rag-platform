@@ -11,7 +11,7 @@ import (
 // route ownership is by resource, not by delivery milestone. Each handler gets
 // only the service slice it owns.
 func RegisterRoutes(router *gin.Engine, cfg config.Config, deps RouteDeps, logger *slog.Logger) {
-	mw := MiddlewareDeps{Identity: deps.Identity, Authorization: deps.Authorization, Limiter: deps.Limiter}
+	mw := MiddlewareDeps{Identity: deps.Identity, Authorization: deps.Authorization, Limiter: deps.Limiter, DB: deps.DB}
 	RegisterAuthRoutes(router, cfg, AuthDeps{Identity: deps.Identity, Authorization: deps.Authorization}, mw, logger)
 	RegisterKnowledgeBaseRoutes(router, cfg, KnowledgeBaseDeps{KnowledgeBase: deps.KnowledgeBase}, mw, logger)
 	RegisterKnowledgeBaseConfigRoutes(router, cfg, KnowledgeBaseDeps{KnowledgeBase: deps.KnowledgeBase}, mw, logger)

@@ -1,4 +1,4 @@
-.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m3-eval vector-recall-probe embed-index embed-rebuild embed-verify embed-acceptance
+.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -30,11 +30,13 @@ dev-down:
 logs:
 	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml logs -f --tail=100
 
+# The dedicated services carry ADMIN_DATABASE_URL, which enforce mode requires;
+# running the binaries inside the api container would use the tenant role.
 migrate:
-	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --entrypoint /usr/local/bin/migrate api
+	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --build migrate
 
 seed:
-	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --entrypoint /usr/local/bin/seed api
+	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --build seed
 
 api-test:
 	curl -fsS http://localhost:$${API_PORT:-8082}/healthz
@@ -46,11 +48,11 @@ web-build:
 	cd web && npm run build
 
 test:
-	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go run ./cmd/checkdeps && go test ./... && go vet ./...'
+	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go run ./cmd/checkdeps && go run ./cmd/checktenancy && go test ./... && go vet ./...'
 	cd web && npm test -- --passWithNoTests
 
 lint:
-	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go run ./cmd/checkdeps && go vet ./...'
+	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal -name "*.go"))" && go run ./cmd/checkdeps && go run ./cmd/checktenancy && go vet ./...'
 	cd web && npm run build
 
 acceptance: m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance embed-acceptance
@@ -79,6 +81,19 @@ m6-acceptance:
 m7-acceptance:
 	./scripts/m7_acceptance.sh
 
+# M13 A1.2: runtime roles and the shadow-stage audit. Enforcement is a separate
+# deployment decision; see docs/operations.md.
+m13-rls-setup:
+	./scripts/m13_setup_rls_roles.sh
+
+m13-rls-acceptance:
+	./scripts/m13_rls_acceptance.sh
+
+# M13 A3: async answers. The worker-down drill stops the worker, submits a
+# question, restarts the worker and requires a terminal SSE event.
+m13-async-acceptance:
+	./scripts/m13_async_acceptance.sh
+
 # Compares bounded graph queries with pure Evidence RAG on the fixed M7 QA set
 # and records reachability/path metrics. The keep-or-drop decision for complex
 # graph queries is a human call based on the recorded report.
@@ -103,6 +118,16 @@ m8-capacity:
 m8-capacity-validate:
 	python3 scripts/m8_capacity.py --validate-report tests/eval/m8_capacity_report.json
 
+# M13 B1: 1M x 1024 synthetic vectors in a throwaway schema, online HNSW build
+# with concurrent writes, 16-tenant vector/BM25 query load and ANN recall
+# sampling. Writes tests/eval/m13_dataplane_report.json and drops the schema
+# unless --keep is passed. This is capacity evidence for M8, not a release gate.
+m13-dataplane:
+	python3 scripts/m13_dataplane.py
+
+m13-dataplane-validate:
+	python3 scripts/m13_dataplane.py --validate-report tests/eval/m13_dataplane_report.json
+
 # Measures vector recall on a synthetic 100:1 tenant split for hnsw.ef_search,
 # over-sampling and iterative scan. Uses a throwaway schema and never touches
 # the application's chunks/documents tables. Writes tests/eval/vector_recall_report.json.
@@ -116,8 +141,16 @@ vector-recall-probe:
 m3-eval:
 	python3 scripts/m3_eval.py
 
+# create-index builds the halfvec(N) HNSW index CONCURRENTLY under a versioned
+# name and only drops the old index after the replacement is valid. The prompt
+# requires --confirm (or EMBED_INDEX_CONFIRM=1) so automation stays explicit.
 embed-index:
-	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --entrypoint /usr/local/bin/embedctl api create-index
+	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --entrypoint /usr/local/bin/embedctl api create-index --confirm
+
+# Read-only index diagnostics: pgvector version, valid/invalid indexes,
+# per-dimension chunk counts and space use.
+embed-check:
+	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --entrypoint /usr/local/bin/embedctl api check
 
 embed-rebuild:
 	docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml run --rm --no-deps --entrypoint /usr/local/bin/embedctl api reembed

@@ -11,6 +11,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/vecutil"
 	"gorm.io/gorm"
 )
@@ -56,7 +57,7 @@ func (s *Service) ListPages(ctx context.Context, principal authz.Principal, know
 	}
 	if len(ids) > 0 {
 		var rows []models.WikiPageVersion
-		if err := s.db.WithContext(ctx).Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id IN ?", ids).Find(&rows).Error; err != nil {
 			return nil, err
 		}
 		for _, row := range rows {
@@ -98,7 +99,7 @@ func (s *Service) GetPage(ctx context.Context, principal authz.Principal, pageID
 		return detail, nil
 	}
 	var version models.WikiPageVersion
-	if err := s.db.WithContext(ctx).First(&version, "id = ?", *versionID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&version, "id = ?", *versionID).Error; err != nil {
 		return PageDetail{}, err
 	}
 	detail.Version = &version
@@ -120,7 +121,7 @@ func (s *Service) ListVersions(ctx context.Context, principal authz.Principal, p
 		return nil, err
 	}
 	var versions []models.WikiPageVersion
-	if err := s.db.WithContext(ctx).Where("wiki_page_id = ?", pageID).Order("version DESC").Find(&versions).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("wiki_page_id = ?", pageID).Order("version DESC").Find(&versions).Error; err != nil {
 		return nil, err
 	}
 	return versions, nil
@@ -146,8 +147,8 @@ func (s *Service) Review(ctx context.Context, principal authz.Principal, pageID,
 		status = ReviewRejected
 	}
 	now := time.Now()
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&models.WikiPageVersion{}).Where("id = ?", version.ID).Updates(map[string]any{
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.WikiPageVersion{}).Where("id = ?", version.ID).Updates(map[string]any{
 			"review_status": status, "review_note": input.Note, "reviewed_by": principal.SubjectID,
 			"reviewed_at": &now,
 		}).Error; err != nil {
@@ -157,7 +158,7 @@ func (s *Service) Review(ctx context.Context, principal authz.Principal, pageID,
 		if page.PublishedVersionID != nil {
 			pageStatus = PagePublished
 		}
-		return tx.Model(&models.WikiPage{}).Where("id = ?", page.ID).Updates(map[string]any{"status": pageStatus, "updated_at": now}).Error
+		return tenantdb.MustScoped(tx, principal.TenantID).Model(&models.WikiPage{}).Where("id = ?", page.ID).Updates(map[string]any{"status": pageStatus, "updated_at": now}).Error
 	})
 	if err != nil {
 		return models.WikiPageVersion{}, err
@@ -204,11 +205,11 @@ func (s *Service) publishVersion(ctx context.Context, principal authz.Principal,
 		return models.WikiPage{}, apperror.ErrNotFound
 	}
 	if version.ACLVersion != knowledgeBase.ACLVersion {
-		s.invalidatePage(ctx, page.ID)
+		s.invalidatePage(ctx, page.TenantID, page.ID)
 		return models.WikiPage{}, fmt.Errorf("%w: acl_changed: rebuild and review the page under the current ACL", apperror.ErrConflict)
 	}
 	if err := s.validateSources(ctx, version.ID); err != nil {
-		s.invalidatePage(ctx, page.ID)
+		s.invalidatePage(ctx, page.TenantID, page.ID)
 		return models.WikiPage{}, err
 	}
 	embedding, err := s.embedPage(ctx, page.Title, version.Content)
@@ -216,8 +217,8 @@ func (s *Service) publishVersion(ctx context.Context, principal authz.Principal,
 		return models.WikiPage{}, err
 	}
 	now := time.Now()
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("wiki_page_id = ?", page.ID).Delete(&models.KnowledgeIndexRecord{}).Error; err != nil {
+	err = tenantdb.InTx(ctx, s.db, page.TenantID, func(tx *gorm.DB) error {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Where("wiki_page_id = ?", page.ID).Delete(&models.KnowledgeIndexRecord{}).Error; err != nil {
 			return err
 		}
 		record := models.KnowledgeIndexRecord{
@@ -230,7 +231,7 @@ func (s *Service) publishVersion(ctx context.Context, principal authz.Principal,
 		if err := tx.Create(&record).Error; err != nil {
 			return err
 		}
-		return tx.Model(&models.WikiPage{}).Where("id = ?", page.ID).Updates(map[string]any{
+		return tenantdb.MustScoped(tx, principal.TenantID).Model(&models.WikiPage{}).Where("id = ?", page.ID).Updates(map[string]any{
 			"published_version_id": version.ID, "status": PagePublished,
 			"acl_version": knowledgeBase.ACLVersion, "updated_at": now,
 		}).Error
@@ -266,7 +267,7 @@ func (s *Service) loadPageVersion(ctx context.Context, tenantID, pageID, version
 		return models.WikiPage{}, models.WikiPageVersion{}, apperror.ErrNotFound
 	}
 	var version models.WikiPageVersion
-	if err := s.db.WithContext(ctx).First(&version, "id = ? AND wiki_page_id = ?", versionID, pageID).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&version, "id = ? AND wiki_page_id = ?", versionID, pageID).Error; err != nil {
 		return models.WikiPage{}, models.WikiPageVersion{}, apperror.ErrNotFound
 	}
 	return page, version, nil
@@ -311,8 +312,8 @@ func (s *Service) embedPage(ctx context.Context, title, content string) ([]float
 	return vectors[0], nil
 }
 
-func (s *Service) invalidatePage(ctx context.Context, pageID string) {
+func (s *Service) invalidatePage(ctx context.Context, tenantID, pageID string) {
 	now := time.Now()
-	s.db.WithContext(ctx).Model(&models.WikiPage{}).Where("id = ?", pageID).Updates(map[string]any{"status": PageStale, "updated_at": now})
-	s.db.WithContext(ctx).Where("wiki_page_id = ?", pageID).Delete(&models.KnowledgeIndexRecord{})
+	tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.WikiPage{}).Where("id = ?", pageID).Updates(map[string]any{"status": PageStale, "updated_at": now})
+	tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("wiki_page_id = ?", pageID).Delete(&models.KnowledgeIndexRecord{})
 }

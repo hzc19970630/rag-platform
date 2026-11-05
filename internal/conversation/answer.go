@@ -13,6 +13,7 @@ import (
 	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/token"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
@@ -21,27 +22,46 @@ import (
 // answer.go owns this slice of the service. Behavior and external contracts are
 // unchanged; the split only narrows each file's responsibility.
 
-// Ask answers one question. Events are persisted before they are emitted, so a
-// client that disconnects mid-answer can resume from the last sequence it saw.
-func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskInput, emit Emitter) (AnswerResult, error) {
+// preparedAnswer is everything both execution paths need after the pre-flight
+// checks: identity, authorization scope, conversation, model choice and
+// history. The synchronous path keeps it in memory; the async path records the
+// same values durably (scope in answer_jobs.scope_json, the rest in messages).
+type preparedAnswer struct {
+	conversation models.Conversation
+	principal    authz.Principal
+	scope        authz.AuthorizationScope
+	requestID    string
+	query        string
+	// sessionOverride is the request-tier retrieval parameter payload. It is
+	// configuration, not identity, so the async job may carry it.
+	sessionOverride string
+	history         []model.Turn
+	chatModel       string
+	answerModel     string
+	started         time.Time
+}
+
+// prepare runs the pre-flight half of an answer. It returns an existing answer
+// for an idempotent retry, so neither path spends a second model call.
+func (s *Service) prepare(ctx context.Context, principal authz.Principal, input AskInput) (preparedAnswer, *AnswerResult, error) {
 	started := time.Now()
 	query := strings.Join(strings.Fields(strings.TrimSpace(input.Query)), " ")
 	if query == "" {
-		return AnswerResult{}, apperror.Invalidf("query is required")
+		return preparedAnswer{}, nil, apperror.Invalidf("query is required")
 	}
 	conversation, err := s.loadConversation(ctx, principal, input.ConversationID)
 	if err != nil {
-		return AnswerResult{}, err
+		return preparedAnswer{}, nil, err
 	}
 	scope, err := s.authorizedKnowledgeBase(ctx, principal, conversation.KnowledgeBaseID)
 	if err != nil {
-		return AnswerResult{}, err
+		return preparedAnswer{}, nil, err
 	}
 	requestID := input.RequestID
 	if strings.TrimSpace(requestID) == "" {
 		generated, err := newID("req")
 		if err != nil {
-			return AnswerResult{}, err
+			return preparedAnswer{}, nil, err
 		}
 		requestID = generated
 	}
@@ -50,18 +70,18 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 	// tenant, user and conversation so a leaked request id cannot disclose
 	// another caller's answer.
 	if existing, ok, err := s.loadAnswer(ctx, principal, conversation.ID, requestID); err != nil {
-		return AnswerResult{}, err
+		return preparedAnswer{}, nil, err
 	} else if ok {
-		return existing, nil
+		return preparedAnswer{requestID: requestID}, &existing, nil
 	}
 	if err := s.checkDailyQuota(ctx, principal.TenantID); err != nil {
-		return AnswerResult{}, err
+		return preparedAnswer{}, nil, err
 	}
 	chatModel := ""
 	if s.models != nil {
 		resolved, err := s.models.ChatModel(ctx, principal.TenantID, conversation.KnowledgeBaseID)
 		if err != nil {
-			return AnswerResult{}, err
+			return preparedAnswer{}, nil, err
 		}
 		chatModel = resolved
 	}
@@ -78,33 +98,62 @@ func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskI
 	if err != nil {
 		history = nil
 	}
+	return preparedAnswer{
+		conversation: conversation, principal: principal, scope: scope,
+		requestID: requestID, query: query, sessionOverride: input.SessionOverride, history: history,
+		chatModel: chatModel, answerModel: answerModel, started: started,
+	}, nil, nil
+}
+
+// Ask answers one question inside the HTTP request. Events are persisted before
+// they are emitted, so a client that disconnects mid-answer can resume from the
+// last sequence it saw. Async mode uses prepare/execute directly instead.
+func (s *Service) Ask(ctx context.Context, principal authz.Principal, input AskInput, emit Emitter) (AnswerResult, error) {
+	prepared, existing, err := s.prepare(ctx, principal, input)
+	if err != nil {
+		return AnswerResult{}, err
+	}
+	if existing != nil {
+		return *existing, nil
+	}
 
 	sequence := 0
 	emitEvent := func(eventType string, data map[string]any) error {
-		return s.appendEvent(ctx, requestID, principal.TenantID, principal.SubjectID, &sequence, eventType, data, emit)
+		return s.appendEvent(ctx, prepared.requestID, principal.TenantID, principal.SubjectID, &sequence, eventType, data, emit)
 	}
 	if _, err := s.persistMessage(ctx, models.Message{
-		ConversationID: conversation.ID, TenantID: principal.TenantID, KnowledgeBaseID: conversation.KnowledgeBaseID,
-		UserID: principal.SubjectID, RequestID: requestID, Role: MessageRoleUser, Content: query,
-		Status: MessageStatusCompleted, AuthorizationScopeVersion: scope.ACLVersion,
+		ConversationID: prepared.conversation.ID, TenantID: principal.TenantID, KnowledgeBaseID: prepared.conversation.KnowledgeBaseID,
+		UserID: principal.SubjectID, RequestID: prepared.requestID, Role: MessageRoleUser, Content: prepared.query,
+		Status: MessageStatusCompleted, AuthorizationScopeVersion: prepared.scope.ACLVersion,
 	}); err != nil {
 		return AnswerResult{}, err
 	}
 	if err := emitEvent(EventStatus, map[string]any{"state": AnswerReceived}); err != nil {
 		return AnswerResult{}, err
 	}
-	if err := emitEvent(EventStatus, map[string]any{"state": AnswerAuthorized, "scope": scope.ACLVersion, "knowledgeBaseId": conversation.KnowledgeBaseID}); err != nil {
+	if err := emitEvent(EventStatus, map[string]any{"state": AnswerAuthorized, "scope": prepared.scope.ACLVersion, "knowledgeBaseId": prepared.conversation.KnowledgeBaseID}); err != nil {
 		return AnswerResult{}, err
 	}
 	if err := emitEvent(EventStatus, map[string]any{"state": AnswerPlanned, "intent": retrieval.IntentFact, "mode": retrieval.ModeEvidence}); err != nil {
 		return AnswerResult{}, err
 	}
+	return s.execute(ctx, prepared, emitEvent)
+}
+
+// execute runs retrieval, generation and collapse into the terminal answer. It
+// is shared by the synchronous request path and the async worker; the caller
+// owns persistence of the user message and the first three stream events.
+func (s *Service) execute(ctx context.Context, prepared preparedAnswer, emitEvent func(string, map[string]any) error) (AnswerResult, error) {
+	conversation, principal, scope := prepared.conversation, prepared.principal, prepared.scope
+	requestID, query, started := prepared.requestID, prepared.query, prepared.started
+	history, chatModel, answerModel := prepared.history, prepared.chatModel, prepared.answerModel
+
 	if err := emitEvent(EventStatus, map[string]any{"state": AnswerRetrieving}); err != nil {
 		return AnswerResult{}, err
 	}
 
 	evidence, err := s.retrieval.Retrieve(ctx, scope, retrieval.QueryInput{
-		RequestID: requestID, Query: query, KnowledgeBaseID: conversation.KnowledgeBaseID, SessionOverride: input.SessionOverride,
+		RequestID: requestID, Query: query, KnowledgeBaseID: conversation.KnowledgeBaseID, SessionOverride: prepared.sessionOverride,
 		History: retrievalHistory(history),
 	})
 	if err != nil {
@@ -392,8 +441,8 @@ func (s *Service) checkDailyQuota(ctx context.Context, tenantID string) error {
 	}
 	start := time.Now().UTC().Truncate(24 * time.Hour)
 	var count int64
-	if err := s.db.WithContext(ctx).Model(&models.Message{}).
-		Where("tenant_id = ? AND role = ? AND created_at >= ?", tenantID, MessageRoleUser, start).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.Message{}).
+		Where("role = ? AND created_at >= ?", MessageRoleUser, start).
 		Count(&count).Error; err != nil {
 		return fmt.Errorf("check daily chat quota: %w", err)
 	}
@@ -450,8 +499,8 @@ func (s *Service) loadHistory(ctx context.Context, principal authz.Principal, co
 	// extra rows to still fill the requested number of completed turns.
 	limit := s.historyTurn*2 + 4
 	var rows []models.Message
-	if err := s.db.WithContext(ctx).
-		Where("conversation_id = ? AND tenant_id = ? AND user_id = ?", conversationID, principal.TenantID, principal.SubjectID).
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("conversation_id = ? AND user_id = ?", conversationID, principal.SubjectID).
 		Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load conversation history: %w", err)
 	}

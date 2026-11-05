@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -43,7 +44,9 @@ func (s *Service) ListConversations(ctx context.Context, principal authz.Princip
 		return []models.Conversation{}, nil
 	}
 	var rows []models.Conversation
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND knowledge_base_id IN ?", principal.TenantID, principal.SubjectID, scope.KnowledgeBaseIDs).Order("updated_at DESC").Limit(100).Find(&rows).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("user_id = ? AND knowledge_base_id IN ?", principal.SubjectID, scope.KnowledgeBaseIDs).
+		Order("updated_at DESC").Limit(100).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
 	return rows, nil
@@ -55,12 +58,13 @@ func (s *Service) ListMessages(ctx context.Context, principal authz.Principal, c
 		return nil, err
 	}
 	var messages []models.Message
-	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversation.ID).Order("created_at, id").Find(&messages).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("conversation_id = ?", conversation.ID).Order("created_at, id").Find(&messages).Error; err != nil {
 		return nil, fmt.Errorf("list messages: %w", err)
 	}
 	views := make([]MessageView, 0, len(messages))
 	for _, message := range messages {
-		citations, err := s.loadCitations(ctx, message.ID)
+		citations, err := s.loadCitations(ctx, principal.TenantID, message.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +81,8 @@ func (s *Service) loadConversation(ctx context.Context, principal authz.Principa
 		return models.Conversation{}, apperror.ErrNotFound
 	}
 	var conversation models.Conversation
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND user_id = ? AND id = ?", principal.TenantID, principal.SubjectID, conversationID).First(&conversation).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("user_id = ? AND id = ?", principal.SubjectID, conversationID).First(&conversation).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Conversation{}, apperror.ErrNotFound
 		}
@@ -106,5 +111,6 @@ func (s *Service) touchConversation(ctx context.Context, conversation models.Con
 	if strings.TrimSpace(conversation.Title) == "" {
 		values["title"] = s.titleFor(ctx, query)
 	}
-	return s.db.WithContext(ctx).Model(&models.Conversation{}).Where("id = ?", conversation.ID).Updates(values).Error
+	return tenantdb.MustScoped(s.db.WithContext(ctx), conversation.TenantID).
+		Model(&models.Conversation{}).Where("id = ?", conversation.ID).Updates(values).Error
 }
