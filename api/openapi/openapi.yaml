@@ -78,6 +78,9 @@ components:
         rerank_enabled: {type: boolean}
         rerank_top_k: {type: integer}
         rerank_threshold: {type: number}
+        vector_ef_search: {type: integer, minimum: 0, maximum: 1000}
+        vector_oversample: {type: integer, minimum: 1, maximum: 20}
+        vector_iterative_scan: {type: boolean}
         context_token_limit: {type: integer}
         adjacent_expansion: {type: integer}
         max_adjacent_chunks: {type: integer}

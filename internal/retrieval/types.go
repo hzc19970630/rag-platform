@@ -57,14 +57,24 @@ type QueryPlan struct {
 // It is owned by the retrieval domain; the YAML configuration converts into it
 // at the application boundary instead of leaking the global config type.
 type Params struct {
-	TopK                 int
-	EmbeddingTopK        int
-	KeywordTopK          int
-	VectorThreshold      float64
-	KeywordThreshold     float64
-	RerankEnabled        bool
-	RerankTopK           int
-	RerankThreshold      float64
+	TopK             int
+	EmbeddingTopK    int
+	KeywordTopK      int
+	VectorThreshold  float64
+	KeywordThreshold float64
+	RerankEnabled    bool
+	RerankTopK       int
+	RerankThreshold  float64
+	// VectorEFSearch is the pgvector HNSW candidate-list size for this query.
+	// Zero leaves the server default in place.
+	VectorEFSearch int
+	// VectorOversample multiplies the SQL LIMIT so a selective tenant filter
+	// still fills TopK after filtering. One keeps the previous behavior.
+	VectorOversample int
+	// VectorIterativeScan enables pgvector's relaxed-order iterative scan so a
+	// filtered HNSW scan keeps walking until it fills TopK. Exact scans ignore
+	// it; false leaves the server default (off) in place.
+	VectorIterativeScan  bool
 	ContextTokenLimit    int
 	AdjacentExpansion    int
 	MaxAdjacentChunks    int

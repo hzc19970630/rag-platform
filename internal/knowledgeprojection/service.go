@@ -4,11 +4,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/contracts/evidence"
+	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/contracts/projectioncache"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/evidencestore"
@@ -41,6 +45,10 @@ type Options struct {
 	// Evidence is the read port for published EvidencePackages. When omitted, a
 	// PostgreSQL reader over DB is used.
 	Evidence evidence.Reader
+	// Cache is the per-package generation cache. Nil keeps full generation.
+	Cache projectioncache.Cache
+	// Metrics records cache hit/miss package counts.
+	Metrics metrics.Recorder
 }
 
 type Service struct {
@@ -53,6 +61,8 @@ type Service struct {
 	timeout    time.Duration
 	store      relationstore.RelationStore
 	evidence   evidence.Reader
+	cache      projectioncache.Cache
+	metrics    metrics.Recorder
 	leaseOwner inboxlease.Owner
 	leaseTTL   time.Duration
 }
@@ -66,12 +76,76 @@ func NewService(options Options) *Service {
 	if reader == nil && options.DB != nil {
 		reader = evidencestore.New(options.DB)
 	}
+	recorder := options.Metrics
+	if recorder == nil {
+		recorder = metrics.Nop{}
+	}
+	if options.Generator != nil {
+		options.Generator.SetCache(options.Cache)
+	}
+	if options.Extractor != nil {
+		options.Extractor.SetCache(options.Cache)
+	}
 	return &Service{
 		db: options.DB, authz: options.Authz, embedder: options.Embedder,
 		generator: options.Generator, relation: options.Extractor,
 		publisher: options.Publisher, timeout: options.Timeout, store: options.Store,
-		evidence: reader,
+		evidence: reader, cache: options.Cache, metrics: recorder,
 	}
+}
+
+// recordGeneration reports how many packages a projection run regenerated
+// versus reused. It is deliberately best-effort: observability must never fail
+// a projection.
+func (s *Service) recordGeneration(projectionType string, generated, reused int) {
+	slog.Info("projection_generation",
+		"projection_type", projectionType, "generated", generated, "reused", reused)
+	if s.metrics == nil {
+		return
+	}
+	record := func(name string, value int) {
+		if value <= 0 {
+			return
+		}
+		if adder, ok := s.metrics.(metrics.Adder); ok {
+			adder.Add(name, int64(value), metrics.Labels("type", projectionType))
+			return
+		}
+		for index := 0; index < value; index++ {
+			s.metrics.Inc(name, metrics.Labels("type", projectionType))
+		}
+	}
+	record("projection_cache_misses_total", generated)
+	record("projection_cache_hits_total", reused)
+}
+
+// clearGenerationCache makes a manual rebuild a real regeneration. Automatic
+// triggers keep the cache so unchanged packages stay reusable.
+func (s *Service) clearGenerationCache(ctx context.Context, tenantID, knowledgeBaseID, projectionType string) error {
+	if s.cache == nil {
+		return nil
+	}
+	if err := s.cache.DeleteScope(ctx, tenantID, knowledgeBaseID, projectionType); err != nil {
+		return fmt.Errorf("clear %s generation cache: %w", projectionType, err)
+	}
+	return nil
+}
+
+// PurgeGenerationCache removes cache rows whose EvidencePackage no longer
+// exists. The optional interface keeps the generator-facing Cache contract
+// small while the PostgreSQL adapter supplies the maintenance sweep.
+func (s *Service) PurgeGenerationCache(ctx context.Context, limit int) (int64, error) {
+	if s.cache == nil {
+		return 0, nil
+	}
+	type purger interface {
+		PurgeOrphans(context.Context, int) (int64, error)
+	}
+	store, ok := s.cache.(purger)
+	if !ok {
+		return 0, nil
+	}
+	return store.PurgeOrphans(ctx, limit)
 }
 
 func (s *Service) requireReviewer(ctx context.Context, principal authz.Principal, knowledgeBaseID string) (authz.AuthorizationScope, error) {

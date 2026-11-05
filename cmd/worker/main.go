@@ -284,6 +284,11 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 	} else if reconciled > 0 {
 		logger.Info("projection_reconciled", "rows_staled", reconciled)
 	}
+	if purged, err := application.Projection.PurgeGenerationCache(ctx, 500); err != nil {
+		logger.Error("projection_cache_purge_failed", "error", err)
+	} else if purged > 0 {
+		logger.Info("projection_cache_purged", "rows", purged)
+	}
 	if report.DocumentsRepaired+report.VersionsRepaired+int64(report.StagesRequeued+report.PipelinesCancelled)+report.InboxesExpired+report.DeadLettersResolved > 0 {
 		logger.Info("maintenance_reconcile_complete",
 			"documents_repaired", report.DocumentsRepaired,

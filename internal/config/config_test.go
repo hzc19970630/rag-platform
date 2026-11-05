@@ -242,6 +242,17 @@ func TestModelRegistryConfig(t *testing.T) {
 	}
 }
 
+func TestProjectionIncrementalKillSwitch(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{}))
+	if !cfg.Projection.IncrementalEnabled {
+		t.Fatalf("incremental projection must default to enabled")
+	}
+	cfg = LoadFrom(lookupFrom(map[string]string{"PROJECTION_INCREMENTAL_ENABLED": "false"}))
+	if cfg.Projection.IncrementalEnabled {
+		t.Fatalf("PROJECTION_INCREMENTAL_ENABLED=false must disable the cache")
+	}
+}
+
 func TestConnectorConfigDefaultsAndOverrides(t *testing.T) {
 	cfg := LoadFrom(lookupFrom(map[string]string{}))
 	if cfg.Connector.EncryptionKey != "" {

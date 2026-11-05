@@ -1,4 +1,4 @@
-.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m3-eval embed-index embed-rebuild embed-verify embed-acceptance
+.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m3-eval vector-recall-probe embed-index embed-rebuild embed-verify embed-acceptance
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -102,6 +102,12 @@ m8-capacity:
 # contacting the stack.
 m8-capacity-validate:
 	python3 scripts/m8_capacity.py --validate-report tests/eval/m8_capacity_report.json
+
+# Measures vector recall on a synthetic 100:1 tenant split for hnsw.ef_search,
+# over-sampling and iterative scan. Uses a throwaway schema and never touches
+# the application's chunks/documents tables. Writes tests/eval/vector_recall_report.json.
+vector-recall-probe:
+	python3 scripts/vector_recall_probe.py
 
 # Records retrieval, citation, refusal and permission metrics for the fixed M3
 # evaluation set. Safety and permission invariants fail the target; the release

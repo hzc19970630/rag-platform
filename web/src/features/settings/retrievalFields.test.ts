@@ -26,6 +26,14 @@ describe("retrieval field validation", () => {
     expect(fieldError(field("rerank_threshold"), -11)).toBe("range");
     expect(fieldError(field("top_k"), 10)).toBeUndefined();
   });
+
+  it("keeps ef_search at zero valid and rejects an out-of-range oversample", () => {
+    expect(fieldError(field("vector_ef_search"), 0)).toBeUndefined();
+    expect(fieldError(field("vector_ef_search"), 1001)).toBe("range");
+    expect(fieldError(field("vector_oversample"), 0)).toBe("range");
+    expect(fieldError(field("vector_oversample"), 21)).toBe("range");
+    expect(fieldError(field("vector_oversample"), 4)).toBeUndefined();
+  });
 });
 
 describe("retrieval override serialization", () => {

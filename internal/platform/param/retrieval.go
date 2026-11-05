@@ -11,6 +11,8 @@ type RetrievalValues struct {
 	KeywordThreshold     *float64
 	RerankTopK           *int
 	RerankThreshold      *float64
+	VectorEFSearch       *int
+	VectorOversample     *int
 	ContextTokenLimit    *int
 	AdjacentExpansion    *int
 	MaxAdjacentChunks    *int
@@ -45,6 +47,16 @@ func ValidateRetrieval(values RetrievalValues) error {
 	}
 	if values.RerankThreshold != nil {
 		if err := FloatRange("rerank_threshold", *values.RerankThreshold, -10, 10); err != nil {
+			return err
+		}
+	}
+	if values.VectorEFSearch != nil {
+		if err := IntRange("vector_ef_search", *values.VectorEFSearch, 0, 1000); err != nil {
+			return err
+		}
+	}
+	if values.VectorOversample != nil {
+		if err := IntRange("vector_oversample", *values.VectorOversample, 1, 20); err != nil {
 			return err
 		}
 	}

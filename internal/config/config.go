@@ -60,6 +60,7 @@ type Config struct {
 	Auth             AuthConfig
 	Limits           LimitsConfig
 	Connector        ConnectorConfig
+	Projection       ProjectionConfig
 	WebPublicURL     string
 	// TrustedProxies lists the IPs or CIDRs of reverse proxies whose forwarded
 	// client-IP headers may be trusted. Empty trusts no proxy: the audit IP is
@@ -81,17 +82,26 @@ type Config struct {
 // overridable per knowledge base (database, audited) and per session (request),
 // so they are policy rather than constants.
 type RetrievalConfig struct {
-	TopK              int     `yaml:"top_k"`
-	EmbeddingTopK     int     `yaml:"embedding_top_k"`
-	KeywordTopK       int     `yaml:"keyword_top_k"`
-	VectorThreshold   float64 `yaml:"vector_threshold"`
-	KeywordThreshold  float64 `yaml:"keyword_threshold"`
-	RerankEnabled     bool    `yaml:"rerank_enabled"`
-	RerankTopK        int     `yaml:"rerank_top_k"`
-	RerankThreshold   float64 `yaml:"rerank_threshold"`
-	ContextTokenLimit int     `yaml:"context_token_limit"`
-	AdjacentExpansion int     `yaml:"adjacent_expansion"`
-	MaxAdjacentChunks int     `yaml:"max_adjacent_chunks"`
+	TopK             int     `yaml:"top_k"`
+	EmbeddingTopK    int     `yaml:"embedding_top_k"`
+	KeywordTopK      int     `yaml:"keyword_top_k"`
+	VectorThreshold  float64 `yaml:"vector_threshold"`
+	KeywordThreshold float64 `yaml:"keyword_threshold"`
+	RerankEnabled    bool    `yaml:"rerank_enabled"`
+	RerankTopK       int     `yaml:"rerank_top_k"`
+	RerankThreshold  float64 `yaml:"rerank_threshold"`
+	// VectorEFSearch is the pgvector HNSW candidate-list size. Zero leaves the
+	// server default (40 on pgvector 0.8) in place.
+	VectorEFSearch int `yaml:"vector_ef_search"`
+	// VectorOversample multiplies the SQL LIMIT so a selective tenant filter
+	// can still fill embedding_top_k after filtering.
+	VectorOversample int `yaml:"vector_oversample"`
+	// VectorIterativeScan enables pgvector's relaxed-order iterative scan. It
+	// only affects filtered HNSW scans; exact scans ignore it.
+	VectorIterativeScan bool `yaml:"vector_iterative_scan"`
+	ContextTokenLimit   int  `yaml:"context_token_limit"`
+	AdjacentExpansion   int  `yaml:"adjacent_expansion"`
+	MaxAdjacentChunks   int  `yaml:"max_adjacent_chunks"`
 	// RRFK is the reciprocal rank fusion constant. It damps the influence of the
 	// top ranks so neither recall channel dominates purely because its score
 	// scale differs, which also fixes the band the fused score can land in.
@@ -116,6 +126,8 @@ func (r RetrievalConfig) Validate() error {
 		KeywordThreshold:     &r.KeywordThreshold,
 		RerankTopK:           &r.RerankTopK,
 		RerankThreshold:      &r.RerankThreshold,
+		VectorEFSearch:       &r.VectorEFSearch,
+		VectorOversample:     &r.VectorOversample,
 		ContextTokenLimit:    &r.ContextTokenLimit,
 		AdjacentExpansion:    &r.AdjacentExpansion,
 		MaxAdjacentChunks:    &r.MaxAdjacentChunks,
@@ -442,6 +454,13 @@ type ConnectorConfig struct {
 	DefaultRatePerSecond float64
 }
 
+// ProjectionConfig controls Pipeline B generation behavior. IncrementalEnabled
+// wires the per-package generation cache; false is the exact pre-cache
+// full-regeneration behavior and is the rollback switch.
+type ProjectionConfig struct {
+	IncrementalEnabled bool
+}
+
 func (c ConnectorConfig) Validate(appEnv string) error {
 	if strings.TrimSpace(c.EncryptionKey) == "" {
 		return fmt.Errorf("CONNECTOR_ENCRYPTION_KEY is required")
@@ -534,17 +553,23 @@ func Load() Config {
 // so a development stack still starts.
 func defaultRetrievalConfig() RetrievalConfig {
 	return RetrievalConfig{
-		TopK:              8,
-		EmbeddingTopK:     20,
-		KeywordTopK:       20,
-		VectorThreshold:   0.2,
-		KeywordThreshold:  0,
-		RerankEnabled:     false,
-		RerankTopK:        8,
-		RerankThreshold:   -10,
-		ContextTokenLimit: 3000,
-		AdjacentExpansion: 1,
-		MaxAdjacentChunks: 2,
+		TopK:             8,
+		EmbeddingTopK:    20,
+		KeywordTopK:      20,
+		VectorThreshold:  0.2,
+		KeywordThreshold: 0,
+		RerankEnabled:    false,
+		RerankTopK:       8,
+		RerankThreshold:  -10,
+		// The recall probe (scripts/vector_recall_probe.py) measured that
+		// over-sampling alone cannot fill a small tenant's HNSW result; relaxed
+		// iterative scan can. Zero ef_search keeps pgvector's default (40).
+		VectorEFSearch:      0,
+		VectorOversample:    1,
+		VectorIterativeScan: true,
+		ContextTokenLimit:   3000,
+		AdjacentExpansion:   1,
+		MaxAdjacentChunks:   2,
 		// With rrf_k = 60 a chunk ranked first by both channels fuses to
 		// 2/(60+1) ~ 0.033, which is the band the API reports as `score`.
 		RRFK:                 60,
@@ -640,6 +665,9 @@ func LoadFrom(lookup Lookup) Config {
 			ReconcileIntervalSeconds:     int(reader.positive("RECONCILE_INTERVAL_SECONDS", 60)),
 			WorkerConcurrency:            int(reader.positive("WORKER_CONCURRENCY", 4)),
 			ShutdownTimeoutSeconds:       int(reader.positive("SHUTDOWN_TIMEOUT_SECONDS", 10)),
+		},
+		Projection: ProjectionConfig{
+			IncrementalEnabled: reader.boolean("PROJECTION_INCREMENTAL_ENABLED", true),
 		},
 		Connector: ConnectorConfig{
 			EncryptionKey:        value(lookup, "CONNECTOR_ENCRYPTION_KEY", ""),

@@ -11,6 +11,13 @@ type Recorder interface {
 	Observe(name string, duration time.Duration, labels map[string]string)
 }
 
+// Adder is an optional extension for counters incremented by more than one.
+// Callers fall back to Inc in a loop when a recorder does not implement it, so
+// existing test recorders keep compiling.
+type Adder interface {
+	Add(name string, value int64, labels map[string]string)
+}
+
 // Nop discards every observation. It is the default so a service without an
 // injected recorder keeps working in tests and offline tools.
 type Nop struct{}

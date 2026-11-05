@@ -24,6 +24,8 @@ export const numericFields: NumericField[] = [
   { key: "keyword_top_k", group: "recall", labelKey: "retrieval.keyword_top_k", unitKey: "retrieval.unitCount", min: 0, max: 200, integer: true, kind: "number" },
   { key: "vector_threshold", group: "recall", labelKey: "retrieval.vector_threshold", min: 0, max: 1, step: 0.01, kind: "number" },
   { key: "keyword_threshold", group: "recall", labelKey: "retrieval.keyword_threshold", min: 0, step: 0.01, kind: "number" },
+  { key: "vector_ef_search", group: "recall", labelKey: "retrieval.vector_ef_search", min: 0, max: 1000, integer: true, kind: "number" },
+  { key: "vector_oversample", group: "recall", labelKey: "retrieval.vector_oversample", min: 1, max: 20, integer: true, kind: "number" },
   { key: "rrf_k", group: "fusion", labelKey: "retrieval.rrf_k", unitKey: "retrieval.unitRrf", min: 1, max: 200, integer: true, kind: "number" },
   { key: "adjacent_expansion", group: "expansion", labelKey: "retrieval.adjacent_expansion", unitKey: "retrieval.unitChunks", min: 0, integer: true, kind: "number" },
   { key: "max_adjacent_chunks", group: "expansion", labelKey: "retrieval.max_adjacent_chunks", unitKey: "retrieval.unitChunks", min: 0, integer: true, kind: "number" },
@@ -34,6 +36,7 @@ export const numericFields: NumericField[] = [
 ];
 
 export const booleanFields: BooleanField[] = [
+  { key: "vector_iterative_scan", group: "recall", labelKey: "retrieval.vector_iterative_scan", kind: "boolean" },
   { key: "rerank_enabled", group: "rerank", labelKey: "retrieval.rerank_enabled", kind: "boolean" },
 ];
 

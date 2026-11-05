@@ -11,6 +11,8 @@
 #   top_k / *_top_k         0 .. 200
 #   rrf_k                   1 .. 200
 #   expansion_score_factor  0 .. 1
+#   vector_ef_search        0 .. 1000 (0 = pgvector server default)
+#   vector_oversample       1 .. 20
 retrieval:
   # Number of evidence chunks handed to the generation step.
   top_k: 8
@@ -19,6 +21,18 @@ retrieval:
   keyword_top_k: 20
   # Minimum cosine similarity for a vector candidate (0-1).
   vector_threshold: 0.2
+  # pgvector HNSW candidate-list size. 0 keeps the server default (40 on
+  # pgvector 0.8). The 2026-11-05 recall probe measured 40 as sufficient once
+  # iterative scan is on; raise only if a larger corpus shows underfill.
+  vector_ef_search: 40
+  # Multiplies the SQL LIMIT before the tenant/version filters are applied.
+  # The probe showed over-sampling alone cannot fill a small tenant's HNSW
+  # result (ef_search limits the candidate list), so this stays 1.
+  vector_oversample: 1
+  # pgvector relaxed-order iterative scan. The probe's 100:1 tenant split
+  # returned 4-6 of 20 rows without it and 20/20 with it, at P95 10-32ms.
+  # Requires pgvector 0.8+; set false to leave the server default (off).
+  vector_iterative_scan: true
   # Minimum BM25 score for a keyword candidate.
   keyword_threshold: 0
   # Rerank is a configurable capability. `rerank_enabled` stays off by default

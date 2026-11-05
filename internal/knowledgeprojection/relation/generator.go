@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/example/rag-platform/internal/contracts/evidence"
 	"github.com/example/rag-platform/internal/contracts/model"
+	"github.com/example/rag-platform/internal/contracts/projectioncache"
 	"github.com/example/rag-platform/internal/prompts"
 )
 
@@ -27,7 +29,18 @@ type Extractor struct {
 	chatter       Chatter
 	template      string
 	promptVersion string
+	cache         projectioncache.Cache
 }
+
+// ExtractStats reports package-level cache effectiveness for one run.
+type ExtractStats struct {
+	Generated int
+	Reused    int
+}
+
+// SetCache enables per-package extraction caching. A nil cache keeps the
+// previous full-extraction behavior.
+func (e *Extractor) SetCache(cache projectioncache.Cache) { e.cache = cache }
 
 func NewExtractor(chatter Chatter, registry *prompts.Registry) (*Extractor, error) {
 	if chatter == nil {
@@ -53,36 +66,110 @@ func (e *Extractor) Model() string         { return e.chatter.Name() }
 // Extract consumes only EvidencePackage chunks. Relations produced by the model
 // without a literal source chunk are dropped; the deterministic triples carry
 // the chunk they were read from.
-func (e *Extractor) Extract(ctx context.Context, tenantID, knowledgeBaseID string, aclVersion int64, packages []evidence.Package) (RelationProjectionPackage, error) {
+func (e *Extractor) Extract(ctx context.Context, tenantID, knowledgeBaseID string, aclVersion int64, packages []evidence.Package) (RelationProjectionPackage, ExtractStats, error) {
 	result := RelationProjectionPackage{
 		SchemaVersion: SchemaRelationProjection, TenantID: tenantID,
 		KnowledgeBaseID: knowledgeBaseID, ACLVersion: aclVersion,
 	}
+	stats := ExtractStats{}
 	sorted := append([]evidence.Package(nil), packages...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].DocumentID < sorted[j].DocumentID })
 	for _, pkg := range sorted {
-		chunks := evidenceChunks(pkg)
-		if len(chunks) == 0 {
+		if len(evidenceChunks(pkg)) == 0 {
 			continue
 		}
-		for start := 0; start < len(chunks); start += maxRelationChunksPerCall {
-			end := start + maxRelationChunksPerCall
-			if end > len(chunks) {
-				end = len(chunks)
+		key := e.cacheKey(pkg)
+		if payload, ok := e.cached(ctx, key); ok {
+			var extracted RelationProjectionPackage
+			if err := json.Unmarshal(payload, &extracted); err == nil {
+				result.Entities = append(result.Entities, extracted.Entities...)
+				result.Relations = append(result.Relations, extracted.Relations...)
+				stats.Reused++
+				continue
 			}
-			batch := chunks[start:end]
-			extracted, err := e.extractBatch(ctx, pkg, batch)
-			if err != nil {
-				return RelationProjectionPackage{}, err
-			}
-			fallback := DeterministicExtraction(batch)
-			result.Entities = append(result.Entities, extracted.Entities...)
-			result.Entities = append(result.Entities, fallback.Entities...)
-			result.Relations = append(result.Relations, extracted.Relations...)
-			result.Relations = append(result.Relations, fallback.Relations...)
+			slog.Warn("relation_cache_decode_failed", "package_id", pkg.ID)
 		}
+		extracted, err := e.ExtractPackage(ctx, pkg)
+		if err != nil {
+			return RelationProjectionPackage{}, stats, err
+		}
+		result.Entities = append(result.Entities, extracted.Entities...)
+		result.Relations = append(result.Relations, extracted.Relations...)
+		e.store(ctx, key, extracted)
+		stats.Generated++
 	}
-	return MergeExtraction(result), nil
+	return MergeExtraction(result), stats, nil
+}
+
+// ExtractPackage extracts one EvidencePackage's batches and deterministic
+// fallback triples. The global MergeExtraction still runs once over all
+// packages, so a cached package result is indistinguishable from a fresh one.
+func (e *Extractor) ExtractPackage(ctx context.Context, pkg evidence.Package) (RelationProjectionPackage, error) {
+	result := RelationProjectionPackage{
+		SchemaVersion: SchemaRelationProjection, TenantID: pkg.TenantID,
+		KnowledgeBaseID: pkg.KnowledgeBaseID, ACLVersion: pkg.ACLVersion,
+	}
+	chunks := evidenceChunks(pkg)
+	for start := 0; start < len(chunks); start += maxRelationChunksPerCall {
+		end := start + maxRelationChunksPerCall
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+		batch := chunks[start:end]
+		extracted, err := e.extractBatch(ctx, pkg, batch)
+		if err != nil {
+			return RelationProjectionPackage{}, err
+		}
+		fallback := DeterministicExtraction(batch)
+		result.Entities = append(result.Entities, extracted.Entities...)
+		result.Entities = append(result.Entities, fallback.Entities...)
+		result.Relations = append(result.Relations, extracted.Relations...)
+		result.Relations = append(result.Relations, fallback.Relations...)
+	}
+	return result, nil
+}
+
+func (e *Extractor) cacheKey(pkg evidence.Package) projectioncache.Key {
+	digest := sha256.New()
+	for _, part := range []string{
+		"relation", pkg.ID, projectioncache.PackageDigest(pkg),
+		e.chatter.Name(), e.promptVersion, fmt.Sprint(pkg.ACLVersion),
+	} {
+		digest.Write([]byte(part))
+		digest.Write([]byte{0})
+	}
+	return projectioncache.Key{
+		TenantID: pkg.TenantID, KnowledgeBaseID: pkg.KnowledgeBaseID,
+		ProjectionType: "relation", Artifact: "extraction", PackageID: pkg.ID,
+		InputHash:     hex.EncodeToString(digest.Sum(nil)),
+		PromptVersion: e.promptVersion, Model: e.chatter.Name(), ACLVersion: pkg.ACLVersion,
+	}
+}
+
+func (e *Extractor) cached(ctx context.Context, key projectioncache.Key) ([]byte, bool) {
+	if e.cache == nil {
+		return nil, false
+	}
+	payload, ok, err := e.cache.Get(ctx, key)
+	if err != nil {
+		slog.Warn("relation_cache_get_failed", "package_id", key.PackageID, "error", err)
+		return nil, false
+	}
+	return payload, ok
+}
+
+func (e *Extractor) store(ctx context.Context, key projectioncache.Key, value any) {
+	if e.cache == nil {
+		return
+	}
+	payload, err := json.Marshal(value)
+	if err != nil {
+		slog.Warn("relation_cache_encode_failed", "package_id", key.PackageID, "error", err)
+		return
+	}
+	if err := e.cache.Put(ctx, key, payload); err != nil {
+		slog.Warn("relation_cache_put_failed", "package_id", key.PackageID, "error", err)
+	}
 }
 
 func (e *Extractor) extractBatch(ctx context.Context, pkg evidence.Package, chunks []evidence.Chunk) (RelationProjectionPackage, error) {

@@ -8,6 +8,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/contracts/projectioncache"
 	"github.com/example/rag-platform/internal/conversation"
 	"github.com/example/rag-platform/internal/datasource"
 	"github.com/example/rag-platform/internal/identity"
@@ -20,6 +21,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/evidenceindex"
 	"github.com/example/rag-platform/internal/platform/evidencestore"
 	"github.com/example/rag-platform/internal/platform/persistence"
+	pgprojectioncache "github.com/example/rag-platform/internal/platform/projectioncache"
 	"github.com/example/rag-platform/internal/platform/queue"
 	"github.com/example/rag-platform/internal/platform/ratelimit"
 	pgrelationstore "github.com/example/rag-platform/internal/platform/relationstore"
@@ -177,11 +179,17 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 		closeDatabase(database)
 		return nil, err
 	}
+	var generationCache projectioncache.Cache
+	if cfg.Projection.IncrementalEnabled {
+		generationCache = pgprojectioncache.New(database)
+	}
 	projectionService := knowledgeprojection.NewService(knowledgeprojection.Options{
 		DB: database, Authz: authorization, Embedder: embedder, Generator: wikiGenerator, Extractor: relationExtractor,
 		Publisher: publisher, Timeout: time.Duration(cfg.TaskTimeoutSeconds) * time.Second,
 		Store:    pgrelationstore.New(database),
 		Evidence: evidencestore.New(database),
+		Cache:    generationCache,
+		Metrics:  recorder,
 	})
 	knowledgeBaseService.SetProjectionLifecycle(projectionService)
 	var queryRewriter retrieval.Rewriter
@@ -189,7 +197,7 @@ func Open(cfg config.Config, recorder metrics.Recorder) (*Application, error) {
 		queryRewriter = conversation.NewQueryRewriter(chatter, registry, time.Duration(cfg.Chat.QueryRewriteTimeoutSec)*time.Second, recorder)
 	}
 	retrievalService := retrieval.NewService(retrieval.Options{
-		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcher(database),
+		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcherWithMetrics(database, recorder),
 		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: reranker,
 		Authz: authorization, Defaults: retrievalDefaults(cfg.Retrieval), Join: projectionService, Rewriter: queryRewriter, Metrics: recorder,
 		RerankModels: modelCatalog,

@@ -243,6 +243,9 @@ export type RetrievalParamsV1 = {
   rerank_enabled: boolean;
   rerank_top_k: number;
   rerank_threshold: number;
+  vector_ef_search: number;
+  vector_oversample: number;
+  vector_iterative_scan: boolean;
   context_token_limit: number;
   adjacent_expansion: number;
   max_adjacent_chunks: number;

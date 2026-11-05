@@ -153,13 +153,14 @@ func (s *Service) generate(ctx context.Context, run *models.ProjectionRun) error
 	if err != nil {
 		return apperror.Terminal("knowledge_base_missing", err)
 	}
-	pages, err := s.generator.Generate(ctx, knowledgeBase.Name, packages)
+	pages, stats, err := s.generator.Generate(ctx, knowledgeBase.Name, packages)
 	if err != nil {
 		return err
 	}
 	if len(pages) == 0 {
 		return apperror.Terminalf("empty_projection", "evidence packages produced no wiki pages")
 	}
+	s.recordGeneration(ProjectionTypeWiki, stats.Generated, stats.Reused)
 	now := time.Now()
 	for _, page := range pages {
 		if err := s.persistPage(ctx, run, knowledgeBase, page, now); err != nil {

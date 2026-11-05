@@ -51,6 +51,18 @@ func (r *Registry) Inc(name string, labels map[string]string) {
 	r.mu.Unlock()
 }
 
+// Add increments a counter by a batch size. It mirrors metrics.Adder so the
+// projection cache can report package counts in one lock acquisition.
+func (r *Registry) Add(name string, value int64, labels map[string]string) {
+	if value == 0 {
+		return
+	}
+	key := metricKey(name, labels)
+	r.mu.Lock()
+	r.counters[key] += value
+	r.mu.Unlock()
+}
+
 func (r *Registry) Observe(name string, duration time.Duration, labels map[string]string) {
 	key := metricKey(name, labels)
 	milliseconds := float64(duration.Microseconds()) / 1000.0

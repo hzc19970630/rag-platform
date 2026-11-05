@@ -94,6 +94,9 @@ func (s *Service) RebuildKnowledgeBase(ctx context.Context, tenantID, knowledgeB
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return 0, lookupErr
 	}
+	if err := s.clearGenerationCache(ctx, tenantID, knowledgeBaseID, ProjectionTypeWiki); err != nil {
+		return 0, err
+	}
 	sourceHash, _ := packagesSourceHash(packages, knowledgeBase.ACLVersion, s.generator.PromptVersion(), s.generator.Model())
 	_ = s.upsertWikiExpectedHash(ctx, knowledgeBase, sourceHash)
 	last := packages[len(packages)-1]
@@ -136,6 +139,9 @@ func (s *Service) RebuildRelations(ctx context.Context, tenantID, knowledgeBaseI
 	}
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return 0, lookupErr
+	}
+	if err := s.clearGenerationCache(ctx, tenantID, knowledgeBaseID, ProjectionTypeRelation); err != nil {
+		return 0, err
 	}
 	last := packages[len(packages)-1]
 	relationHash := s.relationSourceHash(packages, knowledgeBase.ACLVersion)

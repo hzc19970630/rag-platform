@@ -192,7 +192,7 @@ flowchart LR
 - 原始文档是事实源，两个索引和 Relation Store 均可从文档版本重建。
 - 文档新增或修改时，先更新 `Evidence Index`，再异步生成或更新 Wiki 页面和 `Knowledge Index`。
 - 文档删除、版本替换或权限变更时，关联 Wiki 页面进入 `stale` / `review_required` 状态，并清理不可见内容的索引和缓存。
-- Wiki 页面保存 `source_document_version_ids`、`source_chunk_ids`、`content_hash` 和 `acl_version`，用于溯源、增量更新和权限失效判断。
+- Wiki 页面保存 `source_document_version_ids`、`source_chunk_ids`、`content_hash` 和 `acl_version`，用于溯源、增量更新和权限失效判断。实际生成结果按 EvidencePackage 缓存在 `projection_generation_cache`（键含 package 内容摘要、ACL、模型和 Prompt 版本）：未变化的 package 直接复用缓存，变更的 package 只重算自身；手动 `wiki/rebuild` / `graph/rebuild` 会先清空该知识库对应类型的缓存，因此操作者的“重建”仍是全量重算。缓存是派生数据，清空只增加一次模型调用，不影响正确性。
 - 图谱实体和关系保存 `source_chunk_ids`、`graph_snapshot_id` 和 `acl_version`，权限变化时按来源集合重新计算可见性。
 
 推荐的数据表：

@@ -22,6 +22,9 @@ type ParamsOverride struct {
 	RerankEnabled        *bool    `json:"rerank_enabled,omitempty"`
 	RerankTopK           *int     `json:"rerank_top_k,omitempty"`
 	RerankThreshold      *float64 `json:"rerank_threshold,omitempty"`
+	VectorEFSearch       *int     `json:"vector_ef_search,omitempty"`
+	VectorOversample     *int     `json:"vector_oversample,omitempty"`
+	VectorIterativeScan  *bool    `json:"vector_iterative_scan,omitempty"`
 	ContextTokenLimit    *int     `json:"context_token_limit,omitempty"`
 	AdjacentExpansion    *int     `json:"adjacent_expansion,omitempty"`
 	MaxAdjacentChunks    *int     `json:"max_adjacent_chunks,omitempty"`
@@ -54,6 +57,15 @@ func (o ParamsOverride) Apply(base Params) Params {
 	}
 	if o.RerankThreshold != nil {
 		base.RerankThreshold = *o.RerankThreshold
+	}
+	if o.VectorEFSearch != nil {
+		base.VectorEFSearch = *o.VectorEFSearch
+	}
+	if o.VectorOversample != nil {
+		base.VectorOversample = *o.VectorOversample
+	}
+	if o.VectorIterativeScan != nil {
+		base.VectorIterativeScan = *o.VectorIterativeScan
 	}
 	if o.ContextTokenLimit != nil {
 		base.ContextTokenLimit = *o.ContextTokenLimit
@@ -102,6 +114,15 @@ func (o ParamsOverride) Overlay(other ParamsOverride) ParamsOverride {
 	if other.RerankThreshold != nil {
 		result.RerankThreshold = other.RerankThreshold
 	}
+	if other.VectorEFSearch != nil {
+		result.VectorEFSearch = other.VectorEFSearch
+	}
+	if other.VectorOversample != nil {
+		result.VectorOversample = other.VectorOversample
+	}
+	if other.VectorIterativeScan != nil {
+		result.VectorIterativeScan = other.VectorIterativeScan
+	}
 	if other.ContextTokenLimit != nil {
 		result.ContextTokenLimit = other.ContextTokenLimit
 	}
@@ -131,6 +152,8 @@ func ValidateOverride(override ParamsOverride) error {
 		KeywordThreshold:     override.KeywordThreshold,
 		RerankTopK:           override.RerankTopK,
 		RerankThreshold:      override.RerankThreshold,
+		VectorEFSearch:       override.VectorEFSearch,
+		VectorOversample:     override.VectorOversample,
 		ContextTokenLimit:    override.ContextTokenLimit,
 		AdjacentExpansion:    override.AdjacentExpansion,
 		MaxAdjacentChunks:    override.MaxAdjacentChunks,
@@ -140,9 +163,11 @@ func ValidateOverride(override ParamsOverride) error {
 }
 
 // Validate range-checks a fully resolved parameter set. It delegates to the
-// same schema as ValidateOverride so the two tiers cannot drift.
+// same schema as ValidateOverride so the two tiers cannot drift. A zero
+// VectorOversample is the Go zero value ("unset"); the vector adapter treats it
+// as 1, so it is not rejected here. Override and YAML tiers still require 1..20.
 func (p Params) Validate() error {
-	return param.ValidateRetrieval(param.RetrievalValues{
+	values := param.RetrievalValues{
 		TopK:                 &p.TopK,
 		EmbeddingTopK:        &p.EmbeddingTopK,
 		KeywordTopK:          &p.KeywordTopK,
@@ -150,12 +175,17 @@ func (p Params) Validate() error {
 		KeywordThreshold:     &p.KeywordThreshold,
 		RerankTopK:           &p.RerankTopK,
 		RerankThreshold:      &p.RerankThreshold,
+		VectorEFSearch:       &p.VectorEFSearch,
 		ContextTokenLimit:    &p.ContextTokenLimit,
 		AdjacentExpansion:    &p.AdjacentExpansion,
 		MaxAdjacentChunks:    &p.MaxAdjacentChunks,
 		RRFK:                 &p.RRFK,
 		ExpansionScoreFactor: &p.ExpansionScoreFactor,
-	})
+	}
+	if p.VectorOversample > 0 {
+		values.VectorOversample = &p.VectorOversample
+	}
+	return param.ValidateRetrieval(values)
 }
 
 // ParseOverride decodes a stored or request-supplied override. An empty value

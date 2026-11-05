@@ -18,6 +18,12 @@ type RecallRequest struct {
 	EmbeddingModel string
 	TopK           int
 	Threshold      float64
+	// EFSearch, Oversample and IterativeScan are vector-adapter hints. Other
+	// recall adapters may ignore them; the vector adapter applies them to
+	// pgvector.
+	EFSearch      int
+	Oversample    int
+	IterativeScan bool
 }
 
 // Rewriter turns a follow-up question into a standalone retrieval query using

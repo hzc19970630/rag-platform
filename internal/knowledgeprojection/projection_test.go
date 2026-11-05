@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/contracts/model"
+	"github.com/example/rag-platform/internal/contracts/projectioncache"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/prompts"
@@ -257,7 +259,7 @@ func TestGeneratorProducesTraceablePages(t *testing.T) {
 			},
 		},
 	}
-	pages, err := generator.Generate(context.Background(), "Knowledge base", packages)
+	pages, _, err := generator.Generate(context.Background(), "Knowledge base", packages)
 	if err != nil {
 		t.Fatalf("generate pages: %v", err)
 	}
@@ -344,6 +346,211 @@ func TestFuseKnowledgeMergesPages(t *testing.T) {
 	}
 	if fused[0].score <= fused[1].score {
 		t.Fatalf("fused score must reflect both recall lists")
+	}
+}
+
+type fakeCacheEntry struct {
+	hash    string
+	payload []byte
+}
+
+type fakeGenerationCache struct {
+	entries map[string]fakeCacheEntry
+	deletes []string
+}
+
+func newFakeGenerationCache() *fakeGenerationCache {
+	return &fakeGenerationCache{entries: map[string]fakeCacheEntry{}}
+}
+
+func fakeCacheScope(key projectioncache.Key) string {
+	return strings.Join([]string{key.TenantID, key.KnowledgeBaseID, key.ProjectionType, key.Artifact, key.PackageID}, "|")
+}
+
+func (c *fakeGenerationCache) Get(_ context.Context, key projectioncache.Key) ([]byte, bool, error) {
+	entry, ok := c.entries[fakeCacheScope(key)]
+	if !ok || entry.hash != key.InputHash {
+		return nil, false, nil
+	}
+	return entry.payload, true, nil
+}
+
+func (c *fakeGenerationCache) Put(_ context.Context, key projectioncache.Key, payload []byte) error {
+	c.entries[fakeCacheScope(key)] = fakeCacheEntry{hash: key.InputHash, payload: append([]byte(nil), payload...)}
+	return nil
+}
+
+func (c *fakeGenerationCache) DeleteScope(_ context.Context, tenantID, knowledgeBaseID, projectionType string) error {
+	prefix := strings.Join([]string{tenantID, knowledgeBaseID, projectionType, ""}, "|")
+	for key := range c.entries {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.entries, key)
+		}
+	}
+	c.deletes = append(c.deletes, prefix)
+	return nil
+}
+
+type countingChatter struct {
+	name  string
+	calls int
+}
+
+func (c *countingChatter) Complete(ctx context.Context, request model.ChatRequest) (model.ChatResponse, error) {
+	c.calls++
+	return fakeChatter{name: c.name}.Complete(ctx, request)
+}
+
+func (c *countingChatter) Name() string { return c.name }
+
+func cacheTestPackages() []ingestion.EvidencePackage {
+	return []ingestion.EvidencePackage{
+		{
+			ID: "pkg-1", ContentHash: "hash-1", ACLVersion: 1,
+			Envelope: ingestion.Envelope{TenantID: "t1", KnowledgeBaseID: "kb-1", DocumentID: "doc-1", DocumentVersionID: "dv-1"},
+			Chunks: []ingestion.Chunk{
+				{ID: "c1", ParentID: "p1", Ordinal: 1, Content: "[[Acme|supplies|Beta]] alpha content", HeadingPath: "Intro", SourcePath: "a.md"},
+			},
+		},
+		{
+			ID: "pkg-2", ContentHash: "hash-2", ACLVersion: 1,
+			Envelope: ingestion.Envelope{TenantID: "t1", KnowledgeBaseID: "kb-1", DocumentID: "doc-2", DocumentVersionID: "dv-2"},
+			Chunks: []ingestion.Chunk{
+				{ID: "c2", ParentID: "p2", Ordinal: 1, Content: "[[Beta|supplies|Gamma]] beta content", HeadingPath: "Body", SourcePath: "b.md"},
+			},
+		},
+	}
+}
+
+func TestWikiGenerationCacheReusesUnchangedPackages(t *testing.T) {
+	registry, err := prompts.Load(filepath.Join("..", "..", "config", "prompt_templates"))
+	if err != nil {
+		t.Fatalf("load prompt templates: %v", err)
+	}
+	chatter := &countingChatter{name: "cache-test"}
+	generator, err := NewGenerator(chatter, registry)
+	if err != nil {
+		t.Fatalf("new generator: %v", err)
+	}
+	cache := newFakeGenerationCache()
+	generator.SetCache(cache)
+	packages := cacheTestPackages()
+
+	firstPages, firstStats, err := generator.Generate(context.Background(), "KB", append([]ingestion.EvidencePackage(nil), packages...))
+	if err != nil {
+		t.Fatalf("cold generate: %v", err)
+	}
+	if firstStats.Generated != 2 || firstStats.Reused != 0 {
+		t.Fatalf("cold stats = %+v, want 2 generated", firstStats)
+	}
+	coldCalls := chatter.calls
+	if coldCalls == 0 {
+		t.Fatalf("cold generation must call the model")
+	}
+
+	warmPages, warmStats, err := generator.Generate(context.Background(), "KB", append([]ingestion.EvidencePackage(nil), packages...))
+	if err != nil {
+		t.Fatalf("warm generate: %v", err)
+	}
+	if warmStats.Generated != 0 || warmStats.Reused != 2 {
+		t.Fatalf("warm stats = %+v, want 2 reused", warmStats)
+	}
+	if chatter.calls != coldCalls {
+		t.Fatalf("warm cache made %d additional model calls", chatter.calls-coldCalls)
+	}
+	if !reflect.DeepEqual(firstPages, warmPages) {
+		t.Fatalf("cached pages must match freshly generated pages")
+	}
+
+	changed := cacheTestPackages()
+	changed[1].Chunks[0].Content = "changed content"
+	_, changedStats, err := generator.Generate(context.Background(), "KB", changed)
+	if err != nil {
+		t.Fatalf("changed generate: %v", err)
+	}
+	if changedStats.Generated != 1 || changedStats.Reused != 1 {
+		t.Fatalf("changed stats = %+v, want 1 generated / 1 reused", changedStats)
+	}
+
+	// Re-warm the package whose content changed so the ACL case starts from a
+	// fully cached original corpus.
+	if _, _, err := generator.Generate(context.Background(), "KB", cacheTestPackages()); err != nil {
+		t.Fatalf("re-warm generate: %v", err)
+	}
+	aclPackages := cacheTestPackages()
+	aclPackages[0].ACLVersion = 2
+	_, aclStats, err := generator.Generate(context.Background(), "KB", aclPackages)
+	if err != nil {
+		t.Fatalf("acl generate: %v", err)
+	}
+	if aclStats.Generated != 1 || aclStats.Reused != 1 {
+		t.Fatalf("acl stats = %+v, want 1 generated / 1 reused", aclStats)
+	}
+
+	promptGenerator := generator.WithPromptVersion("prompt-v2")
+	_, promptStats, err := promptGenerator.Generate(context.Background(), "KB", cacheTestPackages())
+	if err != nil {
+		t.Fatalf("prompt generate: %v", err)
+	}
+	if promptStats.Generated != 2 || promptStats.Reused != 0 {
+		t.Fatalf("prompt stats = %+v, want 2 generated", promptStats)
+	}
+}
+
+func TestRelationExtractionCachePreservesMergeResult(t *testing.T) {
+	registry, err := prompts.Load(filepath.Join("..", "..", "config", "prompt_templates"))
+	if err != nil {
+		t.Fatalf("load prompt templates: %v", err)
+	}
+	chatter := &countingChatter{name: "cache-test"}
+	extractor, err := NewExtractor(chatter, registry)
+	if err != nil {
+		t.Fatalf("new extractor: %v", err)
+	}
+	cache := newFakeGenerationCache()
+	extractor.SetCache(cache)
+	packages := cacheTestPackages()
+
+	cold, coldStats, err := extractor.Extract(context.Background(), "t1", "kb-1", 1, append([]ingestion.EvidencePackage(nil), packages...))
+	if err != nil {
+		t.Fatalf("cold extract: %v", err)
+	}
+	if coldStats.Generated != 2 || coldStats.Reused != 0 {
+		t.Fatalf("cold stats = %+v, want 2 generated", coldStats)
+	}
+	coldCalls := chatter.calls
+	if len(cold.Relations) == 0 {
+		t.Fatalf("cold extraction must keep the deterministic relations")
+	}
+
+	warm, warmStats, err := extractor.Extract(context.Background(), "t1", "kb-1", 1, append([]ingestion.EvidencePackage(nil), packages...))
+	if err != nil {
+		t.Fatalf("warm extract: %v", err)
+	}
+	if warmStats.Generated != 0 || warmStats.Reused != 2 {
+		t.Fatalf("warm stats = %+v, want 2 reused", warmStats)
+	}
+	if chatter.calls != coldCalls {
+		t.Fatalf("warm cache made %d additional extraction calls", chatter.calls-coldCalls)
+	}
+	if !reflect.DeepEqual(cold, warm) {
+		t.Fatalf("cached extraction must equal the cold merged result")
+	}
+}
+
+func TestClearGenerationCacheScopesManualRebuild(t *testing.T) {
+	cache := newFakeGenerationCache()
+	cache.entries["t1|kb-1|wiki|document|pkg-1"] = fakeCacheEntry{hash: "h", payload: []byte("{}")}
+	cache.entries["t1|kb-1|relation|extraction|pkg-1"] = fakeCacheEntry{hash: "h", payload: []byte("{}")}
+	service := &Service{cache: cache}
+	if err := service.clearGenerationCache(context.Background(), "t1", "kb-1", ProjectionTypeWiki); err != nil {
+		t.Fatalf("clear wiki cache: %v", err)
+	}
+	if _, ok := cache.entries["t1|kb-1|wiki|document|pkg-1"]; ok {
+		t.Fatalf("wiki cache entry was not cleared")
+	}
+	if _, ok := cache.entries["t1|kb-1|relation|extraction|pkg-1"]; !ok {
+		t.Fatalf("relation cache entry must survive a wiki rebuild")
 	}
 }
 

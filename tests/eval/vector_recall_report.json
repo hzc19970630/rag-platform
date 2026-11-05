@@ -1,0 +1,1208 @@
+{
+  "schemaVersion": "VectorRecallProbeV1",
+  "generatedAt": "2026-11-05T03:45:52Z",
+  "durationSeconds": 33.9,
+  "pgvectorVersion": "0.8.7",
+  "corpus": {
+    "dimension": 1024,
+    "majorityDocuments": 10000,
+    "minorityDocuments": 100,
+    "minorityShare": 0.009901,
+    "topK": 20,
+    "relevantChunks": [
+      "minor-0001",
+      "minor-0002",
+      "minor-0003",
+      "minor-0004",
+      "minor-0005"
+    ],
+    "distinctMajorityVectors": 10000,
+    "distinctMinorityVectors": 100
+  },
+  "matrix": {
+    "efSearch": [
+      40,
+      100,
+      200,
+      500
+    ],
+    "oversample": [
+      1,
+      4,
+      10
+    ],
+    "iterativeScan": [
+      "off",
+      "relaxed_order"
+    ],
+    "repeats": 5
+  },
+  "results": [
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.386,
+        "p95": 0.433,
+        "mean": 0.399
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 40,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.378,
+        "p95": 0.457,
+        "mean": 0.392
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 40,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.353,
+        "p95": 0.411,
+        "mean": 0.365
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 40,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.392,
+        "p95": 0.883,
+        "mean": 0.487
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 40,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.406,
+        "p95": 0.45,
+        "mean": 0.397
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 40,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.379,
+        "p95": 0.612,
+        "mean": 0.42
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 40,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.371,
+        "p95": 0.385,
+        "mean": 0.365
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 100,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.357,
+        "p95": 0.369,
+        "mean": 0.353
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 100,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.394,
+        "p95": 0.413,
+        "mean": 0.393
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 100,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.385,
+        "p95": 0.512,
+        "mean": 0.406
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 100,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.386,
+        "p95": 0.399,
+        "mean": 0.381
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 100,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.414,
+        "p95": 0.772,
+        "mean": 0.47
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 100,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.396,
+        "p95": 1.016,
+        "mean": 0.515
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 200,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.376,
+        "p95": 0.388,
+        "mean": 0.378
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 200,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.367,
+        "p95": 0.374,
+        "mean": 0.365
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 200,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.363,
+        "p95": 0.395,
+        "mean": 0.362
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 200,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.368,
+        "p95": 0.402,
+        "mean": 0.371
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 200,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.369,
+        "p95": 0.386,
+        "mean": 0.368
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 200,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.37,
+        "p95": 0.437,
+        "mean": 0.376
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 500,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.358,
+        "p95": 0.424,
+        "mean": 0.37
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 500,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.4,
+        "p95": 0.65,
+        "mean": 0.444
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 500,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.403,
+        "p95": 0.538,
+        "mean": 0.434
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 500,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.363,
+        "p95": 0.386,
+        "mean": 0.367
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 500,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 0.371,
+        "p95": 0.378,
+        "mean": 0.367
+      },
+      "planKinds": [
+        "other"
+      ],
+      "forcedHNSW": false,
+      "efSearch": 500,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 4,
+        "mean": 4.0,
+        "max": 4
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 0.8,
+      "latencyMs": {
+        "p50": 1.799,
+        "p95": 17.609,
+        "mean": 4.941
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 40,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 10.644,
+        "p95": 31.701,
+        "mean": 15.083
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 40,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 4,
+        "mean": 4.0,
+        "max": 4
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 0.8,
+      "latencyMs": {
+        "p50": 1.781,
+        "p95": 2.024,
+        "mean": 1.806
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 40,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 17.173,
+        "p95": 17.885,
+        "mean": 17.116
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 40,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 4,
+        "mean": 4.0,
+        "max": 4
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 0.8,
+      "latencyMs": {
+        "p50": 1.708,
+        "p95": 1.739,
+        "mean": 1.704
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 40,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 19.793,
+        "p95": 31.807,
+        "mean": 22.011
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 40,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 5,
+        "mean": 5.0,
+        "max": 5
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 2.672,
+        "p95": 3.529,
+        "mean": 2.866
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 100,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 10.713,
+        "p95": 10.919,
+        "mean": 10.705
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 100,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 5,
+        "mean": 5.0,
+        "max": 5
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 2.751,
+        "p95": 4.005,
+        "mean": 3.011
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 100,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 16.588,
+        "p95": 16.921,
+        "mean": 16.445
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 100,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 5,
+        "mean": 5.0,
+        "max": 5
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 2.766,
+        "p95": 2.791,
+        "mean": 2.744
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 100,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 20.927,
+        "p95": 22.664,
+        "mean": 20.988
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 100,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 5,
+        "mean": 5.0,
+        "max": 5
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 4.276,
+        "p95": 5.368,
+        "mean": 4.492
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 200,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 11.21,
+        "p95": 12.368,
+        "mean": 11.181
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 200,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 5,
+        "mean": 5.0,
+        "max": 5
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 4.54,
+        "p95": 9.431,
+        "mean": 5.75
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 200,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 16.7,
+        "p95": 20.916,
+        "mean": 17.995
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 200,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 5,
+        "mean": 5.0,
+        "max": 5
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 4.125,
+        "p95": 4.233,
+        "mean": 4.069
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 200,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 19.684,
+        "p95": 25.684,
+        "mean": 20.764
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 200,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 6,
+        "mean": 6.0,
+        "max": 6
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 6.029,
+        "p95": 6.703,
+        "mean": 6.157
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 500,
+      "oversample": 1,
+      "iterativeScan": "off",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 10.483,
+        "p95": 11.3,
+        "mean": 10.701
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 500,
+      "oversample": 1,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 20
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 6,
+        "mean": 6.0,
+        "max": 6
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 6.194,
+        "p95": 6.299,
+        "mean": 6.205
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 500,
+      "oversample": 4,
+      "iterativeScan": "off",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 15.921,
+        "p95": 18.217,
+        "mean": 16.637
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 500,
+      "oversample": 4,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 80
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 6,
+        "mean": 6.0,
+        "max": 6
+      },
+      "underfillRate": 1.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 6.11,
+        "p95": 7.39,
+        "mean": 6.479
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 500,
+      "oversample": 10,
+      "iterativeScan": "off",
+      "sqlLimit": 200
+    },
+    {
+      "samples": 5,
+      "returned": {
+        "min": 20,
+        "mean": 20.0,
+        "max": 20
+      },
+      "underfillRate": 0.0,
+      "targetHitRate": 1.0,
+      "relevantRecall": 1.0,
+      "latencyMs": {
+        "p50": 17.605,
+        "p95": 18.209,
+        "mean": 17.681
+      },
+      "planKinds": [
+        "hnsw-index-scan"
+      ],
+      "forcedHNSW": true,
+      "efSearch": 500,
+      "oversample": 10,
+      "iterativeScan": "relaxed_order",
+      "sqlLimit": 200
+    }
+  ],
+  "recommendation": {
+    "efSearch": 40,
+    "oversample": 1,
+    "iterativeScan": "relaxed_order",
+    "p95Ms": 31.701,
+    "reason": "forced-HNSW run met underfill=0, target/relevant recall=1.0 and p95<=100ms"
+  },
+  "limitations": [
+    "Synthetic random vectors are not semantic embeddings; this probe measures ANN/filter behavior, not answer quality.",
+    "The corpus is one 100:1 tenant split with 10k rows by default; rerun on the M8 corpus before production defaults.",
+    "EXPLAIN ANALYZE Execution Time is used as latency; it excludes client/network and psql overhead.",
+    "A natural-plan result may be an exact scan. Tuning conclusions use the forced-HNSW rows; natural plan kinds are recorded separately.",
+    "The schema is dropped on exit unless --keep is set; the application's tables are never touched."
+  ]
+}

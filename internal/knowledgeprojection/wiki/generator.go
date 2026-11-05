@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path"
 	"regexp"
 	"sort"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/example/rag-platform/internal/contracts/evidence"
 	"github.com/example/rag-platform/internal/contracts/model"
+	"github.com/example/rag-platform/internal/contracts/projectioncache"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/prompts"
 )
@@ -29,7 +32,18 @@ type Generator struct {
 	chatter       Chatter
 	template      string
 	promptVersion string
+	cache         projectioncache.Cache
 }
+
+// GenerateStats reports package-level cache effectiveness for one run.
+type GenerateStats struct {
+	Generated int
+	Reused    int
+}
+
+// SetCache enables per-package generation caching. A nil cache keeps the
+// previous full-generation behavior.
+func (g *Generator) SetCache(cache projectioncache.Cache) { g.cache = cache }
 
 type GeneratedPage struct {
 	PageType   string
@@ -72,9 +86,14 @@ func (g *Generator) WithPromptVersion(version string) *Generator {
 // Generate builds document pages and one knowledge-base overview page. Every
 // page block names the concrete EvidencePackage chunks it came from; the
 // overview is the multi-source page that may span several documents.
-func (g *Generator) Generate(ctx context.Context, kbTitle string, packages []evidence.Package) ([]GeneratedPage, error) {
+//
+// When a cache is wired, each package's document page and overview block are
+// reused until the package digest, ACL, model or prompt version changes. Cache
+// failures are logged and treated as misses: they never fail the projection.
+func (g *Generator) Generate(ctx context.Context, kbTitle string, packages []evidence.Package) ([]GeneratedPage, GenerateStats, error) {
+	stats := GenerateStats{}
 	if len(packages) == 0 {
-		return nil, nil
+		return nil, stats, nil
 	}
 	sort.SliceStable(packages, func(i, j int) bool {
 		return packages[i].DocumentID < packages[j].DocumentID
@@ -88,21 +107,33 @@ func (g *Generator) Generate(ctx context.Context, kbTitle string, packages []evi
 			continue
 		}
 		title := documentTitle(pkg, chunks)
-		docPage, err := g.documentPage(ctx, pkg, title, chunks)
+		generated := false
+		docPage, hit, err := g.documentPageCached(ctx, pkg, title, chunks)
 		if err != nil {
-			return nil, err
+			return nil, stats, err
+		}
+		if !hit {
+			generated = true
 		}
 		pages = append(pages, docPage)
 		if index < maxOverviewBlocks {
-			block, err := g.overviewBlock(ctx, pkg, title, chunks)
+			block, blockHit, err := g.overviewBlockCached(ctx, pkg, title, chunks)
 			if err != nil {
-				return nil, err
+				return nil, stats, err
+			}
+			if !blockHit {
+				generated = true
 			}
 			key := strings.Join(block.SourceChunkIDs, ",")
 			if !overviewSeen[key] {
 				overviewSeen[key] = true
 				overview = append(overview, block)
 			}
+		}
+		if generated {
+			stats.Generated++
+		} else {
+			stats.Reused++
 		}
 	}
 	if len(overview) > 0 {
@@ -115,7 +146,85 @@ func (g *Generator) Generate(ctx context.Context, kbTitle string, packages []evi
 		page.SourceHash = g.PageHash(page, packages)
 		pages = append(pages, page)
 	}
-	return pages, nil
+	return pages, stats, nil
+}
+
+func (g *Generator) documentPageCached(ctx context.Context, pkg evidence.Package, title string, chunks []evidence.Chunk) (GeneratedPage, bool, error) {
+	slug := "document-" + pkg.DocumentID
+	key := g.cacheKey(pkg, PageTypeDocument, slug, title)
+	if payload, ok := g.cached(ctx, key); ok {
+		var page GeneratedPage
+		if err := json.Unmarshal(payload, &page); err == nil {
+			return page, true, nil
+		}
+		slog.Warn("wiki_cache_decode_failed", "package_id", pkg.ID, "page_type", PageTypeDocument)
+	}
+	page, err := g.documentPage(ctx, pkg, title, chunks)
+	if err != nil {
+		return GeneratedPage{}, false, err
+	}
+	g.store(ctx, key, page)
+	return page, false, nil
+}
+
+func (g *Generator) overviewBlockCached(ctx context.Context, pkg evidence.Package, title string, chunks []evidence.Chunk) (models.WikiBlock, bool, error) {
+	key := g.cacheKey(pkg, "overview-block", "overview-"+pkg.DocumentID, title)
+	if payload, ok := g.cached(ctx, key); ok {
+		var block models.WikiBlock
+		if err := json.Unmarshal(payload, &block); err == nil {
+			return block, true, nil
+		}
+		slog.Warn("wiki_cache_decode_failed", "package_id", pkg.ID, "page_type", "overview-block")
+	}
+	block, err := g.overviewBlock(ctx, pkg, title, chunks)
+	if err != nil {
+		return models.WikiBlock{}, false, err
+	}
+	g.store(ctx, key, block)
+	return block, false, nil
+}
+
+func (g *Generator) cacheKey(pkg evidence.Package, pageType, slug, title string) projectioncache.Key {
+	digest := sha256.New()
+	for _, part := range []string{
+		pageType, slug, title, pkg.ID, projectioncache.PackageDigest(pkg),
+		g.chatter.Name(), g.promptVersion, fmt.Sprint(pkg.ACLVersion),
+	} {
+		digest.Write([]byte(part))
+		digest.Write([]byte{0})
+	}
+	return projectioncache.Key{
+		TenantID: pkg.TenantID, KnowledgeBaseID: pkg.KnowledgeBaseID,
+		ProjectionType: "wiki", Artifact: pageType, PackageID: pkg.ID,
+		InputHash:     hex.EncodeToString(digest.Sum(nil)),
+		PromptVersion: g.promptVersion, Model: g.chatter.Name(), ACLVersion: pkg.ACLVersion,
+	}
+}
+
+func (g *Generator) cached(ctx context.Context, key projectioncache.Key) ([]byte, bool) {
+	if g.cache == nil {
+		return nil, false
+	}
+	payload, ok, err := g.cache.Get(ctx, key)
+	if err != nil {
+		slog.Warn("wiki_cache_get_failed", "package_id", key.PackageID, "error", err)
+		return nil, false
+	}
+	return payload, ok
+}
+
+func (g *Generator) store(ctx context.Context, key projectioncache.Key, value any) {
+	if g.cache == nil {
+		return
+	}
+	payload, err := json.Marshal(value)
+	if err != nil {
+		slog.Warn("wiki_cache_encode_failed", "package_id", key.PackageID, "error", err)
+		return
+	}
+	if err := g.cache.Put(ctx, key, payload); err != nil {
+		slog.Warn("wiki_cache_put_failed", "package_id", key.PackageID, "error", err)
+	}
 }
 
 func (g *Generator) documentPage(ctx context.Context, pkg evidence.Package, title string, chunks []evidence.Chunk) (GeneratedPage, error) {

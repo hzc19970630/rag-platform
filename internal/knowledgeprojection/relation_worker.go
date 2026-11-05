@@ -140,13 +140,14 @@ func (s *Service) extractRelation(ctx context.Context, run *models.ProjectionRun
 	if err != nil {
 		return apperror.Terminal("knowledge_base_missing", err)
 	}
-	projection, err := s.relation.Extract(ctx, knowledgeBase.TenantID, knowledgeBase.ID, knowledgeBase.ACLVersion, packages)
+	projection, stats, err := s.relation.Extract(ctx, knowledgeBase.TenantID, knowledgeBase.ID, knowledgeBase.ACLVersion, packages)
 	if err != nil {
 		return err
 	}
 	if len(projection.Relations) == 0 {
 		return apperror.Terminalf("empty_relation_projection", "extraction produced no sourced relation")
 	}
+	s.recordGeneration(ProjectionTypeRelation, stats.Generated, stats.Reused)
 	return s.persistSnapshot(ctx, run, knowledgeBase, packages, projection, time.Now())
 }
 

@@ -33,4 +33,30 @@ func TestVectorRecallTemplateScopeAndDimensionBinding(t *testing.T) {
 	if !strings.Contains(rendered, "halfvec(3)") {
 		t.Fatalf("the rendered query must cast to halfvec(3): %s", rendered)
 	}
+	if !strings.Contains(rendered, "LIMIT ?") {
+		t.Fatalf("the rendered query must keep the bound LIMIT: %s", rendered)
+	}
+}
+
+func TestVectorScanLimitAppliesOversampleAndCap(t *testing.T) {
+	cases := []struct {
+		topK, oversample, want int
+	}{
+		{20, 1, 20},
+		{20, 4, 80},
+		{0, 4, 0},
+		{20, 0, 20},
+		{500, 20, maxVectorLimit},
+	}
+	for _, testCase := range cases {
+		if got := vectorScanLimit(testCase.topK, testCase.oversample); got != testCase.want {
+			t.Fatalf("vectorScanLimit(%d, %d) = %d, want %d", testCase.topK, testCase.oversample, got, testCase.want)
+		}
+	}
+}
+
+func TestVectorEFSearchStatementRendersValidatedInt(t *testing.T) {
+	if got := fmt.Sprintf(vectorEFSearchStatement, 200); got != "SET LOCAL hnsw.ef_search = 200" {
+		t.Fatalf("unexpected ef_search statement: %q", got)
+	}
 }

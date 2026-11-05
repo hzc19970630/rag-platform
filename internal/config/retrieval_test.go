@@ -135,6 +135,9 @@ func TestShippedRetrievalConfigIsValid(t *testing.T) {
 	if cfg.Retrieval.TopK <= 0 || cfg.Retrieval.EmbeddingTopK <= 0 || cfg.Retrieval.KeywordTopK <= 0 {
 		t.Fatalf("shipped config must set positive candidate depths: %+v", cfg.Retrieval)
 	}
+	if cfg.Retrieval.VectorEFSearch != 40 || cfg.Retrieval.VectorOversample != 1 || !cfg.Retrieval.VectorIterativeScan {
+		t.Fatalf("shipped vector defaults must match the recall probe: %+v", cfg.Retrieval)
+	}
 }
 
 func TestChatConfigValidation(t *testing.T) {

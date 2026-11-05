@@ -77,9 +77,9 @@ M3 新增的只读与问答接口：
 - `GET /api/v1/requests/:request_id/events?after=N`（或 `Last-Event-ID`）：断线后按 sequence 续传已持久化的事件。客户端在生成中断开时，服务端仍会落库终止答案（状态 `cancelled`）及 `answer`/`complete` 事件，续传不会停在半截。
 - 请求体上限：除文档上传外的请求 1 MiB，超限返回 `413 payload_too_large`；文档上传按 `DOCREADER_MAX_FILE_MB`（默认 100 MiB）限制，multipart 封装另留 1 MiB 开销。API 的 `ReadTimeout` 为 5 分钟，用于约束慢速 body；SSE 响应不受影响。
 
-检索链路为 BM25 与向量并行召回 → RRF 融合（常数 `rrf_k`，默认 60）→ 去重 → 可配置 Rerank → 父块/邻块扩展 → Top-K 与上下文 Token 限制 → 最终权限二次校验。所有召回查询在 SQL 层就带 `tenant_id`、知识库和"当前版本 + `EVIDENCE_READY`"过滤。Rerank 默认关闭，需离线评估后再开启；开启后由 `RERANK_SOURCE` 选择适配器（`none` 直通 / `lexical` 离线词面重叠 / `remote` OpenAI 兼容 `/rerank`），`rerank_threshold` 与 `rerank_top_k` 只在 Rerank 实际运行时生效。父块始终补齐，两个相邻块计数只约束邻居块。接口里返回的 `score` 是 RRF 融合分（量级由 `rrf_k` 决定，默认 60 时靠前的条目落在 0.016-0.033），向量余弦在 `vectorScore`、关键词分在 `keywordScore`。
+检索链路为 BM25 与向量并行召回 → RRF 融合（常数 `rrf_k`，默认 60）→ 去重 → 可配置 Rerank → 父块/邻块扩展 → Top-K 与上下文 Token 限制 → 最终权限二次校验。所有召回查询在 SQL 层就带 `tenant_id`、知识库和"当前版本 + `EVIDENCE_READY`"过滤。向量召回支持按知识库/请求调整 `vector_ef_search`（默认 40）、`vector_oversample`（默认 1）和 `vector_iterative_scan`（默认 true，映射 pgvector `relaxed_order`）；2026-11-05 的 100:1 租户探针显示，仅提高 ef_search/过采样无法补齐小租户，迭代扫描把 4–6/20 条补齐到 20/20，P95 10–32ms。Rerank 默认关闭，需离线评估后再开启；开启后由 `RERANK_SOURCE` 选择适配器（`none` 直通 / `lexical` 离线词面重叠 / `remote` OpenAI 兼容 `/rerank`），`rerank_threshold` 与 `rerank_top_k` 只在 Rerank 实际运行时生效。父块始终补齐，两个相邻块计数只约束邻居块。接口里返回的 `score` 是 RRF 融合分（量级由 `rrf_k` 决定，默认 60 时靠前的条目落在 0.016-0.033），向量余弦在 `vectorScore`、关键词分在 `keywordScore`。
 
-检索参数采用三级覆盖：`config/config.yaml` 全局默认 → 知识库级（`PATCH /api/v1/knowledge-bases/:id` 的 `retrieval_config`，写入审计）→ 会话/请求级（`sessionOverride`）。三级都通过服务端区间校验：向量阈值 0-1、关键字阈值 ≥ 0（BM25 分数无上界）、Rerank 阈值 -10~10、`*_top_k` 0-200、`rrf_k` 1-200、`expansion_score_factor` 0-1。
+检索参数采用三级覆盖：`config/config.yaml` 全局默认 → 知识库级（`PATCH /api/v1/knowledge-bases/:id` 的 `retrieval_config`，写入审计）→ 会话/请求级（`sessionOverride`）。三级都通过服务端区间校验：向量阈值 0-1、关键字阈值 ≥ 0（BM25 分数无上界）、Rerank 阈值 -10~10、`*_top_k` 0-200、`rrf_k` 1-200、`expansion_score_factor` 0-1、`vector_ef_search` 0-1000、`vector_oversample` 1-20。
 
 Prompt 已外置到 `config/prompt_templates/*.yaml`，启动时校验模板 ID 完整且唯一，Go 代码不含 Prompt 字面量。生成适配器同样是配置：`CHAT_SOURCE=local` 为离线抽取式 Adapter（只引用包含查询词的证据句，无匹配则返回"不足以回答"，生产环境禁止）；`CHAT_SOURCE=remote` 走 OpenAI 兼容 `/chat/completions`。
 
@@ -176,6 +176,8 @@ M6 在知识库的 `IndexingStrategy` 上使用 `wiki_enabled`（默认 false）
 
 Knowledge Index 是页面级投影（halfvec + BM25），只索引已发布且 ACL 与知识库当前版本一致的页面。成员变更或 `PATCH` 知识库会推进 ACL 版本并立即删除索引行、把派生页面置为 `STALE`；手动重建按新 ACL 生成待审核版本。检索时对每个来源 Chunk 重新校验当前文档版本、`EVIDENCE_READY` 和访问权限，任一来源不可见即不返回该页面。`ProjectionJoin` 在 `wiki_enabled=false` 时为 `EVIDENCE_READY`，最新运行就绪且来源哈希一致时为 `KNOWLEDGE_READY`，运行未完成、失败、来源过期或 ACL 不一致时为 `KNOWLEDGE_PARTIAL`；Wiki 失败不影响 Evidence RAG。期望来源哈希物化在 `knowledge_projection_states`，证据发布、投影触发或 ACL/prompt/model 变化时更新，查询只读状态行，不再每次扫描全部 EvidencePackage。
 
+投影生成按 EvidencePackage 增量执行：`projection_generation_cache` 保存每个 package 的文档页、概览块和关系抽取结果，键包含 package 内容摘要、ACL、模型和 Prompt 版本；未变化的 package 不再调用模型，变更的 package 单独重算。手动 `wiki/rebuild` 或 `graph/rebuild` 会先清空该知识库对应类型的缓存，保证操作者的“重建”是全量重算；`PROJECTION_INCREMENTAL_ENABLED=false` 可整体退回旧的全量行为。缓存是派生数据，清空只增加一次模型调用，不影响正确性。
+
 当前边界：Wiki 生成复用平台 Chat 适配器（`CHAT_SOURCE` / `CHAT_MODEL`），本地 `local-extractive` 只用于确定性的离线验收；不提供页面编辑器、自动发布、Wiki 驱动的查询扩展或页面链接图；关系投影在 M7 提供，不在 M6 中实现。
 
 ## M7 关系投影与有界图查询
@@ -202,6 +204,8 @@ M7 在同一个 `IndexingStrategy` 上使用 `graph_enabled`（默认 false）�
 查询与快照/运行视图要求知识库读权限；重建和重试要求写权限且拒绝 API Key；快照审核要求 `manage_members` 且拒绝 API Key。图查询以边为可见性单位：只有全部来源 Chunk 仍为当前版本、`EVIDENCE_READY` 且调用者可读的关系参与遍历，节点和路径只能经可见边到达；隐藏节点、隐藏边、共享实体和多跳路径都不会产生侧信道。`ProjectionJoin` 逐能力判定：声明 `wiki` 只检查 Wiki 投影，声明 `relation` / `graph` 只检查关系投影，未声明投影能力的查询不读取投影状态，因此单个投影失败不会阻塞另一投影或 Evidence RAG；图查询是显式能力，不进入默认问答计划。
 
 `make m7-eval` 在本地栈上创建临时知识库，用 `tests/eval/m7_qa_set.json` 逐条比较图谱查询与 Evidence RAG 的命中情况；`make m7-eval-validate` 只校验用例集（fixture 计数、三元组最短跳数、种子解析、答案标记位置），不联系服务栈。V2 用例集为 30 篇文档 / 135 个子块 / 34 个用例（28 个可答案例、20 个多跳、6 个负例，含三条关系链、别名与归一化种子、分叉、近名干扰和 depth-bound 负例）；strict RAG 要求答案短语出现在 `expectedDocument` 的返回块中，marker-anywhere 只作 loose 诊断。报告写入 `tests/eval/m7_eval_report.json`，并给出 `keep-bounded-graph-query` / `simplify` / `inconclusive` 建议。2026-10-27 实跑（远程 chat 抽取连续两轮超时，改用确定性 local-extractive 抽取器）：多跳 graph 100% vs strict RAG 70%（loose 70%），graph-only rescue 6、RAG-only 0，hop exact 100%（20 项），负例 100%（unknown-seed 4/4、depth-bound 2/2），RAG 干扰误报 0/2，均值延迟 graph 20.3ms vs RAG 187.9ms，delta +30%，harness 建议 `keep-bounded-graph-query`。同一用例集在四次独立索引构建上的多跳 strict RAG 为 85%、60%、80%、70%（graph 均为 100%）；报告 limitations 已声明单次索引样本与重建敏感性，发布决策前应重复运行。是否裁剪复杂图查询由产品依据报告决定，脚本不自动改变产品形态。
+
+关系抽取同样走 `projection_generation_cache`：每个 package 的逐批抽取 + deterministic fallback 结果单独缓存，最终仍统一调用一次 `MergeExtraction`，因此冷缓存与热缓存的合并结果一致；变更 package 只重新抽取自身。
 
 当前边界：抽取基于 `EvidencePackage`，不引入独立的关系抽取服务或外部图数据库；不提供图可视化、图编辑或图驱动的查询扩展；Agent、OpenFGA 和跨知识库图谱仍属于后续里程碑。
 
@@ -231,6 +235,16 @@ make m8-capacity-validate   # 只校验报告 schema 与内部一致性，不联
 脚本按 `--seed` 生成确定性语料（默认 40 篇 × 10 行，每篇带唯一审计标记和 `[[subject|predicate|object]]` 三元组链），创建临时知识库并测量：上传与入库吞吐（含 `parse`/`normalize`/`chunk`/`embed`/`index` 各阶段耗时与重试次数）、检索 P50/P95 与期望文档命中、关系投影墙钟时间与 depth 1–3 图查询延迟/节点数/截断次数、未知种子负例，以及 PostgreSQL 表体积和行数探针（`--no-storage-probe` 可关闭）。为避免触发平台自身的租户限流（`RATE_LIMIT_PER_MINUTE`，默认 600/分钟），脚本以约 400 次/分钟限速请求、并用文档列表每秒一次轮询就绪状态；限速等待发生在请求之间，不进入单次调用延迟。检索计时前先做一轮暖机，直到全部查询返回非空结果，暖机耗时单独记入 `search.settleMs`（用于避开入库或删除后的索引维护窗口，不计入延迟样本）。报告版本为 `M8CapacityReportV1`，同时写入 7 项候选的证据登记（`startedCandidates` 恒为空）与 `limitations`。
 
 可复现性的前提是本地适配器：与 m6/m7 验收相同，远程 chat/embedding 会引入网络抖动与投影超时，正式基线应在 `.env` 设 `CHAT_SOURCE=local`、`EMBEDDING_SOURCE=local` 并重建 api/worker 后运行，采集完成后恢复原值。脚本结束后 `DELETE` 临时知识库并校验其不可再读；`--keep` 保留现场。报告只作启动门槛的容量证据，不改变任何产品形态，M8 在门槛满足前保持未开始。
+
+向量召回调参证据：
+
+```bash
+make vector-recall-probe   # 在本地栈的临时 schema 中跑 100:1 租户矩阵，写入 tests/eval/vector_recall_report.json
+```
+
+探针不触碰 `chunks`/`documents`，默认 10k 多数租户 + 100 少数租户、1024 维，矩阵覆盖 `ef_search` 40/100/200/500、过采样 1/4/10、iterative scan off/relaxed_order，并分别记录自然计划与强制 HNSW 计划。2026-11-05 结果（pgvector 0.8.7）：自然计划选择精确过滤扫描，返回 20/20；强制 HNSW 且 iterative scan=off 时只返回 4–6/20，单纯提高 ef_search/过采样无法补齐；`relaxed_order` 把返回数补到 20/20、relevant recall 1.0，P95 10–32ms。因此默认值定为 `vector_ef_search=40`、`vector_oversample=1`、`vector_iterative_scan=true`。
+
+同日另做了一次本地真实语料只读复核（1463 条 1024 维可检索向量）：以现有 chunk 自身 embedding 作查询向量、精确扫描 Top-20 为基准并排除自身，小 KB 的选择性约 2.6%–6.1%。自然计划同样走 HNSW；`ef_search=40`、过采样 1 且关闭迭代扫描时只返回 7.0–8.7/20，过采样 1/4/10 均无改善，把 ef_search 提到 200 也只到 18.7–19.2/20；`relaxed_order` 在 ef_search=40 即恢复 20/20，召回 0.982–1.000，P95 约 1.3–2.2ms。该复核与合成探针结论一致，默认值保持不变。
 
 关闭环境：
 

@@ -202,3 +202,20 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - HTTP 请求会继续上游 W3C `traceparent`；检索、远程模型调用是同一 trace 的子 span，模型 span 记录 `gen_ai.request.model` 与 token 用量。
 - 异步 worker 的 span 记录任务 envelope 的 `trace.id`、`pipeline_run.id`、`stage`，但当前尚未把 HTTP span 作为父 span 跨队列串联；排障时用 `trace_id` 关联 API 日志与 worker 日志。
 - 导出器故障只影响 tracing，不阻塞请求；collector 不可用时检查进程日志中的 `tracing_bootstrap_failed`（启动期）与 OTLP 导出错误。
+
+## 13. 投影生成缓存
+
+- Pipeline B 的 Wiki 文档页、概览块和关系抽取结果按 EvidencePackage 缓存在 `projection_generation_cache`。主键为 `(tenant_id, knowledge_base_id, projection_type, artifact, package_id)`；`artifact` 区分 `document`、`overview-block`、`extraction`，同一 package 的多个产物不会互相覆盖。
+- 缓存键包含 package 内容摘要（chunk 级）、ACL、模型和 Prompt 版本；任一项变化都会 miss 并重算。package 内容未变时，运行日志出现 `projection_generation` 且 `reused` 增加、模型调用数下降。
+- 手动 `POST /knowledge-bases/:id/wiki/rebuild` 与 `POST /knowledge-bases/:id/graph/rebuild` 会先清空该知识库对应类型的缓存，保证“重建”是全量重算，不复用旧结果。
+- Worker 维护周期调用 `PurgeGenerationCache`，删除 `evidence_packages` 已不存在的缓存行；当前 package 的缓存长期保留，因此很久未改的文档不会因为缓存过期而在下一次变更时被迫全量重算。
+- 回滚开关：`PROJECTION_INCREMENTAL_ENABLED=false` 并重启 api/worker，投影恢复为每次全量生成；缓存表可保留或直接 `TRUNCATE`，二者都不影响业务事实。
+- 观测：`projection_cache_hits_total{type="wiki|relation"}` 与 `projection_cache_misses_total{type="wiki|relation"}` 记录每次运行的 package 数；`projection_generation` 日志给出同一组计数。
+
+## 14. 向量召回调参与探针
+
+- `vector_ef_search`（默认 40）、`vector_oversample`（默认 1）、`vector_iterative_scan`（默认 true → pgvector `relaxed_order`）是三级可覆盖的检索参数；`0` 的 ef_search 表示使用 pgvector 服务端默认。
+- 本地验证：`make vector-recall-probe` 在临时 schema 中构造 100:1 租户语料，输出 `tests/eval/vector_recall_report.json`，不触碰业务表。报告同时记录自然计划与强制 HNSW 计划的返回数、relevant recall、P95 和执行计划节点。
+- 2026-11-05 结论（pgvector 0.8.7）：自然计划选择精确过滤扫描时返回 20/20；强制 HNSW 且 iterative scan=off 时只返回 4–6/20，提高 ef_search 或过采样都无法补齐；`relaxed_order` 补到 20/20、recall 1.0、P95 10–32ms。若生产 pgvector 版本低于 0.8，把 `vector_iterative_scan` 设为 false，否则 `SET LOCAL` 会失败并在检索阶段暴露清晰错误。
+- 2026-11-05 真实语料只读复核（1463 条 1024 维；小 KB 选择性约 2.6%–6.1%，以 chunk 自身 embedding 查询、精确扫描 Top-20 为基准并排除自身）：自然计划走 HNSW；`ef_search=40`、过采样 1 且关闭迭代扫描仅返回 7.0–8.7/20，过采样 1/4/10 无改善；`relaxed_order` 在 ef_search=40 恢复 20/20，recall 0.982–1.000，P95 1.3–2.2ms。与合成探针结论一致。
+- 监控：`vector_recall_underfill_total{ef_search,oversample}` 非零表示过滤后的 ANN 扫描未填满 TopK；同时检查 `vector_recall_underfill` 日志中的 tenant、KB 数和 requested/returned。该指标出现时，优先确认 `vector_iterative_scan=true`，再评估分区或外部向量库。

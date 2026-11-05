@@ -33,6 +33,9 @@ type RetrievalParamsV1 struct {
 	RerankEnabled        bool    `json:"rerank_enabled"`
 	RerankTopK           int     `json:"rerank_top_k"`
 	RerankThreshold      float64 `json:"rerank_threshold"`
+	VectorEFSearch       int     `json:"vector_ef_search"`
+	VectorOversample     int     `json:"vector_oversample"`
+	VectorIterativeScan  bool    `json:"vector_iterative_scan"`
 	ContextTokenLimit    int     `json:"context_token_limit"`
 	AdjacentExpansion    int     `json:"adjacent_expansion"`
 	MaxAdjacentChunks    int     `json:"max_adjacent_chunks"`
@@ -152,7 +155,9 @@ func retrievalParamsFromConfig(cfg config.RetrievalConfig) retrieval.Params {
 		TopK: cfg.TopK, EmbeddingTopK: cfg.EmbeddingTopK, KeywordTopK: cfg.KeywordTopK,
 		VectorThreshold: cfg.VectorThreshold, KeywordThreshold: cfg.KeywordThreshold,
 		RerankEnabled: cfg.RerankEnabled, RerankTopK: cfg.RerankTopK, RerankThreshold: cfg.RerankThreshold,
-		ContextTokenLimit: cfg.ContextTokenLimit, AdjacentExpansion: cfg.AdjacentExpansion,
+		VectorEFSearch: cfg.VectorEFSearch, VectorOversample: cfg.VectorOversample,
+		VectorIterativeScan: cfg.VectorIterativeScan,
+		ContextTokenLimit:   cfg.ContextTokenLimit, AdjacentExpansion: cfg.AdjacentExpansion,
 		MaxAdjacentChunks: cfg.MaxAdjacentChunks, RRFK: cfg.RRFK, ExpansionScoreFactor: cfg.ExpansionScoreFactor,
 	}
 }
@@ -167,6 +172,9 @@ func retrievalParamsView(params retrieval.Params) RetrievalParamsV1 {
 		RerankEnabled:        params.RerankEnabled,
 		RerankTopK:           params.RerankTopK,
 		RerankThreshold:      params.RerankThreshold,
+		VectorEFSearch:       params.VectorEFSearch,
+		VectorOversample:     params.VectorOversample,
+		VectorIterativeScan:  params.VectorIterativeScan,
 		ContextTokenLimit:    params.ContextTokenLimit,
 		AdjacentExpansion:    params.AdjacentExpansion,
 		MaxAdjacentChunks:    params.MaxAdjacentChunks,
@@ -192,6 +200,9 @@ func retrievalSources(override retrieval.ParamsOverride) map[string]string {
 	set("rerank_enabled", override.RerankEnabled != nil)
 	set("rerank_top_k", override.RerankTopK != nil)
 	set("rerank_threshold", override.RerankThreshold != nil)
+	set("vector_ef_search", override.VectorEFSearch != nil)
+	set("vector_oversample", override.VectorOversample != nil)
+	set("vector_iterative_scan", override.VectorIterativeScan != nil)
 	set("context_token_limit", override.ContextTokenLimit != nil)
 	set("adjacent_expansion", override.AdjacentExpansion != nil)
 	set("max_adjacent_chunks", override.MaxAdjacentChunks != nil)

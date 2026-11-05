@@ -257,5 +257,8 @@ func (c VectorChannel) Recall(ctx context.Context, request RecallRequest, params
 	request.EmbeddingModel = c.Embedder.Name()
 	request.TopK = params.EmbeddingTopK
 	request.Threshold = params.VectorThreshold
+	request.EFSearch = params.VectorEFSearch
+	request.Oversample = params.VectorOversample
+	request.IterativeScan = params.VectorIterativeScan
 	return c.Searcher.SearchVector(ctx, request, vectors[0])
 }
