@@ -74,7 +74,7 @@ M3 新增的只读与问答接口：
 - `POST /api/v1/search`：只检索不生成。返回 `EvidenceSetV1`，包含 `QueryPlanV1`、融合分数和各通道排名。
 - `POST /api/v1/sessions`、`GET /api/v1/sessions`、`GET /api/v1/sessions/:id/messages`：会话与消息历史。
 - `POST /api/v1/sessions/:id/messages`：在线问答，SSE 输出 `status`、`references`、`thinking`、`answer`、`complete`、`error` 事件，每条事件带 `event_id`/`request_id`/`sequence`。
-- 异步答案（M13 A3）：默认 `ANSWER_ASYNC_ENABLED=true`，API 只做预检与持久化（user message、`RECEIVED`/`AUTHORIZED`/`PLANNED` 事件、`answer_jobs` 行），随后 worker 在 `interactive` 队列生成答案；SSE 事件契约与同步路径完全一致。`answer_jobs.next_sequence` 由 `UPDATE ... RETURNING` 原子分配，API 与 worker 共用同一序列，进程重启后续写不冲突。作业以租约认领，重复投递只生成一次；worker 丢失后维护循环把过期 `RUNNING` 置 `FAILED` 并追加 `error`/`complete` 终态事件。`ANSWER_ASYNC_ENABLED=false` 是回滚开关（回到请求内同步生成）；`ANSWER_TAIL_TIMEOUT_SECONDS`、`ANSWER_ASYNC_POLL_INTERVAL_MS`、`ANSWER_ASYNC_LEASE_SECONDS` 控制尾部等待、轮询与租约。升级顺序为先 worker 后 API，避免旧 worker 收到未知任务类型。
+- 异步答案（原 M13 A3，已交付）：默认 `ANSWER_ASYNC_ENABLED=true`，API 只做预检与持久化（user message、`RECEIVED`/`AUTHORIZED`/`PLANNED` 事件、`answer_jobs` 行），随后 worker 在 `interactive` 队列生成答案；SSE 事件契约与同步路径完全一致。`answer_jobs.next_sequence` 由 `UPDATE ... RETURNING` 原子分配，API 与 worker 共用同一序列，进程重启后续写不冲突。作业以租约认领，重复投递只生成一次；worker 丢失后维护循环把过期 `RUNNING` 置 `FAILED` 并追加 `error`/`complete` 终态事件。`ANSWER_ASYNC_ENABLED=false` 是回滚开关（回到请求内同步生成）；`ANSWER_TAIL_TIMEOUT_SECONDS`、`ANSWER_ASYNC_POLL_INTERVAL_MS`、`ANSWER_ASYNC_LEASE_SECONDS` 控制尾部等待、轮询与租约。升级顺序为先 worker 后 API，避免旧 worker 收到未知任务类型。
 - `GET /api/v1/requests/:request_id/events?after=N`（或 `Last-Event-ID`）：断线后按 sequence 续传已持久化的事件；加 `?stream=1` 时持续轮询直到 `complete`/`error` 或 `ANSWER_TAIL_TIMEOUT_SECONDS`（超时返回 `tail_timeout` 错误，客户端可再次续流）。客户端在生成中断开时，worker 仍会落库终止答案及 `answer`/`complete` 事件，续传不会停在半截。
 - 请求体上限：除文档上传外的请求 1 MiB，超限返回 `413 payload_too_large`；文档上传按 `DOCREADER_MAX_FILE_MB`（默认 100 MiB）限制，multipart 封装另留 1 MiB 开销。API 的 `ReadTimeout` 为 5 分钟，用于约束慢速 body；SSE 响应不受影响。
 
@@ -248,7 +248,7 @@ make vector-recall-probe   # 在本地栈的临时 schema 中跑 100:1 租户矩
 
 同日另做了一次本地真实语料只读复核（1463 条 1024 维可检索向量）：以现有 chunk 自身 embedding 作查询向量、精确扫描 Top-20 为基准并排除自身，小 KB 的选择性约 2.6%–6.1%。自然计划同样走 HNSW；`ef_search=40`、过采样 1 且关闭迭代扫描时只返回 7.0–8.7/20，过采样 1/4/10 均无改善，把 ef_search 提到 200 也只到 18.7–19.2/20；`relaxed_order` 在 ef_search=40 即恢复 20/20，召回 0.982–1.000，P95 约 1.3–2.2ms。该复核与合成探针结论一致，默认值保持不变。
 
-M13 B1 数据面压测（M8 容量证据输入，不是发布门槛）：
+原 M13 B1 数据面压测（M8 容量证据输入，不是发布门槛）：
 
 ```bash
 make m13-dataplane            # 1M x 1024 合成向量，写入 tests/eval/m13_dataplane_report.json

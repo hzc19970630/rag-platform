@@ -29,10 +29,9 @@
 | M10 | 架构收敛与多轮会话（P0）                         | M1–M9          | P0        |
 | M11 | P1 深化：授权缓存、OTel、多轮改写                 | M10            | P1        |
 | M12 | 正确性加固与架构收敛（P0/P1）                     | M11            | P1        |
-| M13 | 架构纵深与弹性优化（P0/P1）                       | M12            | P0/P1     |
-| M14 | 企业生产就绪（安全门禁、HA、身份、管理台、合规） | M13 A、B1 | P0/P1 |
+| M13 | 生产就绪与架构收敛（P0/P1/P2）             | M12            | P0/P1/P2  |
 
-M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线至少还要完成 M4 中的身份、审计、密钥和运营要求。M6 与 M7 相互独立，可以分开交付。M9 只重构前端工作台并开放数据库级热改配置，不依赖 M8，也不改变 M8 的条件启动门槛。M12 在 M8 条件扩展前完成正确性加固与边界收敛；M8 的任何候选扩展以 M12 完成为前置。M13 在 M12 后补齐租户隔离纵深、向量索引在线变更与生成异步化；M13 的数据面压测结果作为 M8 容量证据的输入，但不替代 M8 的启动门槛。M14 在 M13 A 完成后启动：先完成 M13 B1，再执行 M14 A（P0 安全与发布门禁），最后执行 M14 B（企业 GA）；M13 B3/B5 分别并入 M14 A5/B5，M13 B2/B4/C1–C5 与 M8 保持条件启动。
+M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线至少还要完成 M4 中的身份、审计、密钥和运营要求。M6 与 M7 相互独立，可以分开交付。M9 只重构前端工作台并开放数据库级热改配置，不依赖 M8，也不改变 M8 的条件启动门槛。M12 在 M8 条件扩展前完成正确性加固与边界收敛；M8 的任何候选扩展以 M12 完成为前置。M13 在 M12 后统一承接租户隔离纵深、数据面弹性、企业生产就绪与架构收敛：先完成 A 段 P0，再并行推进 B 段企业 GA 与 C 段契约收敛，D 段条件项在证据或客户需求确认后启动；M13 的数据面压测结果作为 M8 容量证据的输入，但不替代 M8 的启动门槛。
 
 ## M0：工程骨架与本地环境
 
@@ -232,7 +231,7 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 - [ ] 基于多跳查询延迟、查询复杂度和关系规模，评估 Neo4j/其他图数据库；迁移必须通过 `RelationStore` 端口（`internal/relationstore`，首期实现 `internal/platform/relationstore`），不泄漏厂商查询类型。该端口已于 2026-11-03 落地（ADR 0001），M8 仍未开始。
 - [ ] 只有出现动态分支、循环检索、工具调用、人工审批或可恢复长任务时，才评估 LangGraph/Agent 编排。
 - [ ] 根据多租户规模和访问关系复杂度，评估 OpenFGA；不得在没有迁移方案时与 Casbin 双写授权事实。
-- [ ] 基于部署规模和 RTO/RPO 要求，实施 Kubernetes、分片、多区域和高可用。
+- [ ] 基于部署规模和 RTO/RPO 要求，实施 Kubernetes、分片、多区域和高可用。企业 GA 形态的 HA/K8s 由 M13 B1/B2 交付；本项只评估超出 M13 规模的多区域/超大规模型，不重复立项。
 - [ ] 按真实渠道需求增加 MCP、IM、Widget 和复杂连接器。
 - [ ] 若产品数据确认需要扫描件，再增加独立 OCR 里程碑：按页分类、混合 PDF 策略、OCR Adapter/引擎选择、版面与坐标 Schema、置信度和失败/人工复核状态、权限与保留策略、OCR 评估集。未满足这些验收前不得默认接收扫描 PDF。
 
@@ -386,108 +385,99 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 
 **暂不做**：微服务拆分或服务网格；OpenSearch/Milvus/Neo4j 接入；Agent、MCP、IM/Widget；Kubernetes/Helm；合并 Wiki 与 Relation 的业务状态机；全量 Repository 化；跨队列父子 trace。
 
-## M13：架构纵深与弹性优化（P0/P1）
+## M13：生产就绪与架构收敛（P0/P1/P2）
 
-**目标**：在不拆分微服务、不更换 PostgreSQL 主存储的前提下，补齐租户隔离的数据库级纵深、向量索引在线变更安全与生成链路异步化；按实测数据决定数据面扩展；收敛任务状态视图与跨实例运维缺口。来源为 2026-11-05 架构评审（扩展性、设计冗余、耦合与方案合理性）。本里程碑不改变现有 87 条业务路由、响应契约和 M1–M12 验收行为。
+**来源**：合并原 M13（架构纵深与弹性优化）、M14（企业生产就绪）与 M15（架构收敛与契约治理）。原 M13 A1–A3/B1 与原 M14 A1–A4 已交付，完整验收记录保留在本节末“已交付”小节；未完成项按执行顺序重排为 A/B/C/D 四段，括号内保留原编号用于追溯。
 
-**依赖**：M12。M13 的数据面压测结果是 M8 容量证据的输入，但不替代 M8 的启动门槛；M8 的 OpenSearch/Milvus/Neo4j 迁移仍需独立容量证据。
+**目标**：在不拆分微服务、不更换 PostgreSQL 主存储的前提下，先补齐企业生产所需的 P0 安全与运行时韧性，再交付企业 GA 能力，并收敛共享模型、鉴权、配置、前端契约与测试边界。完成后应能支撑中大型企业私有化生产与可重复交付，同时降低新增连接器、投影和模型供应商的边际成本。本里程碑不改变现有 87 条业务路由与 M1–M12 验收行为，也不替代 M8 的容量门槛。
 
-**范围**：
+**依赖**：M12 已完成；原 M13 A1–A3/B1 与原 M14 A1–A4 已交付。M8 保持独立的条件扩展里程碑：D8 先于 M8 的存储迁移，D1/D6 分别以原 M13 B1 数据面报告和图规模为触发证据。
 
-执行顺序为 A → B；C 为按需项，默认不启动，仅在产品需求或证据确认后逐项立项。
+**执行顺序**：
 
-**A. 正确性与可用性（P0）**
+1. 先完成 A 段（P0，4 项）；A 段全部完成前不得对外承诺企业 GA。
+2. A 段完成后，B 段与 C 段并行推进：
+   - 企业 GA 线：B1/B2/B9 → B5 → B3/B4/B6/B7 → B8/B10；
+   - 架构收敛线：C1 → C2 → C3/C4 → C5 → C6–C11。
+3. C5（contracts 拆分）期间冻结大规模功能开发；B3/B4/B6/B7 若与 C5 冲突，排在 C5 之后。
+4. D 段在 B 段完成（企业 GA）后或触发条件命中时启动；D8 必须先于 M8 的存储迁移。
 
-- [x] A1 租户隔离纵深：先用统一入口收口 `tenant_id` 过滤（现状 147 处 / 39 个非测试文件），再启用 PostgreSQL RLS 或等价的连接级 tenant 上下文 + policy，覆盖业务表与只读通道；应用层过滤保留为第二道防线。已暂缓一轮（2026-11-05 P1 批次明确不包含 RLS），本里程碑必须完成。验收：跨租户负向用例、无 tenant 条件的查询静态检查失败、直接 SQL 绕过 RLS 被拒。已实现（2026-11-05）：新增 `internal/platform/tenantdb`（`Scoped`/`Unscoped`/`Require`/`InTx`/`BeginRequestTx`）收口调用点，`cmd/checktenancy` 扫描 `Raw/Exec/Query` 并对 37 张租户/子表强制租户谓词；迁移 0023 为 33 张租户表 + 4 张子表安装 ENABLE/FORCE RLS、允许策略与影子写审计触发器，0024 提供 strict 策略，0025 修复子表级联删除误报；`TENANT_RLS_MODE=off|shadow|enforce` 默认 shadow，启动校验 `rag_app` 非超级用户/非 BYPASSRLS、维护角色具备 BYPASSRLS；`make m13-rls-acceptance`、`tests/postgres/tenantrls_test.go` 与 m1–m4 跨租户负向通过。
-- [x] A2 向量索引在线变更：`CreateHNSWIndex` 当前在事务内 `DROP INDEX` + 非 `CONCURRENTLY` 的 `CREATE INDEX`（`internal/platform/vector/index.go:42-66`），大表重建会阻塞写入；改为并发建索引或后台建索引 + 原子切换，维度切换提供禁写窗口 runbook 与 `cmd/embedctl` 保护。pgvector < 0.8 的迭代扫描门禁沿用 `docs/operations.md` §14。验收：大表重建期间写入不被阻塞（附压测记录）、维度切换演练通过、失败可回滚到旧索引。已实现（2026-11-05）：版本化索引名 + 独立连接 `CREATE INDEX CONCURRENTLY` + `indisvalid`/`pg_get_indexdef` 校验 + INVALID 清理 + 旧索引验证后才删除；会话超时在首次目录读取前设置。`embedctl check`、`create-index --dry-run/--confirm` 与超时配置落地；持锁演练约 1.5s 失败且旧索引保留，3↔4 维切换与 legacy 名复用通过；20 万行构建期并发写 P99 4.95ms（上限 5.24ms），计划命中 HNSW；`make vector-recall-probe`、m0–m7 通过。
-- [x] A3 生成链路异步化：`Ask` 当前在 HTTP 请求 goroutine 内完成检索与生成（`internal/conversation/answer.go:26`、`internal/httpapi/conversations.go:95`），进程重启即丢失答案；改为任务 + SSE 订阅，复用 `stream_events` 的 `?after=` 回放能力，答案可恢复或明确失败。验收：进程重启演练、双实例订阅、客户端断线重连不重复不丢失。已实现（2026-11-05）：迁移 0026 `answer_jobs`；API 预检持久化 user message、`RECEIVED/AUTHORIZED/PLANNED` 事件与 job 后入队，worker 条件认领 + lease + 重建 scope（current ∩ stored）执行生成；`next_sequence` 由 `UPDATE ... RETURNING` 原子分配，跨进程事件连续；过期租约由维护循环置 `FAILED` 并追加终态；`GET /requests/:id/events?stream=1` 提供 tail，`ANSWER_ASYNC_ENABLED=false` 回滚到同步路径；`make m13-async-acceptance` 的正常与 worker 停机演练均到达终态，m3 acceptance 严格事件序列断言在异步路径下通过，87 条路由不变。
+**A. P0 生产安全与运行时韧性（原 M14 A5–A8，未完成）**
 
-**B. 扩展性与运维（P1）**
+- [ ] A1 备份与恢复自动化（原 M14 A5）：定时备份 + WAL/PITR、对象存储版本化/复制、恢复演练自动化；明确 RTO/RPO。吸收原 M13 B3 的备份恢复清单。验收：季度恢复演练通过并记录 RTO。
+- [ ] A2 许可证审查（原 M14 A6）：盘点 ParadeDB/MinIO（AGPL）与 Redis 7.4+（RSALv2/SSPL），决定替换或合规方案。验收：法务书面结论，商业分发清单可追溯。本项为商业化前置，不阻塞自用上线。
+- [ ] A3 生产安全收尾（原 M14 A7）：`APP_ENV` 改为枚举校验（development/test/production，未知值启动失败）；production 下 `METRICS_ADDR` 只允许回环/私网地址；移除成员或修改角色时按 `tenant_id + user_id` 撤销 `auth_sessions`，不再等待 JWT 自然过期。验收：未知 `APP_ENV` 启动失败、公网 metrics 地址被拒、被移除用户下一次请求返回 401；现有 production fail-fast 与 m1/m4 负向不回归。
+- [ ] A4 运行时韧性收尾（原 M14 A8）：chat/embedding 增加熔断、租户级并发舱壁与统一重试预算（rerank 已有 breaker）；connector tombstone 与 `connector_items` 状态更新合并为单事务，同哈希跳过逻辑识别已 tombstone 文档；`embedctl create-index` 增加维度一致性 guard，`reembed` 按 KB 分批、可恢复且中断不留下混合维度；非终端失败保留租约到 TTL 或 CAS 状态，避免绕过重试退避；预览/下载在写响应头前提交请求事务，同步 answer 路径在文档中标注为已知限制。验收：provider 故障注入不产生重试风暴；m5 tombstone/恢复回归；错误维度不删除线上索引；重复投递不立即重入；慢客户端并发预览不长期占用连接池。
 
-- [x] B1 数据面压测与扩展决策（优先执行；M14 B1/B2 与 M8 的容量输入）：以现有 1463 条真实向量为起点扩展到目标量级，记录检索 P50/P95、写入吞吐、索引体积与连接池水位，产出 `tests/eval/m13_dataplane_report.json`；依据报告决定 chunks 分区（tenant/时间）与读副本，迁移与回滚方案评审后再实施。已产出报告（2026-11-05）：新增 `scripts/m13_dataplane.py` 与 `make m13-dataplane`/`m13-dataplane-validate`；在本地 7.8GB PostgreSQL 容器中对 1,000,000 × 1024 维 halfvec 合成语料（16 租户 × 2 KB）执行 `CREATE INDEX CONCURRENTLY`：59.5 分钟、索引 2.89GB、总关系 6.14GB、`indisvalid=true`，构建期 4 路写入 64,395 样本，写 P95 62.9ms / P99 101.2ms。16 并发查询共 640 样本：自然计划为 seq-scan（向量 P50/P95/P99 = 1074/3874/9372ms，BM25 = 849/1976/2225ms，QPS 11.7）；强制 HNSW 计划可用。200 条召回抽样 mean 0.122、p10 0.05（均匀随机合成向量、`ef_search=40`、`relaxed_order`，仅报告不设门槛）。报告通过 `make m13-dataplane-validate`。chunks 分区、读副本与 B2 外部向量库是否启动由评审依据该报告决定，本轮不实施。
-- [ ] B2 外部向量库评估：仅当 B1 证明 pgvector 在目标量级不满足 P95 或召回时启动；必须通过现有 `VectorSearcher` 与索引写入端口，不泄漏厂商查询类型。
-- [ ] B3 跨实例限流与 HA/DR（并入 M14 A5/B1 交付）：进程内 fixed-window 限流（`internal/platform/ratelimit/limiter.go:2-4` 明确依赖外部网关）改为 Redis 令牌桶或网关统一限流，二选一并写入部署文档；输出高可用与备份恢复清单，实施形态由部署方确认。验收：双 API 实例共享限额、Redis 故障降级策略明确、备份恢复演练通过。
-- [ ] B4 任务状态单一视图：Asynq retry、inbox lease、outbox attempts、stage attempts、reconcile、`ExpireStaleRuns`、projection 重试与 datasource 同步重试共 8 套机制，补充一张跨机制状态转移表与统一运维查询；不删除既有机制。同步把 `internal/status`（当前只收敛 `EVIDENCE_READY`/`PARENT`/`STALE`）扩为全量生命周期值的单一来源，清理各域散落的状态字符串与 SQL 直写。
-- [ ] B5 跨队列可观测性（并入 M14 B5 交付）：按 `docs/operations.md:207` 记录的缺口，把 HTTP span 作为父 span 传入 outbox envelope 与 Asynq task，worker span 关联同一 `trace_id`；补充 queue lag、inbox 过期租约、outbox backlog、projection 游标滞后指标与告警阈值。
+A2（许可证审查）法务周期长，可立即启动，不阻塞开发；A1 可与 A3/A4 并行。
 
-**C. 按需扩展（P2，需证据或已确认产品需求）**
+**B. P1 企业 GA（原 M14 B1–B10）**
 
-- [ ] C1 多 embedding 路由与 re-embed 编排：当前一 KB 绑定一个模型+维度、部署只注册一个 embedder；需要 per-KB 路由、批量重建与灰度切换，沿用 `embedctl` 的 create-index → reembed → verify 三段式，维度不匹配仍拒绝。
-- [ ] C2 连接器插件化与 ACL 映射：`ConnectorFactory` 已有注册点（`internal/datasource/connector.go:118`），扩展为独立加载；`ACLMode` 从仅 `knowledge_base` 扩展到逐条/外部组映射。
-- [ ] C3 OpenAPI 生成前端类型：M12 E1 曾移除 `generated.ts` 与漂移检查；按实际收益重新评估，用 OpenAPI 生成 TypeScript 类型与客户端，移除手写重复模型。
-- [ ] C4 配置按域拆分：`internal/config/config.go` 单结构 1,045 行，按域拆为子结构（已有 `RetrievalConfig`/`ChatConfig` 等雏形），环境变量契约不变。
-- [ ] C5 检索质量闭环：在线反馈（点赞、引用点击）接入现有 m3 eval 与向量召回探针，形成离线回放，避免调参依赖猜测。
+B 段中 HA、备份、身份、审计四项必须先于首个外部客户 GA；其余按客户需求分批。B1/B2/B9 优先，B5 与可观测性同批。
 
-**验收门槛**：
-
-- A1 附直接 SQL 绕过测试；A2 附重建前后写入延迟对比；A3 附进程重启与断线重连演练；B3 附双实例限额与备份恢复测试；B4 状态视图覆盖全部 8 套机制且有交叉测试；B5 附跨队列父子 trace 断言。
-- `make test`、`make lint` 通过；m1–m7 acceptance 不回归；m3 评估门槛不下降（`recallAtK`、`citationAccuracy`、`groundedness`、`refusalRate`、`permissionNegativeDenials`、`injectionFlagRate` 为 1.0，`documentHitRate` ≥ 0.85）。
-- 所有迁移可重复执行且可回滚；`docs/operations.md`、DESIGN.md 与本文件同步更新。
-- B/C 每项启动前附可复现数据或已确认的产品需求；没有证据时不启动。
-
-**暂不做**：微服务拆分与服务网格；未压测即迁移 OpenSearch/Milvus/Neo4j；替换 PostgreSQL 主存储；重写检索主干（`RecallChannel`/`FusionStrategy`/`PlanExecutor` 保持现状）；为“统一”删除 outbox/inbox、ACL 二次校验或 citation 复核等防御性冗余。
-
-## M14：企业生产就绪（P0/P1）
-
-**目标**：把当前“部门级私有化试点可用”提升到“中大型企业可私有化生产、可重复交付”的门槛。只补安全底线、交付形态、企业集成与合规运营，不引入新检索引擎、图数据库或微服务拆分；不改变现有 87 条业务路由与 M1–M13 验收行为。
-
-**依赖**：M13 A1–A3 已完成。M13 B1 的压测报告是本里程碑 B1/B2 与 M8 的容量输入；M13 B3/B5 分别并入本里程碑 A5/B5，不单独排期；M13 B2/B4/C1–C5 保持条件启动或延后，不阻塞本里程碑。
-
-**范围**：
-
-执行顺序为 A → B；A 全部完成前不得对外承诺企业生产。B 中 HA、备份、身份、审计四项必须先于首个外部客户 GA，其余按客户需求分批。
-
-**A. P0 安全与发布门禁（1–3 周）**
-
-- [x] A1 生产密钥 fail-fast：启动校验拒绝仓库默认的 JWT 签名密钥、`API_KEY_PEPPER`、S3/MinIO 与数据库密码；生产必须显式提供 `JWT_SIGNING_KEYS`，禁止回落到单一开发密钥。验收：用默认值启动 production 直接失败，补充配置单测与文档。已实现（2026-11-06）：`AuthConfig.SigningKeysExplicit` 区分显式配置与开发回退，production 缺失 `JWT_SIGNING_KEYS` 直接失败；新增仓库默认密钥表，拒绝 `JWT_SIGNING_KEYS`、`API_KEY_PEPPER`、S3 凭据以及 `DATABASE_URL`/`MAINTENANCE_DATABASE_URL`/`ADMIN_DATABASE_URL` 中的仓库默认密码；新增 `TestProductionRejectsRepositoryDefaultSecrets`、`TestProductionRequiresExplicitSigningKeys`、`TestDevelopmentAllowsRepositoryDefaultSecrets`，`make test` 通过；`.env.example` 与 `docs/operations.md` §9 同步说明。
-- [x] A2 RLS 生产强制：`APP_ENV=production` 时要求 `TENANT_RLS_MODE=enforce`，校验 `rag_app`/维护角色分离；把跨租户负向用例纳入 CI。验收：shadow 配置启动失败；直接 SQL 绕过 RLS 被拒；m1–m4 负向不回归。已实现（2026-11-06）：production 强制 enforce，enforce 下 `DATABASE_URL` 与 `MAINTENANCE_DATABASE_URL` 角色必须不同，`TestProductionRequiresEnforceRLS` 与角色分离负向单测通过；请求级事务新增幂等 `CommitRequestTx`，异步预检写入在 SSE tail 前提交，`ReplayEvents` 在租户事务内执行以保持 `app.tenant_id`；新增 `tests/postgres/rls_runtime_test.go`，以 `rag_app` 访问真实 `audit_logs` 严格策略，跨租户 SELECT 为 0、跨租户 INSERT 被拒、savepoint 恢复后 `RESET app.tenant_id` 仍失败闭合；隔离 enforce 栈（`COMPOSE_PROJECT_NAME=rag-m14`）通过 m0/m1、`ENFORCE_LAYOUT=1 m13-rls-acceptance`（容器内 enforce、rag_app/维护角色分离、`pg_stat_activity` 双角色连接）、`m13-async-acceptance` 与 Postgres RLS 测试。
-- [x] A3 CI 集成与安全门禁：CI 启动 ParadeDB、Redis、MinIO，执行迁移、RLS 负向与核心 acceptance 子集；增加 `-race`、govulncheck、trivy、npm audit。验收：PR 阶段可拦截跨租户、迁移和安全回归。已实现（2026-11-06）：CI 拆为 `verify`（gofmt/checkdeps/checktenancy/`go test`/`-race`/vet/`go mod verify`/前端 `npm ci`+test+build/compose config）、`integration`（ParadeDB/Redis/MinIO/docreader 整栈，`deploy/ci/enforce.env` + 迁移 + RLS setup + seed + embed-index + Postgres RLS 测试 + m0/m1 + `ENFORCE_LAYOUT=1` RLS + async）、`security`（govulncheck、npm audit、Trivy fs/image、镜像 pin 校验、CycloneDX SBOM artifact）；本地 `make test`/`make lint`、`npm audit`（0）、govulncheck（0，升级 go-redis 9.7.3、x/net 0.60.0、quic-go 0.59.1 后）、`CGO_ENABLED=1 go test -race ./internal/... ./cmd/...`（33 个包通过，无数据竞争）通过。
-- [x] A4 供应链锁定：镜像由 `:latest`/浮动 tag 改为固定版本或 digest，前端依赖去掉 `"latest"`；生成 SBOM。验收：重复构建可复现，高危漏洞为 0 或有明确豁免。已实现（2026-11-06）：compose 的 ParadeDB/Redis/MinIO/Keycloak、三个 Dockerfile 的基础镜像与 Makefile `GO_IMAGE` 全部改为 `tag@sha256:<多架构 index digest>`，`scripts/check_image_pins.sh` 静态拒绝未固定引用；前端 8 个 `"latest"` 固定为 lockfile 精确版本，`npm ci`/test/build 通过；Go 构建统一 `-trimpath -buildvcs=false -ldflags=-buildid=`，同一输入连续两次 `go build ./cmd/api` 的 SHA-256 均为 `8e4531fbe506008330b3818ddec5bdf9dd3cbaad78f0b341ed7f698d99903e43`。漏洞处置：Trivy fs 首轮发现 docreader `pypdf==6.1.3` 的 20 个 HIGH DoS 与 `klauspost/compress v1.18.0` 的 CVE-2026-63209，已升级到 `pypdf==6.21.4`、`compress v1.18.7`；复扫 `go.mod`/`services/docreader/requirements.txt`/`web/package-lock.json` 均为 0 HIGH/CRITICAL，`govulncheck` 0 可达漏洞，`npm audit` 0；api 镜像 Trivy 扫描（alpine 3.22.8 + 5 个 Go 二进制）0 HIGH/CRITICAL；CycloneDX SBOM 生成成功（218 components），CI `security` job 作为 artifact 上传。
-- [ ] A5 备份与恢复自动化：定时备份 + WAL/PITR、对象存储版本化/复制、恢复演练自动化；明确 RTO/RPO。吸收 M13 B3 的备份恢复清单。验收：季度恢复演练通过并记录 RTO。
-- [ ] A6 许可证审查：盘点 ParadeDB/MinIO（AGPL）与 Redis 7.4+（RSALv2/SSPL），决定替换或合规方案。验收：法务书面结论，商业分发清单可追溯。本项为商业化前置，不阻塞自用上线。
-
-**B. P1 企业 GA（1–3 个月）**
-
-- [ ] B1 高可用拓扑：PostgreSQL 主备/PITR、Redis Sentinel、对象存储多副本；定义故障切换与演练。验收：单节点故障不影响读写，RTO/RPO 达标。
+- [ ] B1 高可用拓扑：PostgreSQL 主备/PITR、Redis Sentinel、对象存储多副本；定义故障切换与演练。并入原 M13 B3：进程内 fixed-window 限流（`internal/platform/ratelimit/limiter.go:2-4` 明确依赖外部网关）改为 Redis 令牌桶或网关统一限流，二选一并写入部署文档，实施形态由部署方确认。验收：单节点故障不影响读写，RTO/RPO 达标；双 API 实例共享限额，Redis 故障降级策略明确。
 - [ ] B2 Kubernetes/Helm 交付：Chart/清单、探针、PDB、HPA、NetworkPolicy、Secret 注入。验收：标准 K8s 集群一键部署与升级。
 - [ ] B3 企业身份：按目标客户补 SAML/LDAP/SCIM/企业微信/钉钉，组到角色映射；OIDC 保持现状。验收：企业 IdP 登录与组织同步联调通过。
 - [ ] B4 管理台：租户/用户/角色/配额/审计页面与审计导出。验收：管理员不碰数据库即可完成日常治理。
-- [ ] B5 可观测性与告警包：Grafana 面板、Prometheus 告警规则、SLO 与值班路由；吸收 M13 B5 的跨队列父子 trace。验收：解析失败、队列积压、5xx 自动告警。
+- [ ] B5 可观测性与告警包：Grafana 面板、Prometheus 告警规则、SLO 与值班路由；吸收原 M13 B5：把 HTTP span 作为父 span 传入 outbox envelope 与 Asynq task，worker span 关联同一 `trace_id`，并补充 queue lag、inbox 过期租约、outbox backlog、projection 游标滞后指标与告警阈值。验收：解析失败、队列积压、5xx 自动告警；父子 trace 断言通过。
 - [ ] B6 权限粒度：部门树、文件夹继承、单文档 ACL。验收：中大型组织可按部门/项目隔离。
 - [ ] B7 内容接入：OCR（混合 PDF、置信度、人工复核）与目标连接器（SharePoint/Confluence/飞书/企微/S3 等）。验收：扫描件可检索，目标数据源可增量同步。
 - [ ] B8 合规加固：静态加密（磁盘/对象存储/KMS）、审计防篡改与导出、PII/DLP、渗透测试、等保/ISO 差距评估。验收：通过客户安全评审。
 - [ ] B9 发布工程：semver/tag/CHANGELOG、镜像签名、升级回滚文档、替换 `github.com/example/rag-platform` 占位模块路径。验收：可重复发布与回滚。
 - [ ] B10 前端 E2E：Playwright 覆盖上传→解析→检索→问答→删除主链路；补可访问性检查。验收：核心流程自动化回归。
 
-**C. P2 条件项（不进入关键路径）**：M13 B2 外部向量库、M13 B4 任务状态单一视图、M13 C1–C5、M8 的 OpenSearch/Milvus/Neo4j/Agent；仅在有容量证据或已确认客户需求时立项。
+**C. P1 架构收敛与契约治理（原 M15 P1，按执行顺序重排）**
 
-### 与 M13 未完成项的先手顺序
+C1/C2 是低风险收敛项，先做；C5 拆分期间冻结大规模功能开发；C6–C11 在 C5 后按序推进。
 
-| 顺序 | 任务 | 来源 | 先做理由 | 产出/门禁 |
-| --- | --- | --- | --- | --- |
-| 1 | 1M × 1024 数据面压测 | M13 B1 | 成本低、已在进行中；为 M14 B1/B2 与 M8 提供唯一容量证据 | `tests/eval/m13_dataplane_report.json`；P95/召回不达标才启动 M13 B2 |
-| 2 | 生产密钥 fail-fast、RLS enforce | M14 A1/A2 | 安全底线，改动小、风险高收益快 | 默认配置启动失败；跨租户负向通过 |
-| 3 | CI 集成/安全门禁、供应链锁定 | M14 A3/A4 | 防止前两步和后续功能回归，阻断已知漏洞 | PR 必须通过 Postgres/Redis/MinIO、RLS 负向、`-race` 与扫描 |
-| 4 | 备份/PITR、恢复演练 | M14 A5（吸收 M13 B3 恢复清单） | 数据丢失不可逆，企业采购必问 | RTO/RPO 达标，季度演练通过 |
-| 5 | 许可证审查 | M14 A6 | 法务周期长，越早启动越好；不阻塞开发 | 书面结论 |
-| 6 | HA 拓扑、K8s/Helm、发布工程 | M14 B1/B2/B9 | 企业 GA 硬门槛，须在安全门禁之后 | 单点故障可切换，Helm 可重复部署 |
-| 7 | 跨实例限流 | M13 B3（并入 M14 B1） | 与 HA 同批，避免双实例限额翻倍 | 双 API 实例共享限额，Redis 故障降级明确 |
-| 8 | 跨队列 trace/metrics | M13 B5（并入 M14 B5） | 与告警/SLO 同批，直接服务运维 | 父子 trace 断言 + 告警规则 |
-| 9 | 企业身份、管理台、权限粒度、OCR/连接器 | M14 B3/B4/B6/B7 | 按首个客户需求排序，避免全量开发 | 客户验收 |
-| 10 | 合规加固、前端 E2E | M14 B8/B10 | GA 前完成，可与第 9 批并行 | 安全评审与主链路回归 |
-| 11 | M13 B2/B4/C1–C5、M8 | 条件项 | 无容量证据/产品需求不启动 | 证据或需求确认 |
+- [ ] C1 依赖门禁放行到端口类型（原 M15 P1-2）：不再整包 whitelist `ingestion`/`retrieval`/`relationstore`；`platform/vector`、`platform/search`、`platform/rerank`、`platform/docreader`、`platform/evidenceindex` 只能 import 端口类型。验收：`cmd/checkdeps` 负向测试证明适配器 import 领域实现会失败。
+- [ ] C2 鉴权入口收敛（原 M15 P1-5）：6 处 `.Authorize(...)` 收敛为 `AuthorizeKnowledgeBase(ctx, principal, kbID, action)`；统一 `tenantdb.MustScoped` 与裸 `tenant_id = ?` 的租户过滤写法；认证中间件只挂载一次；`gin.CustomRecovery` 移到中间件链首位。验收：6 个调用点行为一致，新增路由组漏挂认证有测试拦截，跨租户负向不回归。
+- [ ] C3 合并 `Chatter`（原 M15 P1-3）：conversation、projection、wiki、relation 四份同名接口收敛到 `contracts/model.Chatter`，新增方法只改一处。验收：四个消费者编译通过，行为与现有 chat 适配器测试不变。
+- [ ] C4 管线阶段描述符（原 M15 P1-4）：把 ingestion 与 knowledgeprojection 重复的 Start/Succeed/Fail + next-stage + outbox 样板抽为 `pipeline.StageTable`；新增第三种 pipeline 不再手抄行布局。验收：现有阶段状态/重试/幂等测试通过，新增合成 stage 的契约测试通过。
+- [ ] C5 contracts 与 persistence/models 分离（原 M15 P1-1）：wire DTO、队列 payload、DB 行分家；先迁移 HTTP DTO，再迁移任务 payload，迁移期间保持现有路由与响应字段不变。验收：`httpapi` 不再直接使用 `models`；OpenAPI 由 contracts 生成；m1–m7 与任务 golden 测试通过。
+- [ ] C6 authz 拆分（原 M15 P1-6）：`internal/authz` 拆为 policy / scope / audit / membership 四个组件，保留现有 Casbin 投影、revision、L1/L2 缓存与审计语义。验收：m1/m4 通过，撤权立即生效，审计查询/清理与成员管理行为不变。
+- [ ] C7 配置 profile（原 M15 P1-7，吸收原 M13 C4）：`internal/config` 按 dev/eval/on-prem/SaaS 提供 profile 与生成式配置，减少 128 个环境变量对实施人员的暴露面；同时把 `internal/config/config.go` 单结构（1,045 行）按域拆为子结构（已有 `RetrievalConfig`/`ChatConfig` 等雏形）；环境变量契约保持兼容。验收：production fail-fast 仍生效、未知 `APP_ENV` 启动失败、`.env.example`/README/operations 同步。
+- [ ] C8 领域直连 GORM 收敛（定向）（原 M15 P1-8）：只对 conversation/ops/authz 等存在第二种存储形态的聚合引入窄仓储端口；不对 40 个模型做全量仓储抽象。验收：这些领域构造函数不再接收 `*gorm.DB`；SQLite/Postgres 测试通过。
+- [ ] C9 租户口径统一（原 M15 P1-9）：GORM 查询补 tenant 注入 callback，子表 RLS 口径统一，清理 `casbin_rule` 等无读取方的死 schema。验收：遗漏 `tenant_id` 的 GORM 查询在 shadow 模式可见/失败，`checktenancy` 覆盖 GORM 路径，迁移可回滚。
+- [ ] C10 前端契约与稳健性（原 M15 P1-10，吸收原 M13 C3）：M12 E1 曾移除 `generated.ts` 与漂移检查，本轮按实际收益重新评估；用 OpenAPI 生成 TypeScript 类型与客户端并在 CI 校验无漂移，移除手写重复模型；补齐 SSE `Last-Event-ID` 续传、AbortController、401 刷新和长列表虚拟化。验收：生成类型漂移使 CI 失败；断线重连不丢答案；页面卸载后不再继续流式请求。
+- [ ] C11 失败注入与并发测试（原 M15 P1-11）：覆盖 worker 中途退出、重复投递、租约过期、慢客户端/连接池、GORM 租户口径与图规模；关键用例进入 CI，长跑用例可 nightly。验收：每个已知高风险路径有可复现测试，修复前失败、修复后通过。
 
-**先手结论**：先 M13 B1（1–2 天），再 M14 A（1–3 周），然后 M14 B 的 HA/K8s/发布工程；M13 B3/B5 并入 M14，不单独插队；M13 B2/B4/C1–C5 与 M8 不进入关键路径。
+**D. P2 条件项（原 M13 B2/B4/C1/C2/C5 与原 M15 P2）**
+
+D1–D5 仅在原 M13 B1 数据面报告证据或已确认客户需求时立项；D6/D7 按各项触发条件执行；D8 不依赖容量证据，但必须先于 M8；D9 在 C5 完成后启动。
+
+- [ ] D1 外部向量库评估（原 M13 B2）：仅当原 M13 B1 数据面报告证明 pgvector 在目标量级不满足 P95 或召回时启动；必须通过现有 `VectorSearcher` 与索引写入端口，不泄漏厂商查询类型。
+- [ ] D2 任务状态单一视图（原 M13 B4）：Asynq retry、inbox lease、outbox attempts、stage attempts、reconcile、`ExpireStaleRuns`、projection 重试与 datasource 同步重试共 8 套机制，补充一张跨机制状态转移表与统一运维查询；不删除既有机制。同步把 `internal/status`（当前只收敛 `EVIDENCE_READY`/`PARENT`/`STALE`）扩为全量生命周期值的单一来源，清理各域散落的状态字符串与 SQL 直写。
+- [ ] D3 多 embedding 路由与 re-embed 编排（原 M13 C1）：当前一 KB 绑定一个模型+维度、部署只注册一个 embedder；需要 per-KB 路由、批量重建与灰度切换，沿用 `embedctl` 的 create-index → reembed → verify 三段式，维度不匹配仍拒绝。
+- [ ] D4 连接器插件化与 ACL 映射（原 M13 C2）：`ConnectorFactory` 已有注册点（`internal/datasource/connector.go:118`），扩展为独立加载；`ACLMode` 从仅 `knowledge_base` 扩展到逐条/外部组映射。
+- [ ] D5 检索质量闭环（原 M13 C5）：在线反馈（点赞、引用点击）接入现有 m3 eval 与向量召回探针，形成离线回放，避免调参依赖猜测。
+- [ ] D6 图查询分页与可见性过滤 SQL（原 M15 P2-1）：当前 `RelationStore.Graph` 全量加载 snapshot 后在内存 BFS；改为分页/可见性过滤 SQL + 有界 BFS。触发：单快照 > 10k 实体/关系，或图查询 P95 超 SLA；先于 Neo4j 评估。验收：内存占用有界，m7 评估不回归，隐藏节点/边无侧信道。
+- [ ] D7 SSE 推送模型（原 M15 P2-2）：把 250ms 事件表轮询改为 LISTEN/NOTIFY 或 Redis Streams。触发：并发 tail > 100，或事件轮询占 DB QPS 明显。验收：重连续传契约不变，tail 连接不再轮询，负载测试通过。
+- [ ] D8 向量/格式能力端口（原 M15 P2-3）：`platform/vector` 的索引生命周期与 `platform/formats` 静态切片端口化。触发/前置：M8 启动前必须完成，不依赖容量证据。验收：适配器契约测试通过，pgvector 行为不变，M8 迁移清单可执行。
+- [ ] D9 请求事务边界重构（原 M15 P2-4）：把请求级 `BeginRequestTx` 改为操作级短事务 + RLS 连接初始化/显式 `InTx`；A4 只处理流式响应的立即风险。触发：contracts 拆分完成后，或慢客户端/SSE 并发再次成为瓶颈。验收：慢客户端不占连接，m1–m7 RLS 负向通过。
+
+**已交付（保留原编号与验收记录）**
+
+- [x] 原 M13 A1 租户隔离纵深：先用统一入口收口 `tenant_id` 过滤（现状 147 处 / 39 个非测试文件），再启用 PostgreSQL RLS 或等价的连接级 tenant 上下文 + policy，覆盖业务表与只读通道；应用层过滤保留为第二道防线。已暂缓一轮（2026-11-05 P1 批次明确不包含 RLS），本里程碑必须完成。验收：跨租户负向用例、无 tenant 条件的查询静态检查失败、直接 SQL 绕过 RLS 被拒。已实现（2026-11-05）：新增 `internal/platform/tenantdb`（`Scoped`/`Unscoped`/`Require`/`InTx`/`BeginRequestTx`）收口调用点，`cmd/checktenancy` 扫描 `Raw/Exec/Query` 并对 37 张租户/子表强制租户谓词；迁移 0023 为 33 张租户表 + 4 张子表安装 ENABLE/FORCE RLS、允许策略与影子写审计触发器，0024 提供 strict 策略，0025 修复子表级联删除误报；`TENANT_RLS_MODE=off|shadow|enforce` 默认 shadow，启动校验 `rag_app` 非超级用户/非 BYPASSRLS、维护角色具备 BYPASSRLS；`make m13-rls-acceptance`、`tests/postgres/tenantrls_test.go` 与 m1–m4 跨租户负向通过。
+- [x] 原 M13 A2 向量索引在线变更：`CreateHNSWIndex` 当前在事务内 `DROP INDEX` + 非 `CONCURRENTLY` 的 `CREATE INDEX`（`internal/platform/vector/index.go:42-66`），大表重建会阻塞写入；改为并发建索引或后台建索引 + 原子切换，维度切换提供禁写窗口 runbook 与 `cmd/embedctl` 保护。pgvector < 0.8 的迭代扫描门禁沿用 `docs/operations.md` §14。验收：大表重建期间写入不被阻塞（附压测记录）、维度切换演练通过、失败可回滚到旧索引。已实现（2026-11-05）：版本化索引名 + 独立连接 `CREATE INDEX CONCURRENTLY` + `indisvalid`/`pg_get_indexdef` 校验 + INVALID 清理 + 旧索引验证后才删除；会话超时在首次目录读取前设置。`embedctl check`、`create-index --dry-run/--confirm` 与超时配置落地；持锁演练约 1.5s 失败且旧索引保留，3↔4 维切换与 legacy 名复用通过；20 万行构建期并发写 P99 4.95ms（上限 5.24ms），计划命中 HNSW；`make vector-recall-probe`、m0–m7 通过。
+- [x] 原 M13 A3 生成链路异步化：`Ask` 当前在 HTTP 请求 goroutine 内完成检索与生成（`internal/conversation/answer.go:26`、`internal/httpapi/conversations.go:95`），进程重启即丢失答案；改为任务 + SSE 订阅，复用 `stream_events` 的 `?after=` 回放能力，答案可恢复或明确失败。验收：进程重启演练、双实例订阅、客户端断线重连不重复不丢失。已实现（2026-11-05）：迁移 0026 `answer_jobs`；API 预检持久化 user message、`RECEIVED/AUTHORIZED/PLANNED` 事件与 job 后入队，worker 条件认领 + lease + 重建 scope（current ∩ stored）执行生成；`next_sequence` 由 `UPDATE ... RETURNING` 原子分配，跨进程事件连续；过期租约由维护循环置 `FAILED` 并追加终态；`GET /requests/:id/events?stream=1` 提供 tail，`ANSWER_ASYNC_ENABLED=false` 回滚到同步路径；`make m13-async-acceptance` 的正常与 worker 停机演练均到达终态，m3 acceptance 严格事件序列断言在异步路径下通过，87 条路由不变。
+- [x] 原 M13 B1 数据面压测与扩展决策（优先执行；B1/B2 与 M8 的容量输入）：以现有 1463 条真实向量为起点扩展到目标量级，记录检索 P50/P95、写入吞吐、索引体积与连接池水位，产出 `tests/eval/m13_dataplane_report.json`；依据报告决定 chunks 分区（tenant/时间）与读副本，迁移与回滚方案评审后再实施。已产出报告（2026-11-05）：新增 `scripts/m13_dataplane.py` 与 `make m13-dataplane`/`m13-dataplane-validate`；在本地 7.8GB PostgreSQL 容器中对 1,000,000 × 1024 维 halfvec 合成语料（16 租户 × 2 KB）执行 `CREATE INDEX CONCURRENTLY`：59.5 分钟、索引 2.89GB、总关系 6.14GB、`indisvalid=true`，构建期 4 路写入 64,395 样本，写 P95 62.9ms / P99 101.2ms。16 并发查询共 640 样本：自然计划为 seq-scan（向量 P50/P95/P99 = 1074/3874/9372ms，BM25 = 849/1976/2225ms，QPS 11.7）；强制 HNSW 计划可用。200 条召回抽样 mean 0.122、p10 0.05（均匀随机合成向量、`ef_search=40`、`relaxed_order`，仅报告不设门槛）。报告通过 `make m13-dataplane-validate`。chunks 分区、读副本与外部向量库（原 M13 B2）是否启动由评审依据该报告决定，本轮不实施。
+- [x] 原 M14 A1 生产密钥 fail-fast：启动校验拒绝仓库默认的 JWT 签名密钥、`API_KEY_PEPPER`、S3/MinIO 与数据库密码；生产必须显式提供 `JWT_SIGNING_KEYS`，禁止回落到单一开发密钥。验收：用默认值启动 production 直接失败，补充配置单测与文档。已实现（2026-11-06）：`AuthConfig.SigningKeysExplicit` 区分显式配置与开发回退，production 缺失 `JWT_SIGNING_KEYS` 直接失败；新增仓库默认密钥表，拒绝 `JWT_SIGNING_KEYS`、`API_KEY_PEPPER`、S3 凭据以及 `DATABASE_URL`/`MAINTENANCE_DATABASE_URL`/`ADMIN_DATABASE_URL` 中的仓库默认密码；新增 `TestProductionRejectsRepositoryDefaultSecrets`、`TestProductionRequiresExplicitSigningKeys`、`TestDevelopmentAllowsRepositoryDefaultSecrets`，`make test` 通过；`.env.example` 与 `docs/operations.md` §9 同步说明。
+- [x] 原 M14 A2 RLS 生产强制：`APP_ENV=production` 时要求 `TENANT_RLS_MODE=enforce`，校验 `rag_app`/维护角色分离；把跨租户负向用例纳入 CI。验收：shadow 配置启动失败；直接 SQL 绕过 RLS 被拒；m1–m4 负向不回归。已实现（2026-11-06）：production 强制 enforce，enforce 下 `DATABASE_URL` 与 `MAINTENANCE_DATABASE_URL` 角色必须不同，`TestProductionRequiresEnforceRLS` 与角色分离负向单测通过；请求级事务新增幂等 `CommitRequestTx`，异步预检写入在 SSE tail 前提交，`ReplayEvents` 在租户事务内执行以保持 `app.tenant_id`；新增 `tests/postgres/rls_runtime_test.go`，以 `rag_app` 访问真实 `audit_logs` 严格策略，跨租户 SELECT 为 0、跨租户 INSERT 被拒、savepoint 恢复后 `RESET app.tenant_id` 仍失败闭合；隔离 enforce 栈（`COMPOSE_PROJECT_NAME=rag-m14`）通过 m0/m1、`ENFORCE_LAYOUT=1 m13-rls-acceptance`（容器内 enforce、rag_app/维护角色分离、`pg_stat_activity` 双角色连接）、`m13-async-acceptance` 与 Postgres RLS 测试。
+- [x] 原 M14 A3 CI 集成与安全门禁：CI 启动 ParadeDB、Redis、MinIO，执行迁移、RLS 负向与核心 acceptance 子集；增加 `-race`、govulncheck、trivy、npm audit。验收：PR 阶段可拦截跨租户、迁移和安全回归。已实现（2026-11-06）：CI 拆为 `verify`（gofmt/checkdeps/checktenancy/`go test`/`-race`/vet/`go mod verify`/前端 `npm ci`+test+build/compose config）、`integration`（ParadeDB/Redis/MinIO/docreader 整栈，`deploy/ci/enforce.env` + 迁移 + RLS setup + seed + embed-index + Postgres RLS 测试 + m0/m1 + `ENFORCE_LAYOUT=1` RLS + async）、`security`（govulncheck、npm audit、Trivy fs/image、镜像 pin 校验、CycloneDX SBOM artifact）；本地 `make test`/`make lint`、`npm audit`（0）、govulncheck（0，升级 go-redis 9.7.3、x/net 0.60.0、quic-go 0.59.1 后）、`CGO_ENABLED=1 go test -race ./internal/... ./cmd/...`（33 个包通过，无数据竞争）通过。
+- [x] 原 M14 A4 供应链锁定：镜像由 `:latest`/浮动 tag 改为固定版本或 digest，前端依赖去掉 `"latest"`；生成 SBOM。验收：重复构建可复现，高危漏洞为 0 或有明确豁免。已实现（2026-11-06）：compose 的 ParadeDB/Redis/MinIO/Keycloak、三个 Dockerfile 的基础镜像与 Makefile `GO_IMAGE` 全部改为 `tag@sha256:<多架构 index digest>`，`scripts/check_image_pins.sh` 静态拒绝未固定引用；前端 8 个 `"latest"` 固定为 lockfile 精确版本，`npm ci`/test/build 通过；Go 构建统一 `-trimpath -buildvcs=false -ldflags=-buildid=`，同一输入连续两次 `go build ./cmd/api` 的 SHA-256 均为 `8e4531fbe506008330b3818ddec5bdf9dd3cbaad78f0b341ed7f698d99903e43`。漏洞处置：Trivy fs 首轮发现 docreader `pypdf==6.1.3` 的 20 个 HIGH DoS 与 `klauspost/compress v1.18.0` 的 CVE-2026-63209，已升级到 `pypdf==6.21.4`、`compress v1.18.7`；复扫 `go.mod`/`services/docreader/requirements.txt`/`web/package-lock.json` 均为 0 HIGH/CRITICAL，`govulncheck` 0 可达漏洞，`npm audit` 0；api 镜像 Trivy 扫描（alpine 3.22.8 + 5 个 Go 二进制）0 HIGH/CRITICAL；CycloneDX SBOM 生成成功（218 components），CI `security` job 作为 artifact 上传。
 
 **验收门槛**：
 
-- A1–A5 全部通过；A6 有书面结论（自用上线可豁免）。
+- A1–A4 全部通过；A2 有书面结论（自用上线可豁免）。
 - HA、备份、身份、审计四项完成前不得对外宣称企业 GA。
+- B/D 段每项启动前附客户需求或验收数据；没有证据不启动。
 - `make test`、`make lint` 通过；m1–m7 acceptance 与 m3 eval 门槛不回归。
+- C 段每项重构附边界清单、负向测试与回滚方式；C5 不改变现有 API 路径/响应字段，迁移可重复执行。
+- archtest 负向用例、鉴权越权负向、RLS 负向、GORM 租户口径测试全部通过；前端生成类型在 CI 校验无漂移，SSE 断线续传、页面卸载取消、401 刷新有测试；失败注入覆盖 worker 中途退出、重复投递、租约过期、慢客户端/连接池。
 - 迁移可重复执行且可回滚；README、DESIGN.md、docs/operations.md 与本文件同步。
-- B 每项启动前附客户需求或验收数据；没有证据不启动。
 
-**暂不做**：微服务拆分、服务网格、未压测即迁移 OpenSearch/Milvus/Neo4j、替换 PostgreSQL 主存储、计费/套餐（除非确定做 SaaS）、信创适配（除非进入对应市场）。
+**暂不做**：微服务拆分或服务网格；未压测即迁移 OpenSearch/Milvus/Neo4j；替换 PostgreSQL 主存储；计费/套餐（除非确定做 SaaS）；信创适配（除非进入对应市场）；为“统一”删除 outbox/inbox、ACL 二次校验或 citation 复核；对 40 个模型做全量仓储抽象；在没有产品需求时实现多 embedding 路由或图数据库下推。
 
 ## 里程碑状态记录
 
@@ -508,8 +498,7 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 | M10 | 已完成 | 2026-11-04 | `make test`（gofmt + `go test ./...` + `go vet ./...` + `npm test` 16/16）、`make lint`（gofmt/vet + `tsc -b` + `npm run build`）、`./scripts/m2_acceptance.sh`、`m3_acceptance.sh`、`m4_acceptance.sh` 通过。契约与边界：任务载荷上移 `contracts/tasks`（`Ingestion`/`Sync`/`Projection` + JSON golden），`internal/platform/queue` 只依赖契约；worker handler 抽到 `cmd/worker/handlers.go`；`EvidenceIndexWriter` 增加 `IndexChunks`（Postgres no-op，m2 入库与关键词检索通过）；维护循环改为 leader 持有 Postgres session lock，双 worker 复验为一个 `maintenance_lock_acquired` + 一个 `maintenance_lock_skipped`，锁连接失效时 `maintenance_lock_lost` 并重新竞选。在线链路：`retrieval.Planner`/`EvidencePlanner` 抽出计划构造，`QueryPlan.historyTurns` 记录历史轮数；多轮会话按 system → history → 当前问题发送，只回放完整的 user + COMPLETED assistant，`CHAT_HISTORY_TURNS=0` 可关闭。HTTP 按资源拆分（auth/knowledge_bases/documents/conversations/connectors/projection/operations/knowledge_base_config），`RegisterRoutes` 统一编排，87 条业务路由路径不变；`api/openapi/openapi.yaml` 覆盖 87/87，`openapi_test.go` 双向校验，`web/src/api/generated.ts` 由 spec 生成并在 CI 校验无漂移。单轮评估（`CHAT_HISTORY_TURNS=0`）：49 用例、0 排除，recallAtK 1.0、documentHitRate 0.8889、citationAccuracy/groundedness/refusalRate/permissionNegativeDenials/injectionFlagRate 均为 1.0，gates passed；`meanLatencyMs` 21454 仅诊断项，受本次 provider 延迟影响。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | M11 | 已完成 | 2026-11-04 | `make test`（Go 全包 + 前端 16/16）、`make lint`、`./scripts/m3_acceptance.sh`、`./scripts/m4_acceptance.sh` 通过。授权：Casbin 改为 per-tenant 策略，新增 scope L1（30s）+ Redis L2（30s）缓存，revision 进入 key，每次请求仍读租户 revision；m4 ACL 撤权断言通过，单测覆盖撤权立即生效与只失效单租户。OTel：OTLP/HTTP 可选，HTTP 续接 `traceparent` 并返回 `X-Trace-ID`；检索、远程 chat、worker task 增加 span，日志带 `trace_id`；空 endpoint 下 `/healthz` 实测返回 `X-Trace-ID`。多轮改写：`retrieval.Rewriter` + LLM 改写器 + `query_rewrite`/`query_rewrite_system` 模板；两轮实测第二轮 `query_plan.rewrite` 为独立问题、`historyTurns=2`、回答 `COMPLETED` 且带引用；改写失败/本地适配器回退原问题有单测。文档同步 DESIGN、operations 与 .env.example。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | M12 | 已完成 | 2026-11-05 | 2026-11-05：A1–A6、B1–B3、C1–C3、D1–D7、E1–E2 全部实现并勾选。`make test`、`make lint` 通过；m0/m1/m2/m3/m4/m5/m6/m7 acceptance 通过；m3 eval 复跑通过（recallAtK、citationAccuracy、groundedness、refusalRate、permissionNegativeDenials、injectionFlagRate=1.0，documentHitRate=0.8611 ≥ 0.85）；迁移 0019/0020 在空库与现有库重复执行通过。 |
-| M13 | 进行中 | -          | 2026-11-05：A1–A3、B1 已完成并勾选（tenantdb + RLS、在线 HNSW、异步答案、1M 数据面报告）；`make test`/`make lint`、m1–m7、m3 eval、`make m13-async-acceptance`、`make m13-dataplane-validate` 通过。B1 报告显示 1M 合成语料自然计划为 seq-scan、向量 P95 3.87s、召回 mean 0.122（均匀随机数据，仅证据）；分区/读副本与 B2 由评审决定，B3–B5 未开始。 |
-| M14 | 进行中 | -          | 2026-11-06：A1–A4 已完成并勾选。A1 生产密钥 fail-fast（显式 JWT 密钥、拒绝仓库默认 JWT/pepper/S3/数据库密码）；A2 production 强制 RLS enforce、运行时/维护角色分离，隔离 enforce 栈通过 m1、`ENFORCE_LAYOUT=1` RLS、async 与 Postgres RLS 直连测试；A3 CI 三 job（verify/integration/security）含 `-race`、govulncheck、Trivy、npm audit，本地 race 33 包通过；A4 全镜像 digest 固定、前端精确版本、可复现构建哈希一致、Trivy fs/image 0 HIGH/CRITICAL、CycloneDX SBOM 218 components。A5/A6 与 B 系列未开始。 |
+| M13 | 进行中 | -          | 2026-11-05/06：已交付 8 项——原 M13 A1–A3/B1（tenantdb + RLS、在线 HNSW、异步答案、1M 数据面报告）与原 M14 A1–A4（生产密钥 fail-fast、production RLS enforce、CI verify/integration/security、供应链锁定）；`make test`/`make lint`、m1–m7、m3 eval、`make m13-async-acceptance`、`make m13-dataplane-validate` 通过。未完成：A1–A4（备份恢复、许可证审查、生产安全收尾、运行时韧性收尾）、B1–B10（企业 GA）、C1–C11（契约收敛）；D1–D9 条件启动。 |
 
 ## 大模型执行提示模板
 

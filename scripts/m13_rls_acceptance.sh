@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M13 A1.2/A1.3 acceptance: verify the tenant RLS schema is installed and
+# Original M13 A1.2/A1.3 (delivered) acceptance: verify the tenant RLS schema is installed and
 # consistent with either the shadow (permissive) or enforce (strict) policy
 # layout. This does not switch traffic between roles; role selection is a
 # deployment decision (see docs/operations.md).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M13 A1.2: create the RLS runtime roles and grant their privileges.
+# Original M13 A1.2 (delivered): create the RLS runtime roles and grant their privileges.
 # Idempotent, safe to re-run against an existing database. Passwords come from
 # the environment (or .env): RAG_APP_DB_PASSWORD / RAG_MAINTENANCE_DB_PASSWORD.
 set -euo pipefail

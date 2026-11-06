@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M13 A3 acceptance: async answers survive a worker restart.
+# Original M13 A3 (delivered) acceptance: async answers survive a worker restart.
 #   1. normal async answer: the stream ends with `complete` and answer_jobs is
 #      COMPLETED with a contiguous event sequence;
 #   2. worker-down drill: with the worker stopped, the API accepts the question,
