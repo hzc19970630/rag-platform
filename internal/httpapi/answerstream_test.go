@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/conversation"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -126,6 +128,41 @@ func TestTwoConcurrentTailsBothReceiveTerminalEvent(t *testing.T) {
 	for index, body := range bodies {
 		if !strings.Contains(body, "event: complete") {
 			t.Fatalf("tail %d did not receive the terminal event: %q", index, body)
+		}
+	}
+}
+
+// A streaming tail can outlive the request by minutes. The request transaction
+// must be committed before the tail starts, or the API pins one pooled
+// connection per open stream and exhausts the pool under reconnects.
+func TestRequestEventsCommitsTenantTxBeforeTail(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db, service := tailFixture(t)
+	seededEvents(t, db)
+
+	requestTx := db.Begin()
+	if requestTx.Error != nil {
+		t.Fatalf("begin request tx: %v", requestTx.Error)
+	}
+
+	recorder := newLockedRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest("GET", "/api/v1/requests/req-tail/events?stream=1", nil)
+	c.Request = c.Request.WithContext(tenantdb.WithTx(c.Request.Context(), requestTx))
+	c.Params = gin.Params{{Key: "requestID", Value: "req-tail"}}
+	c.Set(accessContextKey, authz.AccessContext{
+		Principal: authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"},
+	})
+
+	handleRequestEvents(c, ConversationDeps{Conversation: service}, tailConfig())
+
+	if tenantdb.TxFrom(c.Request.Context()) != nil {
+		t.Fatal("the streaming tail still holds the request transaction")
+	}
+	body := recorder.String()
+	for _, want := range []string{"id: req-tail:1", "id: req-tail:3", "event: complete"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("tail body is missing %q: %q", want, body)
 		}
 	}
 }

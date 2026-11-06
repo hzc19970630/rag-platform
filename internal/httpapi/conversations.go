@@ -174,32 +174,44 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 	// ?stream=1 the replay keeps polling until a terminal event, which is the
 	// async connect/reconnect path; the default remains a one-shot replay.
 	protected.GET("/requests/:requestID/events", func(c *gin.Context) {
-		after := intQuery(c, "after")
-		if after == 0 {
-			if lastEventID := strings.TrimSpace(c.GetHeader("Last-Event-ID")); lastEventID != "" {
-				after = sequenceFromEventID(lastEventID)
-			}
+		handleRequestEvents(c, deps, cfg)
+	})
+}
+
+// handleRequestEvents is split out so the streaming transition is testable.
+// A streaming tail can wait up to ANSWER_TAIL_TIMEOUT_SECONDS; committing the
+// request transaction first keeps one pooled connection from being pinned for
+// the whole stream. ReplayEvents opens a short tenant transaction per poll.
+func handleRequestEvents(c *gin.Context, deps ConversationDeps, cfg config.Config) {
+	after := intQuery(c, "after")
+	if after == 0 {
+		if lastEventID := strings.TrimSpace(c.GetHeader("Last-Event-ID")); lastEventID != "" {
+			after = sequenceFromEventID(lastEventID)
 		}
-		principal := accessContext(c).Principal
-		if c.Query("stream") == "1" {
-			stream := newSSEStream(c)
-			defer stream.finish()
-			tailAnswerStream(c.Request.Context(), deps.Conversation, principal, c.Param("requestID"), after, cfg, stream)
-			return
-		}
-		events, err := deps.Conversation.ReplayEvents(c.Request.Context(), principal, c.Param("requestID"), after)
-		if err != nil {
+	}
+	principal := accessContext(c).Principal
+	if c.Query("stream") == "1" {
+		if err := tenantdb.CommitRequestTx(c.Request.Context()); err != nil {
 			writeError(c, err)
 			return
 		}
 		stream := newSSEStream(c)
 		defer stream.finish()
-		for _, event := range events {
-			if err := stream.emit(event); err != nil {
-				return
-			}
+		tailAnswerStream(c.Request.Context(), deps.Conversation, principal, c.Param("requestID"), after, cfg, stream)
+		return
+	}
+	events, err := deps.Conversation.ReplayEvents(c.Request.Context(), principal, c.Param("requestID"), after)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	stream := newSSEStream(c)
+	defer stream.finish()
+	for _, event := range events {
+		if err := stream.emit(event); err != nil {
+			return
 		}
-	})
+	}
 }
 
 type searchRequest struct {
