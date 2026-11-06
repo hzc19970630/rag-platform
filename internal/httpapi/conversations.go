@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/conversation"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/gin-gonic/gin"
 )
@@ -107,6 +108,17 @@ func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps Conv
 				}
 				_ = stream.emit(conversation.Event{Type: conversation.EventError, Data: map[string]any{"code": "internal_error", "message": err.Error()}})
 				return
+			}
+			// The pre-flight writes and the answer job must be durable before the
+			// worker can claim them. In enforce mode the request transaction spans
+			// the handler, so commit it before the long SSE tail; otherwise the
+			// worker sees no job row until the tail gives up. The Existing replay
+			// path has no new hand-off and keeps the request transaction.
+			if prepared.Existing == nil {
+				if err := tenantdb.CommitRequestTx(c.Request.Context()); err != nil {
+					writeError(c, err)
+					return
+				}
 			}
 			if prepared.Existing != nil {
 				events, replayErr := deps.Conversation.ReplayEvents(c.Request.Context(), principal, prepared.RequestID, 0)

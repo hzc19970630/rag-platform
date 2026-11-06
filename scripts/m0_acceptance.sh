@@ -4,7 +4,13 @@ set -eu
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root_dir"
 
-compose="docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml"
+env_file="${ACCEPTANCE_ENV_FILE:-.env.example}"
+if [ -f "$env_file" ]; then
+  set -a
+  . "$env_file"
+  set +a
+fi
+compose="docker compose --env-file $env_file -f deploy/docker-compose/docker-compose.yml"
 
 $compose config --quiet
 $compose up --build -d
@@ -28,10 +34,12 @@ $compose exec -T postgres psql -U rag_platform -d rag_platform -Atc "SELECT id F
 $compose exec -T postgres psql -U rag_platform -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS m0_empty_acceptance WITH (FORCE);" >/dev/null
 $compose exec -T postgres psql -U rag_platform -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE m0_empty_acceptance TEMPLATE template0;" >/dev/null
 empty_url='postgres://rag_platform:change-me-local-only@postgres:5432/m0_empty_acceptance?sslmode=disable'
-$compose run --rm --no-deps -e DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/migrate api >/dev/null
-$compose run --rm --no-deps -e DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/seed api >/dev/null
-$compose run --rm --no-deps -e DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/migrate api >/dev/null
-$compose run --rm --no-deps -e DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/seed api >/dev/null
+# Enforce mode reads ADMIN_DATABASE_URL for DDL; point it at the scratch
+# database too, otherwise migrate/seed would touch the main database.
+$compose run --rm --no-deps -e DATABASE_URL="$empty_url" -e ADMIN_DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/migrate api >/dev/null
+$compose run --rm --no-deps -e DATABASE_URL="$empty_url" -e ADMIN_DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/seed api >/dev/null
+$compose run --rm --no-deps -e DATABASE_URL="$empty_url" -e ADMIN_DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/migrate api >/dev/null
+$compose run --rm --no-deps -e DATABASE_URL="$empty_url" -e ADMIN_DATABASE_URL="$empty_url" --entrypoint /usr/local/bin/seed api >/dev/null
 $compose exec -T postgres psql -U rag_platform -d m0_empty_acceptance -Atc "SELECT value FROM platform_settings WHERE key = 'environment';" | grep -q '^development$'
 
 echo "M0 acceptance passed"

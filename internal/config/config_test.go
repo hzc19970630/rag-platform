@@ -73,6 +73,38 @@ func TestLoadFromReadsOverridesAndIgnoresEmpty(t *testing.T) {
 	}
 }
 
+// productionAPIEnv satisfies every production guard so a test can mutate one
+// value and assert the specific rejection.
+func productionAPIEnv() map[string]string {
+	return map[string]string{
+		"APP_ENV":                  "production",
+		"DATABASE_URL":             "postgres://rag_app:app-secret@localhost:5432/rag",
+		"MAINTENANCE_DATABASE_URL": "postgres://rag_maintenance:maintenance-secret@localhost:5432/rag",
+		"ADMIN_DATABASE_URL":       "postgres://rag_platform:owner-secret@localhost:5432/rag",
+		"TENANT_RLS_MODE":          "enforce",
+		"REDIS_ADDR":               "redis:6379",
+		"DOCREADER_GRPC_ADDR":      "docreader:50051",
+		"S3_ENDPOINT":              "minio:9000",
+		"S3_BUCKET":                "bucket",
+		"S3_ACCESS_KEY":            "prod-access-key",
+		"S3_SECRET_KEY":            "prod-secret-key",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"EMBEDDING_SOURCE":         "remote",
+		"LLM_EMBEDDING_MODEL":      "bge-m3",
+		"EMBEDDING_BASE_URL":       "https://api.example.com/v1",
+		"CHAT_SOURCE":              "remote",
+		"CHAT_BASE_URL":            "https://api.example.com/v1",
+		"LLM_CHAT_MODEL":           "gpt-4o-mini",
+		"JWT_SIGNING_KEYS":         "prod:0123456789abcdef0123456789abcdef",
+		"API_KEY_PEPPER":           "production-api-key-pepper",
+		"OIDC_ENABLED":             "true",
+		"OIDC_ISSUER":              "https://idp.example.com",
+		"OIDC_CLIENT_ID":           "rag-platform",
+		"OIDC_CLIENT_SECRET":       "client-secret",
+		"OIDC_REDIRECT_URL":        "https://rag.example.com/api/auth/callback",
+	}
+}
+
 func TestValidateRequiresInfrastructureForAPI(t *testing.T) {
 	cfg := LoadFrom(lookupFrom(map[string]string{"DATABASE_URL": ""}))
 	if err := cfg.Validate("api"); err == nil {
@@ -125,6 +157,10 @@ func TestValidateEnforceRequiresSplitRoles(t *testing.T) {
 	}
 	if err := with("MAINTENANCE_DATABASE_URL", maintenance).Validate("worker"); err != nil {
 		t.Fatalf("expected enforce worker config to pass, got %v", err)
+	}
+	sameRole := with("MAINTENANCE_DATABASE_URL", "postgres://rag_app:maintenance@localhost:5432/rag")
+	if err := sameRole.Validate("api"); err == nil || !strings.Contains(err.Error(), "different role") {
+		t.Fatalf("expected the maintenance role to differ from rag_app, got %v", err)
 	}
 	owner := with("MAINTENANCE_DATABASE_URL", maintenance)
 	owner.DatabaseURL = "postgres://rag_platform:owner@localhost:5432/rag"
@@ -203,31 +239,7 @@ func TestValidateRejectsBadDatabaseURL(t *testing.T) {
 }
 
 func TestValidateProductionGuards(t *testing.T) {
-	base := map[string]string{
-		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
-		"REDIS_ADDR":               "redis:6379",
-		"DOCREADER_GRPC_ADDR":      "docreader:50051",
-		"S3_ENDPOINT":              "minio:9000",
-		"S3_BUCKET":                "bucket",
-		"S3_ACCESS_KEY":            "key",
-		"S3_SECRET_KEY":            "secret",
-		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-		"APP_ENV":                  "production",
-		"EMBEDDING_SOURCE":         "remote",
-		"LLM_EMBEDDING_MODEL":      "bge-m3",
-		"EMBEDDING_BASE_URL":       "https://api.example.com/v1",
-		// M3 adds a generation adapter with the same production guard, so the
-		// valid production profile must name a remote model as well.
-		"CHAT_SOURCE":    "remote",
-		"CHAT_BASE_URL":  "https://api.example.com/v1",
-		"LLM_CHAT_MODEL": "gpt-4o-mini",
-		// M4 requires OIDC in production, so the valid profile must configure it.
-		"OIDC_ENABLED":       "true",
-		"OIDC_ISSUER":        "https://idp.example.com",
-		"OIDC_CLIENT_ID":     "rag-platform",
-		"OIDC_CLIENT_SECRET": "client-secret",
-		"OIDC_REDIRECT_URL":  "https://rag.example.com/api/auth/callback",
-	}
+	base := productionAPIEnv()
 
 	noSandbox := map[string]string{}
 	for key, value := range base {
@@ -249,6 +261,96 @@ func TestValidateProductionGuards(t *testing.T) {
 
 	if err := LoadFrom(lookupFrom(base)).Validate("api"); err != nil {
 		t.Fatalf("valid production config must pass: %v", err)
+	}
+}
+
+func TestProductionRejectsRepositoryDefaultSecrets(t *testing.T) {
+	cases := []struct {
+		name  string
+		key   string
+		value string
+		want  string
+	}{
+		{"jwt-example-placeholder", "JWT_SIGNING_KEYS", "prod:replace-with-a-random-secret-at-least-32-bytes", "JWT_SIGNING_KEYS"},
+		{"pepper-compiled-default", "API_KEY_PEPPER", "local-api-key-pepper-change-me", "API_KEY_PEPPER"},
+		{"pepper-example-placeholder", "API_KEY_PEPPER", "replace-with-a-random-api-key-pepper", "API_KEY_PEPPER"},
+		{"s3-access-default", "S3_ACCESS_KEY", "rag-local", "S3_ACCESS_KEY"},
+		{"s3-secret-default", "S3_SECRET_KEY", "change-me-local-only", "S3_SECRET_KEY"},
+		{"database-password-default", "DATABASE_URL", "postgres://rag_app:change-me-local-only@localhost:5432/rag", "DATABASE_URL"},
+		{"maintenance-password-default", "MAINTENANCE_DATABASE_URL", "postgres://rag_maintenance:change-me-maintenance@localhost:5432/rag", "MAINTENANCE_DATABASE_URL"},
+		{"admin-password-default", "ADMIN_DATABASE_URL", "postgres://rag_platform:change-me-local-only@localhost:5432/rag", "ADMIN_DATABASE_URL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := productionAPIEnv()
+			env[tc.key] = tc.value
+			err := LoadFrom(lookupFrom(env)).Validate("api")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected %s rejection, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestProductionRequiresExplicitSigningKeys(t *testing.T) {
+	env := productionAPIEnv()
+	delete(env, "JWT_SIGNING_KEYS")
+	err := LoadFrom(lookupFrom(env)).Validate("api")
+	if err == nil || !strings.Contains(err.Error(), "JWT_SIGNING_KEYS must be set explicitly") {
+		t.Fatalf("expected the development JWT fallback to be rejected, got %v", err)
+	}
+
+	env = productionAPIEnv()
+	cfg := LoadFrom(lookupFrom(env))
+	if !cfg.Auth.SigningKeysExplicit {
+		t.Fatalf("explicit JWT_SIGNING_KEYS must be recorded")
+	}
+	if err := cfg.Validate("api"); err != nil {
+		t.Fatalf("explicit production signing keys must pass, got %v", err)
+	}
+}
+
+func TestDevelopmentAllowsRepositoryDefaultSecrets(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{
+		"DATABASE_URL":             "postgres://user:change-me-local-only@localhost:5432/rag",
+		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+	}))
+	if cfg.Auth.SigningKeysExplicit {
+		t.Fatalf("development fallback must not be recorded as explicit")
+	}
+	if err := cfg.Validate("api"); err != nil {
+		t.Fatalf("development defaults must keep working, got %v", err)
+	}
+}
+
+func TestProductionRequiresEnforceRLS(t *testing.T) {
+	for _, mode := range []string{"", "shadow", "off"} {
+		env := productionAPIEnv()
+		if mode == "" {
+			delete(env, "TENANT_RLS_MODE")
+		} else {
+			env["TENANT_RLS_MODE"] = mode
+		}
+		err := LoadFrom(lookupFrom(env)).Validate("api")
+		if err == nil || !strings.Contains(err.Error(), "TENANT_RLS_MODE must be enforce") {
+			t.Fatalf("production mode %q must require enforce, got %v", mode, err)
+		}
+	}
+
+	env := productionAPIEnv()
+	delete(env, "MAINTENANCE_DATABASE_URL")
+	if err := LoadFrom(lookupFrom(env)).Validate("api"); err == nil || !strings.Contains(err.Error(), "MAINTENANCE_DATABASE_URL") {
+		t.Fatalf("production enforce must require the maintenance URL, got %v", err)
+	}
+
+	env = productionAPIEnv()
+	env["MAINTENANCE_DATABASE_URL"] = env["DATABASE_URL"]
+	if err := LoadFrom(lookupFrom(env)).Validate("api"); err == nil || !strings.Contains(err.Error(), "different role") {
+		t.Fatalf("production enforce must reject a shared runtime/maintenance role, got %v", err)
+	}
+
+	if err := LoadFrom(lookupFrom(productionAPIEnv())).Validate("api"); err != nil {
+		t.Fatalf("valid production enforce config must pass, got %v", err)
 	}
 }
 
@@ -494,13 +596,16 @@ func TestChunkConfigRejectsInvalidRanges(t *testing.T) {
 
 func TestWorkerRejectsLocalAdaptersInProduction(t *testing.T) {
 	base := map[string]string{
-		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",
+		"DATABASE_URL":             "postgres://rag_app:app-secret@localhost:5432/rag",
+		"MAINTENANCE_DATABASE_URL": "postgres://rag_maintenance:maintenance-secret@localhost:5432/rag",
+		"ADMIN_DATABASE_URL":       "postgres://rag_platform:owner-secret@localhost:5432/rag",
+		"TENANT_RLS_MODE":          "enforce",
 		"REDIS_ADDR":               "redis:6379",
 		"DOCREADER_GRPC_ADDR":      "docreader:50051",
 		"S3_ENDPOINT":              "minio:9000",
 		"S3_BUCKET":                "bucket",
-		"S3_ACCESS_KEY":            "key",
-		"S3_SECRET_KEY":            "secret",
+		"S3_ACCESS_KEY":            "prod-access-key",
+		"S3_SECRET_KEY":            "prod-secret-key",
 		"CONNECTOR_ENCRYPTION_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
 		"APP_ENV":                  "production",
 		"EMBEDDING_SOURCE":         "remote",

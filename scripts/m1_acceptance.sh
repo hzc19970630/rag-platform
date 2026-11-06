@@ -4,7 +4,13 @@ set -eu
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root_dir"
 
-compose="docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml"
+env_file="${ACCEPTANCE_ENV_FILE:-.env.example}"
+if [ -f "$env_file" ]; then
+  set -a
+  . "$env_file"
+  set +a
+fi
+compose="docker compose --env-file $env_file -f deploy/docker-compose/docker-compose.yml"
 api_base="http://localhost:${API_PORT:-8082}"
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT

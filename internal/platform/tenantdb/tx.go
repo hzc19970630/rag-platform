@@ -21,6 +21,7 @@ type txContextKey struct{}
 type requestTxState struct {
 	db       *gorm.DB
 	rollback atomic.Bool
+	done     atomic.Bool
 }
 
 // WithTx attaches a request transaction to the context.
@@ -41,10 +42,11 @@ func txStateFrom(ctx context.Context) *requestTxState {
 
 // TxFrom returns the request transaction, if any.
 func TxFrom(ctx context.Context) *gorm.DB {
-	if state := txStateFrom(ctx); state != nil {
-		return state.db
+	state := txStateFrom(ctx)
+	if state == nil || state.done.Load() {
+		return nil
 	}
-	return nil
+	return state.db
 }
 
 // RequestTxActive reports whether a request transaction is attached. It pins
@@ -52,7 +54,26 @@ func TxFrom(ctx context.Context) *gorm.DB {
 // two statements at once, so callers that would fan out queries must run them
 // sequentially while it is active.
 func RequestTxActive(ctx context.Context) bool {
-	return txStateFrom(ctx) != nil
+	return TxFrom(ctx) != nil
+}
+
+// CommitRequestTx commits the request transaction before the handler returns.
+// Long-lived streaming handlers that persist a hand-off row and then wait on
+// another process must call it: the worker cannot see uncommitted writes, and
+// holding the transaction open for the whole stream deadlocks the hand-off.
+// A no-op outside enforce mode, and idempotent.
+func CommitRequestTx(ctx context.Context) error {
+	state := txStateFrom(ctx)
+	if state == nil {
+		return nil
+	}
+	if !state.done.CompareAndSwap(false, true) {
+		return nil
+	}
+	if err := state.db.Commit().Error; err != nil {
+		return fmt.Errorf("commit tenant request transaction: %w", err)
+	}
+	return nil
 }
 
 // MarkRollback poisons the request transaction. It is used when a nested
@@ -138,6 +159,9 @@ func BeginRequestTx(ctx context.Context, db *gorm.DB, tenantID string) (context.
 	ctx = WithTx(ctx, tx)
 	state := txStateFrom(ctx)
 	finish := func(cause error) {
+		if !state.done.CompareAndSwap(false, true) {
+			return
+		}
 		if cause != nil || state.rollback.Load() {
 			if err := tx.Rollback().Error; err != nil {
 				slog.Error("tenant_request_rollback_failed", "error", err)
@@ -159,10 +183,10 @@ func BeginRequestTx(ctx context.Context, db *gorm.DB, tenantID string) (context.
 // it keeps the original transaction semantics so SQLite tests and shadow
 // deployments are unchanged.
 func InTx(ctx context.Context, db *gorm.DB, tenantID string, fn func(tx *gorm.DB) error) error {
-	if state := txStateFrom(ctx); state != nil {
-		err := fn(state.db.WithContext(ctx))
+	if requestTx := TxFrom(ctx); requestTx != nil {
+		err := fn(requestTx.WithContext(ctx))
 		if err != nil {
-			state.rollback.Store(true)
+			MarkRollback(ctx)
 		}
 		return err
 	}

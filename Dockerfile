@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine AS build
+FROM golang:1.26-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 # The module proxy must be selectable at build time: the default proxy is not
 # reachable from every network, and a failed download otherwise stalls the
 # whole image build.
@@ -7,13 +7,13 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN GOPROXY=${GOPROXY} go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/api ./cmd/api && \
-    CGO_ENABLED=0 go build -o /out/worker ./cmd/worker && \
-    CGO_ENABLED=0 go build -o /out/migrate ./cmd/migrate && \
-    CGO_ENABLED=0 go build -o /out/seed ./cmd/seed && \
-    CGO_ENABLED=0 go build -o /out/embedctl ./cmd/embedctl
+RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-buildid=' -o /out/api ./cmd/api && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-buildid=' -o /out/worker ./cmd/worker && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-buildid=' -o /out/migrate ./cmd/migrate && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-buildid=' -o /out/seed ./cmd/seed && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-buildid=' -o /out/embedctl ./cmd/embedctl
 
-FROM alpine:3.22
+FROM alpine:3.22@sha256:bfe7ceb9f09ec0566c48fb93356e45a47a00be5a1dd14fa5b909e7709c66b034
 WORKDIR /app
 RUN adduser -D -u 10001 app
 COPY --from=build /out/api /usr/local/bin/api

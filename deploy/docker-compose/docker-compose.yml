@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: paradedb/paradedb:v0.22.6-pg17
+    image: paradedb/paradedb:v0.22.6-pg17@sha256:58bf87d2a6f1e72f56590b0f0ae1467e82c3f99ca203dde646672c8ac13148b2
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rag_platform}
       POSTGRES_USER: ${POSTGRES_USER:-rag_platform}
@@ -21,9 +21,10 @@ services:
       retries: 10
     networks:
       - backend
+      - tools
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
     ports:
       - "6379:6379"
     volumes:
@@ -35,9 +36,11 @@ services:
       retries: 10
     networks:
       - backend
+      - tools
 
   minio:
-    image: pgsty/minio:latest
+    # Version RELEASE.2026-08-04T00-00-00Z, pinned by multi-arch digest.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-rag-local}
@@ -54,6 +57,7 @@ services:
       retries: 10
     networks:
       - backend
+      - tools
 
   docreader:
     build:
@@ -208,7 +212,7 @@ services:
   # reachable from both the host browser and the api container, so localhost
   # only works when the API is not containerized.
   keycloak:
-    image: keycloak/keycloak:26.0
+    image: keycloak/keycloak:26.0@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
     profiles: ["oidc"]
     command: ["start-dev", "--import-realm"]
     environment:
@@ -232,3 +236,6 @@ networks:
   backend:
     internal: true
   frontend:
+  # Non-internal network used only so the published host ports for postgres,
+  # redis and minio work; application traffic stays on the internal backend.
+  tools:

@@ -398,12 +398,16 @@ type AuthConfig struct {
 	JWTIssuer         string
 	JWTAudience       string
 	SigningKeys       []string
-	ActiveKeyID       string
-	CookieName        string
-	CookieSecure      bool
-	DevAuthEnabled    bool
-	APIKeyPepper      string
-	OIDC              OIDCConfig
+	// SigningKeysExplicit records whether JWT_SIGNING_KEYS was provided. The
+	// development fallback below is rejected in production, where a single
+	// shared default key must never sign sessions.
+	SigningKeysExplicit bool
+	ActiveKeyID         string
+	CookieName          string
+	CookieSecure        bool
+	DevAuthEnabled      bool
+	APIKeyPepper        string
+	OIDC                OIDCConfig
 }
 
 type OIDCConfig struct {
@@ -453,6 +457,18 @@ func (a AuthConfig) Validate(appEnv string) error {
 		}
 	}
 	if appEnv == "production" {
+		if !a.SigningKeysExplicit {
+			return fmt.Errorf("JWT_SIGNING_KEYS must be set explicitly in production")
+		}
+		for _, entry := range a.SigningKeys {
+			kid, secret, _ := strings.Cut(entry, ":")
+			if isRepositoryDefaultSecret(secret) {
+				return fmt.Errorf("JWT_SIGNING_KEYS entry %q uses a repository default secret in production", kid)
+			}
+		}
+		if isRepositoryDefaultSecret(a.APIKeyPepper) {
+			return fmt.Errorf("API_KEY_PEPPER must not use a repository default value in production")
+		}
 		if !a.OIDC.Enabled {
 			return fmt.Errorf("OIDC_ENABLED must be true in production")
 		}
@@ -671,6 +687,7 @@ func LoadFrom(lookup Lookup) Config {
 	appEnv := value(lookup, "APP_ENV", "development")
 	apiPublicURL := value(lookup, "API_PUBLIC_URL", "http://localhost:8082")
 	signingKeys := splitValue(lookup, "JWT_SIGNING_KEYS", nil)
+	signingKeysExplicit := len(signingKeys) > 0
 	if len(signingKeys) == 0 {
 		signingKeys = []string{"dev:" + value(lookup, "JWT_SIGNING_KEY", "local-development-signing-key-change-me")}
 	}
@@ -690,15 +707,16 @@ func LoadFrom(lookup Lookup) Config {
 		WebPublicURL:         value(lookup, "WEB_PUBLIC_URL", "http://localhost:5173"),
 		TrustedProxies:       listValue(lookup, "HTTP_TRUSTED_PROXIES", nil),
 		Auth: AuthConfig{
-			SessionTTLSeconds: int(reader.positive("AUTH_SESSION_TTL_SECONDS", 43200)),
-			JWTIssuer:         value(lookup, "JWT_ISSUER", "rag-platform"),
-			JWTAudience:       value(lookup, "JWT_AUDIENCE", "rag-platform-api"),
-			SigningKeys:       signingKeys,
-			ActiveKeyID:       activeKeyID,
-			CookieName:        value(lookup, "AUTH_COOKIE_NAME", "rag_session"),
-			CookieSecure:      reader.boolean("AUTH_COOKIE_SECURE", appEnv == "production"),
-			DevAuthEnabled:    reader.boolean("DEV_AUTH_ENABLED", appEnv != "production"),
-			APIKeyPepper:      value(lookup, "API_KEY_PEPPER", "local-api-key-pepper-change-me"),
+			SessionTTLSeconds:   int(reader.positive("AUTH_SESSION_TTL_SECONDS", 43200)),
+			JWTIssuer:           value(lookup, "JWT_ISSUER", "rag-platform"),
+			JWTAudience:         value(lookup, "JWT_AUDIENCE", "rag-platform-api"),
+			SigningKeys:         signingKeys,
+			SigningKeysExplicit: signingKeysExplicit,
+			ActiveKeyID:         activeKeyID,
+			CookieName:          value(lookup, "AUTH_COOKIE_NAME", "rag_session"),
+			CookieSecure:        reader.boolean("AUTH_COOKIE_SECURE", appEnv == "production"),
+			DevAuthEnabled:      reader.boolean("DEV_AUTH_ENABLED", appEnv != "production"),
+			APIKeyPepper:        value(lookup, "API_KEY_PEPPER", "local-api-key-pepper-change-me"),
 			OIDC: OIDCConfig{
 				Enabled:       reader.boolean("OIDC_ENABLED", false),
 				Issuer:        strings.TrimSuffix(value(lookup, "OIDC_ISSUER", ""), "/"),
@@ -872,6 +890,38 @@ func (c Config) Validate(component string) error {
 	if c.ConfigError != nil {
 		return c.ConfigError
 	}
+	if c.AppEnv == "production" {
+		if component == "api" || component == "worker" {
+			if isRepositoryDefaultSecret(c.S3AccessKey) {
+				return fmt.Errorf("S3_ACCESS_KEY must not use a repository default value in production")
+			}
+			if isRepositoryDefaultSecret(c.S3SecretKey) {
+				return fmt.Errorf("S3_SECRET_KEY must not use a repository default value in production")
+			}
+		}
+		for _, candidate := range []struct {
+			name string
+			raw  string
+		}{
+			{"DATABASE_URL", c.DatabaseURL},
+			{"MAINTENANCE_DATABASE_URL", c.MaintenanceDatabaseURL},
+			{"ADMIN_DATABASE_URL", c.AdminDatabaseURL},
+		} {
+			if strings.TrimSpace(candidate.raw) == "" {
+				continue
+			}
+			password, err := databaseURLPassword(candidate.raw)
+			if err != nil {
+				return fmt.Errorf("%s: %w", candidate.name, err)
+			}
+			if isRepositoryDefaultSecret(password) {
+				return fmt.Errorf("%s must not use the repository default database password in production", candidate.name)
+			}
+		}
+	}
+	if c.AppEnv == "production" && !strings.EqualFold(strings.TrimSpace(c.TenantRLSMode), "enforce") {
+		return fmt.Errorf("TENANT_RLS_MODE must be enforce in production")
+	}
 	switch strings.ToLower(strings.TrimSpace(c.TenantRLSMode)) {
 	case "off", "shadow", "enforce":
 	default:
@@ -890,8 +940,12 @@ func (c Config) Validate(component string) error {
 			if role != "rag_app" {
 				return fmt.Errorf("DATABASE_URL must use the rag_app role when TENANT_RLS_MODE=enforce, got %q", role)
 			}
-			if _, err := databaseURLRole(c.MaintenanceDatabaseURL); err != nil {
+			maintenanceRole, err := databaseURLRole(c.MaintenanceDatabaseURL)
+			if err != nil {
 				return fmt.Errorf("MAINTENANCE_DATABASE_URL: %w", err)
+			}
+			if maintenanceRole == role {
+				return fmt.Errorf("MAINTENANCE_DATABASE_URL must use a different role than DATABASE_URL when TENANT_RLS_MODE=enforce")
 			}
 		case "migrate", "seed", "embedctl":
 			if strings.TrimSpace(c.AdminDatabaseURL) == "" {
@@ -1016,6 +1070,40 @@ func databaseURLRole(raw string) (string, error) {
 		return "", fmt.Errorf("must name a login role")
 	}
 	return parsed.User.Username(), nil
+}
+
+// databaseURLPassword extracts the password so production can reject the
+// repository defaults without logging the value. An empty password is left to
+// the deployment (certificate or peer authentication remain valid).
+func databaseURLPassword(raw string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("must be a valid database URL")
+	}
+	if parsed.User == nil {
+		return "", nil
+	}
+	password, _ := parsed.User.Password()
+	return password, nil
+}
+
+// repositoryDefaultSecrets are the values shipped in .env.example or compiled
+// into development fallbacks. Production must not sign, encrypt or connect with
+// any of them.
+var repositoryDefaultSecrets = map[string]struct{}{
+	"local-development-signing-key-change-me":        {},
+	"replace-with-a-random-secret-at-least-32-bytes": {},
+	"local-api-key-pepper-change-me":                 {},
+	"replace-with-a-random-api-key-pepper":           {},
+	"rag-local":                                      {},
+	"change-me-local-only":                           {},
+	"change-me-app":                                  {},
+	"change-me-maintenance":                          {},
+}
+
+func isRepositoryDefaultSecret(value string) bool {
+	_, found := repositoryDefaultSecrets[strings.ToLower(strings.TrimSpace(value))]
+	return found
 }
 
 // AdminDBURL is the connection migrate, seed and embedctl use. Without a split

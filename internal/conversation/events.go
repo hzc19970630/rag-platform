@@ -25,24 +25,34 @@ func (s *Service) ReplayEvents(ctx context.Context, principal authz.Principal, r
 	if strings.TrimSpace(requestID) == "" {
 		return nil, apperror.Invalidf("request id is required")
 	}
-	var message models.Message
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("user_id = ? AND request_id = ?", principal.SubjectID, requestID).First(&message).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, apperror.ErrNotFound
+	var events []Event
+	// Enforce mode needs one tenant-scoped transaction per replay: a pooled
+	// statement cannot carry app.tenant_id for the next query. InTx joins the
+	// request transaction when one is still active.
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		var message models.Message
+		if err := tenantdb.MustScoped(tx, principal.TenantID).
+			Where("user_id = ? AND request_id = ?", principal.SubjectID, requestID).First(&message).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return apperror.ErrNotFound
+			}
+			return fmt.Errorf("load request messages: %w", err)
 		}
-		return nil, fmt.Errorf("load request messages: %w", err)
-	}
-	var rows []models.StreamEvent
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("user_id = ? AND request_id = ? AND sequence > ?", principal.SubjectID, requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("load stream events: %w", err)
-	}
-	events := make([]Event, 0, len(rows))
-	for _, row := range rows {
-		data := map[string]any{}
-		_ = json.Unmarshal([]byte(row.Payload), &data)
-		events = append(events, Event{EventID: eventID(row.RequestID, row.Sequence), RequestID: row.RequestID, Sequence: row.Sequence, Type: row.EventType, Data: data})
+		var rows []models.StreamEvent
+		if err := tenantdb.MustScoped(tx, principal.TenantID).
+			Where("user_id = ? AND request_id = ? AND sequence > ?", principal.SubjectID, requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
+			return fmt.Errorf("load stream events: %w", err)
+		}
+		events = make([]Event, 0, len(rows))
+		for _, row := range rows {
+			data := map[string]any{}
+			_ = json.Unmarshal([]byte(row.Payload), &data)
+			events = append(events, Event{EventID: eventID(row.RequestID, row.Sequence), RequestID: row.RequestID, Sequence: row.Sequence, Type: row.EventType, Data: data})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return events, nil
 }

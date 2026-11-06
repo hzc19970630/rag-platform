@@ -173,7 +173,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 ## 9. 身份与密钥轮换
 
-- **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键。
+- **生产密钥 fail-fast（M14 A1）**：`APP_ENV=production` 时启动校验拒绝仓库默认值。JWT 必须显式设置 `JWT_SIGNING_KEYS`，不能回落到 `JWT_SIGNING_KEY` 的开发单键；`API_KEY_PEPPER`、`S3_ACCESS_KEY`/`S3_SECRET_KEY`（含 MinIO 默认值），以及 `DATABASE_URL`、`MAINTENANCE_DATABASE_URL`、`ADMIN_DATABASE_URL` 中的占位密码都会让进程以 `configuration_invalid` 退出。被拒绝的值包括 `.env.example` 的 `replace-with-a-random-*`、`change-me-*`、`rag-local` 和编译内置的 `local-*-change-me`。非生产环境保留这些默认值；生产允许数据库 URL 不带密码（证书/peer 认证），但不接受已知占位密码。
+- **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键（仅限非生产）。
 - **API Key**：数据库只保存 `sha256(pepper + raw)`；明文只在创建响应返回一次。轮换 `API_KEY_PEPPER` 会让全部已签发 key 立即失效，需重新签发并通知调用方。
 - **连接器凭据密钥**：新信封固定为 `v2:<kid>:<base64(nonce||sealed)>`，AAD 绑定 `v2:<kid>`。单键模式继续使用 `CONNECTOR_ENCRYPTION_KEY`（kid 固定为 `legacy`）；轮换时改用 `CONNECTOR_ENCRYPTION_KEYS=kid1:key1,kid2:key2` + `CONNECTOR_ENCRYPTION_ACTIVE_KID=kid2`，新写入用 active kid，旧 kid 保留用于解密历史信封。移除某个 kid 会让引用它的连接器立即不可解密（本轮没有批量重加密），所以轮换只加不删；历史的 `v1:` 信封始终用 `legacy` 键解密。设置 `CONNECTOR_ENCRYPTION_KEYS` 时 `CONNECTOR_ENCRYPTION_ACTIVE_KID` 必填，重复/空 kid、非法 key 和缺失的 active kid 都会让启动失败。
 - **OIDC**：`OIDC_ISSUER` 必须指向可发现（discovery）的 issuer；`OIDC_AUTO_PROVISION=false` 时只允许已存在的 membership 登录。登出会撤销 `auth_sessions` 行并清除 HttpOnly cookie；刷新沿用同一 `token_id`，不延长会话 TTL。
@@ -230,7 +231,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - `TENANT_RLS_MODE=off|shadow|enforce`，默认 `shadow`。`off` 不设置 `app.tenant_id`，可用 `./scripts/m13_rls_mode.sh off` 关闭 RLS；`shadow` 使用允许策略并在租户作用域查询中设置该 GUC，写路径触发器据此审计；`enforce` 使用迁移 0024 的严格策略。代码只提供开关与验收，是否切换是部署决策。
 - API 在 enforce 下把每个已认证请求放进一个数据库事务：`tenantdb.BeginRequestTx` 开启事务并执行 `SELECT set_config('app.tenant_id', <tenant>, true)`，普通查询与 `tenantdb.InTx` 服务事务都加入该事务（GORM 的显式 `Transaction` 不经过重定向回调，因此服务层必须用 `InTx`）。handler 返回 5xx、panic 或任一嵌套事务失败时整体回滚；事务级 GUC 随连接归还自动清空。worker 在 enforce 下整体使用 `MAINTENANCE_DATABASE_URL`，跨租户任务不依赖 GUC；API 只对认证前的身份查询使用维护连接。
 - 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`；0026 新增 `answer_jobs` 后总数为 37 张（33 张租户表 + 4 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
-- 角色：`rag_app`（`NOSUPERUSER NOBYPASSRLS`，API 租户流量）与 `rag_maintenance`（`BYPASSRLS`，worker 与跨租户维护）。enforce 下 API/worker 的 `DATABASE_URL` 必须是 `rag_app`，且 `MAINTENANCE_DATABASE_URL` 必填；migrate/seed/embedctl 使用 `ADMIN_DATABASE_URL`（所有者角色，缺省回退 `DATABASE_URL`）。启动时查询 `pg_roles` 校验：API 运行时角色不得是超级用户或 `BYPASSRLS`，worker 维护角色必须具备 `BYPASSRLS`，否则拒绝启动。密码与授权由 `make m13-rls-setup` 设置，需先导出 `RAG_APP_DB_PASSWORD`、`RAG_MAINTENANCE_DB_PASSWORD`；脚本幂等，可对已有库重复执行。全新数据卷由 `deploy/docker-compose/initdb/01-roles.sh` 自动创建角色。
+- 角色：`rag_app`（`NOSUPERUSER NOBYPASSRLS`，API 租户流量）与 `rag_maintenance`（`BYPASSRLS`，worker 与跨租户维护）。enforce 下 API/worker 的 `DATABASE_URL` 必须是 `rag_app`，且 `MAINTENANCE_DATABASE_URL` 必填并必须使用不同角色；migrate/seed/embedctl 使用 `ADMIN_DATABASE_URL`（所有者角色，缺省回退 `DATABASE_URL`）。启动时查询 `pg_roles` 校验：API 运行时角色不得是超级用户或 `BYPASSRLS`，worker 维护角色必须具备 `BYPASSRLS`，否则拒绝启动。密码与授权由 `make m13-rls-setup` 设置，需先导出 `RAG_APP_DB_PASSWORD`、`RAG_MAINTENANCE_DB_PASSWORD`；脚本幂等，可对已有库重复执行。全新数据卷由 `deploy/docker-compose/initdb/01-roles.sh` 自动创建角色。
+- `APP_ENV=production` 时 `TENANT_RLS_MODE` 必须是 `enforce`；`shadow`/`off` 或未设置都会让启动校验失败（M14 A2）。CI 使用 `APP_ENV=development` + dev auth，但以 `rag_app`/`rag_maintenance` 整栈运行 enforce；`ENFORCE_LAYOUT=1 make m13-rls-acceptance` 会额外断言容器内 `TENANT_RLS_MODE=enforce`、`DATABASE_URL` 角色为 `rag_app`、维护角色不同，以及 `pg_stat_activity` 中同时存在两种连接。production 的 OIDC 登录不在 CI 中模拟，由配置单测覆盖启动拒绝。
 - 影子审计范围：触发器只记录写操作。仅当 `current_user = 'rag_app'` 或 GUC 已设置时写入 `rls_shadow_violations`；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 A1.1 的应用 guard、静态门禁 `cmd/checktenancy` 与 `tests/postgres/tenantrls_test.go` 承担，**不承诺对生产读流量做数据库级拦截采样**。
 - 审计 SQL：
 
@@ -252,7 +254,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
   4. 启动后确认没有角色校验错误，运行 `make m13-rls-acceptance` 与 m1–m4；跨租户负向、直连 SQL 绕过探测、向量/BM25 执行计划与 P95 都通过后才保留 enforce。
   5. 回滚：`./scripts/m13_rls_mode.sh shadow` 恢复允许策略，把 `TENANT_RLS_MODE` 改回 `shadow` 并重建 api/worker；`./scripts/m13_rls_mode.sh off` 会同时关闭 RLS。迁移历史仍记录 0024 已应用，如需再次 enforce，手动重放 `migrations/postgres/0024_tenant_rls_strict.sql`（幂等）。
 - Enforce 前置检查（缺一不可）：`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user` 中 `current_user = rag_app` 且两项均为 false；`task_inbox` 无 `tenant_id IS NULL` 行；`rls_shadow_violations` 无跨租户（`row_tenant_id` 与 `session_tenant_id` 不一致）记录；m1–m4 以 `rag_app` 通过。任何一项不满足都保持 shadow。
-- 验收：`make m13-rls-acceptance` 校验 37 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 `tenant_shadow_allow`（shadow）或 `tenant_isolation`（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。该脚本不切换运行角色。
+- 验收：`make m13-rls-acceptance` 校验 37 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 `tenant_shadow_allow`（shadow）或 `tenant_isolation`（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。`ENFORCE_LAYOUT=1` 时只接受严格布局，并增加迁移 0024、容器环境、运行角色与 `pg_stat_activity` 断言。`tests/postgres/rls_runtime_test.go`（需 `TEST_POSTGRES_URL` 与 `make m13-rls-setup`）以 `SET LOCAL ROLE rag_app` 在真实 `audit_logs` 表上验证跨租户读写被拒与无 GUC 时 fail-closed。
 
 ## 16. 在线 HNSW 索引变更（M13 A2）
 
@@ -286,3 +288,14 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
   再对照该请求在 `stream_events` 中的 `sequence` 是否连续。
 - 验收：`make m13-async-acceptance` 在真实栈上验证正常异步答案（终态 `complete`、job `COMPLETED`、事件连续）与 worker 停机演练（任务保留、worker 恢复后仍得到终态或明确错误）。
 
+## 18. CI 门禁与供应链（M14 A3/A4）
+
+- CI 分三个 job：`verify`（gofmt、checkdeps、checktenancy、`go test`、`-race`、vet、`go mod verify`、前端 `npm ci`/test/build、compose config）、`integration`（整栈 enforce + 迁移 + RLS 负向 + m0/m1/m13 验收）、`security`（govulncheck、npm audit、trivy fs/image、SBOM、镜像 pin 校验）。
+- `integration` 使用受版本控制的 `deploy/ci/enforce.env`（全部为一次性 runner 的 dummy 凭据），复制为工作区 `.env`，并以 `COMPOSE_PROJECT_NAME=rag-ci` 隔离。启动顺序固定为：依赖服务 → `make migrate` → `make m13-rls-setup` → `make seed` → `make embed-index` → api/worker。API/worker 在 `APP_ENV=development` 下运行 enforce，因为 production 还要求 OIDC；production 的启动拒绝由配置单测覆盖。`m0/m1` 通过 `ACCEPTANCE_ENV_FILE=.env` 选择 enforce 配置，m0 的空库 migrate/seed 还会覆盖 `ADMIN_DATABASE_URL`。
+- `ENFORCE_LAYOUT=1 make m13-rls-acceptance` 是 CI 的防伪断言：除严格策略外，还要求 api/worker 容器内 `TENANT_RLS_MODE=enforce`、`DATABASE_URL` 角色为 `rag_app`、维护角色不同，并且 `pg_stat_activity` 中同时存在 `rag_app` 与 `rag_maintenance` 连接。
+- 镜像一律使用 `tag@sha256:<多架构 index digest>`：compose 的 ParadeDB/Redis/MinIO/Keycloak、Dockerfile 的 Go/Alpine/Node/Python 基础镜像以及 Makefile 的 `GO_IMAGE`。`scripts/check_image_pins.sh` 在 CI 中拒绝任何未带 digest 的 `image:`/`FROM`/`GO_IMAGE`。升级镜像时先 `docker buildx imagetools inspect <tag>` 取得新 digest，再替换并提交。
+- 前端依赖不再使用 `"latest"`，固定为 lockfile 已解析的精确版本；`make web-install` 使用 `npm ci`，CI 与 Dockerfile 同用 `npm ci`。
+- 可复现构建：Go 构建统一带 `-trimpath -buildvcs=false -ldflags=-buildid=`；验收方式是同一输入连续两次 `go build ./cmd/api` 的 SHA-256 相同。镜像层一致性由固定 digest、`go.sum` 与 `package-lock.json` 保证，不承诺跨构建机的镜像字节一致。
+- SBOM：CI 用 trivy 对 api 镜像生成 CycloneDX artifact。本地可运行 `trivy image --format cyclonedx --output sbom-api.cdx.json <image>`。
+- 漏洞门禁：govulncheck、trivy（HIGH/CRITICAL，忽略未修复）与 `npm audit --audit-level=high` 失败即阻断。确实无法立即修复的条目必须写入 `.trivyignore` 或审计说明，包含 CVE、影响、原因与到期日，并在此节登记。
+- `.github/workflows/ci.yml` 的推送可能需要 workflow-scope PAT；不要通过修改 git 凭证绕过。

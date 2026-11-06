@@ -28,6 +28,12 @@ const (
 	AnswerJobFailed    = "FAILED"
 )
 
+// errAnswerJobNotVisible is returned when a worker consumes the Asynq task
+// before the API request transaction commits the answer_jobs row. Enforce mode
+// wraps the whole request in one transaction, so the publish happens first;
+// returning an error lets Asynq retry instead of silently acking the task.
+var errAnswerJobNotVisible = errors.New("answer job is not visible yet")
+
 // PreparedAnswer is the API-side result of accepting one question. Existing is
 // set for an idempotent retry; the caller should replay the recorded answer
 // instead of waiting for a new terminal event.
@@ -294,6 +300,16 @@ func (s *Service) claimAnswerJob(ctx context.Context, task tasks.Answer) (models
 		return models.AnswerJob{}, false, fmt.Errorf("claim answer job: %w", err)
 	}
 	if job.ID == "" {
+		var exists bool
+		if err := s.db.WithContext(ctx).Raw(
+			"SELECT EXISTS (SELECT 1 FROM answer_jobs WHERE id = ? AND tenant_id = ?)",
+			task.JobID, task.TenantID,
+		).Scan(&exists).Error; err != nil {
+			return models.AnswerJob{}, false, fmt.Errorf("probe answer job: %w", err)
+		}
+		if !exists {
+			return models.AnswerJob{}, false, errAnswerJobNotVisible
+		}
 		return models.AnswerJob{}, false, nil
 	}
 	return job, true, nil

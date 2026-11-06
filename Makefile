@@ -3,7 +3,7 @@
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
 # not behind the default network.
-GO_IMAGE ?= golang:1.26-alpine
+GO_IMAGE ?= golang:1.26-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
 GO_PROXY ?= https://goproxy.cn,direct
 # Compose reads GO_PROXY as the Docker build arg for the Go image.
 export GO_PROXY
@@ -42,7 +42,7 @@ api-test:
 	curl -fsS http://localhost:$${API_PORT:-8082}/healthz
 
 web-install:
-	cd web && npm install
+	cd web && npm ci
 
 web-build:
 	cd web && npm run build

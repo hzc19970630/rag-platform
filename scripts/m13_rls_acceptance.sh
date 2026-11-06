@@ -3,6 +3,9 @@
 # consistent with either the shadow (permissive) or enforce (strict) policy
 # layout. This does not switch traffic between roles; role selection is a
 # deployment decision (see docs/operations.md).
+# Set ENFORCE_LAYOUT=1 to additionally require the strict layout, the running
+# api/worker containers to use enforce with rag_app/rag_maintenance, and live
+# connections for both roles. CI uses this mode.
 set -euo pipefail
 
 if [[ -f .env ]]; then
@@ -60,6 +63,37 @@ app_flags="$(psql_value "SELECT rolsuper::int || ':' || rolbypassrls::int FROM p
 maintenance_flags="$(psql_value "SELECT rolbypassrls::int FROM pg_roles WHERE rolname = 'rag_maintenance'")"
 [[ "$maintenance_flags" == "1" ]] || fail "rag_maintenance must be BYPASSRLS (got $maintenance_flags)"
 
+if [[ "${ENFORCE_LAYOUT:-0}" == "1" ]]; then
+  step "enforce layout"
+  [[ "$layout" == "enforce" ]] || fail "ENFORCE_LAYOUT=1 requires tenant_isolation on all ${#tables[@]} tables (found $layout)"
+  strict_applied="$(psql_value "SELECT count(*) FROM schema_migrations WHERE version = '0024_tenant_rls_strict'")"
+  [[ "$strict_applied" == "1" ]] || fail "migration 0024_tenant_rls_strict is not recorded"
+
+  api_mode="$("${compose[@]}" exec -T api printenv TENANT_RLS_MODE | tr -d '\r')"
+  worker_mode="$("${compose[@]}" exec -T worker printenv TENANT_RLS_MODE | tr -d '\r')"
+  [[ "$api_mode" == "enforce" ]] || fail "api container TENANT_RLS_MODE is '$api_mode', want enforce"
+  [[ "$worker_mode" == "enforce" ]] || fail "worker container TENANT_RLS_MODE is '$worker_mode', want enforce"
+
+  url_role() {
+    python3 - "$1" <<'PY'
+import sys, urllib.parse
+print(urllib.parse.urlparse(sys.argv[1]).username or "")
+PY
+  }
+  api_url="$("${compose[@]}" exec -T api printenv DATABASE_URL | tr -d '\r')"
+  maintenance_url="$("${compose[@]}" exec -T api printenv MAINTENANCE_DATABASE_URL | tr -d '\r')"
+  api_role="$(url_role "$api_url")"
+  maintenance_role="$(url_role "$maintenance_url")"
+  [[ "$api_role" == "rag_app" ]] || fail "api DATABASE_URL role is '$api_role', want rag_app"
+  [[ -n "$maintenance_role" && "$maintenance_role" != "$api_role" ]] || fail "api maintenance role '$maintenance_role' must differ from '$api_role'"
+
+  curl -fsS "http://localhost:${API_PORT:-8082}/readyz" >/dev/null || fail "api /readyz did not pass while checking enforce connections"
+  app_conns="$(psql_value "SELECT count(*) FROM pg_stat_activity WHERE usename = 'rag_app' AND datname = current_database()")"
+  [[ "$app_conns" -gt 0 ]] || fail "no live rag_app connection found; the api is not running enforce"
+  maintenance_conns="$(psql_value "SELECT count(*) FROM pg_stat_activity WHERE usename = 'rag_maintenance' AND datname = current_database()")"
+  [[ "$maintenance_conns" -gt 0 ]] || fail "no live rag_maintenance connection found; api/worker role separation is not active"
+fi
+
 step "task_inbox attribution"
 unattributed="$(psql_value "SELECT count(*) FROM task_inbox WHERE tenant_id IS NULL OR tenant_id = ''")"
 [[ "$unattributed" == "0" ]] || fail "task_inbox has $unattributed unattributable rows; clear them before enforce"
@@ -103,4 +137,4 @@ SQL
 grep -q 'visible=1' <<<"$drill" || fail "strict drill did not see exactly one row: $drill"
 grep -q 'strict_ok' <<<"$drill" || fail "strict drill did not complete: $drill"
 
-echo "M13 RLS shadow acceptance passed"
+echo "M13 RLS ${layout} acceptance passed"

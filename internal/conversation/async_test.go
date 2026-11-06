@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -35,6 +36,14 @@ func newAsyncFixture(t *testing.T, answer string) (*Service, *gorm.DB, *fixedCha
 		AnswerPublisher: publisher, AsyncEnabled: true, AnswerLease: time.Minute,
 	})
 	return service, db, chat, publisher
+}
+
+func TestRunAnswerRetriesWhenJobIsNotYetVisible(t *testing.T) {
+	service, _, _, _ := newAsyncFixture(t, "unused")
+	err := service.RunAnswer(context.Background(), tasks.Answer{JobID: "missing-job", TenantID: "tenant-a"})
+	if !errors.Is(err, errAnswerJobNotVisible) {
+		t.Fatalf("a task consumed before the request transaction commits must be retryable, got %v", err)
+	}
 }
 
 func TestPrepareAnswerEnqueuesOnceAndRunAnswerCompletes(t *testing.T) {

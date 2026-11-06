@@ -4,9 +4,23 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Runners are outside mainland China; the repository default goproxy.cn is
+  # slow there and is used by both the Go toolchain and Docker builds.
+  GO_PROXY: https://proxy.golang.org,direct
+
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # The race build recompiles every package with cgo instrumentation.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -21,10 +35,16 @@ jobs:
         run: test -z "$(gofmt -l cmd internal)"
       - name: Dependency direction
         run: go run ./cmd/checkdeps
-      - name: Go tests and vet
-        run: |
-          go test ./...
-          go vet ./...
+      - name: Tenancy static gate
+        run: go run ./cmd/checktenancy
+      - name: Go tests
+        run: go test ./...
+      - name: Go race tests
+        run: go test -race ./internal/... ./cmd/...
+      - name: Go vet
+        run: go vet ./...
+      - name: Go module checksums
+        run: go mod verify
       - name: Web tests and build
         working-directory: web
         run: |
@@ -33,5 +53,101 @@ jobs:
           npm run build
       - name: Compose configuration
         run: docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml config --quiet
-      - name: Container build
-        run: docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml build
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: rag-ci
+      ACCEPTANCE_ENV_FILE: .env
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Prepare enforce profile
+        run: |
+          cp deploy/ci/enforce.env .env
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml config --quiet
+      - name: Start dependencies
+        run: |
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml \
+            up -d --build --wait postgres redis minio docreader
+      - name: Migrate, roles, seed and index
+        run: |
+          make migrate
+          make m13-rls-setup
+          make seed
+          make embed-index
+      - name: Postgres RLS tests
+        env:
+          TEST_POSTGRES_URL: postgres://rag_platform:change-me-local-only@localhost:5432/rag_platform?sslmode=disable
+        run: go test -short ./tests/postgres/... -count=1
+      - name: M0 acceptance
+        run: ./scripts/m0_acceptance.sh
+      - name: M1 acceptance
+        run: ./scripts/m1_acceptance.sh
+      - name: Enforce RLS acceptance
+        run: ENFORCE_LAYOUT=1 ./scripts/m13_rls_acceptance.sh
+      - name: Async acceptance
+        run: ./scripts/m13_async_acceptance.sh
+      - name: Dump compose logs
+        if: failure()
+        run: |
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml \
+            logs --tail=200 api worker migrate seed || true
+      - name: Stop stack
+        if: always()
+        run: |
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml down -v || true
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Go vulnerability check
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+          go-package: ./...
+      - name: npm audit
+        working-directory: web
+        run: npm audit --audit-level=high
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Image pin check
+        run: ./scripts/check_image_pins.sh
+      - name: Build api image
+        run: docker build --build-arg GOPROXY="$GO_PROXY" -t rag-platform-api:ci .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: rag-platform-api:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: rag-platform-api:ci
+          format: cyclonedx
+          output: sbom-api.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-api
+          path: sbom-api.cdx.json
