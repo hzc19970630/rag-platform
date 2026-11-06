@@ -15,8 +15,10 @@ import (
 )
 
 type memoryObjects struct {
-	mu   sync.Mutex
-	data map[string][]byte
+	mu        sync.Mutex
+	data      map[string][]byte
+	getCalls  int
+	openCalls int
 }
 
 func (m *memoryObjects) Put(_ context.Context, key string, content []byte, _ string) error {
@@ -29,6 +31,7 @@ func (m *memoryObjects) Put(_ context.Context, key string, content []byte, _ str
 func (m *memoryObjects) Get(_ context.Context, key string) ([]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.getCalls++
 	content, ok := m.data[key]
 	if !ok {
 		return nil, errors.New("object not found")
@@ -36,12 +39,31 @@ func (m *memoryObjects) Get(_ context.Context, key string) ([]byte, error) {
 	return content, nil
 }
 
+func (m *memoryObjects) Stat(_ context.Context, key string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	content, ok := m.data[key]
+	if !ok {
+		return 0, errors.New("object not found")
+	}
+	return int64(len(content)), nil
+}
+
 func (m *memoryObjects) Open(_ context.Context, key string) (io.ReadCloser, error) {
-	content, err := m.Get(context.Background(), key)
-	if err != nil {
-		return nil, err
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.openCalls++
+	content, ok := m.data[key]
+	if !ok {
+		return nil, errors.New("object not found")
 	}
 	return io.NopCloser(bytes.NewReader(content)), nil
+}
+
+func (m *memoryObjects) counts() (gets, opens int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.getCalls, m.openCalls
 }
 
 func (m *memoryObjects) Delete(_ context.Context, key string) error {

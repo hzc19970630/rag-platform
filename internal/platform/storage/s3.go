@@ -102,6 +102,22 @@ func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {
 	return content, nil
 }
 
+// Stat reports the stored object's size. Missing objects map to
+// ErrContentUnavailable so callers can fail before writing headers.
+func (s *S3Store) Stat(ctx context.Context, key string) (int64, error) {
+	stat, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		if missingObject(err) {
+			return 0, apperror.ErrContentUnavailable
+		}
+		return 0, fmt.Errorf("stat object %s: %w", key, err)
+	}
+	if s.maxObjectBytes > 0 && stat.Size > s.maxObjectBytes {
+		return 0, fmt.Errorf("object %s is %d bytes, above the %d byte read limit", key, stat.Size, s.maxObjectBytes)
+	}
+	return stat.Size, nil
+}
+
 // Open returns a lazy stream for callers that decode incrementally. It is the
 // only object read that is not bounded by maxObjectBytes because no bytes are
 // buffered; the caller controls how much it consumes.
