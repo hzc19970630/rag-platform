@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/conversation"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
@@ -92,7 +93,7 @@ func (s *sseStream) emit(event conversation.Event) error {
 	if event.EventID == "" {
 		event.EventID = fmt.Sprintf("%s:%d", event.RequestID, event.Sequence)
 	}
-	payload, err := json.Marshal(event)
+	payload, err := json.Marshal(views.StreamEvent(event))
 	if err != nil {
 		return err
 	}

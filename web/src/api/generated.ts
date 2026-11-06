@@ -804,10 +804,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /**
-         * PUT /api/v1/knowledge-bases/{id}/retrieval-config
-         * @description Whole replacement; an empty body clears the knowledge-base tier.
-         */
+        /** PUT /api/v1/knowledge-bases/{id}/retrieval-config */
         put: operations["put_knowledge_bases_id_retrieval_config"];
         post?: never;
         delete?: never;
@@ -1266,327 +1263,1056 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        Error: {
-            error: string;
-            message?: string;
-        };
-        GenericObject: {
-            [key: string]: unknown;
-        };
-        /** @description Optional knowledge-base tier fields; omitted fields keep the global default. */
-        RetrievalConfigOverride: {
-            top_k?: number;
-            embedding_top_k?: number;
-            keyword_top_k?: number;
-            vector_threshold?: number;
-            keyword_threshold?: number;
-            rerank_enabled?: boolean;
-            rerank_top_k?: number;
-            rerank_threshold?: number;
-            vector_ef_search?: number;
-            vector_oversample?: number;
-            vector_iterative_scan?: boolean;
-            context_token_limit?: number;
-            adjacent_expansion?: number;
-            max_adjacent_chunks?: number;
-            rrf_k?: number;
-            expansion_score_factor?: number;
-        };
-        MeResponse: {
-            principal?: {
-                subjectId?: string;
-                tenantId?: string;
-            };
-            scope?: {
-                subjectId?: string;
-                tenantId?: string;
-                knowledgeBaseIds?: string[];
-                capabilities?: string[];
-                aclVersion?: string;
-            };
-            developmentIdentity?: boolean;
-        };
-        KnowledgeBase: {
+        APIKey: {
+            capabilities?: string[];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            expiresAt?: string;
             id?: string;
-            tenantId?: string;
-            ownerId?: string;
+            keyPrefix?: string;
+            knowledgeBaseIds?: string[];
+            /** Format: date-time */
+            lastUsedAt?: string;
             name?: string;
-            description?: string;
+            /** Format: date-time */
+            revokedAt?: string;
+        };
+        APIKeyCreateRequest: {
+            capabilities?: string[];
+            /** Format: date-time */
+            expiresAt?: string;
+            knowledgeBaseIds?: string[];
+            name: string;
+        };
+        APIKeyCreateResponse: {
+            apiKey: components["schemas"]["APIKey"];
+            token: string;
+        };
+        APIKeyList: {
+            items: components["schemas"]["APIKey"][];
+        };
+        AuditEvent: {
+            action?: string;
+            actorId?: string;
+            allowed?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: int64 */
+            id?: number;
+            ipAddress?: string;
+            reason?: string;
+            requestId?: string;
+            resourceId?: string;
+            resourceType?: string;
+            tenantId?: string;
+            userAgent?: string;
+        };
+        AuditEventList: {
+            items: components["schemas"]["AuditEvent"][];
+        };
+        AuthConfig: {
+            devAuthEnabled: boolean;
+            oidcEnabled: boolean;
+            oidcIssuer?: string;
+            sessionCookie: string;
+            sessionTTLHours: number;
+        };
+        CancelResult: {
+            cancelled: boolean;
+        };
+        Chunk: {
+            chunkId?: string;
+            content?: string;
+            contentHash?: string;
+            documentId?: string;
+            documentVersionId?: string;
+            endOffset?: number;
+            headingPath?: string;
+            knowledgeBaseId?: string;
+            ordinal?: number;
+            pageNumber?: number;
+            parentId?: string;
+            sourcePath?: string;
+            startOffset?: number;
+            status?: string;
+        };
+        ChunkPage: {
+            documentId?: string;
+            hasMore?: boolean;
+            items?: components["schemas"]["Chunk"][];
+            nextCursor?: number;
+            schemaVersion?: string;
+            status?: string;
+            versionId?: string;
+        };
+        Citation: {
+            chunkId?: string;
+            documentId?: string;
+            documentVersionId?: string;
+            headingPath?: string;
+            index?: number;
+            knowledgeBaseId?: string;
+            pageNumber?: number;
+            quote?: string;
+            rank?: number;
+            score?: number;
+            sourcePath?: string;
+        };
+        Connector: {
+            config?: components["schemas"]["ConnectorConfig"];
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
+            enabled?: boolean;
+            hasCredential?: boolean;
+            id?: string;
+            knowledgeBaseId?: string;
+            /** Format: date-time */
+            lastSyncAt?: string;
+            name?: string;
+            /** Format: date-time */
+            nextSyncAt?: string;
+            syncIntervalSeconds?: number;
+            tenantId?: string;
+            type?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ConnectorConfig: {
+            aclMode?: string;
+            manifestUrl?: string;
+            maxItemsPerRun?: number;
+            requestsPerSecond?: number;
+        };
+        ConnectorCreateRequest: {
+            config?: components["schemas"]["ConnectorConfig"];
+            credential?: components["schemas"]["CredentialInput"];
+            enabled?: boolean;
+            name: string;
+            syncIntervalSeconds?: number;
+            type: string;
+        };
+        ConnectorList: {
+            connectors: components["schemas"]["Connector"][];
+        };
+        ConnectorPermissions: {
+            aclMode?: string;
             /** Format: int64 */
             aclVersion?: number;
-            retrievalConfig?: string;
-            indexingStrategy?: string;
-            embeddingModel?: string;
-            embeddingDimension?: number;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-        };
-        KnowledgeBaseList: {
-            items?: components["schemas"]["KnowledgeBase"][];
-        };
-        KnowledgeBaseCreateRequest: {
-            name: string;
-            description?: string;
-        };
-        /** @description Only supplied fields change. An empty chat_model or rerank_model clears the knowledge-base override so the deployment default applies again. */
-        KnowledgeBaseUpdateRequest: {
-            name?: string;
-            description?: string;
-            retrieval_config?: components["schemas"]["RetrievalConfigOverride"];
-            indexing_strategy?: {
-                [key: string]: unknown;
-            };
-            embedding_model?: string;
-            embedding_dimension?: number;
-            chat_model?: string;
-            rerank_model?: string;
-        };
-        KnowledgeBaseMember: {
+            connectorId?: string;
+            effectiveAcl?: string;
             knowledgeBaseId?: string;
-            userId?: string;
-            role?: string;
+            members?: components["schemas"]["PermissionMember"][];
+            sourceAcl?: string;
+        };
+        ConnectorRun: {
+            attempts?: number;
+            cancelRequested?: boolean;
+            connectorId?: string;
             /** Format: date-time */
             createdAt?: string;
+            cursor?: unknown;
+            errorSummary?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            id?: string;
+            itemsCreated?: number;
+            itemsDeleted?: number;
+            itemsFailed?: number;
+            itemsSkipped?: number;
+            itemsTotal?: number;
+            itemsUpdated?: number;
+            knowledgeBaseId?: string;
+            mode?: string;
+            resumeOfRunId?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            status?: string;
+            tenantId?: string;
+            triggeredBy?: string;
+        };
+        ConnectorRunList: {
+            runs: components["schemas"]["ConnectorRun"][];
+        };
+        ConnectorUpdateRequest: {
+            config?: components["schemas"]["ConnectorConfig"];
+            credential?: components["schemas"]["CredentialInput"];
+            enabled?: boolean;
+            name?: string;
+            syncIntervalSeconds?: number;
+        };
+        Conversation: {
+            /** Format: date-time */
+            createdAt?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            tenantId?: string;
+            title?: string;
             /** Format: date-time */
             updatedAt?: string;
-        };
-        KnowledgeBaseMemberList: {
-            items?: components["schemas"]["KnowledgeBaseMember"][];
-        };
-        KnowledgeBaseMemberCreateRequest: {
-            user_id: string;
-            /** @enum {string} */
-            role: "viewer" | "editor";
+            userId?: string;
         };
         ConversationCreateRequest: {
             knowledge_base_id: string;
             title?: string;
+        };
+        ConversationList: {
+            items?: components["schemas"]["Conversation"][];
+        };
+        CredentialInput: {
+            password?: string;
+            token?: string;
+            type?: string;
+            username?: string;
+        };
+        DeadLetterList: {
+            items: components["schemas"]["TaskDeadLetter"][];
+        };
+        DevLoginRequest: {
+            tenantId?: string;
+            userId?: string;
+        };
+        DevLoginResponse: {
+            /** Format: date-time */
+            expiresAt: string;
+            principal: components["schemas"]["PrincipalView"];
+            token: string;
+            user: components["schemas"]["User"];
+        };
+        Document: {
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            deletedAt?: string;
+            deletedBy?: string;
+            filename?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            latestVersionId?: string;
+            mimeType?: string;
+            ownerId?: string;
+            /** Format: date-time */
+            purgeAfter?: string;
+            /** Format: date-time */
+            restoredAt?: string;
+            status?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        DocumentEnvelope: {
+            document: components["schemas"]["Document"];
+        };
+        DocumentPage: {
+            hasMore?: boolean;
+            items?: components["schemas"]["DocumentSummary"][];
+            knowledgeBaseId?: string;
+            nextCursor?: string;
+            schemaVersion?: string;
+        };
+        DocumentPreview: {
+            blocks?: components["schemas"]["PreviewBlock"][];
+            documentId?: string;
+            filename?: string;
+            knowledgeBaseId?: string;
+            language?: string;
+            mimeType?: string;
+            parserVersion?: string;
+            schemaVersion?: string;
+            status?: string;
+            title?: string;
+            versionId?: string;
+            visibility?: string;
+        };
+        DocumentStatus: {
+            contentReady?: boolean;
+            document?: components["schemas"]["Document"];
+            pipeline?: components["schemas"]["PipelineRun"];
+            previewable?: boolean;
+            stages?: components["schemas"]["StageRun"][];
+            version?: components["schemas"]["DocumentVersion"];
+        };
+        DocumentSummary: {
+            contentReady?: boolean;
+            document?: components["schemas"]["Document"];
+            previewable?: boolean;
+            version?: components["schemas"]["DocumentVersionSummary"];
+        };
+        DocumentUploadRequest: {
+            document_id?: string;
+            /** Format: binary */
+            file: string;
+        };
+        DocumentVersion: {
+            /** Format: int64 */
+            aclVersion?: number;
+            contentHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            documentId?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            status?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            version?: number;
+        };
+        DocumentVersionPage: {
+            currentVersionId?: string;
+            documentId?: string;
+            items?: components["schemas"]["DocumentVersionView"][];
+            schemaVersion?: string;
+        };
+        DocumentVersionSummary: {
+            errorCode?: string;
+            errorMessage?: string;
+            id?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            status?: string;
+            version?: number;
+        };
+        DocumentVersionView: {
+            contentHash?: string;
+            contentReady?: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            current?: boolean;
+            errorCode?: string;
+            errorMessage?: string;
+            id?: string;
+            restorable?: boolean;
+            /** Format: int64 */
+            sizeBytes?: number;
+            status?: string;
+            version?: number;
+        };
+        DocumentView: {
+            document?: components["schemas"]["Document"];
+            pipeline?: components["schemas"]["PipelineRun"];
+            stages?: components["schemas"]["StageRun"][];
+            version?: components["schemas"]["DocumentVersion"];
+        };
+        Error: {
+            error: string;
+            message?: string;
+        };
+        EvidenceCandidate: {
+            channels?: string[];
+            chunkId?: string;
+            content?: string;
+            contentHash?: string;
+            documentId?: string;
+            documentVersionId?: string;
+            headingPath?: string;
+            keywordRank?: number;
+            keywordScore?: number;
+            knowledgeBaseId?: string;
+            ordinal?: number;
+            pageNumber?: number;
+            parentId?: string;
+            rerankScore?: number;
+            score?: number;
+            sourcePath?: string;
+            vectorRank?: number;
+            vectorScore?: number;
+        };
+        EvidenceSet: {
+            authorizationScopeVersion?: string;
+            droppedByAuthorization?: number;
+            items?: components["schemas"]["EvidenceCandidate"][];
+            plan?: components["schemas"]["QueryPlan"];
+            query?: string;
+            /** Format: int64 */
+            recallLatencyMs?: number;
+            requestId?: string;
+            rerankApplied?: boolean;
+            schemaVersion?: string;
+            tokenEstimate?: number;
+        };
+        GraphCounts: {
+            activeSnapshot?: string;
+            /** Format: int64 */
+            entities?: number;
+            /** Format: int64 */
+            pendingReview?: number;
+            /** Format: int64 */
+            relations?: number;
+            /** Format: int64 */
+            snapshots?: number;
+        };
+        GraphEntity: {
+            aliases?: string[];
+            id?: string;
+            name?: string;
+            properties?: {
+                [key: string]: string;
+            };
+            sources?: components["schemas"]["GraphSource"][];
+            type?: string;
+        };
+        GraphEntityAlias: {
+            alias?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            entityId?: string;
+            knowledgeBaseId?: string;
+            mergedKey?: string;
+            normalized?: string;
+            rule?: string;
+            tenantId?: string;
+        };
+        GraphNode: {
+            aliases?: string[];
+            depth?: number;
+            id?: string;
+            name?: string;
+            properties?: {
+                [key: string]: string;
+            };
+            sources?: components["schemas"]["GraphSource"][];
+            type?: string;
+        };
+        GraphPath: {
+            edgeIds?: string[];
+            nodeIds?: string[];
+        };
+        GraphQueryResult: {
+            depth?: number;
+            edges?: components["schemas"]["GraphRelation"][];
+            joined?: boolean;
+            nodes?: components["schemas"]["GraphNode"][];
+            paths?: components["schemas"]["GraphPath"][];
+            query?: string;
+            snapshotId?: string;
+            truncated?: boolean;
+        };
+        GraphRelation: {
+            confidence?: number;
+            id?: string;
+            object?: string;
+            objectId?: string;
+            predicate?: string;
+            properties?: {
+                [key: string]: string;
+            };
+            sources?: components["schemas"]["GraphSource"][];
+            subject?: string;
+            subjectId?: string;
+        };
+        GraphReviewRequest: {
+            action: string;
+            note?: string;
+        };
+        GraphRunDetail: {
+            run?: components["schemas"]["ProjectionRun"];
+            snapshot?: components["schemas"]["GraphSnapshot"];
+            stages?: components["schemas"]["ProjectionStageRun"][];
+        };
+        GraphRunList: {
+            runs: components["schemas"]["ProjectionRun"][];
+        };
+        GraphSnapshot: {
+            /** Format: int64 */
+            aclVersion?: number;
+            /** Format: date-time */
+            activatedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            model?: string;
+            projectionRunId?: string;
+            promptVersion?: string;
+            reviewNote?: string;
+            /** Format: date-time */
+            reviewedAt?: string;
+            reviewedBy?: string;
+            sourceHash?: string;
+            stats?: string;
+            status?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            version?: number;
+        };
+        GraphSnapshotDetail: {
+            aliases?: components["schemas"]["GraphEntityAlias"][];
+            entities?: components["schemas"]["GraphEntity"][];
+            relations?: components["schemas"]["GraphRelation"][];
+            snapshot?: components["schemas"]["GraphSnapshot"];
+        };
+        GraphSnapshotList: {
+            snapshots: components["schemas"]["GraphSnapshot"][];
+        };
+        GraphSource: {
+            chunkId?: string;
+            documentId?: string;
+            documentVersionId?: string;
+            headingPath?: string;
+            pageNumber?: number;
+            sourcePath?: string;
+        };
+        IndexingStrategy: {
+            graph_enabled?: boolean;
+            keyword_enabled?: boolean;
+            required_capabilities?: string[];
+            vector_enabled?: boolean;
+            wiki_enabled?: boolean;
+        };
+        KnowledgeBase: {
+            /** Format: int64 */
+            aclVersion?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            description?: string;
+            embeddingDimension?: number;
+            embeddingModel?: string;
+            id?: string;
+            indexingStrategy?: string;
+            name?: string;
+            ownerId?: string;
+            retrievalConfig?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        KnowledgeBaseConfiguration: {
+            /** Format: int64 */
+            aclVersion?: number;
+            indexingStrategy?: components["schemas"]["IndexingStrategy"];
+            knowledgeBaseId?: string;
+            readOnly?: components["schemas"]["ReadOnlySystemConfiguration"];
+            retrieval?: components["schemas"]["RetrievalConfiguration"];
+            schemaVersion?: string;
+        };
+        KnowledgeBaseCreateRequest: {
+            description?: string;
+            name: string;
+        };
+        KnowledgeBaseList: {
+            items?: components["schemas"]["KnowledgeBase"][];
+        };
+        KnowledgeBaseMember: {
+            /** Format: date-time */
+            createdAt?: string;
+            knowledgeBaseId?: string;
+            role?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            userId?: string;
+        };
+        KnowledgeBaseMemberCreateRequest: {
+            /** @enum {string} */
+            role: "viewer" | "editor";
+            user_id: string;
+        };
+        KnowledgeBaseMemberList: {
+            items?: components["schemas"]["KnowledgeBaseMember"][];
+        };
+        KnowledgeBaseUpdateRequest: {
+            chat_model?: string;
+            description?: string;
+            embedding_dimension?: number;
+            embedding_model?: string;
+            indexing_strategy?: components["schemas"]["IndexingStrategy"];
+            name?: string;
+            rerank_model?: string;
+            retrieval_config?: components["schemas"]["RetrievalConfigOverride"];
+        };
+        KnowledgeHit: {
+            content?: string;
+            knowledgeBaseId?: string;
+            pageId?: string;
+            score?: number;
+            sources?: components["schemas"]["WikiPageSource"][];
+            title?: string;
+            wikiPageVersionId?: string;
+        };
+        KnowledgeSearchResult: {
+            items?: components["schemas"]["KnowledgeHit"][];
+            joined?: boolean;
+            query?: string;
+        };
+        MeResponse: {
+            developmentIdentity?: boolean;
+            principal?: components["schemas"]["PrincipalView"];
+            scope?: components["schemas"]["ScopeView"];
+        };
+        Message: {
+            authorizationScopeVersion?: string;
+            content?: string;
+            conversationId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            /** Format: int64 */
+            latencyMs?: number;
+            model?: string;
+            requestId?: string;
+            role?: string;
+            status?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            userId?: string;
         };
         MessageCreateRequest: {
             query: string;
             requestId?: string;
             sessionOverride?: string;
         };
-        KnowledgeBaseConfiguration: {
-            knowledgeBaseId?: string;
-            indexingStrategy?: {
-                [key: string]: unknown;
-            };
-            retrieval?: {
-                [key: string]: unknown;
-            };
-            embedding?: {
-                [key: string]: unknown;
-            };
-            chunking?: {
-                [key: string]: unknown;
-            };
-            chat?: {
-                [key: string]: unknown;
-            };
-            rerank?: {
-                [key: string]: unknown;
-            };
-            parser?: {
-                [key: string]: unknown;
-            };
-        } & {
-            [key: string]: unknown;
-        };
-        DocumentView: {
-            document?: {
-                [key: string]: unknown;
-            };
-            version?: {
-                [key: string]: unknown;
-            };
-            pipeline?: {
-                [key: string]: unknown;
-            };
-            stages?: {
-                [key: string]: unknown;
-            }[];
-        };
-        DocumentPage: {
-            schemaVersion?: string;
-            knowledgeBaseId?: string;
-            items?: components["schemas"]["DocumentSummary"][];
-            nextCursor?: string;
-            hasMore?: boolean;
-        };
-        Chunk: {
-            chunkId?: string;
-            documentId?: string;
-            documentVersionId?: string;
-            knowledgeBaseId?: string;
-            parentId?: string;
-            ordinal?: number;
-            content?: string;
-            contentHash?: string;
-            headingPath?: string;
-            pageNumber?: number;
-            sourcePath?: string;
-            startOffset?: number;
-            endOffset?: number;
-            status?: string;
-        };
-        ChunkPage: {
-            schemaVersion?: string;
-            documentId?: string;
-            versionId?: string;
-            status?: string;
-            items?: components["schemas"]["Chunk"][];
-            nextCursor?: number;
-            hasMore?: boolean;
-        };
-        EvidenceSet: {
-            schemaVersion?: string;
-            requestId?: string;
-            authorizationScopeVersion?: string;
-            query?: string;
-            plan?: {
-                [key: string]: unknown;
-            };
-            items?: {
-                [key: string]: unknown;
-            }[];
-            tokenEstimate?: number;
-            /** Format: int64 */
-            recallLatencyMs?: number;
-            rerankApplied?: boolean;
-            droppedByAuthorization?: number;
-        } & {
-            [key: string]: unknown;
-        };
-        Conversation: {
-            id?: string;
-            tenantId?: string;
-            knowledgeBaseId?: string;
-            userId?: string;
-            title?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-        } & {
-            [key: string]: unknown;
-        };
-        ConversationList: {
-            items?: components["schemas"]["Conversation"][];
-        };
-        MessageView: {
-            message?: {
-                [key: string]: unknown;
-            };
-            citations?: {
-                [key: string]: unknown;
-            }[];
-        } & {
-            [key: string]: unknown;
-        };
         MessageList: {
             items?: components["schemas"]["MessageView"][];
+        };
+        MessageView: {
+            citations?: components["schemas"]["Citation"][];
+            message?: components["schemas"]["Message"];
         };
         OpsMetrics: {
             [key: string]: unknown;
         };
-        AuthConfig: {
-            oidcEnabled: boolean;
-            oidcIssuer?: string;
-            devAuthEnabled: boolean;
-            sessionCookie: string;
-            sessionTTLHours: number;
-        };
-        DevLoginRequest: {
-            userId?: string;
-            tenantId?: string;
-        };
-        DevLoginResponse: {
-            token: string;
-            /** Format: date-time */
-            expiresAt: string;
-            user: {
-                [key: string]: unknown;
-            };
-            principal: {
-                [key: string]: unknown;
-            };
-        };
-        RefreshResponse: {
-            token: string;
-            /** Format: date-time */
-            expiresAt: string;
-        };
-        APIKey: {
-            id?: string;
-            name?: string;
-            keyPrefix?: string;
-            capabilities?: string[];
-            knowledgeBaseIds?: string[];
-            /** Format: date-time */
-            expiresAt?: string;
-            /** Format: date-time */
-            revokedAt?: string;
-            /** Format: date-time */
-            lastUsedAt?: string;
+        OutboxEvent: {
+            aggregateId?: string;
+            aggregateType?: string;
+            attempts?: number;
             /** Format: date-time */
             createdAt?: string;
-        };
-        APIKeyList: {
-            items: components["schemas"]["APIKey"][];
-        };
-        APIKeyCreateRequest: {
-            name: string;
-            capabilities?: string[];
-            knowledgeBaseIds?: string[];
+            eventType?: string;
+            /** Format: int64 */
+            id?: number;
+            idempotencyKey?: string;
+            lastError?: string;
             /** Format: date-time */
-            expiresAt?: string;
+            nextAttemptAt?: string;
+            /** Format: date-time */
+            publishedAt?: string;
+            tenantId?: string;
         };
-        APIKeyCreateResponse: {
-            apiKey: components["schemas"]["APIKey"];
+        PageCounts: {
+            /** Format: int64 */
+            indexed?: number;
+            /** Format: int64 */
+            pendingReview?: number;
+            /** Format: int64 */
+            published?: number;
+            /** Format: int64 */
+            stale?: number;
+            /** Format: int64 */
+            total?: number;
+        };
+        PermissionMember: {
+            role?: string;
+            userId?: string;
+        };
+        PipelineRun: {
+            /** Format: date-time */
+            createdAt?: string;
+            documentId?: string;
+            documentVersionId?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            id?: string;
+            idempotencyKey?: string;
+            knowledgeBaseId?: string;
+            pipelineType?: string;
+            requestId?: string;
+            status?: string;
+            tenantId?: string;
+            traceId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PreviewBlock: {
+            blockId?: string;
+            endOffset?: number;
+            headingPath?: string;
+            kind?: string;
+            pageNumber?: number;
+            sourcePath?: string;
+            startOffset?: number;
+            text?: string;
+        };
+        PrincipalView: {
+            capabilities?: string[];
+            credentialId?: string;
+            credentialType?: string;
+            subjectId?: string;
+            tenantId?: string;
+        };
+        ProjectionRun: {
+            /** Format: int64 */
+            aclVersion?: number;
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            evidencePackageId?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            model?: string;
+            projectionType?: string;
+            promptVersion?: string;
+            retryOfRunId?: string;
+            sourceHash?: string;
+            status?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ProjectionStageRun: {
+            attempts?: number;
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            /** Format: int64 */
+            id?: number;
+            idempotencyKey?: string;
+            projectionRunId?: string;
+            projectionType?: string;
+            stage?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            status?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ProjectionState: {
+            graph?: components["schemas"]["GraphCounts"];
+            graphEnabled?: boolean;
+            joinStatus?: string;
+            knowledgeBaseId?: string;
+            pages?: components["schemas"]["PageCounts"];
+            relationRuns?: components["schemas"]["ProjectionRun"][];
+            runs?: components["schemas"]["ProjectionRun"][];
+            wikiEnabled?: boolean;
+        };
+        QueryPlan: {
+            authorizationScopeVersion?: string;
+            channels?: string[];
+            fusion?: string;
+            historyTurns?: number;
+            intent?: string;
+            keywordEnabled?: boolean;
+            knowledgeBaseIds?: string[];
+            mode?: string;
+            params?: components["schemas"]["QueryPlanParams"];
+            requestId?: string;
+            requiredCapabilities?: string[];
+            rerankEnabled?: boolean;
+            rewrite?: string;
+            schemaVersion?: string;
+            tenantId?: string;
+            topK?: number;
+            vectorEnabled?: boolean;
+        };
+        QueryPlanParams: {
+            AdjacentExpansion?: number;
+            ContextTokenLimit?: number;
+            EmbeddingTopK?: number;
+            ExpansionScoreFactor?: number;
+            KeywordThreshold?: number;
+            KeywordTopK?: number;
+            MaxAdjacentChunks?: number;
+            RRFK?: number;
+            RerankEnabled?: boolean;
+            RerankThreshold?: number;
+            RerankTopK?: number;
+            TopK?: number;
+            VectorEFSearch?: number;
+            VectorIterativeScan?: boolean;
+            VectorOversample?: number;
+            VectorThreshold?: number;
+        };
+        ReadOnlyChat: {
+            model?: string;
+            source?: string;
+        };
+        ReadOnlyChunking: {
+            minSize?: number;
+            overlap?: number;
+            size?: number;
+            splitMarkers?: string;
+        };
+        ReadOnlyEmbedding: {
+            dimension?: number;
+            model?: string;
+            source?: string;
+        };
+        ReadOnlyParser: {
+            supportedFormats?: string[];
+            version?: string;
+        };
+        ReadOnlyRerank: {
+            model?: string;
+            source?: string;
+        };
+        ReadOnlySystemConfiguration: {
+            chat?: components["schemas"]["ReadOnlyChat"];
+            chunking?: components["schemas"]["ReadOnlyChunking"];
+            embedding?: components["schemas"]["ReadOnlyEmbedding"];
+            parser?: components["schemas"]["ReadOnlyParser"];
+            rerank?: components["schemas"]["ReadOnlyRerank"];
+        };
+        ReconcileReport: {
+            /** Format: int64 */
+            deadLettersResolved?: number;
+            /** Format: int64 */
+            documentsRepaired?: number;
+            /** Format: int64 */
+            inboxesExpired?: number;
+            pipelinesCancelled?: number;
+            stagesRequeued?: number;
+            /** Format: int64 */
+            versionsRepaired?: number;
+        };
+        RefreshResponse: {
+            /** Format: date-time */
+            expiresAt: string;
             token: string;
         };
+        RetrievalConfigOverride: {
+            adjacent_expansion?: number;
+            context_token_limit?: number;
+            embedding_top_k?: number;
+            expansion_score_factor?: number;
+            keyword_threshold?: number;
+            keyword_top_k?: number;
+            max_adjacent_chunks?: number;
+            rerank_enabled?: boolean;
+            rerank_threshold?: number;
+            rerank_top_k?: number;
+            rrf_k?: number;
+            top_k?: number;
+            vector_ef_search?: number;
+            vector_iterative_scan?: boolean;
+            vector_oversample?: number;
+            vector_threshold?: number;
+        };
+        RetrievalConfiguration: {
+            effective?: components["schemas"]["RetrievalParams"];
+            globalDefaults?: components["schemas"]["RetrievalParams"];
+            knowledgeBaseOverride?: components["schemas"]["RetrievalConfigOverride"];
+            sources?: {
+                [key: string]: string;
+            };
+        };
+        RetrievalParams: {
+            adjacent_expansion?: number;
+            context_token_limit?: number;
+            embedding_top_k?: number;
+            expansion_score_factor?: number;
+            keyword_threshold?: number;
+            keyword_top_k?: number;
+            max_adjacent_chunks?: number;
+            rerank_enabled?: boolean;
+            rerank_threshold?: number;
+            rerank_top_k?: number;
+            rrf_k?: number;
+            top_k?: number;
+            vector_ef_search?: number;
+            vector_iterative_scan?: boolean;
+            vector_oversample?: number;
+            vector_threshold?: number;
+        };
+        ScopeView: {
+            aclVersion?: string;
+            capabilities?: string[];
+            knowledgeBaseIds?: string[];
+            resourceIds?: string[];
+            subjectId?: string;
+            tenantId?: string;
+        };
+        SearchRequest: {
+            knowledgeBaseId?: string;
+            query?: string;
+            sessionOverride?: string;
+        };
+        StageRun: {
+            attempts?: number;
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            /** Format: int64 */
+            id?: number;
+            idempotencyKey?: string;
+            pipelineRunId?: string;
+            stage?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            status?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        StartResult: {
+            started: number;
+        };
+        StreamEvent: {
+            data?: {
+                [key: string]: unknown;
+            };
+            event_id?: string;
+            request_id: string;
+            sequence: number;
+            type: string;
+        };
+        TaskDeadLetter: {
+            attempts?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            documentVersionId?: string;
+            /** Format: int64 */
+            id?: number;
+            idempotencyKey?: string;
+            knowledgeBaseId?: string;
+            lastError?: string;
+            /** Format: date-time */
+            resolvedAt?: string;
+            resolvedBy?: string;
+            stage?: string;
+            status?: string;
+            taskType?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        TaskInbox: {
+            /** Format: date-time */
+            createdAt?: string;
+            idempotencyKey?: string;
+            lastError?: string;
+            leaseOwner?: string;
+            /** Format: date-time */
+            leaseUntil?: string;
+            /** Format: date-time */
+            processedAt?: string;
+            /** Format: int64 */
+            stageRunId?: number;
+            status?: string;
+            taskType?: string;
+            tenantId?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        TaskInspection: {
+            deadLetter?: components["schemas"]["TaskDeadLetter"];
+            inbox?: components["schemas"]["TaskInbox"];
+            outbox: components["schemas"]["OutboxEvent"][];
+            pipeline?: components["schemas"]["PipelineRun"];
+            stage?: components["schemas"]["StageRun"];
+            task: unknown;
+        };
         TenantMember: {
-            userId?: string;
-            email?: string;
             displayName?: string;
+            email?: string;
             role?: string;
+            userId?: string;
+        };
+        TenantMemberCreateRequest: {
+            role: string;
+            userId: string;
         };
         TenantMemberList: {
             items: components["schemas"]["TenantMember"][];
         };
-        TenantMemberCreateRequest: {
-            userId: string;
-            role: string;
-        };
         TenantMemberUpdateRequest: {
             role: string;
         };
-        AuditEvent: {
-            /** Format: int64 */
-            id?: number;
-            tenantId?: string;
-            actorId?: string;
-            action?: string;
-            resourceType?: string;
-            resourceId?: string;
-            allowed?: boolean;
-            reason?: string;
-            requestId?: string;
-            ipAddress?: string;
-            userAgent?: string;
+        User: {
             /** Format: date-time */
             createdAt?: string;
+            displayName?: string;
+            email?: string;
+            id?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
-        AuditEventList: {
-            items: components["schemas"]["AuditEvent"][];
+        WikiBlock: {
+            content?: string;
+            headingPath?: string;
+            sourceChunkIds?: string[];
         };
-        SearchRequest: {
-            query?: string;
+        WikiPage: {
+            /** Format: int64 */
+            aclVersion?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            currentVersionId?: string;
+            documentId?: string;
+            id?: string;
             knowledgeBaseId?: string;
-            sessionOverride?: string;
+            pageType?: string;
+            publishedVersionId?: string;
+            slug?: string;
+            sourceHash?: string;
+            status?: string;
+            tenantId?: string;
+            title?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        WikiPageDetail: {
+            blocks?: components["schemas"]["WikiBlock"][];
+            page?: components["schemas"]["WikiPage"];
+            sources?: components["schemas"]["WikiPageSource"][];
+            version?: components["schemas"]["WikiPageVersion"];
+        };
+        WikiPageList: {
+            pages: components["schemas"]["WikiPageSummary"][];
+        };
+        WikiPageSource: {
+            chunkId?: string;
+            documentId?: string;
+            documentVersionId?: string;
+            headingPath?: string;
+            knowledgeBaseId?: string;
+            pageNumber?: number;
+            sourcePath?: string;
+            tenantId?: string;
+            wikiPageVersionId?: string;
+        };
+        WikiPageSummary: {
+            currentVersion?: components["schemas"]["WikiPageVersion"];
+            page?: components["schemas"]["WikiPage"];
+            publishedVersion?: components["schemas"]["WikiPageVersion"];
+        };
+        WikiPageVersion: {
+            /** Format: int64 */
+            aclVersion?: number;
+            content?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
+            generationModel?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            promptVersion?: string;
+            reviewNote?: string;
+            reviewStatus?: string;
+            /** Format: date-time */
+            reviewedAt?: string;
+            reviewedBy?: string;
+            sourceHash?: string;
+            tenantId?: string;
+            version?: number;
+            wikiPageId?: string;
         };
         WikiReviewRequest: {
             action: string;
@@ -1595,357 +2321,20 @@ export interface components {
         WikiRollbackRequest: {
             version_id: string;
         };
-        GraphReviewRequest: {
-            action: string;
-            note?: string;
-        };
-        ConnectorConfig: {
-            manifestUrl?: string;
-            requestsPerSecond?: number;
-            maxItemsPerRun?: number;
-            aclMode?: string;
-        };
-        CredentialInput: {
-            type?: string;
-            token?: string;
-            username?: string;
-            password?: string;
-        };
-        ConnectorCreateRequest: {
-            name: string;
-            type: string;
-            config?: components["schemas"]["ConnectorConfig"];
-            credential?: components["schemas"]["CredentialInput"];
-            syncIntervalSeconds?: number;
-            enabled?: boolean;
-        };
-        ConnectorUpdateRequest: {
-            name?: string;
-            config?: components["schemas"]["ConnectorConfig"];
-            credential?: components["schemas"]["CredentialInput"];
-            syncIntervalSeconds?: number;
-            enabled?: boolean;
-        };
-        Connector: {
-            id?: string;
-            tenantId?: string;
-            knowledgeBaseId?: string;
-            name?: string;
-            type?: string;
-            config?: components["schemas"]["ConnectorConfig"];
-            enabled?: boolean;
-            syncIntervalSeconds?: number;
-            /** Format: date-time */
-            nextSyncAt?: string;
-            /** Format: date-time */
-            lastSyncAt?: string;
-            hasCredential?: boolean;
-            createdBy?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            /** Format: date-time */
-            updatedAt?: string;
-        };
-        ConnectorList: {
-            connectors: components["schemas"]["Connector"][];
-        };
-        ConnectorRun: {
-            id?: string;
-            tenantId?: string;
-            connectorId?: string;
-            knowledgeBaseId?: string;
-            mode?: string;
-            status?: string;
-            cursor?: unknown;
-            resumeOfRunId?: string;
-            triggeredBy?: string;
-            itemsTotal?: number;
-            itemsCreated?: number;
-            itemsUpdated?: number;
-            itemsDeleted?: number;
-            itemsSkipped?: number;
-            itemsFailed?: number;
-            errorSummary?: string;
-            cancelRequested?: boolean;
-            attempts?: number;
-            /** Format: date-time */
-            startedAt?: string;
-            /** Format: date-time */
-            finishedAt?: string;
-            /** Format: date-time */
-            createdAt?: string;
-        };
-        ConnectorRunList: {
-            runs: components["schemas"]["ConnectorRun"][];
-        };
-        ConnectorPermissions: {
-            connectorId?: string;
-            knowledgeBaseId?: string;
-            sourceAcl?: string;
-            effectiveAcl?: string;
-            aclMode?: string;
-            /** Format: int64 */
-            aclVersion?: number;
-            members?: {
-                userId?: string;
-                role?: string;
-            }[];
-        };
-        CancelResult: {
-            cancelled: boolean;
-        };
-        StartResult: {
-            started: number;
-        };
-        DocumentVersionSummary: {
-            id?: string;
-            version?: number;
-            /** Format: int64 */
-            sizeBytes?: number;
-            status?: string;
-            errorCode?: string;
-            errorMessage?: string;
-        };
-        DocumentSummary: {
-            document?: {
-                [key: string]: unknown;
-            };
-            version?: components["schemas"]["DocumentVersionSummary"];
-            contentReady?: boolean;
-            previewable?: boolean;
-        };
-        DocumentStatus: {
-            document?: {
-                [key: string]: unknown;
-            };
-            version?: {
-                [key: string]: unknown;
-            };
-            pipeline?: {
-                [key: string]: unknown;
-            };
-            stages?: {
-                [key: string]: unknown;
-            }[];
-            contentReady?: boolean;
-            previewable?: boolean;
-        };
-        DocumentVersionPage: {
-            schemaVersion?: string;
-            documentId?: string;
-            currentVersionId?: string;
-            items?: {
-                id?: string;
-                version?: number;
-                contentHash?: string;
-                /** Format: int64 */
-                sizeBytes?: number;
-                status?: string;
-                errorCode?: string;
-                errorMessage?: string;
-                current?: boolean;
-                contentReady?: boolean;
-                restorable?: boolean;
-                /** Format: date-time */
-                createdAt?: string;
-            }[];
-        };
-        DocumentPreview: {
-            schemaVersion?: string;
-            documentId?: string;
-            versionId?: string;
-            knowledgeBaseId?: string;
-            filename?: string;
-            mimeType?: string;
-            status?: string;
-            title?: string;
-            language?: string;
-            parserVersion?: string;
-            blocks?: {
-                [key: string]: unknown;
-            }[];
-            visibility?: string;
-        };
-        DocumentEnvelope: {
-            document: {
-                [key: string]: unknown;
-            };
-        };
-        ProjectionState: {
-            knowledgeBaseId?: string;
-            joinStatus?: string;
-            wikiEnabled?: boolean;
-            graphEnabled?: boolean;
-            runs?: {
-                [key: string]: unknown;
-            }[];
-            relationRuns?: {
-                [key: string]: unknown;
-            }[];
-            pages?: {
-                [key: string]: unknown;
-            };
-            graph?: {
-                [key: string]: unknown;
-            };
-        };
-        WikiPageDetail: {
-            page?: {
-                [key: string]: unknown;
-            };
-            version?: {
-                [key: string]: unknown;
-            };
-            blocks?: {
-                [key: string]: unknown;
-            }[];
-            sources?: {
-                [key: string]: unknown;
-            }[];
-        };
-        WikiPageList: {
-            pages: {
-                [key: string]: unknown;
-            }[];
-        };
-        WikiVersion: {
-            [key: string]: unknown;
-        };
-        WikiVersionList: {
-            versions: components["schemas"]["WikiVersion"][];
-        };
         WikiRunDetail: {
-            run?: {
-                [key: string]: unknown;
-            };
-            stages?: {
-                [key: string]: unknown;
-            }[];
+            run?: components["schemas"]["ProjectionRun"];
+            stages?: components["schemas"]["ProjectionStageRun"][];
         };
         WikiRunList: {
-            runs: {
-                [key: string]: unknown;
-            }[];
+            runs: components["schemas"]["ProjectionRun"][];
         };
-        KnowledgeSearchResult: {
-            query?: string;
-            items?: {
-                [key: string]: unknown;
-            }[];
-            joined?: boolean;
-        };
-        GraphQueryResult: {
-            query?: string;
-            snapshotId?: string;
-            depth?: number;
-            nodes?: {
-                [key: string]: unknown;
-            }[];
-            edges?: {
-                [key: string]: unknown;
-            }[];
-            paths?: {
-                [key: string]: unknown;
-            }[];
-            truncated?: boolean;
-            joined?: boolean;
-        };
-        GraphSnapshotDetail: {
-            snapshot?: {
-                [key: string]: unknown;
-            };
-            entities?: {
-                [key: string]: unknown;
-            }[];
-            relations?: {
-                [key: string]: unknown;
-            }[];
-            aliases?: {
-                [key: string]: unknown;
-            }[];
-        };
-        GraphSnapshotList: {
-            snapshots: {
-                [key: string]: unknown;
-            }[];
-        };
-        GraphRunDetail: {
-            run?: {
-                [key: string]: unknown;
-            };
-            stages?: {
-                [key: string]: unknown;
-            }[];
-            snapshot?: {
-                [key: string]: unknown;
-            };
-        };
-        GraphRunList: {
-            runs: {
-                [key: string]: unknown;
-            }[];
-        };
-        DeadLetter: {
-            [key: string]: unknown;
-        };
-        DeadLetterList: {
-            items: components["schemas"]["DeadLetter"][];
-        };
-        TaskInspection: {
-            task: {
-                [key: string]: unknown;
-            };
-            inbox?: {
-                [key: string]: unknown;
-            };
-            pipeline?: {
-                [key: string]: unknown;
-            };
-            stage?: {
-                [key: string]: unknown;
-            };
-            outbox: {
-                [key: string]: unknown;
-            }[];
-            deadLetter?: {
-                [key: string]: unknown;
-            };
-        };
-        ReconcileReport: {
-            /** Format: int64 */
-            documentsRepaired?: number;
-            /** Format: int64 */
-            versionsRepaired?: number;
-            stagesRequeued?: number;
-            pipelinesCancelled?: number;
-            /** Format: int64 */
-            inboxesExpired?: number;
-            /** Format: int64 */
-            deadLettersResolved?: number;
-        };
-        /** @description One persisted answer-stream event. The SSE id is `<request_id>:<sequence>`. */
-        StreamEvent: {
-            event_id?: string;
-            request_id: string;
-            sequence: number;
-            type: string;
-            data?: {
-                [key: string]: unknown;
-            };
+        WikiVersionList: {
+            versions: components["schemas"]["WikiPageVersion"][];
         };
     };
     responses: {
         /** @description Invalid request */
         BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description Authentication required or invalid */
-        Unauthorized: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1964,6 +2353,15 @@ export interface components {
         };
         /** @description Unexpected server error */
         InternalError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Authentication required or invalid */
+        Unauthorized: {
             headers: {
                 [name: string]: unknown;
             };
@@ -2016,7 +2414,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2035,7 +2433,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2245,7 +2645,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                chunkID: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2269,7 +2671,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2293,7 +2697,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2313,7 +2719,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -2341,12 +2749,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2365,7 +2775,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2389,7 +2801,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2413,7 +2827,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2437,12 +2854,15 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2461,12 +2881,15 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2485,12 +2908,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2509,7 +2934,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2533,7 +2960,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2553,7 +2982,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2577,7 +3008,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2601,7 +3034,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2625,7 +3060,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2647,12 +3084,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -2671,7 +3110,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2695,7 +3136,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2719,7 +3162,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2743,7 +3188,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+                versionID: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2767,7 +3215,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2791,18 +3241,20 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GraphRunDetail"];
+                    "application/json": components["schemas"]["ProjectionRun"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -2815,7 +3267,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                snapshotId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2839,7 +3293,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                snapshotId: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -2854,7 +3310,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GraphSnapshotDetail"];
+                    "application/json": components["schemas"]["GraphSnapshot"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -2900,7 +3356,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2919,7 +3375,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2943,7 +3401,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2963,7 +3423,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -2991,7 +3453,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3015,7 +3479,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3039,7 +3505,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -3048,7 +3516,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3067,7 +3535,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3091,20 +3561,18 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    document_id?: string;
-                };
+                "multipart/form-data": components["schemas"]["DocumentUploadRequest"];
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -3123,7 +3591,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3147,12 +3617,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -3171,7 +3643,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3195,7 +3669,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3219,7 +3695,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3243,7 +3721,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3267,7 +3747,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -3276,7 +3758,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3295,7 +3777,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+                userID: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3315,7 +3800,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3339,7 +3826,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -3367,12 +3856,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -3391,7 +3882,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3415,12 +3908,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -3439,7 +3934,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3511,7 +4008,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3533,7 +4032,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3584,7 +4085,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Prometheus text exposition */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3603,7 +4104,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3649,7 +4152,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3673,12 +4178,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                requestID: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Server-sent events */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3758,7 +4265,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3777,7 +4284,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3801,7 +4310,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -3810,7 +4321,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Server-sent events */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3862,7 +4373,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Created */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3881,7 +4392,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                userID: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3901,7 +4414,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                userID: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -3927,7 +4442,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                pageId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -3951,7 +4468,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                pageId: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -3966,7 +4485,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WikiPageDetail"];
+                    "application/json": components["schemas"]["WikiPage"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -3979,7 +4498,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                pageId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4003,7 +4524,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                pageId: string;
+                versionId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4014,7 +4538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WikiPageDetail"];
+                    "application/json": components["schemas"]["WikiPage"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4027,7 +4551,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                pageId: string;
+                versionId: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -4042,7 +4569,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WikiVersion"];
+                    "application/json": components["schemas"]["WikiPageVersion"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4055,7 +4582,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4079,18 +4608,20 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                runId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Accepted */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WikiRunDetail"];
+                    "application/json": components["schemas"]["ProjectionRun"];
                 };
             };
             400: components["responses"]["BadRequest"];

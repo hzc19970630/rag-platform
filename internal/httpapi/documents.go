@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
@@ -49,7 +50,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusAccepted, result)
+		c.JSON(http.StatusAccepted, views.UploadResult(result))
 	})
 
 	protected.GET("/knowledge-bases/:id/documents", func(c *gin.Context) {
@@ -59,7 +60,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, page)
+		c.JSON(http.StatusOK, views.DocumentPage(page))
 	})
 
 	protected.GET("/documents/:id", func(c *gin.Context) {
@@ -68,7 +69,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, result)
+		c.JSON(http.StatusOK, views.DocumentView(result))
 	})
 
 	protected.DELETE("/documents/:id", func(c *gin.Context) {
@@ -103,7 +104,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, preview)
+		c.JSON(http.StatusOK, views.DocumentPreview(preview))
 	})
 	documents.GET("/chunks", func(c *gin.Context) {
 		page, err := deps.Ingestion.Chunks(c.Request.Context(), accessContext(c).Principal, c.Param("id"), intQuery(c, "cursor"), intQuery(c, "limit"))
@@ -111,7 +112,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, page)
+		c.JSON(http.StatusOK, views.ChunkPage(page))
 	})
 	documents.GET("/status", func(c *gin.Context) {
 		status, err := deps.Ingestion.Status(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
@@ -119,7 +120,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, status)
+		c.JSON(http.StatusOK, views.DocumentStatus(status))
 	})
 
 	protected.GET("/chunks/:chunkID", func(c *gin.Context) {
@@ -128,7 +129,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, chunk)
+		c.JSON(http.StatusOK, views.Chunk(chunk))
 	})
 
 	documents.GET("/versions", func(c *gin.Context) {
@@ -137,7 +138,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, page)
+		c.JSON(http.StatusOK, views.DocumentVersionPage(page))
 	})
 	documents.POST("/reparse", func(c *gin.Context) {
 		result, err := deps.Ingestion.Reparse(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
@@ -145,7 +146,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusAccepted, result)
+		c.JSON(http.StatusAccepted, views.UploadResult(result))
 	})
 	documents.POST("/versions/:versionID/activate", func(c *gin.Context) {
 		view, err := deps.Ingestion.ActivateVersion(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("versionID"))
@@ -153,7 +154,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, view)
+		c.JSON(http.StatusOK, views.DocumentView(view))
 	})
 	documents.POST("/restore", func(c *gin.Context) {
 		document, err := deps.Ingestion.Restore(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
@@ -161,7 +162,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"document": document})
+		c.JSON(http.StatusOK, views.DocumentEnvelope(document))
 	})
 	documents.POST("/purge", func(c *gin.Context) {
 		if err := deps.Ingestion.Purge(c.Request.Context(), accessContext(c).Principal, c.Param("id")); err != nil {

@@ -3,11 +3,10 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
+	"github.com/example/rag-platform/contracts/httpapi"
 	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/knowledgebase"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,24 +18,24 @@ func RegisterKnowledgeBaseRoutes(protected *gin.RouterGroup, cfg config.Config, 
 			writeError(c, err)
 			return
 		}
-		items := make([]knowledgeBaseResponse, 0, len(rows))
+		items := make([]httpapi.KnowledgeBase, 0, len(rows))
 		for _, row := range rows {
-			items = append(items, knowledgeBaseView(row))
+			items = append(items, views.KnowledgeBase(row))
 		}
-		c.JSON(http.StatusOK, gin.H{"items": items})
+		c.JSON(http.StatusOK, httpapi.KnowledgeBaseList{Items: items})
 	})
 	knowledgeBases.POST("", func(c *gin.Context) {
-		var input knowledgebase.CreateInput
+		var input httpapi.KnowledgeBaseCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		row, err := deps.KnowledgeBase.Create(c.Request.Context(), accessContext(c).Principal, input)
+		row, err := deps.KnowledgeBase.Create(c.Request.Context(), accessContext(c).Principal, views.CreateKnowledgeBaseInput(input))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, knowledgeBaseView(row))
+		c.JSON(http.StatusCreated, views.KnowledgeBase(row))
 	})
 
 	byID := knowledgeBases.Group("/:id")
@@ -46,20 +45,20 @@ func RegisterKnowledgeBaseRoutes(protected *gin.RouterGroup, cfg config.Config, 
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, knowledgeBaseView(row))
+		c.JSON(http.StatusOK, views.KnowledgeBase(row))
 	})
 	byID.PATCH("", func(c *gin.Context) {
-		var input knowledgebase.UpdateInput
+		var input httpapi.KnowledgeBaseUpdateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		row, err := deps.KnowledgeBase.Update(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input)
+		row, err := deps.KnowledgeBase.Update(c.Request.Context(), accessContext(c).Principal, c.Param("id"), views.UpdateKnowledgeBaseInput(input))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, knowledgeBaseView(row))
+		c.JSON(http.StatusOK, views.KnowledgeBase(row))
 	})
 	byID.DELETE("", func(c *gin.Context) {
 		if err := deps.KnowledgeBase.Delete(c.Request.Context(), accessContext(c).Principal, c.Param("id")); err != nil {
@@ -76,24 +75,24 @@ func RegisterKnowledgeBaseRoutes(protected *gin.RouterGroup, cfg config.Config, 
 			writeError(c, err)
 			return
 		}
-		items := make([]knowledgeBaseMemberResponse, 0, len(rows))
+		items := make([]httpapi.KnowledgeBaseMember, 0, len(rows))
 		for _, row := range rows {
-			items = append(items, knowledgeBaseMemberView(row))
+			items = append(items, views.KnowledgeBaseMember(row))
 		}
-		c.JSON(http.StatusOK, gin.H{"items": items})
+		c.JSON(http.StatusOK, httpapi.KnowledgeBaseMemberList{Items: items})
 	})
 	members.POST("", func(c *gin.Context) {
-		var input knowledgebase.AddMemberInput
+		var input httpapi.KnowledgeBaseMemberCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		row, err := deps.KnowledgeBase.AddMember(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input)
+		row, err := deps.KnowledgeBase.AddMember(c.Request.Context(), accessContext(c).Principal, c.Param("id"), views.AddKnowledgeBaseMemberInput(input))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, knowledgeBaseMemberView(row))
+		c.JSON(http.StatusCreated, views.KnowledgeBaseMember(row))
 	})
 	members.DELETE("/:userID", func(c *gin.Context) {
 		if err := deps.KnowledgeBase.RemoveMember(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("userID")); err != nil {
@@ -102,45 +101,4 @@ func RegisterKnowledgeBaseRoutes(protected *gin.RouterGroup, cfg config.Config, 
 		}
 		c.Status(http.StatusNoContent)
 	})
-}
-
-// knowledgeBaseResponse is the explicit wire contract; handlers do not expose
-// GORM rows directly, so a column rename cannot silently change the API.
-type knowledgeBaseResponse struct {
-	ID                 string    `json:"id"`
-	TenantID           string    `json:"tenantId"`
-	OwnerID            string    `json:"ownerId"`
-	Name               string    `json:"name"`
-	Description        string    `json:"description"`
-	EmbeddingModel     string    `json:"embeddingModel"`
-	EmbeddingDimension int       `json:"embeddingDimension"`
-	ACLVersion         int64     `json:"aclVersion"`
-	RetrievalConfig    string    `json:"retrievalConfig"`
-	IndexingStrategy   string    `json:"indexingStrategy"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
-}
-
-func knowledgeBaseView(row models.KnowledgeBase) knowledgeBaseResponse {
-	return knowledgeBaseResponse{
-		ID: row.ID, TenantID: row.TenantID, OwnerID: row.OwnerID, Name: row.Name, Description: row.Description,
-		EmbeddingModel: row.EmbeddingModel, EmbeddingDimension: row.EmbeddingDimension, ACLVersion: row.ACLVersion,
-		RetrievalConfig: row.RetrievalConfig, IndexingStrategy: row.IndexingStrategy,
-		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-	}
-}
-
-type knowledgeBaseMemberResponse struct {
-	KnowledgeBaseID string    `json:"knowledgeBaseId"`
-	UserID          string    `json:"userId"`
-	Role            string    `json:"role"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
-}
-
-func knowledgeBaseMemberView(row models.KnowledgeBaseMember) knowledgeBaseMemberResponse {
-	return knowledgeBaseMemberResponse{
-		KnowledgeBaseID: row.KnowledgeBaseID, UserID: row.UserID, Role: row.Role,
-		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-	}
 }

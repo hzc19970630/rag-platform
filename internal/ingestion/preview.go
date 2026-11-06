@@ -193,7 +193,7 @@ func (s *Service) Chunks(ctx context.Context, principal authz.Principal, documen
 	query := s.db.WithContext(ctx).Where("document_version_id = ? AND tenant_id = ? AND knowledge_base_id = ? AND parent_id IS NOT NULL AND status = ?",
 		version.ID, principal.TenantID, document.KnowledgeBaseID, StatusEvidenceReady)
 	if cursor > 0 {
-		query = query.Where("ordinal > ?", cursor)
+		query = query.Where("ordinal >= ?", cursor)
 	}
 	if err := query.Order("ordinal, id").Limit(limit + 1).Find(&rows).Error; err != nil {
 		return ChunkPage{}, fmt.Errorf("list chunks: %w", err)
@@ -203,12 +203,12 @@ func (s *Service) Chunks(ctx context.Context, principal authz.Principal, documen
 		rows = rows[:limit]
 	}
 	items := make([]ChunkView, 0, len(rows))
+	// Cursor is the ordinal to resume at; zero is also the first child's
+	// ordinal, so the next page must start one past the last returned row.
 	nextCursor := cursor
 	for _, row := range rows {
 		items = append(items, chunkView(row, document.ID))
-		if row.Ordinal > nextCursor {
-			nextCursor = row.Ordinal
-		}
+		nextCursor = row.Ordinal + 1
 	}
 	return ChunkPage{SchemaVersion: SchemaChunkPage, DocumentID: document.ID, VersionID: version.ID, Status: version.Status, Items: items, NextCursor: nextCursor, HasMore: hasMore}, nil
 }

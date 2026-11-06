@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/example/rag-platform/contracts/httpapi"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/knowledgebase"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,30 +25,26 @@ func RegisterKnowledgeBaseConfigRoutes(protected *gin.RouterGroup, cfg config.Co
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, view)
+		c.JSON(http.StatusOK, views.KnowledgeBaseConfiguration(view))
 	})
 
 	byID.PUT("/retrieval-config", func(c *gin.Context) {
-		var override retrieval.ParamsOverride
-		if err := c.ShouldBindJSON(&override); err != nil {
+		var input httpapi.RetrievalConfigOverride
+		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		row, err := deps.KnowledgeBase.ReplaceRetrievalConfig(c.Request.Context(), accessContext(c).Principal, c.Param("id"), override)
+		row, err := deps.KnowledgeBase.ReplaceRetrievalConfig(c.Request.Context(), accessContext(c).Principal, c.Param("id"), views.ParamsOverride(input))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		writeRetrievalConfigView(c, cfg, row)
+		view, err := knowledgebase.BuildKnowledgeBaseConfiguration(row, cfg.Retrieval, knowledgebase.ReadOnlySystemConfiguration(cfg))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.KnowledgeBaseConfiguration(view))
 	})
 
-}
-
-func writeRetrievalConfigView(c *gin.Context, cfg config.Config, row models.KnowledgeBase) {
-	view, err := knowledgebase.BuildKnowledgeBaseConfiguration(row, cfg.Retrieval, knowledgebase.ReadOnlySystemConfiguration(cfg))
-	if err != nil {
-		writeError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, view)
 }

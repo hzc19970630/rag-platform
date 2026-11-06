@@ -6,18 +6,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/rag-platform/contracts/httpapi"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/conversation"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
 func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, deps ConversationDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected.POST("/search", func(c *gin.Context) {
-		var input searchRequest
+		var input httpapi.SearchRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
@@ -35,22 +36,22 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, evidence)
+		c.JSON(http.StatusOK, views.EvidenceSet(evidence))
 	})
 
 	sessions := protected.Group("/sessions")
 	sessions.POST("", func(c *gin.Context) {
-		var input conversation.CreateConversationInput
+		var input httpapi.ConversationCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		row, err := deps.Conversation.CreateConversation(c.Request.Context(), accessContext(c).Principal, input)
+		row, err := deps.Conversation.CreateConversation(c.Request.Context(), accessContext(c).Principal, views.CreateConversationInput(input))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, conversationView(row))
+		c.JSON(http.StatusCreated, views.Conversation(row))
 	})
 	sessions.GET("", func(c *gin.Context) {
 		rows, err := deps.Conversation.ListConversations(c.Request.Context(), accessContext(c).Principal)
@@ -58,11 +59,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 			writeError(c, err)
 			return
 		}
-		items := make([]conversationResponse, 0, len(rows))
-		for _, row := range rows {
-			items = append(items, conversationView(row))
-		}
-		c.JSON(http.StatusOK, gin.H{"items": items})
+		c.JSON(http.StatusOK, httpapi.ConversationList{Items: views.Conversations(rows)})
 	})
 	sessions.GET("/:id/messages", func(c *gin.Context) {
 		rows, err := deps.Conversation.ListMessages(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
@@ -70,14 +67,10 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 			writeError(c, err)
 			return
 		}
-		items := make([]messageListView, 0, len(rows))
-		for _, row := range rows {
-			items = append(items, messageListView{Message: messageView(row.Message), Citations: row.Citations})
-		}
-		c.JSON(http.StatusOK, gin.H{"items": items})
+		c.JSON(http.StatusOK, httpapi.MessageList{Items: views.MessageViews(rows)})
 	})
 	sessions.POST("/:id/messages", func(c *gin.Context) {
-		var input messageCreateRequest
+		var input httpapi.MessageCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
@@ -95,9 +88,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 
 		if deps.Conversation.AsyncEnabled() {
 			started := time.Now()
-			prepared, err := deps.Conversation.PrepareAnswer(c.Request.Context(), principal, conversation.AskInput{
-				ConversationID: c.Param("id"), Query: input.Query, RequestID: requestID, SessionOverride: input.SessionOverride,
-			})
+			prepared, err := deps.Conversation.PrepareAnswer(c.Request.Context(), principal, views.AskInput(c.Param("id"), input, requestID))
 			if err != nil {
 				if !stream.started() {
 					writeError(c, err)
@@ -149,9 +140,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 			return
 		}
 
-		result, err := deps.Conversation.Ask(c.Request.Context(), principal, conversation.AskInput{
-			ConversationID: c.Param("id"), Query: input.Query, RequestID: requestID, SessionOverride: input.SessionOverride,
-		}, stream.emit)
+		result, err := deps.Conversation.Ask(c.Request.Context(), principal, views.AskInput(c.Param("id"), input, requestID), stream.emit)
 		if err != nil {
 			// Nothing was streamed yet, so a regular error response is still
 			// possible; otherwise report the failure as a stream event.
@@ -209,68 +198,4 @@ func handleRequestEvents(c *gin.Context, deps ConversationDeps, cfg config.Confi
 			return
 		}
 	}
-}
-
-type searchRequest struct {
-	Query           string `json:"query"`
-	KnowledgeBaseID string `json:"knowledgeBaseId"`
-	SessionOverride string `json:"sessionOverride"`
-}
-
-type messageCreateRequest struct {
-	Query           string `json:"query" binding:"required"`
-	RequestID       string `json:"requestId"`
-	SessionOverride string `json:"sessionOverride"`
-}
-
-type conversationResponse struct {
-	ID              string    `json:"id"`
-	TenantID        string    `json:"tenantId"`
-	KnowledgeBaseID string    `json:"knowledgeBaseId"`
-	UserID          string    `json:"userId"`
-	Title           string    `json:"title"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
-}
-
-func conversationView(row models.Conversation) conversationResponse {
-	return conversationResponse{
-		ID: row.ID, TenantID: row.TenantID, KnowledgeBaseID: row.KnowledgeBaseID,
-		UserID: row.UserID, Title: row.Title, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-	}
-}
-
-type messageResponse struct {
-	ID                        string    `json:"id"`
-	ConversationID            string    `json:"conversationId"`
-	TenantID                  string    `json:"tenantId"`
-	KnowledgeBaseID           string    `json:"knowledgeBaseId"`
-	UserID                    string    `json:"userId"`
-	RequestID                 string    `json:"requestId"`
-	Role                      string    `json:"role"`
-	Content                   string    `json:"content"`
-	Status                    string    `json:"status"`
-	AuthorizationScopeVersion string    `json:"authorizationScopeVersion"`
-	Model                     string    `json:"model"`
-	LatencyMS                 int64     `json:"latencyMs"`
-	ErrorCode                 string    `json:"errorCode,omitempty"`
-	ErrorMessage              string    `json:"errorMessage,omitempty"`
-	CreatedAt                 time.Time `json:"createdAt"`
-	UpdatedAt                 time.Time `json:"updatedAt"`
-}
-
-func messageView(row models.Message) messageResponse {
-	return messageResponse{
-		ID: row.ID, ConversationID: row.ConversationID, TenantID: row.TenantID,
-		KnowledgeBaseID: row.KnowledgeBaseID, UserID: row.UserID, RequestID: row.RequestID,
-		Role: row.Role, Content: row.Content, Status: row.Status,
-		AuthorizationScopeVersion: row.AuthorizationScopeVersion, Model: row.Model,
-		LatencyMS: row.LatencyMS, ErrorCode: row.ErrorCode, ErrorMessage: row.ErrorMessage,
-		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
-	}
-}
-
-type messageListView struct {
-	Message   messageResponse             `json:"message"`
-	Citations []conversation.CitationView `json:"citations"`
 }

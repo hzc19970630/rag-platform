@@ -35,6 +35,8 @@ jobs:
         run: test -z "$(gofmt -l cmd internal)"
       - name: Dependency direction
         run: go run ./cmd/checkdeps
+      - name: OpenAPI drift check
+        run: go run ./cmd/openapi -check
       - name: Tenancy static gate
         run: go run ./cmd/checktenancy
       - name: Go tests

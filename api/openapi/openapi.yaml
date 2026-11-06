@@ -1,16 +1,4433 @@
-openapi: 3.0.3
+components:
+  responses:
+    BadRequest:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: Invalid request
+    Forbidden:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: The caller may not access this resource
+    InternalError:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: Unexpected server error
+    Unauthorized:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+      description: Authentication required or invalid
+  schemas:
+    APIKey:
+      properties:
+        capabilities:
+          items:
+            type: string
+          type: array
+        createdAt:
+          format: date-time
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        keyPrefix:
+          type: string
+        knowledgeBaseIds:
+          items:
+            type: string
+          type: array
+        lastUsedAt:
+          format: date-time
+          type: string
+        name:
+          type: string
+        revokedAt:
+          format: date-time
+          type: string
+      type: object
+    APIKeyCreateRequest:
+      properties:
+        capabilities:
+          items:
+            type: string
+          type: array
+        expiresAt:
+          format: date-time
+          type: string
+        knowledgeBaseIds:
+          items:
+            type: string
+          type: array
+        name:
+          type: string
+      required:
+        - name
+      type: object
+    APIKeyCreateResponse:
+      properties:
+        apiKey:
+          $ref: '#/components/schemas/APIKey'
+        token:
+          type: string
+      required:
+        - apiKey
+        - token
+      type: object
+    APIKeyList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/APIKey'
+          type: array
+      required:
+        - items
+      type: object
+    AuditEvent:
+      properties:
+        action:
+          type: string
+        actorId:
+          type: string
+        allowed:
+          type: boolean
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          format: int64
+          type: integer
+        ipAddress:
+          type: string
+        reason:
+          type: string
+        requestId:
+          type: string
+        resourceId:
+          type: string
+        resourceType:
+          type: string
+        tenantId:
+          type: string
+        userAgent:
+          type: string
+      type: object
+    AuditEventList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+          type: array
+      required:
+        - items
+      type: object
+    AuthConfig:
+      properties:
+        devAuthEnabled:
+          type: boolean
+        oidcEnabled:
+          type: boolean
+        oidcIssuer:
+          type: string
+        sessionCookie:
+          type: string
+        sessionTTLHours:
+          type: integer
+      required:
+        - devAuthEnabled
+        - oidcEnabled
+        - sessionCookie
+        - sessionTTLHours
+      type: object
+    CancelResult:
+      properties:
+        cancelled:
+          type: boolean
+      required:
+        - cancelled
+      type: object
+    Chunk:
+      properties:
+        chunkId:
+          type: string
+        content:
+          type: string
+        contentHash:
+          type: string
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        endOffset:
+          type: integer
+        headingPath:
+          type: string
+        knowledgeBaseId:
+          type: string
+        ordinal:
+          type: integer
+        pageNumber:
+          type: integer
+        parentId:
+          type: string
+        sourcePath:
+          type: string
+        startOffset:
+          type: integer
+        status:
+          type: string
+      type: object
+    ChunkPage:
+      properties:
+        documentId:
+          type: string
+        hasMore:
+          type: boolean
+        items:
+          items:
+            $ref: '#/components/schemas/Chunk'
+          type: array
+        nextCursor:
+          type: integer
+        schemaVersion:
+          type: string
+        status:
+          type: string
+        versionId:
+          type: string
+      type: object
+    Citation:
+      properties:
+        chunkId:
+          type: string
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        headingPath:
+          type: string
+        index:
+          type: integer
+        knowledgeBaseId:
+          type: string
+        pageNumber:
+          type: integer
+        quote:
+          type: string
+        rank:
+          type: integer
+        score:
+          type: number
+        sourcePath:
+          type: string
+      type: object
+    Connector:
+      properties:
+        config:
+          $ref: '#/components/schemas/ConnectorConfig'
+        createdAt:
+          format: date-time
+          type: string
+        createdBy:
+          type: string
+        enabled:
+          type: boolean
+        hasCredential:
+          type: boolean
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        lastSyncAt:
+          format: date-time
+          type: string
+        name:
+          type: string
+        nextSyncAt:
+          format: date-time
+          type: string
+        syncIntervalSeconds:
+          type: integer
+        tenantId:
+          type: string
+        type:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    ConnectorConfig:
+      properties:
+        aclMode:
+          type: string
+        manifestUrl:
+          type: string
+        maxItemsPerRun:
+          type: integer
+        requestsPerSecond:
+          type: number
+      type: object
+    ConnectorCreateRequest:
+      properties:
+        config:
+          $ref: '#/components/schemas/ConnectorConfig'
+        credential:
+          $ref: '#/components/schemas/CredentialInput'
+        enabled:
+          type: boolean
+        name:
+          type: string
+        syncIntervalSeconds:
+          type: integer
+        type:
+          type: string
+      required:
+        - name
+        - type
+      type: object
+    ConnectorList:
+      properties:
+        connectors:
+          items:
+            $ref: '#/components/schemas/Connector'
+          type: array
+      required:
+        - connectors
+      type: object
+    ConnectorPermissions:
+      properties:
+        aclMode:
+          type: string
+        aclVersion:
+          format: int64
+          type: integer
+        connectorId:
+          type: string
+        effectiveAcl:
+          type: string
+        knowledgeBaseId:
+          type: string
+        members:
+          items:
+            $ref: '#/components/schemas/PermissionMember'
+          type: array
+        sourceAcl:
+          type: string
+      type: object
+    ConnectorRun:
+      properties:
+        attempts:
+          type: integer
+        cancelRequested:
+          type: boolean
+        connectorId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        cursor: {}
+        errorSummary:
+          type: string
+        finishedAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        itemsCreated:
+          type: integer
+        itemsDeleted:
+          type: integer
+        itemsFailed:
+          type: integer
+        itemsSkipped:
+          type: integer
+        itemsTotal:
+          type: integer
+        itemsUpdated:
+          type: integer
+        knowledgeBaseId:
+          type: string
+        mode:
+          type: string
+        resumeOfRunId:
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        triggeredBy:
+          type: string
+      type: object
+    ConnectorRunList:
+      properties:
+        runs:
+          items:
+            $ref: '#/components/schemas/ConnectorRun'
+          type: array
+      required:
+        - runs
+      type: object
+    ConnectorUpdateRequest:
+      properties:
+        config:
+          $ref: '#/components/schemas/ConnectorConfig'
+        credential:
+          $ref: '#/components/schemas/CredentialInput'
+        enabled:
+          type: boolean
+        name:
+          type: string
+        syncIntervalSeconds:
+          type: integer
+      type: object
+    Conversation:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        tenantId:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        userId:
+          type: string
+      type: object
+    ConversationCreateRequest:
+      properties:
+        knowledge_base_id:
+          type: string
+        title:
+          type: string
+      required:
+        - knowledge_base_id
+      type: object
+    ConversationList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Conversation'
+          type: array
+      type: object
+    CredentialInput:
+      properties:
+        password:
+          type: string
+        token:
+          type: string
+        type:
+          type: string
+        username:
+          type: string
+      type: object
+    DeadLetterList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskDeadLetter'
+          type: array
+      required:
+        - items
+      type: object
+    DevLoginRequest:
+      properties:
+        tenantId:
+          type: string
+        userId:
+          type: string
+      type: object
+    DevLoginResponse:
+      properties:
+        expiresAt:
+          format: date-time
+          type: string
+        principal:
+          $ref: '#/components/schemas/PrincipalView'
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+        - expiresAt
+        - principal
+        - token
+        - user
+      type: object
+    Document:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        deletedAt:
+          format: date-time
+          type: string
+        deletedBy:
+          type: string
+        filename:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        latestVersionId:
+          type: string
+        mimeType:
+          type: string
+        ownerId:
+          type: string
+        purgeAfter:
+          format: date-time
+          type: string
+        restoredAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    DocumentEnvelope:
+      properties:
+        document:
+          $ref: '#/components/schemas/Document'
+      required:
+        - document
+      type: object
+    DocumentPage:
+      properties:
+        hasMore:
+          type: boolean
+        items:
+          items:
+            $ref: '#/components/schemas/DocumentSummary'
+          type: array
+        knowledgeBaseId:
+          type: string
+        nextCursor:
+          type: string
+        schemaVersion:
+          type: string
+      type: object
+    DocumentPreview:
+      properties:
+        blocks:
+          items:
+            $ref: '#/components/schemas/PreviewBlock'
+          type: array
+        documentId:
+          type: string
+        filename:
+          type: string
+        knowledgeBaseId:
+          type: string
+        language:
+          type: string
+        mimeType:
+          type: string
+        parserVersion:
+          type: string
+        schemaVersion:
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        versionId:
+          type: string
+        visibility:
+          type: string
+      type: object
+    DocumentStatus:
+      properties:
+        contentReady:
+          type: boolean
+        document:
+          $ref: '#/components/schemas/Document'
+        pipeline:
+          $ref: '#/components/schemas/PipelineRun'
+        previewable:
+          type: boolean
+        stages:
+          items:
+            $ref: '#/components/schemas/StageRun'
+          type: array
+        version:
+          $ref: '#/components/schemas/DocumentVersion'
+      type: object
+    DocumentSummary:
+      properties:
+        contentReady:
+          type: boolean
+        document:
+          $ref: '#/components/schemas/Document'
+        previewable:
+          type: boolean
+        version:
+          $ref: '#/components/schemas/DocumentVersionSummary'
+      type: object
+    DocumentUploadRequest:
+      properties:
+        document_id:
+          type: string
+        file:
+          format: binary
+          type: string
+      required:
+        - file
+      type: object
+    DocumentVersion:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        contentHash:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        documentId:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        sizeBytes:
+          format: int64
+          type: integer
+        status:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          type: integer
+      type: object
+    DocumentVersionPage:
+      properties:
+        currentVersionId:
+          type: string
+        documentId:
+          type: string
+        items:
+          items:
+            $ref: '#/components/schemas/DocumentVersionView'
+          type: array
+        schemaVersion:
+          type: string
+      type: object
+    DocumentVersionSummary:
+      properties:
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          type: string
+        sizeBytes:
+          format: int64
+          type: integer
+        status:
+          type: string
+        version:
+          type: integer
+      type: object
+    DocumentVersionView:
+      properties:
+        contentHash:
+          type: string
+        contentReady:
+          type: boolean
+        createdAt:
+          format: date-time
+          type: string
+        current:
+          type: boolean
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          type: string
+        restorable:
+          type: boolean
+        sizeBytes:
+          format: int64
+          type: integer
+        status:
+          type: string
+        version:
+          type: integer
+      type: object
+    DocumentView:
+      properties:
+        document:
+          $ref: '#/components/schemas/Document'
+        pipeline:
+          $ref: '#/components/schemas/PipelineRun'
+        stages:
+          items:
+            $ref: '#/components/schemas/StageRun'
+          type: array
+        version:
+          $ref: '#/components/schemas/DocumentVersion'
+      type: object
+    Error:
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+      type: object
+    EvidenceCandidate:
+      properties:
+        channels:
+          items:
+            type: string
+          type: array
+        chunkId:
+          type: string
+        content:
+          type: string
+        contentHash:
+          type: string
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        headingPath:
+          type: string
+        keywordRank:
+          type: integer
+        keywordScore:
+          type: number
+        knowledgeBaseId:
+          type: string
+        ordinal:
+          type: integer
+        pageNumber:
+          type: integer
+        parentId:
+          type: string
+        rerankScore:
+          type: number
+        score:
+          type: number
+        sourcePath:
+          type: string
+        vectorRank:
+          type: integer
+        vectorScore:
+          type: number
+      type: object
+    EvidenceSet:
+      properties:
+        authorizationScopeVersion:
+          type: string
+        droppedByAuthorization:
+          type: integer
+        items:
+          items:
+            $ref: '#/components/schemas/EvidenceCandidate'
+          type: array
+        plan:
+          $ref: '#/components/schemas/QueryPlan'
+        query:
+          type: string
+        recallLatencyMs:
+          format: int64
+          type: integer
+        requestId:
+          type: string
+        rerankApplied:
+          type: boolean
+        schemaVersion:
+          type: string
+        tokenEstimate:
+          type: integer
+      type: object
+    GraphCounts:
+      properties:
+        activeSnapshot:
+          type: string
+        entities:
+          format: int64
+          type: integer
+        pendingReview:
+          format: int64
+          type: integer
+        relations:
+          format: int64
+          type: integer
+        snapshots:
+          format: int64
+          type: integer
+      type: object
+    GraphEntity:
+      properties:
+        aliases:
+          items:
+            type: string
+          type: array
+        id:
+          type: string
+        name:
+          type: string
+        properties:
+          additionalProperties:
+            type: string
+          type: object
+        sources:
+          items:
+            $ref: '#/components/schemas/GraphSource'
+          type: array
+        type:
+          type: string
+      type: object
+    GraphEntityAlias:
+      properties:
+        alias:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        entityId:
+          type: string
+        knowledgeBaseId:
+          type: string
+        mergedKey:
+          type: string
+        normalized:
+          type: string
+        rule:
+          type: string
+        tenantId:
+          type: string
+      type: object
+    GraphNode:
+      properties:
+        aliases:
+          items:
+            type: string
+          type: array
+        depth:
+          type: integer
+        id:
+          type: string
+        name:
+          type: string
+        properties:
+          additionalProperties:
+            type: string
+          type: object
+        sources:
+          items:
+            $ref: '#/components/schemas/GraphSource'
+          type: array
+        type:
+          type: string
+      type: object
+    GraphPath:
+      properties:
+        edgeIds:
+          items:
+            type: string
+          type: array
+        nodeIds:
+          items:
+            type: string
+          type: array
+      type: object
+    GraphQueryResult:
+      properties:
+        depth:
+          type: integer
+        edges:
+          items:
+            $ref: '#/components/schemas/GraphRelation'
+          type: array
+        joined:
+          type: boolean
+        nodes:
+          items:
+            $ref: '#/components/schemas/GraphNode'
+          type: array
+        paths:
+          items:
+            $ref: '#/components/schemas/GraphPath'
+          type: array
+        query:
+          type: string
+        snapshotId:
+          type: string
+        truncated:
+          type: boolean
+      type: object
+    GraphRelation:
+      properties:
+        confidence:
+          type: number
+        id:
+          type: string
+        object:
+          type: string
+        objectId:
+          type: string
+        predicate:
+          type: string
+        properties:
+          additionalProperties:
+            type: string
+          type: object
+        sources:
+          items:
+            $ref: '#/components/schemas/GraphSource'
+          type: array
+        subject:
+          type: string
+        subjectId:
+          type: string
+      type: object
+    GraphReviewRequest:
+      properties:
+        action:
+          type: string
+        note:
+          type: string
+      required:
+        - action
+      type: object
+    GraphRunDetail:
+      properties:
+        run:
+          $ref: '#/components/schemas/ProjectionRun'
+        snapshot:
+          $ref: '#/components/schemas/GraphSnapshot'
+        stages:
+          items:
+            $ref: '#/components/schemas/ProjectionStageRun'
+          type: array
+      type: object
+    GraphRunList:
+      properties:
+        runs:
+          items:
+            $ref: '#/components/schemas/ProjectionRun'
+          type: array
+      required:
+        - runs
+      type: object
+    GraphSnapshot:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        activatedAt:
+          format: date-time
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        model:
+          type: string
+        projectionRunId:
+          type: string
+        promptVersion:
+          type: string
+        reviewNote:
+          type: string
+        reviewedAt:
+          format: date-time
+          type: string
+        reviewedBy:
+          type: string
+        sourceHash:
+          type: string
+        stats:
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        version:
+          type: integer
+      type: object
+    GraphSnapshotDetail:
+      properties:
+        aliases:
+          items:
+            $ref: '#/components/schemas/GraphEntityAlias'
+          type: array
+        entities:
+          items:
+            $ref: '#/components/schemas/GraphEntity'
+          type: array
+        relations:
+          items:
+            $ref: '#/components/schemas/GraphRelation'
+          type: array
+        snapshot:
+          $ref: '#/components/schemas/GraphSnapshot'
+      type: object
+    GraphSnapshotList:
+      properties:
+        snapshots:
+          items:
+            $ref: '#/components/schemas/GraphSnapshot'
+          type: array
+      required:
+        - snapshots
+      type: object
+    GraphSource:
+      properties:
+        chunkId:
+          type: string
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        headingPath:
+          type: string
+        pageNumber:
+          type: integer
+        sourcePath:
+          type: string
+      type: object
+    IndexingStrategy:
+      properties:
+        graph_enabled:
+          type: boolean
+        keyword_enabled:
+          type: boolean
+        required_capabilities:
+          items:
+            type: string
+          type: array
+        vector_enabled:
+          type: boolean
+        wiki_enabled:
+          type: boolean
+      type: object
+    KnowledgeBase:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        description:
+          type: string
+        embeddingDimension:
+          type: integer
+        embeddingModel:
+          type: string
+        id:
+          type: string
+        indexingStrategy:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+        retrievalConfig:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    KnowledgeBaseConfiguration:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        indexingStrategy:
+          $ref: '#/components/schemas/IndexingStrategy'
+        knowledgeBaseId:
+          type: string
+        readOnly:
+          $ref: '#/components/schemas/ReadOnlySystemConfiguration'
+        retrieval:
+          $ref: '#/components/schemas/RetrievalConfiguration'
+        schemaVersion:
+          type: string
+      type: object
+    KnowledgeBaseCreateRequest:
+      properties:
+        description:
+          type: string
+        name:
+          maxLength: 255
+          type: string
+      required:
+        - name
+      type: object
+    KnowledgeBaseList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/KnowledgeBase'
+          type: array
+      type: object
+    KnowledgeBaseMember:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        knowledgeBaseId:
+          type: string
+        role:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        userId:
+          type: string
+      type: object
+    KnowledgeBaseMemberCreateRequest:
+      properties:
+        role:
+          enum:
+            - viewer
+            - editor
+          type: string
+        user_id:
+          type: string
+      required:
+        - role
+        - user_id
+      type: object
+    KnowledgeBaseMemberList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/KnowledgeBaseMember'
+          type: array
+      type: object
+    KnowledgeBaseUpdateRequest:
+      properties:
+        chat_model:
+          type: string
+        description:
+          type: string
+        embedding_dimension:
+          type: integer
+        embedding_model:
+          type: string
+        indexing_strategy:
+          $ref: '#/components/schemas/IndexingStrategy'
+        name:
+          maxLength: 255
+          type: string
+        rerank_model:
+          type: string
+        retrieval_config:
+          $ref: '#/components/schemas/RetrievalConfigOverride'
+      type: object
+    KnowledgeHit:
+      properties:
+        content:
+          type: string
+        knowledgeBaseId:
+          type: string
+        pageId:
+          type: string
+        score:
+          type: number
+        sources:
+          items:
+            $ref: '#/components/schemas/WikiPageSource'
+          type: array
+        title:
+          type: string
+        wikiPageVersionId:
+          type: string
+      type: object
+    KnowledgeSearchResult:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/KnowledgeHit'
+          type: array
+        joined:
+          type: boolean
+        query:
+          type: string
+      type: object
+    MeResponse:
+      properties:
+        developmentIdentity:
+          type: boolean
+        principal:
+          $ref: '#/components/schemas/PrincipalView'
+        scope:
+          $ref: '#/components/schemas/ScopeView'
+      type: object
+    Message:
+      properties:
+        authorizationScopeVersion:
+          type: string
+        content:
+          type: string
+        conversationId:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        latencyMs:
+          format: int64
+          type: integer
+        model:
+          type: string
+        requestId:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        userId:
+          type: string
+      type: object
+    MessageCreateRequest:
+      properties:
+        query:
+          type: string
+        requestId:
+          type: string
+        sessionOverride:
+          type: string
+      required:
+        - query
+      type: object
+    MessageList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/MessageView'
+          type: array
+      type: object
+    MessageView:
+      properties:
+        citations:
+          items:
+            $ref: '#/components/schemas/Citation'
+          type: array
+        message:
+          $ref: '#/components/schemas/Message'
+      type: object
+    OpsMetrics:
+      additionalProperties: true
+      type: object
+    OutboxEvent:
+      properties:
+        aggregateId:
+          type: string
+        aggregateType:
+          type: string
+        attempts:
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        eventType:
+          type: string
+        id:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        lastError:
+          type: string
+        nextAttemptAt:
+          format: date-time
+          type: string
+        publishedAt:
+          format: date-time
+          type: string
+        tenantId:
+          type: string
+      type: object
+    PageCounts:
+      properties:
+        indexed:
+          format: int64
+          type: integer
+        pendingReview:
+          format: int64
+          type: integer
+        published:
+          format: int64
+          type: integer
+        stale:
+          format: int64
+          type: integer
+        total:
+          format: int64
+          type: integer
+      type: object
+    PermissionMember:
+      properties:
+        role:
+          type: string
+        userId:
+          type: string
+      type: object
+    PipelineRun:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          type: string
+        idempotencyKey:
+          type: string
+        knowledgeBaseId:
+          type: string
+        pipelineType:
+          type: string
+        requestId:
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        traceId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    PreviewBlock:
+      properties:
+        blockId:
+          type: string
+        endOffset:
+          type: integer
+        headingPath:
+          type: string
+        kind:
+          type: string
+        pageNumber:
+          type: integer
+        sourcePath:
+          type: string
+        startOffset:
+          type: integer
+        text:
+          type: string
+      type: object
+    PrincipalView:
+      properties:
+        capabilities:
+          items:
+            type: string
+          type: array
+        credentialId:
+          type: string
+        credentialType:
+          type: string
+        subjectId:
+          type: string
+        tenantId:
+          type: string
+      type: object
+    ProjectionRun:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        completedAt:
+          format: date-time
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        evidencePackageId:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        model:
+          type: string
+        projectionType:
+          type: string
+        promptVersion:
+          type: string
+        retryOfRunId:
+          type: string
+        sourceHash:
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    ProjectionStageRun:
+      properties:
+        attempts:
+          type: integer
+        completedAt:
+          format: date-time
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        projectionRunId:
+          type: string
+        projectionType:
+          type: string
+        stage:
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    ProjectionState:
+      properties:
+        graph:
+          $ref: '#/components/schemas/GraphCounts'
+        graphEnabled:
+          type: boolean
+        joinStatus:
+          type: string
+        knowledgeBaseId:
+          type: string
+        pages:
+          $ref: '#/components/schemas/PageCounts'
+        relationRuns:
+          items:
+            $ref: '#/components/schemas/ProjectionRun'
+          type: array
+        runs:
+          items:
+            $ref: '#/components/schemas/ProjectionRun'
+          type: array
+        wikiEnabled:
+          type: boolean
+      type: object
+    QueryPlan:
+      properties:
+        authorizationScopeVersion:
+          type: string
+        channels:
+          items:
+            type: string
+          type: array
+        fusion:
+          type: string
+        historyTurns:
+          type: integer
+        intent:
+          type: string
+        keywordEnabled:
+          type: boolean
+        knowledgeBaseIds:
+          items:
+            type: string
+          type: array
+        mode:
+          type: string
+        params:
+          $ref: '#/components/schemas/QueryPlanParams'
+        requestId:
+          type: string
+        requiredCapabilities:
+          items:
+            type: string
+          type: array
+        rerankEnabled:
+          type: boolean
+        rewrite:
+          type: string
+        schemaVersion:
+          type: string
+        tenantId:
+          type: string
+        topK:
+          type: integer
+        vectorEnabled:
+          type: boolean
+      type: object
+    QueryPlanParams:
+      properties:
+        AdjacentExpansion:
+          type: integer
+        ContextTokenLimit:
+          type: integer
+        EmbeddingTopK:
+          type: integer
+        ExpansionScoreFactor:
+          type: number
+        KeywordThreshold:
+          type: number
+        KeywordTopK:
+          type: integer
+        MaxAdjacentChunks:
+          type: integer
+        RRFK:
+          type: integer
+        RerankEnabled:
+          type: boolean
+        RerankThreshold:
+          type: number
+        RerankTopK:
+          type: integer
+        TopK:
+          type: integer
+        VectorEFSearch:
+          type: integer
+        VectorIterativeScan:
+          type: boolean
+        VectorOversample:
+          type: integer
+        VectorThreshold:
+          type: number
+      type: object
+    ReadOnlyChat:
+      properties:
+        model:
+          type: string
+        source:
+          type: string
+      type: object
+    ReadOnlyChunking:
+      properties:
+        minSize:
+          type: integer
+        overlap:
+          type: integer
+        size:
+          type: integer
+        splitMarkers:
+          type: string
+      type: object
+    ReadOnlyEmbedding:
+      properties:
+        dimension:
+          type: integer
+        model:
+          type: string
+        source:
+          type: string
+      type: object
+    ReadOnlyParser:
+      properties:
+        supportedFormats:
+          items:
+            type: string
+          type: array
+        version:
+          type: string
+      type: object
+    ReadOnlyRerank:
+      properties:
+        model:
+          type: string
+        source:
+          type: string
+      type: object
+    ReadOnlySystemConfiguration:
+      properties:
+        chat:
+          $ref: '#/components/schemas/ReadOnlyChat'
+        chunking:
+          $ref: '#/components/schemas/ReadOnlyChunking'
+        embedding:
+          $ref: '#/components/schemas/ReadOnlyEmbedding'
+        parser:
+          $ref: '#/components/schemas/ReadOnlyParser'
+        rerank:
+          $ref: '#/components/schemas/ReadOnlyRerank'
+      type: object
+    ReconcileReport:
+      properties:
+        deadLettersResolved:
+          format: int64
+          type: integer
+        documentsRepaired:
+          format: int64
+          type: integer
+        inboxesExpired:
+          format: int64
+          type: integer
+        pipelinesCancelled:
+          type: integer
+        stagesRequeued:
+          type: integer
+        versionsRepaired:
+          format: int64
+          type: integer
+      type: object
+    RefreshResponse:
+      properties:
+        expiresAt:
+          format: date-time
+          type: string
+        token:
+          type: string
+      required:
+        - expiresAt
+        - token
+      type: object
+    RetrievalConfigOverride:
+      properties:
+        adjacent_expansion:
+          type: integer
+        context_token_limit:
+          type: integer
+        embedding_top_k:
+          type: integer
+        expansion_score_factor:
+          type: number
+        keyword_threshold:
+          type: number
+        keyword_top_k:
+          type: integer
+        max_adjacent_chunks:
+          type: integer
+        rerank_enabled:
+          type: boolean
+        rerank_threshold:
+          type: number
+        rerank_top_k:
+          type: integer
+        rrf_k:
+          type: integer
+        top_k:
+          type: integer
+        vector_ef_search:
+          maximum: 1000
+          minimum: 0
+          type: integer
+        vector_iterative_scan:
+          type: boolean
+        vector_oversample:
+          maximum: 20
+          minimum: 1
+          type: integer
+        vector_threshold:
+          type: number
+      type: object
+    RetrievalConfiguration:
+      properties:
+        effective:
+          $ref: '#/components/schemas/RetrievalParams'
+        globalDefaults:
+          $ref: '#/components/schemas/RetrievalParams'
+        knowledgeBaseOverride:
+          $ref: '#/components/schemas/RetrievalConfigOverride'
+        sources:
+          additionalProperties:
+            type: string
+          type: object
+      type: object
+    RetrievalParams:
+      properties:
+        adjacent_expansion:
+          type: integer
+        context_token_limit:
+          type: integer
+        embedding_top_k:
+          type: integer
+        expansion_score_factor:
+          type: number
+        keyword_threshold:
+          type: number
+        keyword_top_k:
+          type: integer
+        max_adjacent_chunks:
+          type: integer
+        rerank_enabled:
+          type: boolean
+        rerank_threshold:
+          type: number
+        rerank_top_k:
+          type: integer
+        rrf_k:
+          type: integer
+        top_k:
+          type: integer
+        vector_ef_search:
+          type: integer
+        vector_iterative_scan:
+          type: boolean
+        vector_oversample:
+          type: integer
+        vector_threshold:
+          type: number
+      type: object
+    ScopeView:
+      properties:
+        aclVersion:
+          type: string
+        capabilities:
+          items:
+            type: string
+          type: array
+        knowledgeBaseIds:
+          items:
+            type: string
+          type: array
+        resourceIds:
+          items:
+            type: string
+          type: array
+        subjectId:
+          type: string
+        tenantId:
+          type: string
+      type: object
+    SearchRequest:
+      properties:
+        knowledgeBaseId:
+          type: string
+        query:
+          type: string
+        sessionOverride:
+          type: string
+      type: object
+    StageRun:
+      properties:
+        attempts:
+          type: integer
+        completedAt:
+          format: date-time
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        id:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        pipelineRunId:
+          type: string
+        stage:
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    StartResult:
+      properties:
+        started:
+          type: integer
+      required:
+        - started
+      type: object
+    StreamEvent:
+      properties:
+        data:
+          additionalProperties: true
+          type: object
+        event_id:
+          type: string
+        request_id:
+          type: string
+        sequence:
+          type: integer
+        type:
+          type: string
+      required:
+        - request_id
+        - sequence
+        - type
+      type: object
+    TaskDeadLetter:
+      properties:
+        attempts:
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        documentVersionId:
+          type: string
+        id:
+          format: int64
+          type: integer
+        idempotencyKey:
+          type: string
+        knowledgeBaseId:
+          type: string
+        lastError:
+          type: string
+        resolvedAt:
+          format: date-time
+          type: string
+        resolvedBy:
+          type: string
+        stage:
+          type: string
+        status:
+          type: string
+        taskType:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    TaskInbox:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        idempotencyKey:
+          type: string
+        lastError:
+          type: string
+        leaseOwner:
+          type: string
+        leaseUntil:
+          format: date-time
+          type: string
+        processedAt:
+          format: date-time
+          type: string
+        stageRunId:
+          format: int64
+          type: integer
+        status:
+          type: string
+        taskType:
+          type: string
+        tenantId:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    TaskInspection:
+      properties:
+        deadLetter:
+          $ref: '#/components/schemas/TaskDeadLetter'
+        inbox:
+          $ref: '#/components/schemas/TaskInbox'
+        outbox:
+          items:
+            $ref: '#/components/schemas/OutboxEvent'
+          type: array
+        pipeline:
+          $ref: '#/components/schemas/PipelineRun'
+        stage:
+          $ref: '#/components/schemas/StageRun'
+        task: {}
+      required:
+        - outbox
+        - task
+      type: object
+    TenantMember:
+      properties:
+        displayName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        userId:
+          type: string
+      type: object
+    TenantMemberCreateRequest:
+      properties:
+        role:
+          type: string
+        userId:
+          type: string
+      required:
+        - role
+        - userId
+      type: object
+    TenantMemberList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TenantMember'
+          type: array
+      required:
+        - items
+      type: object
+    TenantMemberUpdateRequest:
+      properties:
+        role:
+          type: string
+      required:
+        - role
+      type: object
+    User:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+        id:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    WikiBlock:
+      properties:
+        content:
+          type: string
+        headingPath:
+          type: string
+        sourceChunkIds:
+          items:
+            type: string
+          type: array
+      type: object
+    WikiPage:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        currentVersionId:
+          type: string
+        documentId:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        pageType:
+          type: string
+        publishedVersionId:
+          type: string
+        slug:
+          type: string
+        sourceHash:
+          type: string
+        status:
+          type: string
+        tenantId:
+          type: string
+        title:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    WikiPageDetail:
+      properties:
+        blocks:
+          items:
+            $ref: '#/components/schemas/WikiBlock'
+          type: array
+        page:
+          $ref: '#/components/schemas/WikiPage'
+        sources:
+          items:
+            $ref: '#/components/schemas/WikiPageSource'
+          type: array
+        version:
+          $ref: '#/components/schemas/WikiPageVersion'
+      type: object
+    WikiPageList:
+      properties:
+        pages:
+          items:
+            $ref: '#/components/schemas/WikiPageSummary'
+          type: array
+      required:
+        - pages
+      type: object
+    WikiPageSource:
+      properties:
+        chunkId:
+          type: string
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        headingPath:
+          type: string
+        knowledgeBaseId:
+          type: string
+        pageNumber:
+          type: integer
+        sourcePath:
+          type: string
+        tenantId:
+          type: string
+        wikiPageVersionId:
+          type: string
+      type: object
+    WikiPageSummary:
+      properties:
+        currentVersion:
+          $ref: '#/components/schemas/WikiPageVersion'
+        page:
+          $ref: '#/components/schemas/WikiPage'
+        publishedVersion:
+          $ref: '#/components/schemas/WikiPageVersion'
+      type: object
+    WikiPageVersion:
+      properties:
+        aclVersion:
+          format: int64
+          type: integer
+        content:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        createdBy:
+          type: string
+        generationModel:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        promptVersion:
+          type: string
+        reviewNote:
+          type: string
+        reviewStatus:
+          type: string
+        reviewedAt:
+          format: date-time
+          type: string
+        reviewedBy:
+          type: string
+        sourceHash:
+          type: string
+        tenantId:
+          type: string
+        version:
+          type: integer
+        wikiPageId:
+          type: string
+      type: object
+    WikiReviewRequest:
+      properties:
+        action:
+          type: string
+        note:
+          type: string
+      required:
+        - action
+      type: object
+    WikiRollbackRequest:
+      properties:
+        version_id:
+          type: string
+      required:
+        - version_id
+      type: object
+    WikiRunDetail:
+      properties:
+        run:
+          $ref: '#/components/schemas/ProjectionRun'
+        stages:
+          items:
+            $ref: '#/components/schemas/ProjectionStageRun'
+          type: array
+      type: object
+    WikiRunList:
+      properties:
+        runs:
+          items:
+            $ref: '#/components/schemas/ProjectionRun'
+          type: array
+      required:
+        - runs
+      type: object
+    WikiVersionList:
+      properties:
+        versions:
+          items:
+            $ref: '#/components/schemas/WikiPageVersion'
+          type: array
+      required:
+        - versions
+      type: object
+  securitySchemes:
+    bearerAuth:
+      scheme: bearer
+      type: http
+    sessionCookie:
+      in: cookie
+      name: rag_session
+      type: apiKey
 info:
+  description: |-
+    Resource-oriented contract for the RAG platform. Route ownership follows the
+    domain resource, not the delivery milestone. This file is generated from
+    contracts/httpapi; every Gin business route must have a matching entry there
+    (see openapi_test.go).
   title: RAG Platform API
   version: 0.10.0
-  description: |
-    Resource-oriented contract for the RAG platform. Route ownership follows the
-    domain resource, not the delivery milestone. Every Gin business route must
-    have a matching path and method here (see openapi_test.go).
-servers:
-  - url: /api/v1
+openapi: 3.0.3
+paths:
+  /api/v1/api-keys:
+    get:
+      operationId: get_api_keys
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKeyList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/api-keys
+      tags:
+        - identity
+    post:
+      operationId: post_api_keys
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKeyCreateResponse'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/api-keys
+      tags:
+        - identity
+  /api/v1/api-keys/{id}:
+    delete:
+      operationId: delete_api_keys_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/api-keys/{id}
+      tags:
+        - identity
+  /api/v1/audit:
+    get:
+      operationId: get_audit
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/audit
+      tags:
+        - identity
+  /api/v1/audit/authorization:
+    get:
+      operationId: get_audit_authorization
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/audit/authorization
+      tags:
+        - identity
+  /api/v1/auth/callback:
+    get:
+      operationId: get_auth_callback
+      responses:
+        "302":
+          description: Redirect to the web application
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: GET /api/v1/auth/callback
+      tags:
+        - auth
+  /api/v1/auth/config:
+    get:
+      operationId: get_auth_config
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthConfig'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: GET /api/v1/auth/config
+      tags:
+        - auth
+  /api/v1/auth/dev-login:
+    post:
+      operationId: post_auth_dev_login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevLoginResponse'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: POST /api/v1/auth/dev-login
+      tags:
+        - auth
+  /api/v1/auth/logout:
+    post:
+      operationId: post_auth_logout
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: POST /api/v1/auth/logout
+      tags:
+        - auth
+  /api/v1/auth/oidc/login:
+    get:
+      operationId: get_auth_oidc_login
+      responses:
+        "302":
+          description: Redirect to the web application
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: GET /api/v1/auth/oidc/login
+      tags:
+        - auth
+  /api/v1/auth/refresh:
+    post:
+      operationId: post_auth_refresh
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: POST /api/v1/auth/refresh
+      tags:
+        - auth
+  /api/v1/chunks/{chunkID}:
+    get:
+      operationId: get_chunks_chunkID
+      parameters:
+        - in: path
+          name: chunkID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chunk'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/chunks/{chunkID}
+      tags:
+        - documents
+  /api/v1/connectors/{id}:
+    delete:
+      operationId: delete_connectors_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/connectors/{id}
+      tags:
+        - connectors
+    get:
+      operationId: get_connectors_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connector'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/connectors/{id}
+      tags:
+        - connectors
+    patch:
+      operationId: patch_connectors_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connector'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/connectors/{id}
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/cancel:
+    post:
+      operationId: post_connectors_id_cancel
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelResult'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/connectors/{id}/cancel
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/permissions:
+    get:
+      operationId: get_connectors_id_permissions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorPermissions'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/connectors/{id}/permissions
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/runs:
+    get:
+      operationId: get_connectors_id_runs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorRunList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/connectors/{id}/runs
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/runs/{runId}:
+    get:
+      operationId: get_connectors_id_runs_runId
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorRun'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/connectors/{id}/runs/{runId}
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/runs/{runId}/cancel:
+    post:
+      operationId: post_connectors_id_runs_runId_cancel
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/connectors/{id}/runs/{runId}/cancel
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/runs/{runId}/retry:
+    post:
+      operationId: post_connectors_id_runs_runId_retry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/connectors/{id}/runs/{runId}/retry
+      tags:
+        - connectors
+  /api/v1/connectors/{id}/sync:
+    post:
+      operationId: post_connectors_id_sync
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/connectors/{id}/sync
+      tags:
+        - connectors
+  /api/v1/documents/{id}:
+    delete:
+      operationId: delete_documents_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/documents/{id}
+      tags:
+        - documents
+    get:
+      operationId: get_documents_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}
+      tags:
+        - documents
+  /api/v1/documents/{id}/chunks:
+    get:
+      operationId: get_documents_id_chunks
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChunkPage'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}/chunks
+      tags:
+        - documents
+  /api/v1/documents/{id}/content:
+    get:
+      operationId: get_documents_id_content
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentPreview'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}/content
+      tags:
+        - documents
+  /api/v1/documents/{id}/preview:
+    get:
+      operationId: get_documents_id_preview
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: Original file bytes with the stored MIME type
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}/preview
+      tags:
+        - documents
+  /api/v1/documents/{id}/purge:
+    post:
+      operationId: post_documents_id_purge
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/documents/{id}/purge
+      tags:
+        - documents
+  /api/v1/documents/{id}/reparse:
+    post:
+      operationId: post_documents_id_reparse
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/documents/{id}/reparse
+      tags:
+        - documents
+  /api/v1/documents/{id}/restore:
+    post:
+      operationId: post_documents_id_restore
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentEnvelope'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/documents/{id}/restore
+      tags:
+        - documents
+  /api/v1/documents/{id}/status:
+    get:
+      operationId: get_documents_id_status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentStatus'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}/status
+      tags:
+        - documents
+  /api/v1/documents/{id}/versions:
+    get:
+      operationId: get_documents_id_versions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionPage'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}/versions
+      tags:
+        - documents
+  /api/v1/documents/{id}/versions/{versionID}/activate:
+    post:
+      operationId: post_documents_id_versions_versionID_activate
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: versionID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/documents/{id}/versions/{versionID}/activate
+      tags:
+        - documents
+  /api/v1/graph/runs/{runId}:
+    get:
+      operationId: get_graph_runs_runId
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphRunDetail'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/graph/runs/{runId}
+      tags:
+        - projections
+  /api/v1/graph/runs/{runId}/retry:
+    post:
+      operationId: post_graph_runs_runId_retry
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectionRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/graph/runs/{runId}/retry
+      tags:
+        - projections
+  /api/v1/graph/snapshots/{snapshotId}:
+    get:
+      operationId: get_graph_snapshots_snapshotId
+      parameters:
+        - in: path
+          name: snapshotId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphSnapshotDetail'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/graph/snapshots/{snapshotId}
+      tags:
+        - projections
+  /api/v1/graph/snapshots/{snapshotId}/review:
+    post:
+      operationId: post_graph_snapshots_snapshotId_review
+      parameters:
+        - in: path
+          name: snapshotId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphReviewRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphSnapshot'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/graph/snapshots/{snapshotId}/review
+      tags:
+        - projections
+  /api/v1/knowledge-bases:
+    get:
+      operationId: get_knowledge_bases
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases
+      tags:
+        - knowledge-bases
+    post:
+      operationId: post_knowledge_bases
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeBaseCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBase'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases
+      tags:
+        - knowledge-bases
+  /api/v1/knowledge-bases/{id}:
+    delete:
+      operationId: delete_knowledge_bases_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/knowledge-bases/{id}
+      tags:
+        - knowledge-bases
+    get:
+      operationId: get_knowledge_bases_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBase'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}
+      tags:
+        - knowledge-bases
+    patch:
+      operationId: patch_knowledge_bases_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeBaseUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBase'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/knowledge-bases/{id}
+      tags:
+        - knowledge-bases
+  /api/v1/knowledge-bases/{id}/configuration:
+    get:
+      operationId: get_knowledge_bases_id_configuration
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseConfiguration'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/configuration
+      tags:
+        - knowledge-bases
+  /api/v1/knowledge-bases/{id}/connectors:
+    get:
+      operationId: get_knowledge_bases_id_connectors
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectorList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/connectors
+      tags:
+        - connectors
+    post:
+      operationId: post_knowledge_bases_id_connectors
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectorCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connector'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/connectors
+      tags:
+        - connectors
+  /api/v1/knowledge-bases/{id}/documents:
+    get:
+      operationId: get_knowledge_bases_id_documents
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentPage'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/documents
+      tags:
+        - documents
+    post:
+      operationId: post_knowledge_bases_id_documents
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentUploadRequest'
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/documents
+      tags:
+        - documents
+  /api/v1/knowledge-bases/{id}/graph/query:
+    get:
+      operationId: get_knowledge_bases_id_graph_query
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQueryResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/graph/query
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/graph/rebuild:
+    post:
+      operationId: post_knowledge_bases_id_graph_rebuild
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartResult'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/graph/rebuild
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/graph/runs:
+    get:
+      operationId: get_knowledge_bases_id_graph_runs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphRunList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/graph/runs
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/graph/snapshots:
+    get:
+      operationId: get_knowledge_bases_id_graph_snapshots
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphSnapshotList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/graph/snapshots
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/knowledge/search:
+    get:
+      operationId: get_knowledge_bases_id_knowledge_search
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeSearchResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/knowledge/search
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/members:
+    get:
+      operationId: get_knowledge_bases_id_members
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseMemberList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/members
+      tags:
+        - knowledge-bases
+    post:
+      operationId: post_knowledge_bases_id_members
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KnowledgeBaseMemberCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseMember'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/members
+      tags:
+        - knowledge-bases
+  /api/v1/knowledge-bases/{id}/members/{userID}:
+    delete:
+      operationId: delete_knowledge_bases_id_members_userID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: userID
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/knowledge-bases/{id}/members/{userID}
+      tags:
+        - knowledge-bases
+  /api/v1/knowledge-bases/{id}/projection:
+    get:
+      operationId: get_knowledge_bases_id_projection
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectionState'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/projection
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/retrieval-config:
+    put:
+      operationId: put_knowledge_bases_id_retrieval_config
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetrievalConfigOverride'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeBaseConfiguration'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PUT /api/v1/knowledge-bases/{id}/retrieval-config
+      tags:
+        - knowledge-bases
+  /api/v1/knowledge-bases/{id}/sync/cancel:
+    post:
+      operationId: post_knowledge_bases_id_sync_cancel
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelResult'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/sync/cancel
+      tags:
+        - connectors
+  /api/v1/knowledge-bases/{id}/wiki/pages:
+    get:
+      operationId: get_knowledge_bases_id_wiki_pages
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiPageList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/wiki/pages
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/wiki/rebuild:
+    post:
+      operationId: post_knowledge_bases_id_wiki_rebuild
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartResult'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/wiki/rebuild
+      tags:
+        - projections
+  /api/v1/knowledge-bases/{id}/wiki/runs:
+    get:
+      operationId: get_knowledge_bases_id_wiki_runs
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiRunList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/wiki/runs
+      tags:
+        - projections
+  /api/v1/me:
+    get:
+      operationId: get_me
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/me
+      tags:
+        - identity
+  /api/v1/ops/dead-letters:
+    get:
+      operationId: get_ops_dead_letters
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeadLetterList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/ops/dead-letters
+      tags:
+        - operations
+  /api/v1/ops/dead-letters/{id}/discard:
+    post:
+      operationId: post_ops_dead_letters_id_discard
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/ops/dead-letters/{id}/discard
+      tags:
+        - operations
+  /api/v1/ops/dead-letters/{id}/retry:
+    post:
+      operationId: post_ops_dead_letters_id_retry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/ops/dead-letters/{id}/retry
+      tags:
+        - operations
+  /api/v1/ops/metrics:
+    get:
+      operationId: get_ops_metrics
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsMetrics'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/ops/metrics
+      tags:
+        - operations
+  /api/v1/ops/metrics/prometheus:
+    get:
+      operationId: get_ops_metrics_prometheus
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/ops/metrics/prometheus
+      tags:
+        - operations
+  /api/v1/ops/pipelines/{id}/cancel:
+    post:
+      operationId: post_ops_pipelines_id_cancel
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/ops/pipelines/{id}/cancel
+      tags:
+        - operations
+  /api/v1/ops/reconcile:
+    post:
+      operationId: post_ops_reconcile
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileReport'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/ops/reconcile
+      tags:
+        - operations
+  /api/v1/ops/tasks/{key}:
+    get:
+      operationId: get_ops_tasks_key
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskInspection'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/ops/tasks/{key}
+      tags:
+        - operations
+  /api/v1/requests/{requestID}/events:
+    get:
+      operationId: get_requests_requestID_events
+      parameters:
+        - in: path
+          name: requestID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/requests/{requestID}/events
+      tags:
+        - conversations
+  /api/v1/search:
+    post:
+      operationId: post_search
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceSet'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/search
+      tags:
+        - conversations
+  /api/v1/sessions:
+    get:
+      operationId: get_sessions
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/sessions
+      tags:
+        - conversations
+    post:
+      operationId: post_sessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/sessions
+      tags:
+        - conversations
+  /api/v1/sessions/{id}/messages:
+    get:
+      operationId: get_sessions_id_messages
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/sessions/{id}/messages
+      tags:
+        - conversations
+    post:
+      operationId: post_sessions_id_messages
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/sessions/{id}/messages
+      tags:
+        - conversations
+  /api/v1/tenant/members:
+    get:
+      operationId: get_tenant_members
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMemberList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/tenant/members
+      tags:
+        - identity
+    post:
+      operationId: post_tenant_members
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMemberCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantMember'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/tenant/members
+      tags:
+        - identity
+  /api/v1/tenant/members/{userID}:
+    delete:
+      operationId: delete_tenant_members_userID
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/tenant/members/{userID}
+      tags:
+        - identity
+    patch:
+      operationId: patch_tenant_members_userID
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantMemberUpdateRequest'
+        required: true
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/tenant/members/{userID}
+      tags:
+        - identity
+  /api/v1/wiki/pages/{pageId}:
+    get:
+      operationId: get_wiki_pages_pageId
+      parameters:
+        - in: path
+          name: pageId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiPageDetail'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/wiki/pages/{pageId}
+      tags:
+        - projections
+  /api/v1/wiki/pages/{pageId}/rollback:
+    post:
+      operationId: post_wiki_pages_pageId_rollback
+      parameters:
+        - in: path
+          name: pageId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WikiRollbackRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiPage'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/wiki/pages/{pageId}/rollback
+      tags:
+        - projections
+  /api/v1/wiki/pages/{pageId}/versions:
+    get:
+      operationId: get_wiki_pages_pageId_versions
+      parameters:
+        - in: path
+          name: pageId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiVersionList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/wiki/pages/{pageId}/versions
+      tags:
+        - projections
+  /api/v1/wiki/pages/{pageId}/versions/{versionId}/publish:
+    post:
+      operationId: post_wiki_pages_pageId_versions_versionId_publish
+      parameters:
+        - in: path
+          name: pageId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: versionId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiPage'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/publish
+      tags:
+        - projections
+  /api/v1/wiki/pages/{pageId}/versions/{versionId}/review:
+    post:
+      operationId: post_wiki_pages_pageId_versions_versionId_review
+      parameters:
+        - in: path
+          name: pageId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: versionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WikiReviewRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiPageVersion'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review
+      tags:
+        - projections
+  /api/v1/wiki/runs/{runId}:
+    get:
+      operationId: get_wiki_runs_runId
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiRunDetail'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/wiki/runs/{runId}
+      tags:
+        - projections
+  /api/v1/wiki/runs/{runId}/retry:
+    post:
+      operationId: post_wiki_runs_runId_retry
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectionRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/wiki/runs/{runId}/retry
+      tags:
+        - projections
 security:
   - bearerAuth: []
   - sessionCookie: []
+servers:
+  - url: /api/v1
 tags:
   - name: auth
   - name: identity
@@ -20,2482 +4437,3 @@ tags:
   - name: connectors
   - name: projections
   - name: operations
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-    sessionCookie:
-      type: apiKey
-      in: cookie
-      name: rag_session
-  responses:
-    BadRequest:
-      description: Invalid request
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Unauthorized:
-      description: Authentication required or invalid
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    Forbidden:
-      description: The caller may not access this resource
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    InternalError:
-      description: Unexpected server error
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-  schemas:
-    Error:
-      type: object
-      required: [error]
-      properties:
-        error:
-          type: string
-        message:
-          type: string
-    GenericObject:
-      type: object
-      additionalProperties: true
-    RetrievalConfigOverride:
-      type: object
-      description: Optional knowledge-base tier fields; omitted fields keep the global default.
-      properties:
-        top_k: {type: integer}
-        embedding_top_k: {type: integer}
-        keyword_top_k: {type: integer}
-        vector_threshold: {type: number}
-        keyword_threshold: {type: number}
-        rerank_enabled: {type: boolean}
-        rerank_top_k: {type: integer}
-        rerank_threshold: {type: number}
-        vector_ef_search: {type: integer, minimum: 0, maximum: 1000}
-        vector_oversample: {type: integer, minimum: 1, maximum: 20}
-        vector_iterative_scan: {type: boolean}
-        context_token_limit: {type: integer}
-        adjacent_expansion: {type: integer}
-        max_adjacent_chunks: {type: integer}
-        rrf_k: {type: integer}
-        expansion_score_factor: {type: number}
-    MeResponse:
-      type: object
-      properties:
-        principal:
-          type: object
-          properties:
-            subjectId: {type: string}
-            tenantId: {type: string}
-        scope:
-          type: object
-          properties:
-            subjectId: {type: string}
-            tenantId: {type: string}
-            knowledgeBaseIds:
-              type: array
-              items: {type: string}
-            capabilities:
-              type: array
-              items: {type: string}
-            aclVersion: {type: string}
-        developmentIdentity: {type: boolean}
-    KnowledgeBase:
-      type: object
-      properties:
-        id: {type: string}
-        tenantId: {type: string}
-        ownerId: {type: string}
-        name: {type: string}
-        description: {type: string}
-        aclVersion: {type: integer, format: int64}
-        retrievalConfig: {type: string}
-        indexingStrategy: {type: string}
-        embeddingModel: {type: string}
-        embeddingDimension: {type: integer}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
-    KnowledgeBaseList:
-      type: object
-      properties:
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/KnowledgeBase'}
-    KnowledgeBaseCreateRequest:
-      type: object
-      required: [name]
-      properties:
-        name: {type: string, maxLength: 255}
-        description: {type: string}
-    KnowledgeBaseUpdateRequest:
-      type: object
-      description: >-
-        Only supplied fields change. An empty chat_model or rerank_model clears
-        the knowledge-base override so the deployment default applies again.
-      properties:
-        name: {type: string, maxLength: 255}
-        description: {type: string}
-        retrieval_config: {$ref: '#/components/schemas/RetrievalConfigOverride'}
-        indexing_strategy: {type: object, additionalProperties: true}
-        embedding_model: {type: string}
-        embedding_dimension: {type: integer}
-        chat_model: {type: string}
-        rerank_model: {type: string}
-    KnowledgeBaseMember:
-      type: object
-      properties:
-        knowledgeBaseId: {type: string}
-        userId: {type: string}
-        role: {type: string}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
-    KnowledgeBaseMemberList:
-      type: object
-      properties:
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/KnowledgeBaseMember'}
-    KnowledgeBaseMemberCreateRequest:
-      type: object
-      required: [user_id, role]
-      properties:
-        user_id: {type: string}
-        role: {type: string, enum: [viewer, editor]}
-    ConversationCreateRequest:
-      type: object
-      required: [knowledge_base_id]
-      properties:
-        knowledge_base_id: {type: string}
-        title: {type: string}
-    MessageCreateRequest:
-      type: object
-      required: [query]
-      properties:
-        query: {type: string}
-        requestId: {type: string}
-        sessionOverride: {type: string}
-    KnowledgeBaseConfiguration:
-      type: object
-      additionalProperties: true
-      properties:
-        knowledgeBaseId: {type: string}
-        indexingStrategy: {type: object, additionalProperties: true}
-        retrieval: {type: object, additionalProperties: true}
-        embedding: {type: object, additionalProperties: true}
-        chunking: {type: object, additionalProperties: true}
-        chat: {type: object, additionalProperties: true}
-        rerank: {type: object, additionalProperties: true}
-        parser: {type: object, additionalProperties: true}
-    DocumentView:
-      type: object
-      properties:
-        document: {type: object, additionalProperties: true}
-        version: {type: object, additionalProperties: true}
-        pipeline: {type: object, additionalProperties: true}
-        stages:
-          type: array
-          items: {type: object, additionalProperties: true}
-    DocumentPage:
-      type: object
-      properties:
-        schemaVersion: {type: string}
-        knowledgeBaseId: {type: string}
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/DocumentSummary'}
-        nextCursor: {type: string}
-        hasMore: {type: boolean}
-    Chunk:
-      type: object
-      properties:
-        chunkId: {type: string}
-        documentId: {type: string}
-        documentVersionId: {type: string}
-        knowledgeBaseId: {type: string}
-        parentId: {type: string}
-        ordinal: {type: integer}
-        content: {type: string}
-        contentHash: {type: string}
-        headingPath: {type: string}
-        pageNumber: {type: integer}
-        sourcePath: {type: string}
-        startOffset: {type: integer}
-        endOffset: {type: integer}
-        status: {type: string}
-    ChunkPage:
-      type: object
-      properties:
-        schemaVersion: {type: string}
-        documentId: {type: string}
-        versionId: {type: string}
-        status: {type: string}
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/Chunk'}
-        nextCursor: {type: integer}
-        hasMore: {type: boolean}
-    EvidenceSet:
-      type: object
-      additionalProperties: true
-      properties:
-        schemaVersion: {type: string}
-        requestId: {type: string}
-        authorizationScopeVersion: {type: string}
-        query: {type: string}
-        plan: {type: object, additionalProperties: true}
-        items:
-          type: array
-          items: {type: object, additionalProperties: true}
-        tokenEstimate: {type: integer}
-        recallLatencyMs: {type: integer, format: int64}
-        rerankApplied: {type: boolean}
-        droppedByAuthorization: {type: integer}
-    Conversation:
-      type: object
-      additionalProperties: true
-      properties:
-        id: {type: string}
-        tenantId: {type: string}
-        knowledgeBaseId: {type: string}
-        userId: {type: string}
-        title: {type: string}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
-    ConversationList:
-      type: object
-      properties:
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/Conversation'}
-    MessageView:
-      type: object
-      additionalProperties: true
-      properties:
-        message: {type: object, additionalProperties: true}
-        citations:
-          type: array
-          items: {type: object, additionalProperties: true}
-    MessageList:
-      type: object
-      properties:
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/MessageView'}
-    OpsMetrics:
-      type: object
-      additionalProperties: true
-    AuthConfig:
-      type: object
-      required: [oidcEnabled, devAuthEnabled, sessionCookie, sessionTTLHours]
-      properties:
-        oidcEnabled: {type: boolean}
-        oidcIssuer: {type: string}
-        devAuthEnabled: {type: boolean}
-        sessionCookie: {type: string}
-        sessionTTLHours: {type: integer}
-    DevLoginRequest:
-      type: object
-      properties:
-        userId: {type: string}
-        tenantId: {type: string}
-    DevLoginResponse:
-      type: object
-      required: [token, expiresAt, user, principal]
-      properties:
-        token: {type: string}
-        expiresAt: {type: string, format: date-time}
-        user: {type: object, additionalProperties: true}
-        principal: {type: object, additionalProperties: true}
-    RefreshResponse:
-      type: object
-      required: [token, expiresAt]
-      properties:
-        token: {type: string}
-        expiresAt: {type: string, format: date-time}
-    APIKey:
-      type: object
-      properties:
-        id: {type: string}
-        name: {type: string}
-        keyPrefix: {type: string}
-        capabilities: {type: array, items: {type: string}}
-        knowledgeBaseIds: {type: array, items: {type: string}}
-        expiresAt: {type: string, format: date-time}
-        revokedAt: {type: string, format: date-time}
-        lastUsedAt: {type: string, format: date-time}
-        createdAt: {type: string, format: date-time}
-    APIKeyList:
-      type: object
-      required: [items]
-      properties:
-        items: {type: array, items: {$ref: '#/components/schemas/APIKey'}}
-    APIKeyCreateRequest:
-      type: object
-      required: [name]
-      properties:
-        name: {type: string}
-        capabilities: {type: array, items: {type: string}}
-        knowledgeBaseIds: {type: array, items: {type: string}}
-        expiresAt: {type: string, format: date-time}
-    APIKeyCreateResponse:
-      type: object
-      required: [apiKey, token]
-      properties:
-        apiKey: {$ref: '#/components/schemas/APIKey'}
-        token: {type: string}
-    TenantMember:
-      type: object
-      properties:
-        userId: {type: string}
-        email: {type: string}
-        displayName: {type: string}
-        role: {type: string}
-    TenantMemberList:
-      type: object
-      required: [items]
-      properties:
-        items: {type: array, items: {$ref: '#/components/schemas/TenantMember'}}
-    TenantMemberCreateRequest:
-      type: object
-      required: [userId, role]
-      properties:
-        userId: {type: string}
-        role: {type: string}
-    TenantMemberUpdateRequest:
-      type: object
-      required: [role]
-      properties:
-        role: {type: string}
-    AuditEvent:
-      type: object
-      properties:
-        id: {type: integer, format: int64}
-        tenantId: {type: string}
-        actorId: {type: string}
-        action: {type: string}
-        resourceType: {type: string}
-        resourceId: {type: string}
-        allowed: {type: boolean}
-        reason: {type: string}
-        requestId: {type: string}
-        ipAddress: {type: string}
-        userAgent: {type: string}
-        createdAt: {type: string, format: date-time}
-    AuditEventList:
-      type: object
-      required: [items]
-      properties:
-        items: {type: array, items: {$ref: '#/components/schemas/AuditEvent'}}
-    SearchRequest:
-      type: object
-      properties:
-        query: {type: string}
-        knowledgeBaseId: {type: string}
-        sessionOverride: {type: string}
-    WikiReviewRequest:
-      type: object
-      required: [action]
-      properties:
-        action: {type: string}
-        note: {type: string}
-    WikiRollbackRequest:
-      type: object
-      required: [version_id]
-      properties:
-        version_id: {type: string}
-    GraphReviewRequest:
-      type: object
-      required: [action]
-      properties:
-        action: {type: string}
-        note: {type: string}
-    ConnectorConfig:
-      type: object
-      properties:
-        manifestUrl: {type: string}
-        requestsPerSecond: {type: number}
-        maxItemsPerRun: {type: integer}
-        aclMode: {type: string}
-    CredentialInput:
-      type: object
-      properties:
-        type: {type: string}
-        token: {type: string}
-        username: {type: string}
-        password: {type: string}
-    ConnectorCreateRequest:
-      type: object
-      required: [name, type]
-      properties:
-        name: {type: string}
-        type: {type: string}
-        config: {$ref: '#/components/schemas/ConnectorConfig'}
-        credential: {$ref: '#/components/schemas/CredentialInput'}
-        syncIntervalSeconds: {type: integer}
-        enabled: {type: boolean}
-    ConnectorUpdateRequest:
-      type: object
-      properties:
-        name: {type: string}
-        config: {$ref: '#/components/schemas/ConnectorConfig'}
-        credential: {$ref: '#/components/schemas/CredentialInput'}
-        syncIntervalSeconds: {type: integer}
-        enabled: {type: boolean}
-    Connector:
-      type: object
-      properties:
-        id: {type: string}
-        tenantId: {type: string}
-        knowledgeBaseId: {type: string}
-        name: {type: string}
-        type: {type: string}
-        config: {$ref: '#/components/schemas/ConnectorConfig'}
-        enabled: {type: boolean}
-        syncIntervalSeconds: {type: integer}
-        nextSyncAt: {type: string, format: date-time}
-        lastSyncAt: {type: string, format: date-time}
-        hasCredential: {type: boolean}
-        createdBy: {type: string}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
-    ConnectorList:
-      type: object
-      required: [connectors]
-      properties:
-        connectors:
-          type: array
-          items: {$ref: '#/components/schemas/Connector'}
-    ConnectorRun:
-      type: object
-      properties:
-        id: {type: string}
-        tenantId: {type: string}
-        connectorId: {type: string}
-        knowledgeBaseId: {type: string}
-        mode: {type: string}
-        status: {type: string}
-        cursor: {}
-        resumeOfRunId: {type: string}
-        triggeredBy: {type: string}
-        itemsTotal: {type: integer}
-        itemsCreated: {type: integer}
-        itemsUpdated: {type: integer}
-        itemsDeleted: {type: integer}
-        itemsSkipped: {type: integer}
-        itemsFailed: {type: integer}
-        errorSummary: {type: string}
-        cancelRequested: {type: boolean}
-        attempts: {type: integer}
-        startedAt: {type: string, format: date-time}
-        finishedAt: {type: string, format: date-time}
-        createdAt: {type: string, format: date-time}
-    ConnectorRunList:
-      type: object
-      required: [runs]
-      properties:
-        runs:
-          type: array
-          items: {$ref: '#/components/schemas/ConnectorRun'}
-    ConnectorPermissions:
-      type: object
-      properties:
-        connectorId: {type: string}
-        knowledgeBaseId: {type: string}
-        sourceAcl: {type: string}
-        effectiveAcl: {type: string}
-        aclMode: {type: string}
-        aclVersion: {type: integer, format: int64}
-        members:
-          type: array
-          items:
-            type: object
-            properties:
-              userId: {type: string}
-              role: {type: string}
-    CancelResult:
-      type: object
-      required: [cancelled]
-      properties:
-        cancelled: {type: boolean}
-    StartResult:
-      type: object
-      required: [started]
-      properties:
-        started: {type: integer}
-    DocumentVersionSummary:
-      type: object
-      properties:
-        id: {type: string}
-        version: {type: integer}
-        sizeBytes: {type: integer, format: int64}
-        status: {type: string}
-        errorCode: {type: string}
-        errorMessage: {type: string}
-    DocumentSummary:
-      type: object
-      properties:
-        document: {type: object, additionalProperties: true}
-        version: {$ref: '#/components/schemas/DocumentVersionSummary'}
-        contentReady: {type: boolean}
-        previewable: {type: boolean}
-    DocumentStatus:
-      type: object
-      properties:
-        document: {type: object, additionalProperties: true}
-        version: {type: object, additionalProperties: true}
-        pipeline: {type: object, additionalProperties: true}
-        stages:
-          type: array
-          items: {type: object, additionalProperties: true}
-        contentReady: {type: boolean}
-        previewable: {type: boolean}
-    DocumentVersionPage:
-      type: object
-      properties:
-        schemaVersion: {type: string}
-        documentId: {type: string}
-        currentVersionId: {type: string}
-        items:
-          type: array
-          items:
-            type: object
-            properties:
-              id: {type: string}
-              version: {type: integer}
-              contentHash: {type: string}
-              sizeBytes: {type: integer, format: int64}
-              status: {type: string}
-              errorCode: {type: string}
-              errorMessage: {type: string}
-              current: {type: boolean}
-              contentReady: {type: boolean}
-              restorable: {type: boolean}
-              createdAt: {type: string, format: date-time}
-    DocumentPreview:
-      type: object
-      properties:
-        schemaVersion: {type: string}
-        documentId: {type: string}
-        versionId: {type: string}
-        knowledgeBaseId: {type: string}
-        filename: {type: string}
-        mimeType: {type: string}
-        status: {type: string}
-        title: {type: string}
-        language: {type: string}
-        parserVersion: {type: string}
-        blocks:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        visibility: {type: string}
-    DocumentEnvelope:
-      type: object
-      required: [document]
-      properties:
-        document: {type: object, additionalProperties: true}
-    ProjectionState:
-      type: object
-      properties:
-        knowledgeBaseId: {type: string}
-        joinStatus: {type: string}
-        wikiEnabled: {type: boolean}
-        graphEnabled: {type: boolean}
-        runs: {type: array, items: {type: object, additionalProperties: true}}
-        relationRuns: {type: array, items: {type: object, additionalProperties: true}}
-        pages: {type: object, additionalProperties: true}
-        graph: {type: object, additionalProperties: true}
-    WikiPageDetail:
-      type: object
-      properties:
-        page: {type: object, additionalProperties: true}
-        version: {type: object, additionalProperties: true}
-        blocks: {type: array, items: {type: object, additionalProperties: true}}
-        sources: {type: array, items: {type: object, additionalProperties: true}}
-    WikiPageList:
-      type: object
-      required: [pages]
-      properties:
-        pages:
-          type: array
-          items: {type: object, additionalProperties: true}
-    WikiVersion:
-      type: object
-      additionalProperties: true
-    WikiVersionList:
-      type: object
-      required: [versions]
-      properties:
-        versions:
-          type: array
-          items: {$ref: '#/components/schemas/WikiVersion'}
-    WikiRunDetail:
-      type: object
-      properties:
-        run: {type: object, additionalProperties: true}
-        stages: {type: array, items: {type: object, additionalProperties: true}}
-    WikiRunList:
-      type: object
-      required: [runs]
-      properties:
-        runs:
-          type: array
-          items: {type: object, additionalProperties: true}
-    KnowledgeSearchResult:
-      type: object
-      properties:
-        query: {type: string}
-        items:
-          type: array
-          items: {type: object, additionalProperties: true}
-        joined: {type: boolean}
-    GraphQueryResult:
-      type: object
-      properties:
-        query: {type: string}
-        snapshotId: {type: string}
-        depth: {type: integer}
-        nodes: {type: array, items: {type: object, additionalProperties: true}}
-        edges: {type: array, items: {type: object, additionalProperties: true}}
-        paths: {type: array, items: {type: object, additionalProperties: true}}
-        truncated: {type: boolean}
-        joined: {type: boolean}
-    GraphSnapshotDetail:
-      type: object
-      properties:
-        snapshot: {type: object, additionalProperties: true}
-        entities: {type: array, items: {type: object, additionalProperties: true}}
-        relations: {type: array, items: {type: object, additionalProperties: true}}
-        aliases: {type: array, items: {type: object, additionalProperties: true}}
-    GraphSnapshotList:
-      type: object
-      required: [snapshots]
-      properties:
-        snapshots:
-          type: array
-          items: {type: object, additionalProperties: true}
-    GraphRunDetail:
-      type: object
-      properties:
-        run: {type: object, additionalProperties: true}
-        stages: {type: array, items: {type: object, additionalProperties: true}}
-        snapshot: {type: object, additionalProperties: true}
-    GraphRunList:
-      type: object
-      required: [runs]
-      properties:
-        runs:
-          type: array
-          items: {type: object, additionalProperties: true}
-    DeadLetter:
-      type: object
-      additionalProperties: true
-    DeadLetterList:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: {$ref: '#/components/schemas/DeadLetter'}
-    TaskInspection:
-      type: object
-      required: [task, outbox]
-      properties:
-        task: {type: object, additionalProperties: true}
-        inbox: {type: object, additionalProperties: true}
-        pipeline: {type: object, additionalProperties: true}
-        stage: {type: object, additionalProperties: true}
-        outbox: {type: array, items: {type: object, additionalProperties: true}}
-        deadLetter: {type: object, additionalProperties: true}
-    ReconcileReport:
-      type: object
-      properties:
-        documentsRepaired: {type: integer, format: int64}
-        versionsRepaired: {type: integer, format: int64}
-        stagesRequeued: {type: integer}
-        pipelinesCancelled: {type: integer}
-        inboxesExpired: {type: integer, format: int64}
-        deadLettersResolved: {type: integer, format: int64}
-    StreamEvent:
-      type: object
-      description: One persisted answer-stream event. The SSE id is `<request_id>:<sequence>`.
-      required: [request_id, sequence, type]
-      properties:
-        event_id:
-          type: string
-        request_id:
-          type: string
-        sequence:
-          type: integer
-        type:
-          type: string
-        data:
-          type: object
-          additionalProperties: true
-paths:
-
-  /api/v1/api-keys:
-    get:
-      tags: [identity]
-      summary: "GET /api/v1/api-keys"
-      operationId: get_api_keys
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIKeyList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [identity]
-      summary: "POST /api/v1/api-keys"
-      operationId: post_api_keys
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/APIKeyCreateRequest'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/APIKeyCreateResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/api-keys/{id}:
-    delete:
-      tags: [identity]
-      summary: "DELETE /api/v1/api-keys/{id}"
-      operationId: delete_api_keys_id
-      responses:
-        '204':
-          description: No content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-  /api/v1/audit:
-    get:
-      tags: [identity]
-      summary: "GET /api/v1/audit"
-      operationId: get_audit
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuditEventList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/audit/authorization:
-    get:
-      tags: [identity]
-      summary: "GET /api/v1/audit/authorization"
-      operationId: get_audit_authorization
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuditEventList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/auth/callback:
-    get:
-      tags: [auth]
-      summary: "GET /api/v1/auth/callback"
-      operationId: get_auth_callback
-      security: []
-      responses:
-        '302':
-          description: Redirect to the web application
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/auth/config:
-    get:
-      tags: [auth]
-      summary: "GET /api/v1/auth/config"
-      operationId: get_auth_config
-      security: []
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthConfig'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/auth/dev-login:
-    post:
-      tags: [auth]
-      summary: "POST /api/v1/auth/dev-login"
-      operationId: post_auth_dev_login
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DevLoginRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DevLoginResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/auth/logout:
-    post:
-      tags: [auth]
-      summary: "POST /api/v1/auth/logout"
-      operationId: post_auth_logout
-      security: []
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/auth/oidc/login:
-    get:
-      tags: [auth]
-      summary: "GET /api/v1/auth/oidc/login"
-      operationId: get_auth_oidc_login
-      security: []
-      responses:
-        '302':
-          description: Redirect to the web application
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/auth/refresh:
-    post:
-      tags: [auth]
-      summary: "POST /api/v1/auth/refresh"
-      operationId: post_auth_refresh
-      security: []
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RefreshResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/chunks/{chunkID}:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/chunks/{chunkID}"
-      operationId: get_chunks_chunkID
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Chunk'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}:
-    get:
-      tags: [connectors]
-      summary: "GET /api/v1/connectors/{id}"
-      operationId: get_connectors_id
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Connector'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    patch:
-      tags: [connectors]
-      summary: "PATCH /api/v1/connectors/{id}"
-      operationId: patch_connectors_id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConnectorUpdateRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Connector'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    delete:
-      tags: [connectors]
-      summary: "DELETE /api/v1/connectors/{id}"
-      operationId: delete_connectors_id
-      responses:
-        '204':
-          description: No content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-  /api/v1/connectors/{id}/cancel:
-    post:
-      tags: [connectors]
-      summary: "POST /api/v1/connectors/{id}/cancel"
-      operationId: post_connectors_id_cancel
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CancelResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}/permissions:
-    get:
-      tags: [connectors]
-      summary: "GET /api/v1/connectors/{id}/permissions"
-      operationId: get_connectors_id_permissions
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorPermissions'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}/runs:
-    get:
-      tags: [connectors]
-      summary: "GET /api/v1/connectors/{id}/runs"
-      operationId: get_connectors_id_runs
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorRunList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}/runs/{runId}:
-    get:
-      tags: [connectors]
-      summary: "GET /api/v1/connectors/{id}/runs/{runId}"
-      operationId: get_connectors_id_runs_runId
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorRun'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}/runs/{runId}/cancel:
-    post:
-      tags: [connectors]
-      summary: "POST /api/v1/connectors/{id}/runs/{runId}/cancel"
-      operationId: post_connectors_id_runs_runId_cancel
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorRun'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}/runs/{runId}/retry:
-    post:
-      tags: [connectors]
-      summary: "POST /api/v1/connectors/{id}/runs/{runId}/retry"
-      operationId: post_connectors_id_runs_runId_retry
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorRun'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/connectors/{id}/sync:
-    post:
-      tags: [connectors]
-      summary: "POST /api/v1/connectors/{id}/sync"
-      operationId: post_connectors_id_sync
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorRun'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/documents/{id}"
-      operationId: get_documents_id
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentView'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    delete:
-      tags: [documents]
-      summary: "DELETE /api/v1/documents/{id}"
-      operationId: delete_documents_id
-      responses:
-        '204':
-          description: No content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-  /api/v1/documents/{id}/chunks:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/documents/{id}/chunks"
-      operationId: get_documents_id_chunks
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChunkPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/content:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/documents/{id}/content"
-      operationId: get_documents_id_content
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentPreview'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/preview:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/documents/{id}/preview"
-      operationId: get_documents_id_preview
-      responses:
-        '200':
-          description: Original file bytes with the stored MIME type
-          content:
-            application/octet-stream:
-              schema: {type: string, format: binary}
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/purge:
-    post:
-      tags: [documents]
-      summary: "POST /api/v1/documents/{id}/purge"
-      operationId: post_documents_id_purge
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/reparse:
-    post:
-      tags: [documents]
-      summary: "POST /api/v1/documents/{id}/reparse"
-      operationId: post_documents_id_reparse
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentView'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/restore:
-    post:
-      tags: [documents]
-      summary: "POST /api/v1/documents/{id}/restore"
-      operationId: post_documents_id_restore
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/status:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/documents/{id}/status"
-      operationId: get_documents_id_status
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentStatus'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/versions:
-    get:
-      tags: [documents]
-      summary: "GET /api/v1/documents/{id}/versions"
-      operationId: get_documents_id_versions
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentVersionPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/documents/{id}/versions/{versionID}/activate:
-    post:
-      tags: [documents]
-      summary: "POST /api/v1/documents/{id}/versions/{versionID}/activate"
-      operationId: post_documents_id_versions_versionID_activate
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentView'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/graph/runs/{runId}:
-    get:
-      tags: [projections]
-      summary: "GET /api/v1/graph/runs/{runId}"
-      operationId: get_graph_runs_runId
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphRunDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/graph/runs/{runId}/retry:
-    post:
-      tags: [projections]
-      summary: "POST /api/v1/graph/runs/{runId}/retry"
-      operationId: post_graph_runs_runId_retry
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphRunDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/graph/snapshots/{snapshotId}:
-    get:
-      tags: [projections]
-      summary: "GET /api/v1/graph/snapshots/{snapshotId}"
-      operationId: get_graph_snapshots_snapshotId
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphSnapshotDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/graph/snapshots/{snapshotId}/review:
-    post:
-      tags: [projections]
-      summary: "POST /api/v1/graph/snapshots/{snapshotId}/review"
-      operationId: post_graph_snapshots_snapshotId_review
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GraphReviewRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphSnapshotDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases"
-      operationId: get_knowledge_bases
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBaseList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases"
-      operationId: post_knowledge_bases
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KnowledgeBaseCreateRequest'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBase'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}"
-      operationId: get_knowledge_bases_id
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBase'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    patch:
-      tags: [knowledge-bases]
-      summary: "PATCH /api/v1/knowledge-bases/{id}"
-      operationId: patch_knowledge_bases_id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KnowledgeBaseUpdateRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBase'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    delete:
-      tags: [knowledge-bases]
-      summary: "DELETE /api/v1/knowledge-bases/{id}"
-      operationId: delete_knowledge_bases_id
-      responses:
-        '204':
-          description: No content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-  /api/v1/knowledge-bases/{id}/configuration:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/configuration"
-      operationId: get_knowledge_bases_id_configuration
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBaseConfiguration'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/connectors:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/connectors"
-      operationId: get_knowledge_bases_id_connectors
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConnectorList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases/{id}/connectors"
-      operationId: post_knowledge_bases_id_connectors
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConnectorCreateRequest'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Connector'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/documents:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/documents"
-      operationId: get_knowledge_bases_id_documents
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases/{id}/documents"
-      operationId: post_knowledge_bases_id_documents
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file: {type: string, format: binary}
-                document_id: {type: string}
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DocumentView'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/graph/query:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/graph/query"
-      operationId: get_knowledge_bases_id_graph_query
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphQueryResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/graph/rebuild:
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases/{id}/graph/rebuild"
-      operationId: post_knowledge_bases_id_graph_rebuild
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StartResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/graph/runs:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/graph/runs"
-      operationId: get_knowledge_bases_id_graph_runs
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphRunList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/graph/snapshots:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/graph/snapshots"
-      operationId: get_knowledge_bases_id_graph_snapshots
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GraphSnapshotList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/knowledge/search:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/knowledge/search"
-      operationId: get_knowledge_bases_id_knowledge_search
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeSearchResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/members:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/members"
-      operationId: get_knowledge_bases_id_members
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBaseMemberList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases/{id}/members"
-      operationId: post_knowledge_bases_id_members
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KnowledgeBaseMemberCreateRequest'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBaseMember'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/members/{userID}:
-    delete:
-      tags: [knowledge-bases]
-      summary: "DELETE /api/v1/knowledge-bases/{id}/members/{userID}"
-      operationId: delete_knowledge_bases_id_members_userID
-      responses:
-        '204':
-          description: No content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-  /api/v1/knowledge-bases/{id}/projection:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/projection"
-      operationId: get_knowledge_bases_id_projection
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectionState'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/retrieval-config:
-    put:
-      tags: [knowledge-bases]
-      summary: "PUT /api/v1/knowledge-bases/{id}/retrieval-config"
-      description: Whole replacement; an empty body clears the knowledge-base tier.
-      operationId: put_knowledge_bases_id_retrieval_config
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RetrievalConfigOverride'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KnowledgeBaseConfiguration'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/sync/cancel:
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases/{id}/sync/cancel"
-      operationId: post_knowledge_bases_id_sync_cancel
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CancelResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/wiki/pages:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/wiki/pages"
-      operationId: get_knowledge_bases_id_wiki_pages
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiPageList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/wiki/rebuild:
-    post:
-      tags: [knowledge-bases]
-      summary: "POST /api/v1/knowledge-bases/{id}/wiki/rebuild"
-      operationId: post_knowledge_bases_id_wiki_rebuild
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StartResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/knowledge-bases/{id}/wiki/runs:
-    get:
-      tags: [knowledge-bases]
-      summary: "GET /api/v1/knowledge-bases/{id}/wiki/runs"
-      operationId: get_knowledge_bases_id_wiki_runs
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiRunList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/me:
-    get:
-      tags: [identity]
-      summary: "GET /api/v1/me"
-      operationId: get_me
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MeResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/dead-letters:
-    get:
-      tags: [operations]
-      summary: "GET /api/v1/ops/dead-letters"
-      operationId: get_ops_dead_letters
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeadLetterList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/dead-letters/{id}/discard:
-    post:
-      tags: [operations]
-      summary: "POST /api/v1/ops/dead-letters/{id}/discard"
-      operationId: post_ops_dead_letters_id_discard
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/dead-letters/{id}/retry:
-    post:
-      tags: [operations]
-      summary: "POST /api/v1/ops/dead-letters/{id}/retry"
-      operationId: post_ops_dead_letters_id_retry
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/metrics:
-    get:
-      tags: [operations]
-      summary: "GET /api/v1/ops/metrics"
-      operationId: get_ops_metrics
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OpsMetrics'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/metrics/prometheus:
-    get:
-      tags: [operations]
-      summary: "GET /api/v1/ops/metrics/prometheus"
-      operationId: get_ops_metrics_prometheus
-      responses:
-        '200':
-          description: Prometheus text exposition
-          content:
-            text/plain:
-              schema: {type: string}
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/pipelines/{id}/cancel:
-    post:
-      tags: [operations]
-      summary: "POST /api/v1/ops/pipelines/{id}/cancel"
-      operationId: post_ops_pipelines_id_cancel
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/reconcile:
-    post:
-      tags: [operations]
-      summary: "POST /api/v1/ops/reconcile"
-      operationId: post_ops_reconcile
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconcileReport'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/ops/tasks/{key}:
-    get:
-      tags: [operations]
-      summary: "GET /api/v1/ops/tasks/{key}"
-      operationId: get_ops_tasks_key
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskInspection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/requests/{requestID}/events:
-    get:
-      tags: [conversations]
-      summary: "GET /api/v1/requests/{requestID}/events"
-      operationId: get_requests_requestID_events
-      responses:
-        '200':
-          description: Server-sent events
-          content:
-            text/event-stream:
-              schema:
-                $ref: '#/components/schemas/StreamEvent'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/search:
-    post:
-      tags: [conversations]
-      summary: "POST /api/v1/search"
-      operationId: post_search
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SearchRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EvidenceSet'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/sessions:
-    get:
-      tags: [conversations]
-      summary: "GET /api/v1/sessions"
-      operationId: get_sessions
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ConversationList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [conversations]
-      summary: "POST /api/v1/sessions"
-      operationId: post_sessions
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConversationCreateRequest'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Conversation'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/sessions/{id}/messages:
-    get:
-      tags: [conversations]
-      summary: "GET /api/v1/sessions/{id}/messages"
-      operationId: get_sessions_id_messages
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [conversations]
-      summary: "POST /api/v1/sessions/{id}/messages"
-      operationId: post_sessions_id_messages
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MessageCreateRequest'
-      responses:
-        '200':
-          description: Server-sent events
-          content:
-            text/event-stream:
-              schema:
-                $ref: '#/components/schemas/StreamEvent'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/tenant/members:
-    get:
-      tags: [identity]
-      summary: "GET /api/v1/tenant/members"
-      operationId: get_tenant_members
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TenantMemberList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      tags: [identity]
-      summary: "POST /api/v1/tenant/members"
-      operationId: post_tenant_members
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TenantMemberCreateRequest'
-      responses:
-        '201':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TenantMember'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/tenant/members/{userID}:
-    patch:
-      tags: [identity]
-      summary: "PATCH /api/v1/tenant/members/{userID}"
-      operationId: patch_tenant_members_userID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TenantMemberUpdateRequest'
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    delete:
-      tags: [identity]
-      summary: "DELETE /api/v1/tenant/members/{userID}"
-      operationId: delete_tenant_members_userID
-      responses:
-        '204':
-          description: No content
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-  /api/v1/wiki/pages/{pageId}:
-    get:
-      tags: [projections]
-      summary: "GET /api/v1/wiki/pages/{pageId}"
-      operationId: get_wiki_pages_pageId
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiPageDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/wiki/pages/{pageId}/rollback:
-    post:
-      tags: [projections]
-      summary: "POST /api/v1/wiki/pages/{pageId}/rollback"
-      operationId: post_wiki_pages_pageId_rollback
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WikiRollbackRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiPageDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/wiki/pages/{pageId}/versions:
-    get:
-      tags: [projections]
-      summary: "GET /api/v1/wiki/pages/{pageId}/versions"
-      operationId: get_wiki_pages_pageId_versions
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiVersionList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/wiki/pages/{pageId}/versions/{versionId}/publish:
-    post:
-      tags: [projections]
-      summary: "POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/publish"
-      operationId: post_wiki_pages_pageId_versions_versionId_publish
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiPageDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/wiki/pages/{pageId}/versions/{versionId}/review:
-    post:
-      tags: [projections]
-      summary: "POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review"
-      operationId: post_wiki_pages_pageId_versions_versionId_review
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WikiReviewRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiVersion'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/wiki/runs/{runId}:
-    get:
-      tags: [projections]
-      summary: "GET /api/v1/wiki/runs/{runId}"
-      operationId: get_wiki_runs_runId
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiRunDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/wiki/runs/{runId}/retry:
-    post:
-      tags: [projections]
-      summary: "POST /api/v1/wiki/runs/{runId}/retry"
-      operationId: post_wiki_runs_runId_retry
-      responses:
-        '202':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WikiRunDetail'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '500':
-          $ref: '#/components/responses/InternalError'

@@ -9,10 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/rag-platform/contracts/httpapi"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/modelregistry"
 	"github.com/example/rag-platform/internal/platform/observability"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,7 +34,7 @@ func RegisterOperationsRoutes(protected *gin.RouterGroup, cfg config.Config, dep
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, inspection)
+		c.JSON(http.StatusOK, views.TaskInspection(inspection))
 	})
 	ops.GET("/dead-letters", func(c *gin.Context) {
 		rows, err := deps.Tasks.ListDeadLetters(c.Request.Context(), accessContext(c).Principal, c.Query("status"), intQuery(c, "limit"))
@@ -40,7 +42,7 @@ func RegisterOperationsRoutes(protected *gin.RouterGroup, cfg config.Config, dep
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": rows})
+		c.JSON(http.StatusOK, httpapi.DeadLetterList{Items: views.TaskDeadLetters(rows)})
 	})
 	ops.POST("/dead-letters/:id/retry", func(c *gin.Context) {
 		id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -83,7 +85,7 @@ func RegisterOperationsRoutes(protected *gin.RouterGroup, cfg config.Config, dep
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, report)
+		c.JSON(http.StatusOK, views.ReconcileReport(report))
 	})
 	ops.GET("/metrics", func(c *gin.Context) {
 		snapshot := registry.Snapshot()

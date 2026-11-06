@@ -115,9 +115,9 @@ graph LR
 | 授权 | Go Casbin Domain RBAC（进程内策略投影） | Owner / Admin / Editor / Viewer，加租户和知识库级访问控制 |
 | 可观测性 | OpenTelemetry traces（OTLP/HTTP 可选）+ 进程内 counters/summaries + 独立 `/metrics` 监听 | HTTP → 检索 → 模型调用共享同一 trace；异步 worker span 以 `trace.id` 关联，跨队列父子链仍待补 |
 | 部署 | 目标：Docker Compose + Helm/Kubernetes；当前：仅 Docker Compose | 本地开发、私有化和生产集群统一交付方式 |
-| API 契约 | REST 使用 OpenAPI 3（`api/openapi/openapi.yaml`）；gRPC 使用 Protobuf；异步任务使用 `contracts/tasks` 的版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
+| API 契约 | REST 使用 OpenAPI 3，DTO 与路由清单定义在 `contracts/httpapi`，`api/openapi/openapi.yaml` 由 `cmd/openapi` 生成；gRPC 使用 Protobuf；异步任务使用 `contracts/tasks` 的版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
 
-`web/` 已完成 M9 迁移：React Router + Ant Design + TanStack Query + Zustand + i18next 已接入。前端只保留手写的 `web/src/api/types.ts` 作为收敛视图；M12 移除了 OpenAPI 类型生成（`generated.ts`）和对应的漂移检查，避免两套模型并存。`api/openapi/openapi.yaml` 仍是 HTTP 契约事实源，由 `internal/httpapi` 的契约测试校验路由覆盖、请求/响应 schema 和引用完整性。
+`web/` 已完成 M9 迁移：React Router + Ant Design + TanStack Query + Zustand + i18next 已接入。`contracts/httpapi` 是 HTTP wire 契约的唯一事实源：请求/响应 DTO 和 87 条业务路由清单都在此定义，`internal/transport/views` 负责把领域投影与 GORM 行映射为契约类型，`internal/httpapi` 生产代码不直接引用 `models`（测试夹具仍用 `models` 建表播种数据）。`api/openapi/openapi.yaml` 由 `go run ./cmd/openapi` 反射生成，`go run ./cmd/openapi -check`（Makefile test/lint 与 CI verify）拦截未重新生成的契约变更；前端继续用 `openapi-typescript` 生成 `web/src/api/generated.ts`，`npm run codegen:check` 再拦截一次客户端漂移。`internal/httpapi` 的契约测试仍校验 Gin 路由与路由清单/OpenAPI 的双向覆盖、schema 与 DTO 字段一致以及引用完整性。
 
 ### 4.2 检索存储策略
 
@@ -724,8 +724,9 @@ rag-platform/
 │   │       ├── conversation/
 │   │       └── admin/
 │   └── tests/
-├── api/openapi/                      # OpenAPI 文档和生成代码
+├── api/openapi/                      # 由 contracts/httpapi 生成的 OpenAPI 文档
 ├── contracts/
+│   ├── httpapi/                       # HTTP DTO 与路由清单（OpenAPI 事实源）
 │   ├── proto/                         # docreader gRPC Protobuf
 │   ├── tasks/                         # 异步任务版本化载荷
 │   └── events/                        # Outbox/领域事件 Schema

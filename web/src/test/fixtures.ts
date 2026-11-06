@@ -7,11 +7,18 @@ import type {
 
 export function meWith(capabilities: string[]): MeResponse {
   return {
-    principal: { subjectId: "user-1", tenantId: "tenant-1" },
+    principal: {
+      subjectId: "user-1",
+      tenantId: "tenant-1",
+      capabilities,
+      credentialType: "session",
+      credentialId: "credential-1",
+    },
     scope: {
       subjectId: "user-1",
       tenantId: "tenant-1",
       knowledgeBaseIds: ["kb-1"],
+      resourceIds: [],
       capabilities,
       aclVersion: "1",
     },

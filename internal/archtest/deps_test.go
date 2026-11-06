@@ -30,10 +30,28 @@ func TestCheckRejectsIllegalEdges(t *testing.T) {
 			rule:    RuleDomainAdapter,
 		},
 		{
+			name:    "domain imports transport views",
+			pkg:     module + "/internal/knowledgebase",
+			imports: []string{module + "/internal/transport/views"},
+			rule:    RuleDomainComposition,
+		},
+		{
 			name:    "transport imports application",
 			pkg:     module + "/internal/httpapi",
 			imports: []string{module + "/internal/app"},
 			rule:    RuleTransportApp,
+		},
+		{
+			name:    "transport imports persistence models",
+			pkg:     module + "/internal/httpapi",
+			imports: []string{module + "/internal/platform/persistence/models"},
+			rule:    RuleTransportModels,
+		},
+		{
+			name:    "contract imports internal package",
+			pkg:     module + "/contracts/httpapi",
+			imports: []string{module + "/internal/status"},
+			rule:    RuleContractIsolation,
 		},
 		{
 			name:    "platform adapter imports transport",
@@ -109,6 +127,22 @@ func TestCheckAllowsPortAndSharedEdges(t *testing.T) {
 		{ImportPath: module + "/internal/platform/docreader", Imports: []string{module + "/internal/contracts/ports"}},
 		{ImportPath: module + "/internal/platform/relationstore", Imports: []string{module + "/internal/relationstore"}},
 		{ImportPath: module + "/internal/platform/evidencestore", Imports: []string{module + "/internal/status", module + "/internal/apperror", module + "/internal/contracts/evidence"}},
+		{ImportPath: module + "/contracts/httpapi", Imports: []string{"time", "encoding/json"}},
+		{ImportPath: module + "/internal/httpapi", Imports: []string{
+			module + "/contracts/httpapi",
+			module + "/internal/transport/views",
+			module + "/internal/knowledgebase",
+		}},
+		{ImportPath: module + "/internal/transport/views", Imports: []string{
+			module + "/contracts/httpapi",
+			module + "/internal/knowledgebase",
+			module + "/internal/platform/persistence/models",
+		}},
+		{ImportPath: module + "/cmd/api", Imports: []string{
+			module + "/internal/app",
+			module + "/internal/httpapi",
+			module + "/internal/platform/persistence/models",
+		}},
 	}
 	if violations := Check(module, packages); len(violations) != 0 {
 		t.Fatalf("unexpected violations: %#v", violations)

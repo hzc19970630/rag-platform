@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/authz"
+	"github.com/example/rag-platform/internal/platform/persistence/models"
 )
 
 func TestDocumentCursorRoundTrips(t *testing.T) {
@@ -52,6 +53,43 @@ func TestClampPageLimitFallsBackOutOfRange(t *testing.T) {
 		if got := clampPageLimit(input); got != expected {
 			t.Fatalf("clampPageLimit(%d) = %d, want %d", input, got, expected)
 		}
+	}
+}
+
+func TestChunksCursorAdvancesFromZeroOrdinal(t *testing.T) {
+	service, db, _ := newReparseFixture(t)
+	now := time.Now()
+	chunks := []models.Chunk{
+		{ID: "chunk-0", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentVersionID: "ver-1", ParentID: "parent-0", Ordinal: 0, Content: "zero", ContentHash: "h0", Status: StatusEvidenceReady, CreatedAt: now, UpdatedAt: now},
+		{ID: "chunk-1", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentVersionID: "ver-1", ParentID: "parent-1", Ordinal: 1, Content: "one", ContentHash: "h1", Status: StatusEvidenceReady, CreatedAt: now, UpdatedAt: now},
+		{ID: "chunk-2", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentVersionID: "ver-1", ParentID: "parent-2", Ordinal: 2, Content: "two", ContentHash: "h2", Status: StatusEvidenceReady, CreatedAt: now, UpdatedAt: now},
+	}
+	if err := db.Create(&chunks).Error; err != nil {
+		t.Fatalf("seed chunks: %v", err)
+	}
+	principal := authz.Principal{SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session"}
+	ctx := context.Background()
+
+	page, err := service.Chunks(ctx, principal, "doc-a", 0, 1)
+	if err != nil {
+		t.Fatalf("first page: %v", err)
+	}
+	if !page.HasMore || page.NextCursor != 1 || len(page.Items) != 1 || page.Items[0].Ordinal != 0 {
+		t.Fatalf("first page = %+v, want ordinal 0 and next cursor 1", page)
+	}
+	page, err = service.Chunks(ctx, principal, "doc-a", page.NextCursor, 1)
+	if err != nil {
+		t.Fatalf("second page: %v", err)
+	}
+	if !page.HasMore || page.NextCursor != 2 || len(page.Items) != 1 || page.Items[0].Ordinal != 1 {
+		t.Fatalf("second page = %+v, want ordinal 1 and next cursor 2", page)
+	}
+	page, err = service.Chunks(ctx, principal, "doc-a", page.NextCursor, 1)
+	if err != nil {
+		t.Fatalf("third page: %v", err)
+	}
+	if page.HasMore || len(page.Items) != 1 || page.Items[0].Ordinal != 2 {
+		t.Fatalf("third page = %+v, want final ordinal 2", page)
 	}
 }
 

@@ -406,10 +406,15 @@ if grep -q "$listed_document_id" "$tmp_dir/list-after-delete.json"; then
   echo "a deleted document is still listed" >&2
   exit 1
 fi
-[[ "$(psql_value "SELECT count(*) FROM document_versions WHERE document_id = '$listed_document_id' AND status <> 'CANCELLED';")" == "0" ]]
-[[ "$(psql_value "SELECT count(*) FROM chunks WHERE document_version_id = '$listed_version_id' AND status = 'EVIDENCE_READY';")" == "0" ]]
+# Deletion is a soft delete: versions and chunks stay for Restore until the
+# retention window elapses; every read path must already hide the document.
+[[ "$(psql_value "SELECT count(*) FROM documents WHERE id = '$listed_document_id' AND status = 'CANCELLED' AND deleted_at IS NOT NULL;")" == "1" ]]
 # M4 turns deletion into a soft delete that is invisible to every read path,
 # so the document itself is now not found rather than a stale-version conflict.
 request GET "/api/v1/documents/$listed_document_id/content" 404 "$tmp_dir/list-deleted-content.json" "${dev_headers[@]}"
+
+# Remove the run's fixture so repeated acceptance runs do not leave duplicate
+# handbook documents that later answers could cite.
+request DELETE "/api/v1/documents/$document_id" 204 "$tmp_dir/fixture-delete.json" "${dev_headers[@]}"
 
 printf 'M3 acceptance passed: document=%s version=%s newVersion=%s conversation=%s listedDocument=%s\n' "$document_id" "$version_id" "$new_version_id" "$conversation_id" "$listed_document_id"

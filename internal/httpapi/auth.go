@@ -4,13 +4,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/example/rag-platform/contracts/httpapi"
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/identity"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,7 +29,7 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"principal": access.Principal, "scope": scope, "developmentIdentity": access.DevIdentity})
+		c.JSON(http.StatusOK, views.Me(access.Principal, scope, access.DevIdentity))
 	})
 	protected.GET("/audit/authorization", func(c *gin.Context) {
 		access := accessContext(c)
@@ -38,18 +38,18 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": auditLogViews(rows)})
+		c.JSON(http.StatusOK, httpapi.AuditEventList{Items: views.AuditEvents(rows)})
 	})
 
 	auth := api.Group("/auth")
 	auth.GET("/config", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"oidcEnabled":     deps.Identity.OIDCEnabled(),
-			"oidcIssuer":      deps.Identity.OIDCIssuer(),
-			"devAuthEnabled":  cfg.Auth.DevAuthEnabled && (cfg.AppEnv == "development" || cfg.AppEnv == "test"),
-			"sessionCookie":   cfg.Auth.CookieName,
-			"sessionTTLHours": cfg.Auth.SessionTTLSeconds / 3600,
-		})
+		c.JSON(http.StatusOK, views.AuthConfig(
+			deps.Identity.OIDCEnabled(),
+			deps.Identity.OIDCIssuer(),
+			cfg.Auth.DevAuthEnabled && (cfg.AppEnv == "development" || cfg.AppEnv == "test"),
+			cfg.Auth.CookieName,
+			cfg.Auth.SessionTTLSeconds,
+		))
 	})
 	auth.GET("/oidc/login", func(c *gin.Context) {
 		if !deps.Identity.OIDCEnabled() {
@@ -95,7 +95,7 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, apperror.ErrNotFound)
 			return
 		}
-		var input devLoginRequest
+		var input httpapi.DevLoginRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
@@ -112,7 +112,7 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			return
 		}
 		setSessionCookie(c, cfg, result.Token, result.ExpiresAt)
-		c.JSON(http.StatusOK, result)
+		c.JSON(http.StatusOK, views.DevLogin(result))
 	})
 	auth.POST("/refresh", func(c *gin.Context) {
 		raw := bearerToken(c)
@@ -125,7 +125,7 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			return
 		}
 		setSessionCookie(c, cfg, token, expiresAt)
-		c.JSON(http.StatusOK, gin.H{"token": token, "expiresAt": expiresAt})
+		c.JSON(http.StatusOK, httpapi.RefreshResponse{Token: token, ExpiresAt: expiresAt})
 	})
 	auth.POST("/logout", func(c *gin.Context) {
 		raw := bearerToken(c)
@@ -149,23 +149,23 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": rows})
+		c.JSON(http.StatusOK, httpapi.APIKeyList{Items: views.APIKeys(rows)})
 	})
 	apiKeys.POST("", func(c *gin.Context) {
 		if !requireSessionCredential(c) {
 			return
 		}
-		var input identity.CreateAPIKeyInput
+		var input httpapi.APIKeyCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
 		}
-		view, token, err := deps.Identity.CreateAPIKey(c.Request.Context(), accessContext(c).Principal, input)
+		view, token, err := deps.Identity.CreateAPIKey(c.Request.Context(), accessContext(c).Principal, views.CreateAPIKeyInput(input))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, gin.H{"apiKey": view, "token": token})
+		c.JSON(http.StatusCreated, httpapi.APIKeyCreateResponse{APIKey: views.APIKey(view), Token: token})
 	})
 	apiKeys.DELETE("/:id", func(c *gin.Context) {
 		if !requireSessionCredential(c) {
@@ -185,10 +185,10 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": rows})
+		c.JSON(http.StatusOK, httpapi.TenantMemberList{Items: views.TenantMembers(rows)})
 	})
 	tenantMembers.POST("", func(c *gin.Context) {
-		var input tenantMemberCreateRequest
+		var input httpapi.TenantMemberCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
@@ -198,10 +198,10 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, view)
+		c.JSON(http.StatusCreated, views.TenantMember(view))
 	})
 	tenantMembers.PATCH("/:userID", func(c *gin.Context) {
-		var input tenantMemberUpdateRequest
+		var input httpapi.TenantMemberUpdateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)
 			return
@@ -237,52 +237,6 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"items": auditLogViews(rows)})
+		c.JSON(http.StatusOK, httpapi.AuditEventList{Items: views.AuditEvents(rows)})
 	})
-}
-
-type devLoginRequest struct {
-	UserID   string `json:"userId"`
-	TenantID string `json:"tenantId"`
-}
-
-type tenantMemberCreateRequest struct {
-	UserID string `json:"userId" binding:"required"`
-	Role   string `json:"role" binding:"required"`
-}
-
-type tenantMemberUpdateRequest struct {
-	Role string `json:"role" binding:"required"`
-}
-
-type auditLogResponse struct {
-	ID           uint64    `json:"id"`
-	TenantID     string    `json:"tenantId"`
-	ActorID      string    `json:"actorId"`
-	Action       string    `json:"action"`
-	ResourceType string    `json:"resourceType"`
-	ResourceID   string    `json:"resourceId"`
-	Allowed      bool      `json:"allowed"`
-	Reason       string    `json:"reason"`
-	RequestID    string    `json:"requestId"`
-	IPAddress    string    `json:"ipAddress"`
-	UserAgent    string    `json:"userAgent"`
-	CreatedAt    time.Time `json:"createdAt"`
-}
-
-func auditLogView(row models.AuditLog) auditLogResponse {
-	return auditLogResponse{
-		ID: row.ID, TenantID: row.TenantID, ActorID: row.ActorID, Action: row.Action,
-		ResourceType: row.ResourceType, ResourceID: row.ResourceID, Allowed: row.Allowed,
-		Reason: row.Reason, RequestID: row.RequestID, IPAddress: row.IPAddress,
-		UserAgent: row.UserAgent, CreatedAt: row.CreatedAt,
-	}
-}
-
-func auditLogViews(rows []models.AuditLog) []auditLogResponse {
-	items := make([]auditLogResponse, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, auditLogView(row))
-	}
-	return items
 }

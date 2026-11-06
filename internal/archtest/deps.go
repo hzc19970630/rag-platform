@@ -22,8 +22,10 @@ const (
 	RuleDomainComposition  = "domain must not import composition or transport"
 	RuleDomainAdapter      = "domain must not import a provider adapter"
 	RuleTransportApp       = "httpapi must not import internal/app"
+	RuleTransportModels    = "httpapi must not import persistence models"
 	RuleAdapterComposition = "platform adapters must not import composition or transport"
 	RuleAdapterDomain      = "platform adapters may only import port-owner domains"
+	RuleContractIsolation  = "contracts/httpapi must not import internal packages"
 )
 
 // providerAdapters are integration packages that own a provider SDK or wire
@@ -70,6 +72,10 @@ func Check(module string, packages []Package) []Violation {
 
 func classify(pkg, dep string) string {
 	switch {
+	case hasPrefix(pkg, "contracts/httpapi"):
+		if hasPrefix(dep, "internal") {
+			return RuleContractIsolation
+		}
 	case isDomain(pkg):
 		if dep == "internal/config" && !hasPrefix(pkg, "internal/knowledgebase") {
 			return RuleDomainConfig
@@ -83,6 +89,9 @@ func classify(pkg, dep string) string {
 	case hasPrefix(pkg, "internal/httpapi"):
 		if dep == "internal/app" {
 			return RuleTransportApp
+		}
+		if hasPrefix(dep, "internal/platform/persistence/models") {
+			return RuleTransportModels
 		}
 	case hasPrefix(pkg, "internal/platform"):
 		if isComposition(dep) {
@@ -107,14 +116,14 @@ func isDomain(pkg string) bool {
 		top = rest[:index]
 	}
 	switch top {
-	case "app", "httpapi", "platform", "contracts", "config", "status", "apperror":
+	case "app", "httpapi", "transport", "platform", "contracts", "config", "status", "apperror":
 		return false
 	}
 	return true
 }
 
 func isComposition(dep string) bool {
-	return dep == "internal/app" || dep == "internal/httpapi" || hasPrefix(dep, "cmd/")
+	return dep == "internal/app" || dep == "internal/httpapi" || hasPrefix(dep, "internal/transport") || hasPrefix(dep, "cmd/")
 }
 
 func isProviderAdapter(dep string) bool {
