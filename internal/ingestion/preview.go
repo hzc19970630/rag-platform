@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -122,11 +123,13 @@ type DocumentPage struct {
 }
 
 // SourceDocument is the controlled original-file stream. The object key is
-// never returned to the client; the API proxies the bytes.
+// never returned to the client; the API proxies the bytes. The caller owns Body
+// and must close it.
 type SourceDocument struct {
 	Filename string
 	MimeType string
-	Content  []byte
+	Size     int64
+	Body     io.ReadCloser
 }
 
 // DocumentStatusView describes a document whose content is not yet available, so
@@ -370,11 +373,15 @@ func (s *Service) SourceDocument(ctx context.Context, principal authz.Principal,
 	if version.SourceObjectKey == "" {
 		return SourceDocument{}, apperror.ErrNotFound
 	}
-	content, err := s.objects.Get(ctx, version.SourceObjectKey)
+	size, err := s.objects.Stat(ctx, version.SourceObjectKey)
 	if err != nil {
 		return SourceDocument{}, err
 	}
-	return SourceDocument{Filename: document.Filename, MimeType: document.MimeType, Content: content}, nil
+	body, err := s.objects.Open(ctx, version.SourceObjectKey)
+	if err != nil {
+		return SourceDocument{}, err
+	}
+	return SourceDocument{Filename: document.Filename, MimeType: document.MimeType, Size: size, Body: body}, nil
 }
 
 // Status returns the processing status plus the flags the detail page needs to

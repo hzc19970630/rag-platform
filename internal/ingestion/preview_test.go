@@ -1,8 +1,12 @@
 package ingestion
 
 import (
+	"context"
+	"io"
 	"testing"
 	"time"
+
+	"github.com/example/rag-platform/internal/authz"
 )
 
 func TestDocumentCursorRoundTrips(t *testing.T) {
@@ -48,5 +52,30 @@ func TestClampPageLimitFallsBackOutOfRange(t *testing.T) {
 		if got := clampPageLimit(input); got != expected {
 			t.Fatalf("clampPageLimit(%d) = %d, want %d", input, got, expected)
 		}
+	}
+}
+
+func TestSourceDocumentStreamsSourceObject(t *testing.T) {
+	service, _, objects := newReparseFixture(t)
+	source, err := service.SourceDocument(context.Background(), authz.Principal{
+		SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session",
+	}, "doc-a")
+	if err != nil {
+		t.Fatalf("source document: %v", err)
+	}
+	defer source.Body.Close()
+	content, err := io.ReadAll(source.Body)
+	if err != nil {
+		t.Fatalf("read source body: %v", err)
+	}
+	if got, want := string(content), "reparse idempotency fixture"; got != want {
+		t.Fatalf("source body = %q, want %q", got, want)
+	}
+	if source.Size != int64(len(content)) {
+		t.Fatalf("source size = %d, want %d", source.Size, len(content))
+	}
+	gets, opens := objects.counts()
+	if gets != 0 || opens != 1 {
+		t.Fatalf("object reads: Get=%d Open=%d, want Get=0 Open=1", gets, opens)
 	}
 }

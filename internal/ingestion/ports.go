@@ -8,6 +8,9 @@ import (
 type ObjectStore interface {
 	Put(ctx context.Context, key string, content []byte, contentType string) error
 	Get(ctx context.Context, key string) ([]byte, error)
+	// Stat reports an object's size without buffering it. Preview uses this to
+	// fail before response headers are written and to set Content-Length.
+	Stat(ctx context.Context, key string) (int64, error)
 	// Open streams an object without buffering it. Callers that decode JSON
 	// documents use this so a large object is not read whole into memory.
 	Open(ctx context.Context, key string) (io.ReadCloser, error)
