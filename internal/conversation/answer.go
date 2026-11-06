@@ -13,7 +13,6 @@ import (
 	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/contracts/model"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/token"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
@@ -440,11 +439,9 @@ func (s *Service) checkDailyQuota(ctx context.Context, tenantID string) error {
 		return nil
 	}
 	start := time.Now().UTC().Truncate(24 * time.Hour)
-	var count int64
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.Message{}).
-		Where("role = ? AND created_at >= ?", MessageRoleUser, start).
-		Count(&count).Error; err != nil {
-		return fmt.Errorf("check daily chat quota: %w", err)
+	count, err := s.messages.CountRoleSince(ctx, tenantID, MessageRoleUser, start)
+	if err != nil {
+		return err
 	}
 	if count >= int64(s.dailyCap) {
 		return fmt.Errorf("%w: the daily chat budget of %d questions has been consumed", apperror.ErrQuotaExceeded, s.dailyCap)
@@ -488,6 +485,8 @@ func (s *Service) titleFor(ctx context.Context, query string) string {
 	return truncateRunes(response.Text, conversationTitleMaxRunes)
 }
 
+const historyMessageMaxRunes = 2000
+
 // loadHistory returns the most recent completed turns in chronological order.
 // It reads before the current user message is persisted, so the current
 // question never appears twice.
@@ -498,11 +497,9 @@ func (s *Service) loadHistory(ctx context.Context, principal authz.Principal, co
 	// Refused or failed answers are filtered out after loading, so fetch a few
 	// extra rows to still fill the requested number of completed turns.
 	limit := s.historyTurn*2 + 4
-	var rows []models.Message
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("conversation_id = ? AND user_id = ?", conversationID, principal.SubjectID).
-		Order("created_at DESC, id DESC").Limit(limit).Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("load conversation history: %w", err)
+	rows, err := s.messages.History(ctx, principal.TenantID, principal.SubjectID, conversationID, limit)
+	if err != nil {
+		return nil, err
 	}
 	for left, right := 0, len(rows)-1; left < right; left, right = left+1, right-1 {
 		rows[left], rows[right] = rows[right], rows[left]

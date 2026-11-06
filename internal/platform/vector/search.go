@@ -7,9 +7,9 @@ import (
 	"strconv"
 
 	"github.com/example/rag-platform/internal/contracts/metrics"
+	"github.com/example/rag-platform/internal/contracts/ports"
 	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/platform/vecutil"
-	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
@@ -86,7 +86,7 @@ func vectorScanLimit(topK, oversample int) int {
 	return limit
 }
 
-func (s *Searcher) SearchVector(ctx context.Context, request retrieval.RecallRequest, embedding []float32) ([]retrieval.Hit, error) {
+func (s *Searcher) SearchVector(ctx context.Context, request ports.RecallRequest, embedding []float32) ([]ports.Hit, error) {
 	dimension := len(embedding)
 	if dimension <= 0 {
 		return nil, fmt.Errorf("query embedding is empty")
@@ -108,7 +108,7 @@ func (s *Searcher) SearchVector(ctx context.Context, request retrieval.RecallReq
 	query := fmt.Sprintf(vectorRecallTemplate, dimension, dimension, dimension, dimension, dimension)
 	literal := vecutil.Literal(embedding)
 
-	var hits []retrieval.Hit
+	var hits []ports.Hit
 	err := tenantdb.InTx(ctx, s.db, request.TenantID, func(tx *gorm.DB) error {
 		if efSearch > 0 {
 			// efSearch is a validated non-negative int, so inlining is safe.
@@ -129,7 +129,7 @@ func (s *Searcher) SearchVector(ctx context.Context, request retrieval.RecallReq
 
 		rank := 0
 		for rows.Next() {
-			var hit retrieval.Hit
+			var hit ports.Hit
 			if err := rows.Scan(&hit.ChunkID, &hit.DocumentID, &hit.DocumentVersionID, &hit.KnowledgeBaseID, &hit.ParentID, &hit.Ordinal, &hit.Content, &hit.ContentHash, &hit.HeadingPath, &hit.PageNumber, &hit.SourcePath, &hit.Score); err != nil {
 				return fmt.Errorf("scan vector hit: %w", err)
 			}
@@ -139,7 +139,7 @@ func (s *Searcher) SearchVector(ctx context.Context, request retrieval.RecallReq
 			}
 			rank++
 			hit.Rank = rank
-			hit.Channel = retrieval.ChannelVector
+			hit.Channel = ports.ChannelVector
 			hits = append(hits, hit)
 			if len(hits) == request.TopK {
 				break

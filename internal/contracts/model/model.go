@@ -1,12 +1,21 @@
 // Package model holds the provider-neutral generation contract shared by the
-// domain packages. The interfaces live with their consumers; only the request
-// and response data shapes are shared so adapters and callers agree on the wire.
+// domain packages. Request/response shapes and the Chatter port live here so
+// every consumer and adapter agrees on one definition.
 package model
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
+
+// Chatter is the generation port shared by conversation, projection, wiki and
+// relation. Adapters implement it structurally; adding a method changes one
+// interface instead of four copies.
+type Chatter interface {
+	Complete(ctx context.Context, request ChatRequest) (ChatResponse, error)
+	Name() string
+}
 
 // EvidenceItem is one authorized chunk presented to the model. Index is the
 // short citation id the model must use when referring to it.

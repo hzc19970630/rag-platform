@@ -33,7 +33,7 @@ func TestSyncCancelRejectsAPIKeyAndNonOperator(t *testing.T) {
 	if err := db.Create(&models.Membership{TenantID: "t1", UserID: "editor", Role: "editor", CreatedAt: now, UpdatedAt: now}).Error; err != nil {
 		t.Fatalf("seed editor: %v", err)
 	}
-	authorizer, err := authz.NewService(db)
+	authorizer, err := authz.NewService(authz.NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("new authz service: %v", err)
 	}

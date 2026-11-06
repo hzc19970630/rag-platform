@@ -296,7 +296,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 	if _, err := s.authz.BuildScope(ctx, principal, authz.QueryTarget{KnowledgeBaseID: id}); err != nil {
 		return models.KnowledgeBase{}, err
 	}
-	allowed, err := s.authz.Authorize(ctx, principal, action, "/knowledge-bases/"+id)
+	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, id, action)
 	if err != nil {
 		return models.KnowledgeBase{}, err
 	}
@@ -304,7 +304,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 		return models.KnowledgeBase{}, apperror.ErrForbidden
 	}
 	var knowledgeBase models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&knowledgeBase).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&knowledgeBase).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.KnowledgeBase{}, apperror.ErrNotFound
 		}

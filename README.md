@@ -44,7 +44,7 @@ M1 权限验收命令：
 ./scripts/m1_acceptance.sh
 ```
 
-本地 M1 默认身份为 `dev-user` / `dev-tenant`。测试其他种子身份时，在请求中传入 `X-Dev-User-ID` 和 `X-Dev-Tenant-ID`；该开发身份方式在 `APP_ENV=production` 下会被拒绝。
+本地 M1 默认身份为 `dev-user` / `dev-tenant`。测试其他种子身份时，在请求中传入 `X-Dev-User-ID` 和 `X-Dev-Tenant-ID`；该开发身份方式在 `APP_ENV=production` 下会被拒绝。部署可用 `CONFIG_PROFILE=dev|eval|on-prem|saas` 选择预设；profile 只填充未显式设置的环境变量，显式值始终优先。
 
 M2 Evidence 入库验收命令：
 

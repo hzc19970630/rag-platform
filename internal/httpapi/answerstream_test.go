@@ -39,7 +39,7 @@ func tailFixture(t *testing.T) (*gorm.DB, *conversation.Service) {
 	}).Error; err != nil {
 		t.Fatalf("seed message: %v", err)
 	}
-	return db, conversation.NewService(conversation.Options{DB: db})
+	return db, conversation.NewService(conversation.Options{Stores: conversation.NewPostgresStores(db)})
 }
 
 func seededEvents(t *testing.T, db *gorm.DB) {

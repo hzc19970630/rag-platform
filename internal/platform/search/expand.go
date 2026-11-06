@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/example/rag-platform/internal/contracts/ports"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
@@ -61,11 +61,11 @@ WHERE c.tenant_id = ?
   AND d.latest_version_id = dv.id
 ORDER BY c.ordinal`
 
-func (e *ChunkExpander) Expand(ctx context.Context, request retrieval.RecallRequest, selected []retrieval.Candidate, options retrieval.ExpansionOptions) ([]retrieval.Candidate, error) {
+func (e *ChunkExpander) Expand(ctx context.Context, request ports.RecallRequest, selected []ports.Candidate, options ports.ExpansionOptions) ([]ports.Candidate, error) {
 	if len(selected) == 0 {
 		return selected, nil
 	}
-	result := make([]retrieval.Candidate, len(selected))
+	result := make([]ports.Candidate, len(selected))
 	copy(result, selected)
 	seen := map[string]bool{}
 	anchorScore := map[string]float64{}
@@ -87,7 +87,7 @@ func (e *ChunkExpander) Expand(ctx context.Context, request retrieval.RecallRequ
 	return result, nil
 }
 
-func (e *ChunkExpander) appendParents(ctx context.Context, request retrieval.RecallRequest, selected []retrieval.Candidate, result *[]retrieval.Candidate, seen map[string]bool, anchorScore map[string]float64, scoreFactor float64) error {
+func (e *ChunkExpander) appendParents(ctx context.Context, request ports.RecallRequest, selected []ports.Candidate, result *[]ports.Candidate, seen map[string]bool, anchorScore map[string]float64, scoreFactor float64) error {
 	parentIDs := make([]string, 0, len(selected))
 	for _, candidate := range selected {
 		if candidate.ParentID != "" && !seen[candidate.ParentID] {
@@ -106,12 +106,12 @@ func (e *ChunkExpander) appendParents(ctx context.Context, request retrieval.Rec
 			continue
 		}
 		anchor := bestAnchor(selected, hit.ChunkID, anchorScore)
-		appendExpanded(result, seen, hit, retrieval.ChannelParent, anchor, scoreFactor)
+		appendExpanded(result, seen, hit, ports.ChannelParent, anchor, scoreFactor)
 	}
 	return nil
 }
 
-func (e *ChunkExpander) appendNeighbours(ctx context.Context, request retrieval.RecallRequest, selected []retrieval.Candidate, options retrieval.ExpansionOptions, result *[]retrieval.Candidate, seen map[string]bool, anchorScore map[string]float64) error {
+func (e *ChunkExpander) appendNeighbours(ctx context.Context, request ports.RecallRequest, selected []ports.Candidate, options ports.ExpansionOptions, result *[]ports.Candidate, seen map[string]bool, anchorScore map[string]float64) error {
 	ordinalsByVersion := map[string][]int{}
 	for _, candidate := range selected {
 		if candidate.DocumentVersionID == "" {
@@ -143,7 +143,7 @@ func (e *ChunkExpander) appendNeighbours(ctx context.Context, request retrieval.
 				continue
 			}
 			anchor := bestAnchor(selected, hit.ChunkID, anchorScore)
-			appendExpanded(result, seen, hit, retrieval.ChannelNeighbor, anchor, options.ScoreFactor)
+			appendExpanded(result, seen, hit, ports.ChannelNeighbor, anchor, options.ScoreFactor)
 			added++
 		}
 	}
@@ -166,15 +166,15 @@ func neighbourWindow(ordinals []int, perSide int) (int, int) {
 	return low - perSide, high + perSide
 }
 
-func (e *ChunkExpander) load(ctx context.Context, query string, values ...any) ([]retrieval.Hit, error) {
+func (e *ChunkExpander) load(ctx context.Context, query string, values ...any) ([]ports.Hit, error) {
 	rows, err := e.db.WithContext(ctx).Raw(query, values...).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("load expansion chunks: %w", err)
 	}
 	defer rows.Close()
-	var hits []retrieval.Hit
+	var hits []ports.Hit
 	for rows.Next() {
-		var hit retrieval.Hit
+		var hit ports.Hit
 		if err := rows.Scan(&hit.ChunkID, &hit.DocumentID, &hit.DocumentVersionID, &hit.KnowledgeBaseID, &hit.ParentID, &hit.Ordinal, &hit.Content, &hit.ContentHash, &hit.HeadingPath, &hit.PageNumber, &hit.SourcePath); err != nil {
 			return nil, fmt.Errorf("scan expansion chunk: %w", err)
 		}
@@ -183,9 +183,9 @@ func (e *ChunkExpander) load(ctx context.Context, query string, values ...any) (
 	return hits, rows.Err()
 }
 
-func appendExpanded(result *[]retrieval.Candidate, seen map[string]bool, hit retrieval.Hit, channel string, anchor float64, scoreFactor float64) {
+func appendExpanded(result *[]ports.Candidate, seen map[string]bool, hit ports.Hit, channel string, anchor float64, scoreFactor float64) {
 	seen[hit.ChunkID] = true
-	*result = append(*result, retrieval.Candidate{
+	*result = append(*result, ports.Candidate{
 		ChunkID:           hit.ChunkID,
 		DocumentID:        hit.DocumentID,
 		DocumentVersionID: hit.DocumentVersionID,
@@ -204,7 +204,7 @@ func appendExpanded(result *[]retrieval.Candidate, seen map[string]bool, hit ret
 
 // bestAnchor scores an expanded chunk against the strongest selected chunk of
 // the same document version, so adjacent context inherits a proportional rank.
-func bestAnchor(selected []retrieval.Candidate, chunkID string, anchorScore map[string]float64) float64 {
+func bestAnchor(selected []ports.Candidate, chunkID string, anchorScore map[string]float64) float64 {
 	if score, ok := anchorScore[chunkID]; ok {
 		return score
 	}

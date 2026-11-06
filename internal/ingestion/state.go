@@ -1,6 +1,10 @@
 package ingestion
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/example/rag-platform/internal/pipeline"
+)
 
 var transitions = map[string]map[string]bool{
 	StatusReceived:    {StatusStored: true, StatusFailed: true, StatusCancelled: true},
@@ -27,38 +31,35 @@ func ValidateTransition(from, to string) error {
 	return fmt.Errorf("invalid ingestion state transition %s -> %s", from, to)
 }
 
-var stageOrder = []string{StageParse, StageNormalize, StageChunk, StageEmbed, StageIndex}
+var ingestionStageTable = pipeline.NewStageTable(
+	pipeline.StageSpec{Stage: StageParse, Processing: StatusParsing, Completed: StatusParsed, EventType: "document." + StageNormalize},
+	pipeline.StageSpec{Stage: StageNormalize, Processing: StatusNormalizing, Completed: StatusNormalized, EventType: "document." + StageChunk},
+	pipeline.StageSpec{Stage: StageChunk, Processing: StatusChunking, Completed: StatusChunked, EventType: "document." + StageEmbed},
+	pipeline.StageSpec{Stage: StageEmbed, Processing: StatusEmbedding, Completed: StatusEmbedded, EventType: "document." + StageIndex},
+	pipeline.StageSpec{Stage: StageIndex, Processing: StatusIndexing, Completed: StatusEvidenceReady},
+)
+
+var stageOrder = ingestionStageTable.Stages()
 
 func NextStage(stage string) (string, bool) {
-	switch stage {
-	case StageParse:
-		return StageNormalize, true
-	case StageNormalize:
-		return StageChunk, true
-	case StageChunk:
-		return StageEmbed, true
-	case StageEmbed:
-		return StageIndex, true
-	default:
-		return "", false
-	}
+	next, ok := ingestionStageTable.Next(stage)
+	return next.Stage, ok
 }
 
 func StatusForStage(stage string) string {
-	switch stage {
-	case StageParse:
-		return StatusParsing
-	case StageNormalize:
-		return StatusNormalizing
-	case StageChunk:
-		return StatusChunking
-	case StageEmbed:
-		return StatusEmbedding
-	case StageIndex:
-		return StatusIndexing
-	default:
+	spec, ok := ingestionStageTable.Spec(stage)
+	if !ok {
 		return StatusFailed
 	}
+	return spec.Processing
+}
+
+func StageEventType(stage string) string {
+	spec, ok := ingestionStageTable.Spec(stage)
+	if !ok {
+		return ""
+	}
+	return spec.EventType
 }
 
 // StatusBeforeStage is the status a pipeline and version hold while the stage is
@@ -83,18 +84,9 @@ func StatusBeforeStage(stage string) string {
 }
 
 func CompletedStatusForStage(stage string) string {
-	switch stage {
-	case StageParse:
-		return StatusParsed
-	case StageNormalize:
-		return StatusNormalized
-	case StageChunk:
-		return StatusChunked
-	case StageEmbed:
-		return StatusEmbedded
-	case StageIndex:
-		return StatusEvidenceReady
-	default:
+	spec, ok := ingestionStageTable.Spec(stage)
+	if !ok {
 		return StatusFailed
 	}
+	return spec.Completed
 }

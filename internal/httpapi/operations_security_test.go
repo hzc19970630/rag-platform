@@ -82,7 +82,7 @@ func TestOperationsRoutesDoNotCrossTenantBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("identity service: %v", err)
 	}
-	authzService, err := authz.NewService(db)
+	authzService, err := authz.NewService(authz.NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("authz service: %v", err)
 	}

@@ -13,10 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterDocumentRoutes(router *gin.Engine, cfg config.Config, deps IngestionDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
-
+func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps IngestionDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected.POST(documentUploadPath, func(c *gin.Context) {
 		// The global JSON cap skips multipart, so the upload route bounds the
 		// envelope itself before FormFile parses it into memory or temp files.

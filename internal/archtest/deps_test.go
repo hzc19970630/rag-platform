@@ -53,6 +53,36 @@ func TestCheckRejectsIllegalEdges(t *testing.T) {
 			imports: []string{module + "/internal/modelregistry"},
 			rule:    RuleAdapterDomain,
 		},
+		{
+			name:    "vector adapter imports retrieval implementation",
+			pkg:     module + "/internal/platform/vector",
+			imports: []string{module + "/internal/retrieval"},
+			rule:    RuleAdapterDomain,
+		},
+		{
+			name:    "search adapter imports retrieval implementation",
+			pkg:     module + "/internal/platform/search",
+			imports: []string{module + "/internal/retrieval"},
+			rule:    RuleAdapterDomain,
+		},
+		{
+			name:    "rerank adapter imports retrieval implementation",
+			pkg:     module + "/internal/platform/rerank",
+			imports: []string{module + "/internal/retrieval"},
+			rule:    RuleAdapterDomain,
+		},
+		{
+			name:    "docreader adapter imports ingestion implementation",
+			pkg:     module + "/internal/platform/docreader",
+			imports: []string{module + "/internal/ingestion"},
+			rule:    RuleAdapterDomain,
+		},
+		{
+			name:    "evidence index adapter imports ingestion implementation",
+			pkg:     module + "/internal/platform/evidenceindex",
+			imports: []string{module + "/internal/ingestion"},
+			rule:    RuleAdapterDomain,
+		},
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -72,8 +102,11 @@ func TestCheckAllowsPortAndSharedEdges(t *testing.T) {
 		{ImportPath: module + "/internal/knowledgebase", Imports: []string{module + "/internal/config"}},
 		{ImportPath: module + "/internal/retrieval", Imports: []string{module + "/internal/contracts/metrics", module + "/internal/platform/persistence/models"}},
 		{ImportPath: module + "/internal/platform/llm", Imports: []string{module + "/internal/contracts/model"}},
-		{ImportPath: module + "/internal/platform/evidenceindex", Imports: []string{module + "/internal/ingestion"}},
-		{ImportPath: module + "/internal/platform/rerank", Imports: []string{module + "/internal/retrieval"}},
+		{ImportPath: module + "/internal/platform/evidenceindex", Imports: []string{module + "/internal/contracts/ports"}},
+		{ImportPath: module + "/internal/platform/rerank", Imports: []string{module + "/internal/contracts/ports"}},
+		{ImportPath: module + "/internal/platform/vector", Imports: []string{module + "/internal/contracts/ports"}},
+		{ImportPath: module + "/internal/platform/search", Imports: []string{module + "/internal/contracts/ports"}},
+		{ImportPath: module + "/internal/platform/docreader", Imports: []string{module + "/internal/contracts/ports"}},
 		{ImportPath: module + "/internal/platform/relationstore", Imports: []string{module + "/internal/relationstore"}},
 		{ImportPath: module + "/internal/platform/evidencestore", Imports: []string{module + "/internal/status", module + "/internal/apperror", module + "/internal/contracts/evidence"}},
 	}

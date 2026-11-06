@@ -254,7 +254,7 @@ func seedAuthorization(t *testing.T, db *gorm.DB) {
 
 func mustAuthorizer(t *testing.T, db *gorm.DB) *authz.Service {
 	t.Helper()
-	service, err := authz.NewService(db)
+	service, err := authz.NewService(authz.NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("create authorizer: %v", err)
 	}

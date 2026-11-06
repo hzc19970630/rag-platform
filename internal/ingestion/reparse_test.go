@@ -82,7 +82,7 @@ func newReparseFixture(t *testing.T) (*Service, *gorm.DB, *memoryObjects) {
 	); err != nil {
 		t.Fatalf("migrate reparse tables: %v", err)
 	}
-	authorizer, err := authz.NewService(db)
+	authorizer, err := authz.NewService(authz.NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("new authz service: %v", err)
 	}

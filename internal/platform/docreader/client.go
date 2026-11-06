@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	docreaderv1 "github.com/example/rag-platform/contracts/proto/docreader/v1"
-	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/internal/contracts/ports"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -25,18 +25,18 @@ func New(address string) (*Client, error) {
 
 func (c *Client) Close() error { return c.connection.Close() }
 
-func (c *Client) Parse(ctx context.Context, source ingestion.SourceObject, content []byte) (ingestion.ParseResult, error) {
+func (c *Client) Parse(ctx context.Context, source ports.SourceObject, content []byte) (ports.ParseResult, error) {
 	response, err := c.reader.ParseDocument(ctx, &docreaderv1.ParseDocumentRequest{
-		SchemaVersion:     ingestion.SchemaSourceObject,
+		SchemaVersion:     ports.SchemaSourceObject,
 		DocumentVersionId: source.DocumentVersionID,
 		Filename:          source.Filename,
 		MimeType:          source.MimeType,
 		Content:           content,
 	})
 	if err != nil {
-		return ingestion.ParseResult{}, fmt.Errorf("docreader parse: %w", err)
+		return ports.ParseResult{}, fmt.Errorf("docreader parse: %w", err)
 	}
-	result := ingestion.ParseResult{
+	result := ports.ParseResult{
 		SchemaVersion:     response.SchemaVersion,
 		DocumentVersionID: response.DocumentVersionId,
 		ContentHash:       response.ContentHash,
@@ -48,7 +48,7 @@ func (c *Client) Parse(ctx context.Context, source ingestion.SourceObject, conte
 		ErrorMessage:      response.ErrorMessage,
 	}
 	for _, item := range response.Blocks {
-		result.Blocks = append(result.Blocks, ingestion.DocumentBlock{
+		result.Blocks = append(result.Blocks, ports.DocumentBlock{
 			BlockID: item.BlockId, Kind: item.Kind, Text: item.Text, HeadingPath: item.HeadingPath,
 			PageNumber: int(item.PageNumber), SourcePath: item.SourcePath,
 			StartOffset: int(item.StartOffset), EndOffset: int(item.EndOffset),

@@ -9,10 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterWikiProjectionRoutes(router *gin.Engine, cfg config.Config, deps ProjectionDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
-
+func RegisterWikiProjectionRoutes(protected *gin.RouterGroup, cfg config.Config, deps ProjectionDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	knowledgeBases := protected.Group("/knowledge-bases/:id")
 	knowledgeBases.GET("/projection", func(c *gin.Context) {
 		status, err := deps.Projection.Status(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
@@ -128,10 +125,7 @@ func RegisterWikiProjectionRoutes(router *gin.Engine, cfg config.Config, deps Pr
 	})
 }
 
-func RegisterGraphProjectionRoutes(router *gin.Engine, cfg config.Config, deps ProjectionDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
-
+func RegisterGraphProjectionRoutes(protected *gin.RouterGroup, cfg config.Config, deps ProjectionDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	knowledgeBases := protected.Group("/knowledge-bases/:id")
 	knowledgeBases.GET("/graph/query", func(c *gin.Context) {
 		result, err := deps.Projection.QueryGraph(c.Request.Context(), accessContext(c).Principal, knowledgeprojection.GraphQueryOptions{

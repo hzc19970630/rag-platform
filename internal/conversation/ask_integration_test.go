@@ -167,7 +167,7 @@ func newAskFixture(t *testing.T, answer string) (*Service, *gorm.DB, *fixedChatt
 	}).Error; err != nil {
 		t.Fatalf("seed knowledge base: %v", err)
 	}
-	authzService, err := authz.NewService(db)
+	authzService, err := authz.NewService(authz.NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("authz service: %v", err)
 	}
@@ -189,7 +189,7 @@ func newAskFixture(t *testing.T, answer string) (*Service, *gorm.DB, *fixedChatt
 	}
 	chat := &fixedChatter{text: answer}
 	service := NewService(Options{
-		DB: db, Authz: authzService, Retrieval: retrievalService,
+		Stores: NewPostgresStores(db), Authz: authzService, Retrieval: retrievalService,
 		Chat: chat, Prompts: promptRegistry, Timeout: 5 * time.Second,
 	})
 	return service, db, chat

@@ -10,6 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 )
@@ -216,7 +217,7 @@ func (s *Service) Configuration(ctx context.Context, principal authz.Principal, 
 		return KnowledgeBaseConfigurationV1{}, err
 	}
 	var row models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&row).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&row).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return KnowledgeBaseConfigurationV1{}, apperror.ErrNotFound
 		}
@@ -241,7 +242,7 @@ func (s *Service) writeRetrievalConfig(ctx context.Context, principal authz.Prin
 		return models.KnowledgeBase{}, err
 	}
 	var row models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&row).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&row).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return models.KnowledgeBase{}, apperror.ErrNotFound
 		}

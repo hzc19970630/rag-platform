@@ -27,6 +27,7 @@ import (
 // exercise per-chunk denial, which the current KB-level ACL cannot express.
 type Authorizer interface {
 	Authorize(ctx context.Context, principal authz.Principal, action, object string) (bool, error)
+	AuthorizeKnowledgeBase(ctx context.Context, principal authz.Principal, knowledgeBaseID, action string) (bool, error)
 	BuildScope(ctx context.Context, principal authz.Principal, target authz.QueryTarget) (authz.AuthorizationScope, error)
 	FilterReadable(ctx context.Context, scope authz.AuthorizationScope, refs []authz.ResourceRef) ([]authz.ResourceRef, error)
 }
@@ -163,7 +164,7 @@ func (s *Service) authorize(ctx context.Context, principal authz.Principal, know
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}
-	allowed, err := s.authz.Authorize(ctx, principal, action, "/knowledge-bases/"+knowledgeBaseID)
+	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, knowledgeBaseID, action)
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}

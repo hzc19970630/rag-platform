@@ -11,10 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterKnowledgeBaseConfigRoutes(router *gin.Engine, cfg config.Config, deps KnowledgeBaseDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
-
+func RegisterKnowledgeBaseConfigRoutes(protected *gin.RouterGroup, cfg config.Config, deps KnowledgeBaseDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	byID := protected.Group("/knowledge-bases/:id")
 	byID.GET("/configuration", func(c *gin.Context) {
 		view, err := deps.KnowledgeBase.Configuration(

@@ -89,7 +89,7 @@ func TestPurgeAuditLogsDeletesOnlyExpiredRowsInBatches(t *testing.T) {
 		t.Fatalf("seed audit rows: %v", err)
 	}
 
-	service := &Service{db: db}
+	service := &Service{auditStore: NewPostgresAuditStore(db)}
 	ctx := context.Background()
 	purged, err := service.PurgeAuditLogs(ctx, now.Add(-24*time.Hour), 2)
 	if err != nil {

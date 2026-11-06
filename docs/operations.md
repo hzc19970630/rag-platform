@@ -213,6 +213,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 ## 9. 身份与密钥轮换
 
 - **APP_ENV 枚举**：只接受 `development`、`test`、`production`（忽略首尾空白与大小写）；未知值让所有进程在启动校验阶段失败，避免把拼写错误当成非生产环境绕过 production fail-fast。
+- **CONFIG_PROFILE**：`dev`（默认，保持现有默认值）、`eval`（`CHAT_SOURCE`/`EMBEDDING_SOURCE=local`、`TENANT_RLS_MODE=off`、异步答案关闭）、`on-prem`（`TENANT_RLS_MODE=enforce`、异步答案开启、开发身份关闭）、`saas`（在 on-prem 基础上强制 secure cookie）。profile 只在变量未显式设置时提供默认值，显式环境变量始终优先；未知 profile 启动失败。
 - **生产密钥 fail-fast（原 M14 A1，已交付）**：`APP_ENV=production` 时启动校验拒绝仓库默认值。JWT 必须显式设置 `JWT_SIGNING_KEYS`，不能回落到 `JWT_SIGNING_KEY` 的开发单键；`API_KEY_PEPPER`、`S3_ACCESS_KEY`/`S3_SECRET_KEY`（含 MinIO 默认值），以及 `DATABASE_URL`、`MAINTENANCE_DATABASE_URL`、`ADMIN_DATABASE_URL` 中的占位密码都会让进程以 `configuration_invalid` 退出。被拒绝的值包括 `.env.example` 的 `replace-with-a-random-*`、`change-me-*`、`rag-local` 和编译内置的 `local-*-change-me`。非生产环境保留这些默认值；生产允许数据库 URL 不带密码（证书/peer 认证），但不接受已知占位密码。
 - **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键（仅限非生产）。
 - **API Key**：数据库只保存 `sha256(pepper + raw)`；明文只在创建响应返回一次。轮换 `API_KEY_PEPPER` 会让全部已签发 key 立即失效，需重新签发并通知调用方。

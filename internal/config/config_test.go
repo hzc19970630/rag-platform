@@ -23,6 +23,9 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	if cfg.AppEnv != "development" {
 		t.Fatalf("AppEnv default: %q", cfg.AppEnv)
 	}
+	if cfg.Profile != "dev" {
+		t.Fatalf("Profile default: %q", cfg.Profile)
+	}
 	if cfg.RedisAddr != "redis:6379" || cfg.DocreaderAddr != "docreader:50051" {
 		t.Fatalf("service defaults: %+v", cfg)
 	}
@@ -191,6 +194,40 @@ func TestValidateRejectsUnknownAppEnv(t *testing.T) {
 	cfg := LoadFrom(lookupFrom(map[string]string{"APP_ENV": " Production "}))
 	if cfg.AppEnv != "production" {
 		t.Fatalf("APP_ENV normalization = %q, want production", cfg.AppEnv)
+	}
+}
+
+func TestConfigProfilesApplyDefaultsOnlyWhenEnvUnset(t *testing.T) {
+	eval := LoadFrom(lookupFrom(map[string]string{"CONFIG_PROFILE": "eval"}))
+	if eval.Profile != "eval" || eval.Chat.Source != "local" || eval.Embedding.Source != "local" || eval.TenantRLSMode != "off" || eval.Answer.AsyncEnabled {
+		t.Fatalf("eval profile = %+v", eval)
+	}
+	explicit := LoadFrom(lookupFrom(map[string]string{
+		"CONFIG_PROFILE":       "eval",
+		"CHAT_SOURCE":          "remote",
+		"EMBEDDING_SOURCE":     "remote",
+		"TENANT_RLS_MODE":      "shadow",
+		"ANSWER_ASYNC_ENABLED": "true",
+		"CHAT_BASE_URL":        "https://example.invalid",
+		"EMBEDDING_BASE_URL":   "https://example.invalid",
+		"LLM_CHAT_MODEL":       "m",
+		"LLM_EMBEDDING_MODEL":  "e",
+		"EMBEDDING_DIMENSION":  "4",
+	}))
+	if explicit.Chat.Source != "remote" || explicit.Embedding.Source != "remote" || explicit.TenantRLSMode != "shadow" || !explicit.Answer.AsyncEnabled {
+		t.Fatalf("explicit env must win over eval profile: %+v", explicit)
+	}
+	onPrem := LoadFrom(lookupFrom(map[string]string{"CONFIG_PROFILE": "on-prem"}))
+	if onPrem.TenantRLSMode != "enforce" || onPrem.Auth.DevAuthEnabled || !onPrem.Answer.AsyncEnabled {
+		t.Fatalf("on-prem profile = %+v", onPrem)
+	}
+	saas := LoadFrom(lookupFrom(map[string]string{"CONFIG_PROFILE": "saas"}))
+	if saas.TenantRLSMode != "enforce" || saas.Auth.DevAuthEnabled || !saas.Auth.CookieSecure || !saas.Answer.AsyncEnabled {
+		t.Fatalf("saas profile = %+v", saas)
+	}
+	unknown := LoadFrom(lookupFrom(map[string]string{"CONFIG_PROFILE": "staging"}))
+	if err := unknown.Validate("api"); err == nil || !strings.Contains(err.Error(), "CONFIG_PROFILE") {
+		t.Fatalf("unknown profile error = %v", err)
 	}
 }
 

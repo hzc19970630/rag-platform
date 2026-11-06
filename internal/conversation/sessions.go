@@ -2,7 +2,6 @@ package conversation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,8 +9,6 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
-	"gorm.io/gorm"
 )
 
 // sessions.go owns this slice of the service. Behavior and external contracts are
@@ -29,7 +26,7 @@ func (s *Service) CreateConversation(ctx context.Context, principal authz.Princi
 		return models.Conversation{}, err
 	}
 	conversation := models.Conversation{ID: id, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, UserID: principal.SubjectID, Title: truncateRunes(input.Title, conversationTitleMaxRunes)}
-	if err := s.db.WithContext(ctx).Create(&conversation).Error; err != nil {
+	if err := s.sessions.Create(ctx, conversation); err != nil {
 		return models.Conversation{}, fmt.Errorf("create conversation: %w", err)
 	}
 	return conversation, nil
@@ -43,11 +40,9 @@ func (s *Service) ListConversations(ctx context.Context, principal authz.Princip
 	if len(scope.KnowledgeBaseIDs) == 0 {
 		return []models.Conversation{}, nil
 	}
-	var rows []models.Conversation
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("user_id = ? AND knowledge_base_id IN ?", principal.SubjectID, scope.KnowledgeBaseIDs).
-		Order("updated_at DESC").Limit(100).Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list conversations: %w", err)
+	rows, err := s.sessions.List(ctx, principal.TenantID, principal.SubjectID, scope.KnowledgeBaseIDs)
+	if err != nil {
+		return nil, err
 	}
 	return rows, nil
 }
@@ -57,10 +52,9 @@ func (s *Service) ListMessages(ctx context.Context, principal authz.Principal, c
 	if err != nil {
 		return nil, err
 	}
-	var messages []models.Message
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("conversation_id = ?", conversation.ID).Order("created_at, id").Find(&messages).Error; err != nil {
-		return nil, fmt.Errorf("list messages: %w", err)
+	messages, err := s.sessions.Messages(ctx, principal.TenantID, conversation.ID)
+	if err != nil {
+		return nil, err
 	}
 	views := make([]MessageView, 0, len(messages))
 	for _, message := range messages {
@@ -80,15 +74,7 @@ func (s *Service) loadConversation(ctx context.Context, principal authz.Principa
 	if strings.TrimSpace(conversationID) == "" {
 		return models.Conversation{}, apperror.ErrNotFound
 	}
-	var conversation models.Conversation
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("user_id = ? AND id = ?", principal.SubjectID, conversationID).First(&conversation).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return models.Conversation{}, apperror.ErrNotFound
-		}
-		return models.Conversation{}, fmt.Errorf("load conversation: %w", err)
-	}
-	return conversation, nil
+	return s.sessions.Load(ctx, principal.TenantID, principal.SubjectID, conversationID)
 }
 
 func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.Principal, knowledgeBaseID string) (authz.AuthorizationScope, error) {
@@ -96,7 +82,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}
-	allowed, err := s.authz.Authorize(ctx, principal, "read", "/knowledge-bases/"+knowledgeBaseID)
+	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, knowledgeBaseID, "read")
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}
@@ -111,6 +97,5 @@ func (s *Service) touchConversation(ctx context.Context, conversation models.Con
 	if strings.TrimSpace(conversation.Title) == "" {
 		values["title"] = s.titleFor(ctx, query)
 	}
-	return tenantdb.MustScoped(s.db.WithContext(ctx), conversation.TenantID).
-		Model(&models.Conversation{}).Where("id = ?", conversation.ID).Updates(values).Error
+	return s.sessions.Touch(ctx, conversation.TenantID, conversation.ID, values)
 }

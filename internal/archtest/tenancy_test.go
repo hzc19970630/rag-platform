@@ -94,14 +94,14 @@ func load(db *gorm.DB) { db.Raw("SELECT id FROM chunks -- tenant_id is added els
 		},
 		{
 			name: "allowlisted retention sweep",
-			path: "internal/authz/service.go",
+			path: "internal/authz/audit_store.go",
 			source: `package authz
 import "gorm.io/gorm"
 func purge(db *gorm.DB) { db.Exec("DELETE FROM audit_logs WHERE created_at < ?", "2026-01-01") }`,
 		},
 		{
 			name: "new table in an allowlisted file still fails",
-			path: "internal/authz/service.go",
+			path: "internal/authz/audit_store.go",
 			source: `package authz
 import "gorm.io/gorm"
 func purge(db *gorm.DB) { db.Exec("DELETE FROM chunks WHERE id = ?", "chunk-1") }`,
@@ -135,17 +135,17 @@ func purge(db *gorm.DB) { db.Exec("DELETE FROM chunks WHERE id = ?", "chunk-1") 
 func TestTenancyAllowlistIsExplicit(t *testing.T) {
 	want := []TenancyAllowlistEntry{
 		{
-			File:   "internal/authz/service.go",
+			File:   "internal/authz/audit_store.go",
 			Tables: []string{"audit_logs"},
 			Reason: "retention sweep: deletes one bounded batch of expired audit rows across all tenants",
 		},
 		{
-			File:   "internal/conversation/events.go",
+			File:   "internal/conversation/event_store.go",
 			Tables: []string{"stream_events"},
 			Reason: "retention sweep: deletes one bounded batch of expired replay buffers across all tenants",
 		},
 		{
-			File:   "internal/conversation/async.go",
+			File:   "internal/conversation/job_store.go",
 			Tables: []string{"answer_jobs"},
 			Reason: "stale-lease sweep: fails RUNNING jobs whose worker disappeared across all tenants; it reads tenant_id only to address the job's own terminal events",
 		},

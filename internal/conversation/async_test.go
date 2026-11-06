@@ -31,7 +31,7 @@ func newAsyncFixture(t *testing.T, answer string) (*Service, *gorm.DB, *fixedCha
 	}
 	publisher := &fakeAnswerPublisher{}
 	service := NewService(Options{
-		DB: db, Authz: synchronous.authz, Retrieval: synchronous.retrieval,
+		Stores: NewPostgresStores(db), Authz: synchronous.authz, Retrieval: synchronous.retrieval,
 		Chat: chat, Prompts: synchronous.prompts, Timeout: 5 * time.Second,
 		AnswerPublisher: publisher, AsyncEnabled: true, AnswerLease: time.Minute,
 	})

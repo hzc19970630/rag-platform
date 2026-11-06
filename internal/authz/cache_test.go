@@ -49,10 +49,38 @@ func seedAuthz(t *testing.T, db *gorm.DB) {
 	}
 }
 
+func TestAuthorizeKnowledgeBaseHelpersMatchAuthorize(t *testing.T) {
+	db := openAuthzDB(t)
+	seedAuthz(t, db)
+	service, err := NewService(NewPostgresStores(db))
+	if err != nil {
+		t.Fatalf("new authz service: %v", err)
+	}
+	ctx := context.Background()
+	owner := Principal{SubjectID: "owner-a", TenantID: "tenant-a"}
+
+	for _, action := range []string{"read", "write", "delete"} {
+		got, gotErr := service.AuthorizeKnowledgeBase(ctx, owner, "kb-a", action)
+		want, wantErr := service.Authorize(ctx, owner, action, "/knowledge-bases/kb-a")
+		if got != want || (gotErr == nil) != (wantErr == nil) {
+			t.Fatalf("AuthorizeKnowledgeBase(%s) = %v,%v; Authorize = %v,%v", action, got, gotErr, want, wantErr)
+		}
+	}
+	got, err := service.AuthorizeKnowledgeBases(ctx, owner, "write")
+	if err != nil || !got {
+		t.Fatalf("collection write = %v, %v", got, err)
+	}
+	// Authorize alone is object-path based; BuildScope is the tenant boundary
+	// that every service must resolve before calling the helper.
+	if _, err := service.BuildScope(ctx, Principal{SubjectID: "owner-b", TenantID: "tenant-b"}, QueryTarget{KnowledgeBaseID: "kb-a"}); err == nil {
+		t.Fatal("cross-tenant BuildScope must remain forbidden")
+	}
+}
+
 func TestTenantPolicyScopesAndRevocationIsImmediate(t *testing.T) {
 	db := openAuthzDB(t)
 	seedAuthz(t, db)
-	service, err := NewService(db)
+	service, err := NewService(NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("new authz service: %v", err)
 	}
@@ -102,7 +130,7 @@ func TestTenantPolicyScopesAndRevocationIsImmediate(t *testing.T) {
 func TestBumpRevisionOnlyInvalidatesOneTenant(t *testing.T) {
 	db := openAuthzDB(t)
 	seedAuthz(t, db)
-	service, err := NewService(db)
+	service, err := NewService(NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("new authz service: %v", err)
 	}
@@ -138,7 +166,7 @@ func TestBumpRevisionOnlyInvalidatesOneTenant(t *testing.T) {
 func TestScopeCacheReturnsIndependentCopy(t *testing.T) {
 	db := openAuthzDB(t)
 	seedAuthz(t, db)
-	service, err := NewService(db)
+	service, err := NewService(NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("new authz service: %v", err)
 	}

@@ -13,17 +13,17 @@ type TenancyAllowlistEntry struct {
 // editing that test, which keeps every cross-tenant statement reviewable.
 var TenancyAllowlist = []TenancyAllowlistEntry{
 	{
-		File:   "internal/authz/service.go",
+		File:   "internal/authz/audit_store.go",
 		Tables: []string{"audit_logs"},
 		Reason: "retention sweep: deletes one bounded batch of expired audit rows across all tenants",
 	},
 	{
-		File:   "internal/conversation/events.go",
+		File:   "internal/conversation/event_store.go",
 		Tables: []string{"stream_events"},
 		Reason: "retention sweep: deletes one bounded batch of expired replay buffers across all tenants",
 	},
 	{
-		File:   "internal/conversation/async.go",
+		File:   "internal/conversation/job_store.go",
 		Tables: []string{"answer_jobs"},
 		Reason: "stale-lease sweep: fails RUNNING jobs whose worker disappeared across all tenants; it reads tenant_id only to address the job's own terminal events",
 	},

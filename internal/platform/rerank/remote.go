@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/rag-platform/internal/contracts/ports"
 	"github.com/example/rag-platform/internal/platform/netprobe"
-	"github.com/example/rag-platform/internal/retrieval"
 )
 
 // RemoteReranker calls an OpenAI compatible /rerank endpoint. The retrieval
-// layer depends only on retrieval.Reranker, so swapping the offline overlap
+// layer depends only on ports.Reranker, so swapping the offline overlap
 // reranker for a hosted model is a configuration change, not a code change.
 //
 // The adapter only annotates scores: the fused score stays on the candidate
@@ -90,13 +90,13 @@ type rerankResponse struct {
 	} `json:"results"`
 }
 
-func (r *RemoteReranker) Rerank(ctx context.Context, query string, candidates []retrieval.Candidate) ([]retrieval.Candidate, error) {
+func (r *RemoteReranker) Rerank(ctx context.Context, query string, candidates []ports.Candidate) ([]ports.Candidate, error) {
 	return r.RerankWithModel(ctx, r.model, query, candidates)
 }
 
 // RerankWithModel reranks with the resolved knowledge-base model. An empty
 // model falls back to the adapter's configured default.
-func (r *RemoteReranker) RerankWithModel(ctx context.Context, model, query string, candidates []retrieval.Candidate) ([]retrieval.Candidate, error) {
+func (r *RemoteReranker) RerankWithModel(ctx context.Context, model, query string, candidates []ports.Candidate) ([]ports.Candidate, error) {
 	if len(candidates) == 0 {
 		return candidates, nil
 	}
@@ -139,7 +139,7 @@ func (r *RemoteReranker) RerankWithModel(ctx context.Context, model, query strin
 		return nil, fmt.Errorf("decode rerank response: %w", err)
 	}
 
-	scored := make([]retrieval.Candidate, len(candidates))
+	scored := make([]ports.Candidate, len(candidates))
 	copy(scored, candidates)
 	annotated := 0
 	for _, result := range parsed.Results {
@@ -151,8 +151,8 @@ func (r *RemoteReranker) RerankWithModel(ctx context.Context, model, query strin
 		}
 		value := result.RelevanceScore
 		scored[result.Index].RerankScore = &value
-		if !contains(scored[result.Index].Channels, retrieval.ChannelReranked) {
-			scored[result.Index].Channels = append(scored[result.Index].Channels, retrieval.ChannelReranked)
+		if !contains(scored[result.Index].Channels, ports.ChannelReranked) {
+			scored[result.Index].Channels = append(scored[result.Index].Channels, ports.ChannelReranked)
 		}
 		annotated++
 	}
@@ -160,7 +160,7 @@ func (r *RemoteReranker) RerankWithModel(ctx context.Context, model, query strin
 		return nil, fmt.Errorf("rerank endpoint returned no results for %d candidates", len(scored))
 	}
 
-	retrieval.SortCandidates(scored)
+	ports.SortCandidates(scored)
 	return scored, nil
 }
 

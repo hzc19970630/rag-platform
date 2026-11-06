@@ -25,28 +25,38 @@ const (
 	inboxFailed     = "FAILED"
 )
 
-func stageStatusFor(projectionType, stage string) string {
+var wikiStageTable = pipeline.NewStageTable(
+	pipeline.StageSpec{Stage: StageCollect, Processing: ProjectionPending, Completed: ProjectionRunning, EventType: "projection.wiki"},
+	pipeline.StageSpec{Stage: StageGenerate, Processing: ProjectionRunning, Completed: ProjectionRunning, EventType: "projection.wiki"},
+	pipeline.StageSpec{Stage: StageFinalize, Processing: ProjectionRunning, Completed: ProjectionReady},
+)
+
+var relationStageTable = pipeline.NewStageTable(
+	pipeline.StageSpec{Stage: StageCollect, Processing: RelationPending, Completed: RelationExtracting, EventType: "projection.relation"},
+	pipeline.StageSpec{Stage: StageExtract, Processing: RelationExtracting, Completed: RelationExtracting, EventType: "projection.relation"},
+	pipeline.StageSpec{Stage: StageFinalize, Processing: RelationExtracting, Completed: RelationReady},
+)
+
+func projectionStages(projectionType string) *pipeline.StageTable {
 	if projectionType == ProjectionTypeRelation {
-		if stage == StageCollect {
-			return RelationPending
-		}
+		return relationStageTable
+	}
+	return wikiStageTable
+}
+
+func stageStatusFor(projectionType, stage string) string {
+	if spec, ok := projectionStages(projectionType).Spec(stage); ok {
+		return spec.Processing
+	}
+	if projectionType == ProjectionTypeRelation {
 		return RelationExtracting
 	}
-	return stageRunStatus(stage)
+	return ProjectionRunning
 }
 
 func nextStageFor(projectionType, stage string) (string, bool) {
-	if projectionType == ProjectionTypeRelation {
-		switch stage {
-		case StageCollect:
-			return StageExtract, true
-		case StageExtract:
-			return StageFinalize, true
-		default:
-			return "", false
-		}
-	}
-	return nextStage(stage)
+	next, ok := projectionStages(projectionType).Next(stage)
+	return next.Stage, ok
 }
 
 func failedStatusFor(projectionType string) string {
@@ -156,6 +166,9 @@ func stageEvent(run *models.ProjectionRun, stage string, attempt int) (models.Ou
 	schema, eventType := SchemaWikiTask, "projection.wiki"
 	if run.ProjectionType == ProjectionTypeRelation {
 		schema, eventType = SchemaRelationTask, "projection.relation"
+	}
+	if spec, ok := projectionStages(run.ProjectionType).Spec(stage); ok && spec.EventType != "" {
+		eventType = spec.EventType
 	}
 	task := Task{
 		SchemaVersion: schema, TenantID: run.TenantID, KnowledgeBaseID: run.KnowledgeBaseID,

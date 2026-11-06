@@ -36,12 +36,12 @@ var providerAdapters = []string{
 	"internal/platform/queue",
 }
 
-// portOwnerDomains define the interfaces that platform adapters implement.
-// Adapters must reference these port types, so these edges are legal; every
-// other domain package is off limits to keep adapters free of business logic.
-var portOwnerDomains = []string{
-	"internal/ingestion",
-	"internal/retrieval",
+// portPackages are the only domain-side packages platform adapters may import.
+// ingestion/retrieval expose their port types through contracts/ports; the
+// relationstore package is itself the port definition. Subpackages are not
+// allowed, so an adapter cannot reach into an implementation file.
+var portPackages = []string{
+	"internal/contracts/ports",
 	"internal/relationstore",
 }
 
@@ -127,8 +127,8 @@ func isProviderAdapter(dep string) bool {
 }
 
 func isPortOwner(dep string) bool {
-	for _, domain := range portOwnerDomains {
-		if hasPrefix(dep, domain) {
+	for _, pkg := range portPackages {
+		if dep == pkg {
 			return true
 		}
 	}

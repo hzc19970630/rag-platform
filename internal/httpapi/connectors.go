@@ -9,10 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterConnectorRoutes(router *gin.Engine, cfg config.Config, deps DataSourceDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
-
+func RegisterConnectorRoutes(protected *gin.RouterGroup, cfg config.Config, deps DataSourceDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	knowledgeBases := protected.Group("/knowledge-bases/:id")
 	knowledgeBases.POST("/connectors", func(c *gin.Context) {
 		var input datasource.CreateConnectorInput

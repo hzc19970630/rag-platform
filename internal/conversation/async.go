@@ -12,9 +12,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
-	"gorm.io/gorm/clause"
 )
 
 // Async answer job states. They describe durable hand-off, not the answer:
@@ -185,14 +183,11 @@ func (s *Service) RunAnswer(ctx context.Context, task tasks.Answer) error {
 // conversationQuery reads the question back from the user message persisted by
 // PrepareAnswer. The queue payload intentionally does not carry prompt text.
 func (s *Service) conversationQuery(ctx context.Context, job models.AnswerJob, task tasks.Answer) string {
-	var message models.Message
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), job.TenantID).
-		Where("user_id = ? AND conversation_id = ? AND request_id = ? AND role = ?",
-			job.UserID, task.ConversationID, task.RequestID, MessageRoleUser).
-		Order("created_at DESC, id DESC").First(&message).Error; err == nil {
-		return message.Content
+	content, ok, err := s.messages.LatestQuestion(ctx, job.TenantID, job.UserID, task.ConversationID, task.RequestID)
+	if err != nil || !ok {
+		return ""
 	}
-	return ""
+	return content
 }
 
 // SweepStaleAnswers fails jobs whose worker lease expired and appends a terminal
@@ -201,27 +196,9 @@ func (s *Service) SweepStaleAnswers(ctx context.Context, now time.Time, limit in
 	if limit <= 0 {
 		limit = 100
 	}
-	type staleJob struct {
-		ID        string
-		TenantID  string
-		UserID    string
-		RequestID string
-	}
-	var rows []staleJob
-	// This sweep is deliberately cross-tenant: it runs in the maintenance loop
-	// on the BYPASSRLS role and only touches another tenant's job when its lease
-	// has expired.
-	err := s.db.WithContext(ctx).Raw(`
-		UPDATE answer_jobs SET status = ?, error_code = ?, lease_owner = '', lease_until = NULL, updated_at = ?
-		WHERE id IN (
-			SELECT id FROM answer_jobs
-			WHERE status = ? AND lease_until IS NOT NULL AND lease_until < ?
-			ORDER BY lease_until LIMIT ?
-		)
-		RETURNING id, tenant_id, user_id, request_id`,
-		AnswerJobFailed, CodeWorkerLost, now, AnswerJobRunning, now, limit).Scan(&rows).Error
+	rows, err := s.jobs.SweepStale(ctx, now, limit)
 	if err != nil {
-		return 0, fmt.Errorf("sweep stale answer jobs: %w", err)
+		return 0, err
 	}
 	for _, row := range rows {
 		job := models.AnswerJob{ID: row.ID, TenantID: row.TenantID, UserID: row.UserID, RequestID: row.RequestID}
@@ -238,9 +215,9 @@ func (s *Service) FailAnswerJob(ctx context.Context, jobID, code, message string
 	if strings.TrimSpace(jobID) == "" {
 		return nil
 	}
-	var job models.AnswerJob
-	if err := s.db.WithContext(ctx).Where("id = ?", jobID).First(&job).Error; err != nil {
-		return fmt.Errorf("load answer job %s: %w", jobID, err)
+	job, err := s.jobs.Load(ctx, jobID)
+	if err != nil {
+		return err
 	}
 	if job.Status == AnswerJobCompleted || job.Status == AnswerJobFailed {
 		return nil
@@ -263,62 +240,33 @@ func (s *Service) ensureAnswerJob(ctx context.Context, prepared preparedAnswer) 
 		ConversationID: prepared.conversation.ID, RequestID: prepared.requestID,
 		Status: AnswerJobQueued, ScopeJSON: &value,
 	}
-	result := s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&job)
-	if result.Error != nil {
-		return models.AnswerJob{}, false, fmt.Errorf("create answer job: %w", result.Error)
-	}
-	if result.RowsAffected == 1 {
-		return job, true, nil
-	}
-	var existing models.AnswerJob
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), prepared.principal.TenantID).
-		Where("user_id = ? AND conversation_id = ? AND request_id = ?",
-			prepared.principal.SubjectID, prepared.conversation.ID, prepared.requestID).
-		First(&existing).Error; err != nil {
-		return models.AnswerJob{}, false, fmt.Errorf("load concurrent answer job: %w", err)
-	}
-	return existing, false, nil
+	return s.jobs.CreateOrLoad(ctx, job)
 }
 
 // claimAnswerJob admits one worker per job and renews the lease atomically.
 func (s *Service) claimAnswerJob(ctx context.Context, task tasks.Answer) (models.AnswerJob, bool, error) {
 	now := time.Now()
-	leaseUntil := now.Add(s.leaseTTL)
-	var job models.AnswerJob
-	err := s.db.WithContext(ctx).Raw(`
-		UPDATE answer_jobs
-		SET status = ?, attempts = attempts + 1, lease_owner = ?, lease_until = ?, updated_at = ?
-		WHERE id = ? AND tenant_id = ?
-		  AND (status = ? OR (status = ? AND (lease_until IS NULL OR lease_until < ?)))
-		RETURNING id, tenant_id, user_id, conversation_id, request_id, status, attempts,
-		          lease_owner, lease_until, next_sequence, scope_json, error_code, created_at, updated_at`,
-		AnswerJobRunning, task.JobID, leaseUntil, now,
-		task.JobID, task.TenantID,
-		AnswerJobQueued, AnswerJobRunning, now,
-	).Scan(&job).Error
+	job, claimed, err := s.jobs.Claim(ctx, task.JobID, task.TenantID, now.Add(s.leaseTTL), now)
 	if err != nil {
-		return models.AnswerJob{}, false, fmt.Errorf("claim answer job: %w", err)
+		return models.AnswerJob{}, false, err
 	}
-	if job.ID == "" {
-		var exists bool
-		if err := s.db.WithContext(ctx).Raw(
-			"SELECT EXISTS (SELECT 1 FROM answer_jobs WHERE id = ? AND tenant_id = ?)",
-			task.JobID, task.TenantID,
-		).Scan(&exists).Error; err != nil {
-			return models.AnswerJob{}, false, fmt.Errorf("probe answer job: %w", err)
-		}
-		if !exists {
-			return models.AnswerJob{}, false, errAnswerJobNotVisible
-		}
-		return models.AnswerJob{}, false, nil
+	if claimed {
+		return job, true, nil
 	}
-	return job, true, nil
+	exists, err := s.jobs.Exists(ctx, task.JobID, task.TenantID)
+	if err != nil {
+		return models.AnswerJob{}, false, err
+	}
+	if !exists {
+		return models.AnswerJob{}, false, errAnswerJobNotVisible
+	}
+	return models.AnswerJob{}, false, nil
 }
 
 func (s *Service) requeueAnswerJob(ctx context.Context, job *models.AnswerJob) error {
-	if err := s.db.WithContext(ctx).Model(&models.AnswerJob{}).
-		Where("id = ? AND tenant_id = ?", job.ID, job.TenantID).
-		Updates(map[string]any{"status": AnswerJobQueued, "lease_owner": "", "lease_until": nil, "error_code": "", "updated_at": time.Now()}).Error; err != nil {
+	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+		"status": AnswerJobQueued, "lease_owner": "", "lease_until": nil, "error_code": "", "updated_at": time.Now(),
+	}); err != nil {
 		return fmt.Errorf("requeue answer job: %w", err)
 	}
 	job.Status = AnswerJobQueued
@@ -329,12 +277,10 @@ func (s *Service) requeueAnswerJob(ctx context.Context, job *models.AnswerJob) e
 }
 
 func (s *Service) releaseAnswerJob(ctx context.Context, job *models.AnswerJob, cause error) error {
-	if err := s.db.WithContext(ctx).Model(&models.AnswerJob{}).
-		Where("id = ? AND tenant_id = ?", job.ID, job.TenantID).
-		Updates(map[string]any{
-			"status": AnswerJobQueued, "lease_owner": "", "lease_until": nil,
-			"error_code": CodeWorkerError, "updated_at": time.Now(),
-		}).Error; err != nil {
+	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+		"status": AnswerJobQueued, "lease_owner": "", "lease_until": nil,
+		"error_code": CodeWorkerError, "updated_at": time.Now(),
+	}); err != nil {
 		return fmt.Errorf("release answer job %s: %w (original: %v)", job.ID, err, cause)
 	}
 	return cause
@@ -346,9 +292,9 @@ func (s *Service) completeAnswerJob(ctx context.Context, job *models.AnswerJob, 
 	case AnswerFailed, AnswerTimedOut, AnswerCancelled:
 		status = AnswerJobFailed
 	}
-	if err := s.db.WithContext(ctx).Model(&models.AnswerJob{}).
-		Where("id = ? AND tenant_id = ?", job.ID, job.TenantID).
-		Updates(map[string]any{"status": status, "error_code": code, "lease_owner": "", "lease_until": nil, "updated_at": time.Now()}).Error; err != nil {
+	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+		"status": status, "error_code": code, "lease_owner": "", "lease_until": nil, "updated_at": time.Now(),
+	}); err != nil {
 		return fmt.Errorf("complete answer job %s: %w", job.ID, err)
 	}
 	return nil
@@ -365,9 +311,9 @@ func (s *Service) abortAnswerJob(ctx context.Context, job *models.AnswerJob, cod
 // SSE tail waits for. Event failures are best effort: the job row is the
 // durable signal.
 func (s *Service) failAnswerJob(ctx context.Context, job *models.AnswerJob, code string, cause error) error {
-	if err := s.db.WithContext(ctx).Model(&models.AnswerJob{}).
-		Where("id = ? AND tenant_id = ?", job.ID, job.TenantID).
-		Updates(map[string]any{"status": AnswerJobFailed, "error_code": code, "lease_owner": "", "lease_until": nil, "updated_at": time.Now()}).Error; err != nil {
+	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+		"status": AnswerJobFailed, "error_code": code, "lease_owner": "", "lease_until": nil, "updated_at": time.Now(),
+	}); err != nil {
 		return fmt.Errorf("fail answer job %s: %w", job.ID, err)
 	}
 	emit := s.jobEvents(ctx, job, nil)
@@ -389,14 +335,7 @@ func (s *Service) jobEvents(ctx context.Context, job *models.AnswerJob, emit Emi
 }
 
 func (s *Service) nextAnswerSequence(ctx context.Context, jobID, tenantID string) (int, error) {
-	var sequence int
-	if err := s.db.WithContext(ctx).Raw(
-		`UPDATE answer_jobs SET next_sequence = next_sequence + 1, updated_at = ? WHERE id = ? AND tenant_id = ? RETURNING next_sequence`,
-		time.Now(), jobID, tenantID,
-	).Scan(&sequence).Error; err != nil {
-		return 0, fmt.Errorf("allocate answer event sequence: %w", err)
-	}
-	return sequence, nil
+	return s.jobs.NextSequence(ctx, jobID, tenantID)
 }
 
 func decodeAuthorizationScope(value *string) (authz.AuthorizationScope, error) {

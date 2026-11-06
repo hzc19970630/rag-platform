@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/example/rag-platform/internal/contracts/ports"
 	"github.com/example/rag-platform/internal/platform/cjk"
-	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/example/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
@@ -50,7 +50,7 @@ WHERE c.tenant_id = ?
 ORDER BY score DESC
 LIMIT ?`
 
-func (s *BM25Searcher) SearchKeyword(ctx context.Context, request retrieval.RecallRequest) ([]retrieval.Hit, error) {
+func (s *BM25Searcher) SearchKeyword(ctx context.Context, request ports.RecallRequest) ([]ports.Hit, error) {
 	expression := SanitizeBM25Query(request.Query)
 	if expression == "" || request.TopK <= 0 || len(request.KnowledgeBaseIDs) == 0 {
 		return nil, nil
@@ -61,10 +61,10 @@ func (s *BM25Searcher) SearchKeyword(ctx context.Context, request retrieval.Reca
 	}
 	defer rows.Close()
 
-	var hits []retrieval.Hit
+	var hits []ports.Hit
 	rank := 0
 	for rows.Next() {
-		var hit retrieval.Hit
+		var hit ports.Hit
 		if err := rows.Scan(&hit.ChunkID, &hit.DocumentID, &hit.DocumentVersionID, &hit.KnowledgeBaseID, &hit.ParentID, &hit.Ordinal, &hit.Content, &hit.ContentHash, &hit.HeadingPath, &hit.PageNumber, &hit.SourcePath, &hit.Score); err != nil {
 			return nil, fmt.Errorf("scan bm25 hit: %w", err)
 		}
@@ -75,7 +75,7 @@ func (s *BM25Searcher) SearchKeyword(ctx context.Context, request retrieval.Reca
 		}
 		rank++
 		hit.Rank = rank
-		hit.Channel = retrieval.ChannelKeyword
+		hit.Channel = ports.ChannelKeyword
 		hits = append(hits, hit)
 	}
 	return hits, rows.Err()

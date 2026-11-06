@@ -31,6 +31,10 @@ func (f fakeAuthorizer) Authorize(_ context.Context, _ authz.Principal, action, 
 	return !f.deniedActions[action], nil
 }
 
+func (f fakeAuthorizer) AuthorizeKnowledgeBase(ctx context.Context, principal authz.Principal, knowledgeBaseID, action string) (bool, error) {
+	return f.Authorize(ctx, principal, action, "/knowledge-bases/"+knowledgeBaseID)
+}
+
 func (f fakeAuthorizer) BuildScope(_ context.Context, principal authz.Principal, target authz.QueryTarget) (authz.AuthorizationScope, error) {
 	return authz.AuthorizationScope{
 		SubjectID: principal.SubjectID, TenantID: principal.TenantID,

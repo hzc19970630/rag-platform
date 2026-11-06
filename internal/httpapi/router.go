@@ -47,10 +47,10 @@ func NewRouterWithReadiness(cfg config.Config, logger *slog.Logger, registry *ob
 		logger.Error("trusted_proxies_invalid", "error", err)
 		_ = r.SetTrustedProxies(nil)
 	}
-	r.Use(tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(registry), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes), gin.CustomRecovery(func(c *gin.Context, recovered any) {
+	r.Use(gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		logger.Error("http_panic", "path", c.Request.URL.Path, "panic", recovered)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_server_error"})
-	}))
+	}), tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(registry), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes))
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})

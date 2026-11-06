@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/example/rag-platform/internal/contracts/ports"
 )
 
 func TestRemoteRerankerUsesTheResolvedModel(t *testing.T) {
@@ -37,7 +37,7 @@ func TestRemoteRerankerUsesTheResolvedModel(t *testing.T) {
 	if reranker.Name() != "deployment-rerank" {
 		t.Fatalf("Name must be the configured model so the catalog can register it, got %q", reranker.Name())
 	}
-	scored, err := reranker.RerankWithModel(context.Background(), "kb-rerank", "question", []retrieval.Candidate{{ChunkID: "chunk-1", Content: "text"}})
+	scored, err := reranker.RerankWithModel(context.Background(), "kb-rerank", "question", []ports.Candidate{{ChunkID: "chunk-1", Content: "text"}})
 	if err != nil {
 		t.Fatalf("rerank: %v", err)
 	}

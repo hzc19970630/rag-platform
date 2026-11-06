@@ -15,10 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterConversationRoutes(router *gin.Engine, cfg config.Config, deps ConversationDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
-
+func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, deps ConversationDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected.POST("/search", func(c *gin.Context) {
 		var input searchRequest
 		if err := c.ShouldBindJSON(&input); err != nil {

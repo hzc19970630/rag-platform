@@ -556,7 +556,7 @@ func (s workerStage) Succeed(tx *gorm.DB, now time.Time) (*models.OutboxEvent, e
 	}
 	return &models.OutboxEvent{
 		TenantID: task.TenantID, AggregateType: "pipeline_run", AggregateID: task.PipelineRunID,
-		EventType: "document." + next, IdempotencyKey: stageKey, Payload: string(payload),
+		EventType: StageEventType(task.Stage), IdempotencyKey: stageKey, Payload: string(payload),
 	}, nil
 }
 

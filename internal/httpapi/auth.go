@@ -15,9 +15,13 @@ import (
 )
 
 func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, deps AuthDeps, mw MiddlewareDeps, logger *slog.Logger) {
-	protected := router.Group("/api/v1")
+	api := router.Group("/api/v1")
+	protected := api.Group("")
 	protected.Use(authenticationMiddleware(cfg, mw))
+	registerAuthRoutes(api, protected, cfg, deps, mw, logger)
+}
 
+func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps AuthDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected.GET("/me", func(c *gin.Context) {
 		access := accessContext(c)
 		scope, err := deps.Authorization.BuildScope(c.Request.Context(), access.Principal, authz.QueryTarget{})
@@ -37,7 +41,7 @@ func RegisterAuthRoutes(router *gin.Engine, cfg config.Config, deps AuthDeps, mw
 		c.JSON(http.StatusOK, gin.H{"items": auditLogViews(rows)})
 	})
 
-	auth := router.Group("/api/v1/auth")
+	auth := api.Group("/auth")
 	auth.GET("/config", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"oidcEnabled":     deps.Identity.OIDCEnabled(),

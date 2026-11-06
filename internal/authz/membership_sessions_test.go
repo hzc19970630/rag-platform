@@ -21,7 +21,7 @@ func TestTenantMemberChangesRevokeOnlyTargetSessions(t *testing.T) {
 	if err := db.Create(&sessions).Error; err != nil {
 		t.Fatalf("seed sessions: %v", err)
 	}
-	service, err := NewService(db)
+	service, err := NewService(NewPostgresStores(db))
 	if err != nil {
 		t.Fatalf("new authz service: %v", err)
 	}

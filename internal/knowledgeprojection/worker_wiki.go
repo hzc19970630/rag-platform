@@ -37,23 +37,15 @@ func ValidateStageTransition(runStatus, stage string) error {
 }
 
 func stageRunStatus(stage string) string {
-	switch stage {
-	case StageCollect:
-		return ProjectionPending
-	default:
-		return ProjectionRunning
+	if spec, ok := wikiStageTable.Spec(stage); ok {
+		return spec.Processing
 	}
+	return ProjectionRunning
 }
 
 func nextStage(stage string) (string, bool) {
-	switch stage {
-	case StageCollect:
-		return StageGenerate, true
-	case StageGenerate:
-		return StageFinalize, true
-	default:
-		return "", false
-	}
+	next, ok := wikiStageTable.Next(stage)
+	return next.Stage, ok
 }
 
 func (s *Service) processWiki(ctx context.Context, task Task) error {

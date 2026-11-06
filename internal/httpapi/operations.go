@@ -16,15 +16,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterOperationsRoutes(router *gin.Engine, cfg config.Config, deps OperationsDeps, mw MiddlewareDeps, logger *slog.Logger) {
+func RegisterOperationsRoutes(protected *gin.RouterGroup, cfg config.Config, deps OperationsDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	// The command injects the process registry. A handler-only test that omits
 	// it gets an isolated registry rather than silently reading global state.
 	registry := deps.Metrics
 	if registry == nil {
 		registry = observability.New()
 	}
-	protected := router.Group("/api/v1")
-	protected.Use(authenticationMiddleware(cfg, mw))
 
 	ops := protected.Group("/ops")
 	ops.Use(requireOperator(mw))

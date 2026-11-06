@@ -3,7 +3,6 @@ package conversation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,9 +10,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
-	"gorm.io/gorm"
 )
 
 // events.go owns this slice of the service. Behavior and external contracts are
@@ -25,41 +22,18 @@ func (s *Service) ReplayEvents(ctx context.Context, principal authz.Principal, r
 	if strings.TrimSpace(requestID) == "" {
 		return nil, apperror.Invalidf("request id is required")
 	}
-	var events []Event
-	// Enforce mode needs one tenant-scoped transaction per replay: a pooled
-	// statement cannot carry app.tenant_id for the next query. InTx joins the
-	// request transaction when one is still active.
-	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
-		var message models.Message
-		if err := tenantdb.MustScoped(tx, principal.TenantID).
-			Where("user_id = ? AND request_id = ?", principal.SubjectID, requestID).First(&message).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return apperror.ErrNotFound
-			}
-			return fmt.Errorf("load request messages: %w", err)
-		}
-		var rows []models.StreamEvent
-		if err := tenantdb.MustScoped(tx, principal.TenantID).
-			Where("user_id = ? AND request_id = ? AND sequence > ?", principal.SubjectID, requestID, afterSequence).Order("sequence").Find(&rows).Error; err != nil {
-			return fmt.Errorf("load stream events: %w", err)
-		}
-		events = make([]Event, 0, len(rows))
-		for _, row := range rows {
-			data := map[string]any{}
-			_ = json.Unmarshal([]byte(row.Payload), &data)
-			events = append(events, Event{EventID: eventID(row.RequestID, row.Sequence), RequestID: row.RequestID, Sequence: row.Sequence, Type: row.EventType, Data: data})
-		}
-		return nil
-	})
+	rows, err := s.events.Replay(ctx, principal.TenantID, principal.SubjectID, requestID, afterSequence)
 	if err != nil {
 		return nil, err
 	}
+	events := make([]Event, 0, len(rows))
+	for _, row := range rows {
+		data := map[string]any{}
+		_ = json.Unmarshal([]byte(row.Payload), &data)
+		events = append(events, Event{EventID: eventID(row.RequestID, row.Sequence), RequestID: row.RequestID, Sequence: row.Sequence, Type: row.EventType, Data: data})
+	}
 	return events, nil
 }
-
-// PurgeStreamEvents deletes at most one batch of replay buffers older than the
-// cutoff. Answers and citations live in messages/message_citations, so an
-// expired request simply replays no events; it does not lose the answer.
 
 // PurgeStreamEvents deletes at most one batch of replay buffers older than the
 // cutoff. Answers and citations live in messages/message_citations, so an
@@ -71,19 +45,8 @@ func (s *Service) PurgeStreamEvents(ctx context.Context, before time.Time, limit
 	if limit <= 0 {
 		limit = 1000
 	}
-	result := tenantdb.Unscoped(s.db.WithContext(ctx), "retention: purge expired stream events across tenants").Exec(`
-		DELETE FROM stream_events
-		WHERE id IN (
-			SELECT id FROM stream_events WHERE created_at < ? ORDER BY created_at, id LIMIT ?
-		)`, before, limit)
-	if result.Error != nil {
-		return 0, fmt.Errorf("purge stream events: %w", result.Error)
-	}
-	return result.RowsAffected, nil
+	return s.events.Purge(ctx, before, limit)
 }
-
-// Ask answers one question. Events are persisted before they are emitted, so a
-// client that disconnects mid-answer can resume from the last sequence it saw.
 
 func (s *Service) appendEvent(ctx context.Context, requestID, tenantID, userID string, sequence *int, eventType string, data map[string]any, emit Emitter) error {
 	*sequence++
@@ -104,8 +67,8 @@ func (s *Service) appendEventAt(ctx context.Context, requestID, tenantID, userID
 	// the terminal events from being recorded.
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
 	defer cancel()
-	if err := s.db.WithContext(writeCtx).Create(&row).Error; err != nil {
-		return fmt.Errorf("persist stream event: %w", err)
+	if err := s.events.Append(writeCtx, row); err != nil {
+		return err
 	}
 	if emit == nil {
 		return nil
@@ -125,33 +88,30 @@ func (s *Service) persistMessage(ctx context.Context, message models.Message) (s
 		}
 		message.ID = id
 	}
-	if err := s.db.WithContext(ctx).Create(&message).Error; err != nil {
+	if err := s.messages.Create(ctx, message); err != nil {
 		return "", fmt.Errorf("persist message: %w", err)
 	}
 	return message.ID, nil
 }
 
 func (s *Service) persistCitations(ctx context.Context, messageID string, principal authz.Principal, conversation models.Conversation, citations []CitationView) error {
+	rows := make([]models.MessageCitation, 0, len(citations))
 	for _, citation := range citations {
-		row := models.MessageCitation{
+		rows = append(rows, models.MessageCitation{
 			ID: stableID("cit", messageID, fmt.Sprint(citation.Index)), MessageID: messageID,
 			TenantID: principal.TenantID, KnowledgeBaseID: conversation.KnowledgeBaseID,
 			DocumentID: citation.DocumentID, DocumentVersionID: citation.DocumentVersionID,
 			ChunkID: citation.ChunkID, CitationIndex: citation.Index, Rank: citation.Rank,
 			Score: citation.Score, Quote: citation.Quote,
-		}
-		if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
-			return fmt.Errorf("persist citation: %w", err)
-		}
+		})
 	}
-	return nil
+	return s.messages.CreateCitations(ctx, rows)
 }
 
 func (s *Service) loadCitations(ctx context.Context, tenantID, messageID string) ([]CitationView, error) {
-	var rows []models.MessageCitation
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).
-		Where("message_id = ?", messageID).Order("citation_index").Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("load citations: %w", err)
+	rows, err := s.messages.Citations(ctx, tenantID, messageID)
+	if err != nil {
+		return nil, err
 	}
 	views := make([]CitationView, 0, len(rows))
 	for _, row := range rows {
@@ -167,20 +127,10 @@ func (s *Service) loadCitations(ctx context.Context, tenantID, messageID string)
 // loadAnswer returns a recorded assistant answer for an idempotent retry.
 // Request ids are client-supplied, so the lookup must be scoped exactly like
 // ReplayEvents: tenant + user + conversation, not the global request id alone.
-
-// loadAnswer returns a recorded assistant answer for an idempotent retry.
-// Request ids are client-supplied, so the lookup must be scoped exactly like
-// ReplayEvents: tenant + user + conversation, not the global request id alone.
 func (s *Service) loadAnswer(ctx context.Context, principal authz.Principal, conversationID, requestID string) (AnswerResult, bool, error) {
-	var message models.Message
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("user_id = ? AND conversation_id = ? AND request_id = ? AND role = ?",
-			principal.SubjectID, conversationID, requestID, MessageRoleAssistant).
-		First(&message).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return AnswerResult{}, false, nil
-		}
-		return AnswerResult{}, false, fmt.Errorf("load recorded answer: %w", err)
+	message, ok, err := s.messages.FindAnswer(ctx, principal.TenantID, principal.SubjectID, conversationID, requestID)
+	if err != nil || !ok {
+		return AnswerResult{}, false, err
 	}
 	citations, err := s.loadCitations(ctx, principal.TenantID, message.ID)
 	if err != nil {
@@ -205,9 +155,3 @@ func (s *Service) loadAnswer(ctx context.Context, principal authz.Principal, con
 		ErrorCode: message.ErrorCode, ErrorMessage: message.ErrorMessage,
 	}, true, nil
 }
-
-const historyMessageMaxRunes = 2000
-
-// loadHistory returns the most recent completed turns in chronological order.
-// It reads before the current user message is persisted, so the current
-// question never appears twice.

@@ -150,7 +150,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 			return nil, err
 		}
 	}
-	authorization, err := authz.NewService(database)
+	authorization, err := authz.NewService(authz.NewPostgresStores(database))
 	if err != nil {
 		closeAll()
 		return nil, fmt.Errorf("initialize authorization: %w", err)
@@ -283,7 +283,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		RerankModels: modelCatalog,
 	})
 	conversationService := conversation.NewService(conversation.Options{
-		DB: database, Authz: authorization, Retrieval: retrievalService, Chat: chatter, Models: modelCatalog,
+		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: chatter, Models: modelCatalog,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
 		ChatRequestsPerDay: cfg.Limits.TenantChatRequestsPerDay,
 		HistoryTurns:       cfg.Chat.HistoryTurns,
@@ -293,7 +293,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(database), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

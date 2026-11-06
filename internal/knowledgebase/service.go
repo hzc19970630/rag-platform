@@ -104,7 +104,7 @@ func (s *Service) Create(ctx context.Context, principal authz.Principal, input C
 	if strings.TrimSpace(input.Name) == "" {
 		return models.KnowledgeBase{}, apperror.Invalidf("name is required")
 	}
-	allowed, err := s.authz.Authorize(ctx, principal, "write", "/knowledge-bases")
+	allowed, err := s.authz.AuthorizeKnowledgeBases(ctx, principal, "write")
 	if err != nil {
 		return models.KnowledgeBase{}, err
 	}
@@ -161,7 +161,7 @@ func (s *Service) List(ctx context.Context, principal authz.Principal) ([]models
 		return []models.KnowledgeBase{}, nil
 	}
 	var rows []models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id IN ?", principal.TenantID, scope.KnowledgeBaseIDs).Order("created_at DESC").Find(&rows).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id IN ?", scope.KnowledgeBaseIDs).Order("created_at DESC").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list knowledge bases: %w", err)
 	}
 	return rows, nil
@@ -172,7 +172,7 @@ func (s *Service) Get(ctx context.Context, principal authz.Principal, id string)
 		return models.KnowledgeBase{}, err
 	}
 	var row models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&row).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&row).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return models.KnowledgeBase{}, apperror.ErrNotFound
 		}
@@ -186,7 +186,7 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 		return models.KnowledgeBase{}, err
 	}
 	var row models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&row).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&row).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return models.KnowledgeBase{}, apperror.ErrNotFound
 		}
@@ -419,7 +419,7 @@ func (s *Service) Delete(ctx context.Context, principal authz.Principal, id stri
 	if _, err := s.authorizedScope(ctx, principal, id, "delete"); err != nil {
 		return err
 	}
-	result := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).Delete(&models.KnowledgeBase{})
+	result := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).Delete(&models.KnowledgeBase{})
 	if result.Error != nil {
 		return fmt.Errorf("delete knowledge base: %w", result.Error)
 	}
@@ -451,7 +451,7 @@ func (s *Service) AddMember(ctx context.Context, principal authz.Principal, id s
 		return models.KnowledgeBaseMember{}, apperror.Invalidf("unsupported knowledge base role")
 	}
 	var knowledgeBase models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&knowledgeBase).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&knowledgeBase).Error; err != nil {
 		return models.KnowledgeBaseMember{}, apperror.ErrNotFound
 	}
 	var membership models.Membership
@@ -484,7 +484,7 @@ func (s *Service) RemoveMember(ctx context.Context, principal authz.Principal, i
 		return err
 	}
 	var knowledgeBase models.KnowledgeBase
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND id = ?", principal.TenantID, id).First(&knowledgeBase).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).First(&knowledgeBase).Error; err != nil {
 		return apperror.ErrNotFound
 	}
 	if knowledgeBase.OwnerID == userID {
@@ -521,7 +521,7 @@ func (s *Service) authorizedScope(ctx context.Context, principal authz.Principal
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}
-	allowed, err := s.authz.Authorize(ctx, principal, action, "/knowledge-bases/"+id)
+	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, id, action)
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}

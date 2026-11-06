@@ -36,7 +36,7 @@ func TestLoadAnswerScopedToTenantUserAndConversation(t *testing.T) {
 		t.Fatalf("seed messages: %v", err)
 	}
 
-	service := NewService(Options{DB: db})
+	service := newTestService(db, Options{})
 	ctx := context.Background()
 
 	got, ok, err := service.loadAnswer(ctx, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "conv-a", "req-shared")
@@ -103,7 +103,7 @@ func TestPurgeStreamEventsDeletesOnlyExpiredRowsInBatches(t *testing.T) {
 		t.Fatalf("seed stream events: %v", err)
 	}
 
-	service := NewService(Options{DB: db})
+	service := newTestService(db, Options{})
 	ctx := context.Background()
 	cutoff := now.Add(-7 * 24 * time.Hour)
 	purged, err := service.PurgeStreamEvents(ctx, cutoff, 2)
@@ -165,7 +165,7 @@ func TestFinishAnswerPersistsAfterClientCancellation(t *testing.T) {
 		t.Fatalf("migrate conversation tables: %v", err)
 	}
 
-	service := NewService(Options{DB: db})
+	service := newTestService(db, Options{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -269,7 +269,7 @@ func TestLoadHistoryScopedAndChronological(t *testing.T) {
 	if err := db.Create(&rows).Error; err != nil {
 		t.Fatalf("seed messages: %v", err)
 	}
-	service := NewService(Options{DB: db, HistoryTurns: 3, HistoryTokenLimit: 10000})
+	service := newTestService(db, Options{HistoryTurns: 3, HistoryTokenLimit: 10000})
 	turns, err := service.loadHistory(context.Background(), authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "conv-a")
 	if err != nil {
 		t.Fatalf("load history: %v", err)
@@ -288,6 +288,11 @@ func TestLoadHistoryDisabled(t *testing.T) {
 	if err != nil || turns != nil {
 		t.Fatalf("disabled history must be empty: turns=%v err=%v", turns, err)
 	}
+}
+
+func newTestService(db *gorm.DB, options Options) *Service {
+	options.Stores = NewPostgresStores(db)
+	return NewService(options)
 }
 
 func openConversationTestDB(t *testing.T) *gorm.DB {

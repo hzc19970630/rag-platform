@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/internal/contracts/ports"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/vecutil"
 	"gorm.io/gorm"
@@ -21,9 +21,9 @@ type Writer struct {
 
 func New(db *gorm.DB) *Writer { return &Writer{db: db} }
 
-var _ ingestion.EvidenceIndexWriter = (*Writer)(nil)
+var _ ports.EvidenceIndexWriter = (*Writer)(nil)
 
-func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, records []ingestion.EmbeddingRecord) error {
+func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, records []ports.EmbeddingRecord) error {
 	if len(records) == 0 {
 		return fmt.Errorf("embedding writer received no records")
 	}
@@ -37,7 +37,7 @@ func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, r
 			args := []any{vecutil.Literal(record.Vector), len(record.Vector), model, now}
 			if versionID != "" {
 				query += ", status = ?"
-				args = append(args, ingestion.StatusEmbedded)
+				args = append(args, ports.StatusEmbedded)
 			}
 			query += " WHERE id = ?"
 			args = append(args, record.ChunkID)
@@ -57,7 +57,7 @@ func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, r
 			return nil
 		}
 		return tx.Model(&models.DocumentVersion{}).Where("id = ?", versionID).Updates(map[string]any{
-			"status": ingestion.StatusEmbedded, "error_code": "", "error_message": "", "updated_at": now,
+			"status": ports.StatusEmbedded, "error_code": "", "error_message": "", "updated_at": now,
 		}).Error
 	})
 }
@@ -65,7 +65,7 @@ func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, r
 func (w *Writer) IndexVersion(ctx context.Context, versionID string) error {
 	var count int64
 	if err := w.db.WithContext(ctx).Table("chunks").
-		Where("document_version_id = ? AND parent_id IS NOT NULL AND status = ?", versionID, ingestion.StatusEmbedded).
+		Where("document_version_id = ? AND parent_id IS NOT NULL AND status = ?", versionID, ports.StatusEmbedded).
 		Count(&count).Error; err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (w *Writer) IndexVersion(ctx context.Context, versionID string) error {
 
 // IndexChunks is a no-op for PostgreSQL: BM25 is maintained by the chunk row
 // itself. An external keyword/hybrid adapter receives the same documents here.
-func (w *Writer) IndexChunks(context.Context, string, []ingestion.ChunkDocument) error {
+func (w *Writer) IndexChunks(context.Context, string, []ports.ChunkDocument) error {
 	return nil
 }
 

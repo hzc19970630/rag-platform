@@ -15,7 +15,6 @@ import (
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
-	"gorm.io/gorm"
 )
 
 // localChatName identifies the offline generation adapter. It is used only to
@@ -29,7 +28,10 @@ const localChatName = "local-extractive"
 const terminalPersistTimeout = 15 * time.Second
 
 type Service struct {
-	db          *gorm.DB
+	sessions    SessionStore
+	events      EventStore
+	messages    MessageStore
+	jobs        AnswerJobStore
 	authz       *authz.Service
 	retrieval   *retrieval.Service
 	chat        Chatter
@@ -58,7 +60,9 @@ type AnswerPublisher interface {
 }
 
 type Options struct {
-	DB        *gorm.DB
+	// Stores are the narrow persistence ports. The service holds no *gorm.DB,
+	// so an alternate backend can provide its own implementation.
+	Stores    Stores
 	Authz     *authz.Service
 	Retrieval *retrieval.Service
 	Chat      Chatter
@@ -96,7 +100,10 @@ func NewService(options Options) *Service {
 		lease = 5 * time.Minute
 	}
 	return &Service{
-		db:          options.DB,
+		sessions:    options.Stores.Sessions,
+		events:      options.Stores.Events,
+		messages:    options.Stores.Messages,
+		jobs:        options.Stores.Jobs,
 		authz:       options.Authz,
 		retrieval:   options.Retrieval,
 		chat:        options.Chat,
