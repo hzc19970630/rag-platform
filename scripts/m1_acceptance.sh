@@ -5,6 +5,12 @@ root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root_dir"
 
 env_file="${ACCEPTANCE_ENV_FILE:-.env.example}"
+# POSIX sh searches PATH for dot-sourced names without a slash, so make the
+# profile explicitly relative after cd "$root_dir".
+case "$env_file" in
+  /*) ;;
+  *) env_file="./$env_file" ;;
+esac
 if [ -f "$env_file" ]; then
   set -a
   . "$env_file"
