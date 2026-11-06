@@ -21,7 +21,7 @@ func openAuthzDB(t *testing.T) *gorm.DB {
 		t.Fatalf("test db handle: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	if err := db.AutoMigrate(&models.Membership{}, &models.KnowledgeBase{}, &models.KnowledgeBaseMember{}, &models.AuthorizationRevision{}, &models.AuditLog{}); err != nil {
+	if err := db.AutoMigrate(&models.Membership{}, &models.KnowledgeBase{}, &models.KnowledgeBaseMember{}, &models.AuthorizationRevision{}, &models.AuditLog{}, &models.AuthSession{}); err != nil {
 		t.Fatalf("migrate authz tables: %v", err)
 	}
 	return db

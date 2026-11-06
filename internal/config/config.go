@@ -684,7 +684,7 @@ func applyRetrievalDefaults(cfg *Config) error {
 }
 
 func LoadFrom(lookup Lookup) Config {
-	appEnv := value(lookup, "APP_ENV", "development")
+	appEnv := strings.ToLower(strings.TrimSpace(value(lookup, "APP_ENV", "development")))
 	apiPublicURL := value(lookup, "API_PUBLIC_URL", "http://localhost:8082")
 	signingKeys := splitValue(lookup, "JWT_SIGNING_KEYS", nil)
 	signingKeysExplicit := len(signingKeys) > 0
@@ -844,6 +844,11 @@ func LoadFrom(lookup Lookup) Config {
 }
 
 func (c Config) Validate(component string) error {
+	switch c.AppEnv {
+	case "development", "test", "production":
+	default:
+		return fmt.Errorf("APP_ENV must be one of development, test, production, got %q", c.AppEnv)
+	}
 	if endpoint := strings.TrimSpace(c.OTELExporterEndpoint); endpoint != "" {
 		parsed, err := url.Parse(endpoint)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -971,7 +976,7 @@ func (c Config) Validate(component string) error {
 	// listener; the port must be a real host:port in either process.
 	if component == "api" || component == "worker" {
 		if metricsAddr := strings.TrimSpace(c.MetricsAddr); metricsAddr != "" {
-			_, port, err := net.SplitHostPort(metricsAddr)
+			host, port, err := net.SplitHostPort(metricsAddr)
 			if err != nil {
 				return fmt.Errorf("METRICS_ADDR must be a host:port listen address: %w", err)
 			}
@@ -981,6 +986,9 @@ func (c Config) Validate(component string) error {
 			}
 			if component == "api" && metricsAddr == strings.TrimSpace(c.APIAddr) {
 				return fmt.Errorf("METRICS_ADDR must differ from API_ADDR")
+			}
+			if c.AppEnv == "production" && !isLoopbackOrPrivateHost(host) {
+				return fmt.Errorf("METRICS_ADDR must bind to a loopback or private address in production, got %q", host)
 			}
 		}
 	}
@@ -1049,6 +1057,21 @@ func (c Config) Validate(component string) error {
 		}
 	}
 	return nil
+}
+
+// isLoopbackOrPrivateHost accepts only addresses that a production metrics
+// listener can bind without exposing the endpoint on a public interface. A
+// hostname other than localhost is rejected because it cannot be verified
+// without DNS resolution at startup.
+func isLoopbackOrPrivateHost(host string) bool {
+	if strings.EqualFold(strings.TrimSpace(host), "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
 func value(lookup Lookup, key, fallback string) string {

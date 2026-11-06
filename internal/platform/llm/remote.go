@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/example/rag-platform/internal/contracts/model"
+	"github.com/example/rag-platform/internal/platform/resilience"
 )
 
 // RemoteChatter calls an OpenAI-compatible /chat/completions endpoint, which
@@ -27,6 +28,7 @@ type RemoteChatter struct {
 	maxTokens int
 	healthURL string
 	client    *http.Client
+	guard     *resilience.Guard
 }
 
 type RemoteChatterOptions struct {
@@ -38,6 +40,8 @@ type RemoteChatterOptions struct {
 	// HealthURL overrides the liveness endpoint. Empty uses /models, which is
 	// part of the OpenAI-compatible surface this adapter targets.
 	HealthURL string
+	// Guard is optional; nil creates a default breaker/bulkhead/retry budget.
+	Guard *resilience.Guard
 }
 
 func NewRemoteChatter(opts RemoteChatterOptions) (*RemoteChatter, error) {
@@ -58,6 +62,10 @@ func NewRemoteChatter(opts RemoteChatterOptions) (*RemoteChatter, error) {
 	if healthURL == "" {
 		healthURL = baseURL + "/models"
 	}
+	guard := opts.Guard
+	if guard == nil {
+		guard = resilience.New(resilience.DefaultConfig())
+	}
 	return &RemoteChatter{
 		baseURL:   baseURL,
 		apiKey:    opts.APIKey,
@@ -65,6 +73,7 @@ func NewRemoteChatter(opts RemoteChatterOptions) (*RemoteChatter, error) {
 		maxTokens: opts.MaxTokens,
 		healthURL: healthURL,
 		client:    &http.Client{Timeout: opts.Timeout},
+		guard:     guard,
 	}, nil
 }
 
@@ -138,49 +147,58 @@ func (c *RemoteChatter) Complete(ctx context.Context, request model.ChatRequest)
 	if err != nil {
 		return model.ChatResponse{}, fmt.Errorf("marshal chat request: %w", err)
 	}
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return model.ChatResponse{}, fmt.Errorf("build chat request: %w", err)
+	if err := c.guard.Do(ctx, func(attemptCtx context.Context) error {
+		httpRequest, err := http.NewRequestWithContext(attemptCtx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("build chat request: %w", err)
+		}
+		httpRequest.Header.Set("Content-Type", "application/json")
+		if c.apiKey != "" {
+			httpRequest.Header.Set("Authorization", "Bearer "+c.apiKey)
+		}
+		httpResponse, err := c.client.Do(httpRequest)
+		if err != nil {
+			if attemptCtx.Err() != nil {
+				return attemptCtx.Err()
+			}
+			return resilience.Retryable(fmt.Errorf("call chat provider: %w", err))
+		}
+		defer httpResponse.Body.Close()
+		raw, err := io.ReadAll(io.LimitReader(httpResponse.Body, 16<<20))
+		if err != nil {
+			return fmt.Errorf("read chat response: %w", err)
+		}
+		if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
+			return resilience.ProviderStatusError(httpResponse.StatusCode, strings.TrimSpace(string(raw)))
+		}
+		var decoded chatResponse
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			return fmt.Errorf("decode chat response: %w", err)
+		}
+		if decoded.Error != nil && decoded.Error.Message != "" {
+			return fmt.Errorf("chat provider error: %s", decoded.Error.Message)
+		}
+		if len(decoded.Choices) == 0 {
+			return fmt.Errorf("chat provider returned no choices")
+		}
+		responseModel := decoded.Model
+		if responseModel == "" {
+			responseModel = modelName
+		}
+		response = model.ChatResponse{
+			Text:             decoded.Choices[0].Message.Content,
+			Model:            responseModel,
+			PromptTokens:     decoded.Usage.PromptTokens,
+			CompletionTokens: decoded.Usage.CompletionTokens,
+		}
+		span.SetAttributes(
+			attribute.Int("gen_ai.usage.input_tokens", decoded.Usage.PromptTokens),
+			attribute.Int("gen_ai.usage.output_tokens", decoded.Usage.CompletionTokens),
+			attribute.String("gen_ai.response.model", responseModel),
+		)
+		return nil
+	}); err != nil {
+		return model.ChatResponse{}, err
 	}
-	httpRequest.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		httpRequest.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-	httpResponse, err := c.client.Do(httpRequest)
-	if err != nil {
-		return model.ChatResponse{}, fmt.Errorf("call chat provider: %w", err)
-	}
-	defer httpResponse.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(httpResponse.Body, 16<<20))
-	if err != nil {
-		return model.ChatResponse{}, fmt.Errorf("read chat response: %w", err)
-	}
-	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		return model.ChatResponse{}, fmt.Errorf("chat provider returned %d: %s", httpResponse.StatusCode, strings.TrimSpace(string(raw)))
-	}
-	var decoded chatResponse
-	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return model.ChatResponse{}, fmt.Errorf("decode chat response: %w", err)
-	}
-	if decoded.Error != nil && decoded.Error.Message != "" {
-		return model.ChatResponse{}, fmt.Errorf("chat provider error: %s", decoded.Error.Message)
-	}
-	if len(decoded.Choices) == 0 {
-		return model.ChatResponse{}, fmt.Errorf("chat provider returned no choices")
-	}
-	responseModel := decoded.Model
-	if responseModel == "" {
-		responseModel = modelName
-	}
-	span.SetAttributes(
-		attribute.Int("gen_ai.usage.input_tokens", decoded.Usage.PromptTokens),
-		attribute.Int("gen_ai.usage.output_tokens", decoded.Usage.CompletionTokens),
-		attribute.String("gen_ai.response.model", responseModel),
-	)
-	return model.ChatResponse{
-		Text:             decoded.Choices[0].Message.Content,
-		Model:            responseModel,
-		PromptTokens:     decoded.Usage.PromptTokens,
-		CompletionTokens: decoded.Usage.CompletionTokens,
-	}, nil
+	return response, nil
 }

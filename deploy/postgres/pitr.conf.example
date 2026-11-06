@@ -1,0 +1,22 @@
+# Example PostgreSQL settings for WAL archiving / PITR. Merge these into the
+# PostgreSQL configuration and mount a durable archive volume before enabling:
+#   archive_command must point at storage outside the database volume, and the
+#   archive destination must be backed up or replicated independently.
+# RPO depends on wal_level/archive_timeout and how often WAL is shipped; the
+# owner-supplied RPO target determines whether this path or a managed backup
+# service is required.
+
+wal_level = replica
+archive_mode = on
+archive_command = 'test ! -f /var/lib/postgresql/wal-archive/%f && cp %p /var/lib/postgresql/wal-archive/%f'
+archive_timeout = 60
+max_wal_senders = 5
+
+# Restore outline (run against a disposable target, never the live primary):
+#   1. prepare the same ParadeDB/pgvector image and an empty data directory
+#   2. restore the latest base backup
+#   3. write recovery.signal and restore_command = 'cp /archive/%f %p'
+#   4. start PostgreSQL, wait for replay, then run `migrate -check`
+#   5. measure RTO from restore start to readyz and record it in
+#      tests/eval/m13_backup_drill_report.json (logical drill) or the managed
+#      PITR drill record.

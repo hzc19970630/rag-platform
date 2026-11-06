@@ -57,6 +57,10 @@ type IndexOptions struct {
 	LockTimeout      time.Duration
 	StatementTimeout time.Duration
 	DryRun           bool
+	// KeepDimensions names dimensions that still have searchable chunks. The
+	// manager never drops their indexes, even when they differ from the
+	// dimension being built, so a wrong config cannot take the live index away.
+	KeepDimensions map[int]bool
 }
 
 // EnsureResult describes what an online index build did. In a dry run Created
@@ -135,6 +139,12 @@ func EnsureChunksIndex(ctx context.Context, db *gorm.DB, dimension int, options 
 		return EnsureResult{}, fmt.Errorf("acquire index build connection: %w", err)
 	}
 	session := &postgresIndexSession{connection: connection}
+	dimensions, err := activeChunkDimensions(ctx, sqlDB)
+	if err != nil {
+		_ = connection.Close()
+		return EnsureResult{}, err
+	}
+	options.KeepDimensions = dimensions
 	defer func() {
 		// Session settings outlive Conn.Close (the connection returns to the
 		// pool), so reset them before handing it back.
@@ -187,7 +197,7 @@ func ensureIndex(ctx context.Context, session indexSession, dimension int, optio
 		}
 		result.Index = nextChunksIndexName(records, dimension)
 		result.Planned = true
-		result.Dropped = validChunksIndexNames(records, "")
+		result.Dropped = droppableChunksIndexNames(records, "", dimension, options.KeepDimensions)
 		return result, nil
 	}
 
@@ -215,7 +225,7 @@ func ensureIndex(ctx context.Context, session indexSession, dimension int, optio
 		}
 		if current == dimension {
 			result.Index = record.Name
-			result.Dropped, err = pruneChunksIndexes(ctx, session, records, record.Name)
+			result.Dropped, err = pruneChunksIndexes(ctx, session, records, record.Name, dimension, options.KeepDimensions)
 			if err != nil {
 				return result, err
 			}
@@ -264,7 +274,7 @@ func ensureIndex(ctx context.Context, session indexSession, dimension int, optio
 
 	result.Index = target
 	result.Created = true
-	result.Dropped, err = pruneChunksIndexes(ctx, session, records, target)
+	result.Dropped, err = pruneChunksIndexes(ctx, session, records, target, dimension, options.KeepDimensions)
 	if err != nil {
 		return result, err
 	}
@@ -272,13 +282,21 @@ func ensureIndex(ctx context.Context, session indexSession, dimension int, optio
 	return result, nil
 }
 
-// pruneChunksIndexes drops every valid chunks vector index except keep. The
-// newest index is already serving, so keeping older dimensions only doubles
-// write cost and disk use.
-func pruneChunksIndexes(ctx context.Context, session indexSession, records []indexRecord, keep string) ([]string, error) {
+// pruneChunksIndexes drops superseded indexes for the target dimension and
+// indexes for dimensions that no longer have searchable chunks. An index for a
+// different dimension that still has chunks is kept: during a managed switch
+// the old dimension remains searchable until reembed finishes.
+func pruneChunksIndexes(ctx context.Context, session indexSession, records []indexRecord, keep string, targetDimension int, keepDimensions map[int]bool) ([]string, error) {
 	var dropped []string
 	for _, record := range records {
 		if !record.Valid || record.Name == keep {
+			continue
+		}
+		dimension, err := dimensionFromIndexDef(record.Definition)
+		if err != nil {
+			return dropped, err
+		}
+		if dimension != targetDimension && keepDimensions[dimension] {
 			continue
 		}
 		if err := session.DropIndex(ctx, record.Name); err != nil {
@@ -289,14 +307,45 @@ func pruneChunksIndexes(ctx context.Context, session indexSession, records []ind
 	return dropped, nil
 }
 
-func validChunksIndexNames(records []indexRecord, keep string) []string {
+func droppableChunksIndexNames(records []indexRecord, keep string, targetDimension int, keepDimensions map[int]bool) []string {
 	var names []string
 	for _, record := range records {
-		if record.Valid && record.Name != keep {
-			names = append(names, record.Name)
+		if !record.Valid || record.Name == keep {
+			continue
 		}
+		dimension, err := dimensionFromIndexDef(record.Definition)
+		if err != nil {
+			continue
+		}
+		if dimension != targetDimension && keepDimensions[dimension] {
+			continue
+		}
+		names = append(names, record.Name)
 	}
 	return names
+}
+
+// activeChunkDimensions is the guard input: dimensions that still have
+// searchable child chunks. Their indexes must outlive an index build for a
+// different dimension.
+func activeChunkDimensions(ctx context.Context, db *sql.DB) (map[int]bool, error) {
+	rows, err := db.QueryContext(ctx, "SELECT DISTINCT embedding_dimension FROM chunks WHERE embedding IS NOT NULL AND parent_id IS NOT NULL AND embedding_dimension > 0")
+	if err != nil {
+		return nil, fmt.Errorf("load active chunk dimensions: %w", err)
+	}
+	defer rows.Close()
+	dimensions := make(map[int]bool)
+	for rows.Next() {
+		var dimension int
+		if err := rows.Scan(&dimension); err != nil {
+			return nil, fmt.Errorf("scan active chunk dimension: %w", err)
+		}
+		dimensions[dimension] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("load active chunk dimensions: %w", err)
+	}
+	return dimensions, nil
 }
 
 func indexSize(ctx context.Context, session indexSession, name string) int64 {

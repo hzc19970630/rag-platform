@@ -147,6 +147,40 @@ func TestEnsureIndexCreatesVersionedIndexAndDropsOld(t *testing.T) {
 	}
 }
 
+func TestEnsureIndexKeepsIndexForDimensionWithChunks(t *testing.T) {
+	session := &fakeIndexSession{
+		version: "0.8.7",
+		indexes: []indexRecord{{Name: ChunksIndexName, Valid: true, Definition: indexDefinition(ChunksIndexName, 3)}},
+	}
+	result, err := ensureIndex(context.Background(), session, 4, IndexOptions{KeepDimensions: map[int]bool{3: true}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Created || len(result.Dropped) != 0 {
+		t.Fatalf("the old dimension still has chunks and must stay: created=%v dropped=%v", result.Created, result.Dropped)
+	}
+	if len(session.dropped) != 0 {
+		t.Fatalf("dropped %v, want none", session.dropped)
+	}
+
+	// Once reembed has moved the last chunk off dimension 3, a later run may
+	// prune the old index while keeping the target.
+	session = &fakeIndexSession{
+		version: "0.8.7",
+		indexes: []indexRecord{
+			{Name: ChunksIndexName, Valid: true, Definition: indexDefinition(ChunksIndexName, 3)},
+			{Name: "chunks_vector_idx_4_v1", Valid: true, Definition: indexDefinition("chunks_vector_idx_4_v1", 4)},
+		},
+	}
+	result, err = ensureIndex(context.Background(), session, 4, IndexOptions{KeepDimensions: map[int]bool{4: true}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Dropped) != 1 || result.Dropped[0] != ChunksIndexName {
+		t.Fatalf("the stale dimension index must be pruned once empty: %v", result.Dropped)
+	}
+}
+
 func TestEnsureIndexBuildStatementIsConcurrentAndPartial(t *testing.T) {
 	statement := buildChunksIndexStatement("chunks_vector_idx_4_v1", 4)
 	for _, fragment := range []string{

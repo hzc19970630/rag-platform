@@ -42,6 +42,32 @@ compose logs --no-color worker | grep worker_shutting_down
 
 ## 3. 备份与恢复演练
 
+### 3.1 定时逻辑备份
+
+`scripts/backup_postgres.sh` 提供可调度的 `pg_dump` 备份：必须显式设置 `BACKUP_DIR`（仓库外的运维目录），`BACKUP_RETENTION_DAYS` 默认 7 天；脚本会校验 dump 非空并清理过期文件。示例 cron：
+
+```cron
+17 2 * * * cd /opt/rag-platform && BACKUP_DIR=/var/backups/rag ./scripts/backup_postgres.sh >>/var/log/rag-backup.log 2>&1
+```
+
+逻辑备份只是基础回退路径；生产 RPO 若要求分钟级，必须启用 WAL/PITR（见 3.2），逻辑备份不能替代 PITR。
+
+### 3.2 WAL/PITR 与对象存储
+
+`deploy/postgres/pitr.conf.example` 给出 `wal_level=replica`、`archive_mode=on`、`archive_command` 与 `archive_timeout=60` 的模板。启用前必须把 WAL 归档目录放到独立、可复制、可恢复的存储，并按目标 RPO 调整 `archive_timeout`/WAL 投递频率。对象存储需启用版本化与跨副本复制（MinIO/S3 的 `mc version enable`、`mc replicate add` 或云厂商等价能力），否则 `pg_dump`/PITR 不包含原始文件与 `normalized.json`。
+
+### 3.3 恢复演练与 RTO 记录
+
+`scripts/m13_backup_drill.sh` 包装现有的逻辑 dump/restore 演练，并强制要求显式提供 `RTO_TARGET_SECONDS` 与 `RPO_TARGET_SECONDS`；缺省直接失败，避免用臆造目标值通过验收。运行后把实测 RTO/RPO 写入 `tests/eval/m13_backup_drill_report.json`，超过目标则退出 1。
+
+```bash
+RTO_TARGET_SECONDS=900 RPO_TARGET_SECONDS=300 ./scripts/m13_backup_drill.sh
+# 只校验输入和计划，不执行恢复：
+RTO_TARGET_SECONDS=900 RPO_TARGET_SECONDS=300 ./scripts/m13_backup_drill.sh --dry-run
+```
+
+季度演练仍需运维按计划执行并归档报告；本脚本只保证流程可重复、输入明确、结果可核对。
+
 `scripts/m4_backup_restore.sh` 会：
 
 1. 用 `pg_dump --format=custom --no-owner --no-privileges` 导出当前开发库。
@@ -141,7 +167,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | `operations.outboxBacklog` | `published_at IS NULL AND attempts < OUTBOX_MAX_ATTEMPTS` | 持续 > 0 且不下降 |
 
 - `operations` 来自数据库，跨进程重启保留；`counters`/`timings`/`queues` 是进程级或实时 Redis 状态，API 重启后归零。
-- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（如 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`。进程内 counters 输出为 `_total`，timings 输出为固定毫秒桶的 histogram（`_bucket{le="1|5|10|25|50|100|250|500|1000|2500|5000|10000|+Inf"}`、`_count`、`_sum`），另外保留 `<name>_max` gauge 供既有面板使用。P95 用 `histogram_quantile(0.95, sum by (le) (rate(<name>_bucket[5m])))` 计算。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target `api:9091` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
+- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（开发/测试可用 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`。`APP_ENV=production` 时只允许 `localhost` 或回环/RFC1918/ULA/link-local 的字面 IP，`:9091`、`0.0.0.0`、公网 IP 和普通主机名都会让启动校验失败。进程内 counters 输出为 `_total`，timings 输出为固定毫秒桶的 histogram（`_bucket{le="1|5|10|25|50|100|250|500|1000|2500|5000|10000|+Inf"}`、`_count`、`_sum`），另外保留 `<name>_max` gauge 供既有面板使用。P95 用 `histogram_quantile(0.95, sum by (le) (rate(<name>_bucket[5m])))` 计算。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target `api:9091` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
 - `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
 - 独立监听器只包含本进程的指标，不包含数据库窗口内的 `operations`；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
@@ -164,6 +190,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - 可路由模型来自部署配置：`LLM_CHAT_MODEL`、`CHAT_MODELS`、`LLM_RERANK_MODEL`、`RERANK_MODELS`。每项可写成 `name` 或 `name@version`；版本只用于审计，不参与供应商请求。`CHAT_MODELS`/`RERANK_MODELS` 只在对应 `*_SOURCE=remote` 时额外登记，离线适配器固定一个模型。改配置后需重启 api（目录在启动时构建）。
 - 知识库绑定通过 `PATCH /api/v1/knowledge-bases/{id}` 的 `chat_model`、`rerank_model` 字段设置；空串清除覆盖，回到部署默认。绑定写入前会校验模型已登记且能力匹配，未登记返回 400；每次实际变化都写 `audit_logs`（`resource_type=model_binding`，`reason` 含新/旧模型与版本），可用 `GET /api/v1/audit` 按资源排查。
 - 运行路径会做两次保护：绑定模型已不在目录中（例如回滚部署）时自动降级到部署默认；绑定供应商健康探测失败时也降级到默认，探测结果缓存 30 秒。默认模型同样不可用时请求失败（问答记录 `model_error`），不会静默切换。
+- Chat 与 Embedding 适配器同样受熔断、租户并发舱壁与有界重试保护：连续 5 次失败熔断 30 秒，期间不调用供应商；每租户每能力最多 4 个并发调用；只对 transport/429/5xx 重试，Chat 最多 2 次尝试，Embedding 每批保持 3 次尝试。租户来自请求或任务上下文（`tenantdb.WithTenant`），缺失时使用进程级兜底舱壁。
 - Rerank 是唯一允许降级的模型调用：绑定解析失败、供应商调用失败或熔断打开时，检索退回 rerank 前的关键词/向量融合顺序继续问答（`rerankApplied=false`），只损失重排序，不会让整次问答失败。降级原因通过 `rerank_degraded_total{reason=resolve|error|breaker_open}` 与 `rerank_degraded` 日志观察；`model_errors_total` 仍只统计真实的解析/调用错误。适配器连续失败 5 次后熔断 30 秒，期间直接使用融合顺序；冷却后只放行一个探针，成功即恢复。Chat 生成仍按上一条硬失败，不会静默降级。
 - 探测地址默认从各适配器的 base URL 推导：chat 与 embedding 用 `<base>/models`，rerank 用 `<base>/health`；可用 `CHAT_HEALTH_URL`、`EMBEDDING_HEALTH_URL`、`RERANK_HEALTH_URL` 覆盖（留空即用默认）。探测是带 Bearer 凭据的 `GET`，单次超时 3 秒；401/403（凭据被拒）和 5xx 判为不健康，其余状态（含 404）只要求网关可达，避免因供应商没有标准健康路径而误降级。
 - 当前健康快照可通过租户 owner/admin 的 `GET /api/v1/ops/metrics` 查看（`modelHealth` 数组，含 `model`、`provider`、`version`、`healthy`、`checkedAt`），也可从同一鉴权路由 `GET /api/v1/ops/metrics/prometheus` 抓取 `model_health{model,provider,version}` gauge（1 健康、0 不健康）。`model_health` 目前只在 API 进程的这条路由上暴露，不在 `METRICS_ADDR` 的无鉴权监听器里；需要自动告警时，让抓取端带 owner/admin 会话访问该路由，或对 `modelHealth` 做巡检。
@@ -173,6 +200,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 ## 9. 身份与密钥轮换
 
+- **APP_ENV 枚举**：只接受 `development`、`test`、`production`（忽略首尾空白与大小写）；未知值让所有进程在启动校验阶段失败，避免把拼写错误当成非生产环境绕过 production fail-fast。
 - **生产密钥 fail-fast（原 M14 A1，已交付）**：`APP_ENV=production` 时启动校验拒绝仓库默认值。JWT 必须显式设置 `JWT_SIGNING_KEYS`，不能回落到 `JWT_SIGNING_KEY` 的开发单键；`API_KEY_PEPPER`、`S3_ACCESS_KEY`/`S3_SECRET_KEY`（含 MinIO 默认值），以及 `DATABASE_URL`、`MAINTENANCE_DATABASE_URL`、`ADMIN_DATABASE_URL` 中的占位密码都会让进程以 `configuration_invalid` 退出。被拒绝的值包括 `.env.example` 的 `replace-with-a-random-*`、`change-me-*`、`rag-local` 和编译内置的 `local-*-change-me`。非生产环境保留这些默认值；生产允许数据库 URL 不带密码（证书/peer 认证），但不接受已知占位密码。
 - **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键（仅限非生产）。
 - **API Key**：数据库只保存 `sha256(pepper + raw)`；明文只在创建响应返回一次。轮换 `API_KEY_PEPPER` 会让全部已签发 key 立即失效，需重新签发并通知调用方。
@@ -181,6 +209,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - **反向代理与客户端 IP**：`HTTP_TRUSTED_PROXIES` 是逗号分隔的代理 IP/CIDR 列表，只有来自这些地址的 `X-Forwarded-For`/`X-Real-IP` 会被用于审计、限流和配额的客户端 IP。留空表示不信任任何代理，审计 IP 取 TCP 对端；`0.0.0.0/0` 与 `::/0` 会在启动校验被拒绝，避免把客户端 IP 重新交给调用方控制。部署在 Nginx/网关之后时，把实际的代理网段填入该变量，不要使用通配网段。
 - **CSRF**：会话 cookie 为 `HttpOnly` + `SameSite=Lax`；此外，携带会话 cookie 的写请求（POST/PUT/PATCH/DELETE）要求 `Origin`（缺失时回退 `Referer`）与请求 Host、`WEB_PUBLIC_URL` 或开发工作台源一致，否则返回 403。Bearer/API Key 请求不依赖 cookie，不受该检查影响。
 - **撤销**：删除知识库成员会同时提升 `knowledge_bases.acl_version` 与 `authorization_revisions`，后续检索按新 revision 重建 scope；不需要手工清 Redis。
+- **租户成员变更**：修改租户角色或移除租户成员时，在同一事务内按 `tenant_id + user_id` 撤销该用户的 `auth_sessions`；用户的下一次请求直接返回 401，不再等待 JWT 自然过期。仅删除知识库成员不会撤销租户会话，知识库权限仍按 revision 即时生效。
 
 ## 10. 文档生命周期与保留
 
@@ -259,7 +288,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 ## 16. 在线 HNSW 索引变更（原 M13 A2，已交付）
 
 - 索引契约：一个索引名只服务一个 `halfvec(N)` 维度。当前实现使用版本化名 `chunks_vector_idx_<dim>_v<N>`，旧的无版本名 `chunks_vector_idx` 仍被识别并可作为服务索引复用。
-- `embedctl create-index` 的执行顺序：读取 `pgvector` 版本（要求 ≥ 0.7.0）、应用会话超时、清理 `indisvalid=false` 的残留候选、在独立连接上执行 `CREATE INDEX CONCURRENTLY`、校验 `indisvalid` 与 `halfvec(dim)`/`embedding_dimension = dim`、最后 `DROP INDEX CONCURRENTLY` 删除被替换的旧索引。会话超时必须在第一次目录读取之前设置，因为 `pg_get_indexdef` 会持有 `chunks` 的表锁；否则一个已运行的 `ACCESS EXCLUSIVE` 事务会在超时生效前把构建挂住。CONCURRENTLY 不能在事务块内运行，因此不要把它塞进迁移；迁移只负责表结构与策略。
+- `embedctl create-index` 的执行顺序：读取 `pgvector` 版本（要求 ≥ 0.7.0）、应用会话超时、读取仍有可检索 chunk 的维度、清理 `indisvalid=false` 的残留候选、在独立连接上执行 `CREATE INDEX CONCURRENTLY`、校验 `indisvalid` 与 `halfvec(dim)`/`embedding_dimension = dim`、最后 `DROP INDEX CONCURRENTLY` 删除被替换的旧索引。若其他维度仍有可检索 chunk，其索引会保留，错误的 `EMBEDDING_DIMENSION` 不会删除线上索引；`reembed` 完成后重跑 `create-index` 即可清理旧维度索引。会话超时必须在第一次目录读取之前设置，因为 `pg_get_indexdef` 会持有 `chunks` 的表锁；否则一个已运行的 `ACCESS EXCLUSIVE` 事务会在超时生效前把构建挂住。CONCURRENTLY 不能在事务块内运行，因此不要把它塞进迁移；迁移只负责表结构与策略。
 - 失败语义：构建失败会删除本次产生的 INVALID 索引并保留原服务索引；重跑是安全的。若旧索引因锁超时未被删除，新索引已经有效，重跑会继续清理多余索引。
 - 观测：`make embed-check`（只读）输出 pgvector 版本、每个 chunks 向量索引的名称/维度/是否有效/大小/定义、每个 `embedding_dimension` 的 chunk 数量、数据库与 `chunks` 堆大小，以及 embedctl 容器根文件系统的剩余空间（不是 PostgreSQL 数据卷的剩余空间，容器内无法直接读取后者）。
 - 超时：`EMBED_INDEX_LOCK_TIMEOUT_SECONDS`（默认 10）限制等待表锁的时间，覆盖目录读取与 `CREATE INDEX CONCURRENTLY` 的加锁阶段；被阻塞时命令在超时后失败退出，旧索引保持不变。`EMBED_INDEX_STATEMENT_TIMEOUT_SECONDS`（默认 0，不限制）限制整条 `CREATE INDEX`（含并发扫描）的执行时间；取消后会留下 INVALID 索引，由本次失败清理或下次运行清理。`--dry-run` 同样受锁超时保护。大表构建前先用 `df` 确认数据库卷有约 2× 新索引大小的空闲空间，因为新旧索引会短暂并存。
@@ -271,6 +300,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - 默认 `ANSWER_ASYNC_ENABLED=true`：`POST /sessions/:id/messages` 只做预检（会话、scope、配额、模型、历史），在同一事务内写入 user message、`RECEIVED/AUTHORIZED/PLANNED` 三条事件和 `answer_jobs` 行（`QUEUED`），然后把 `answer.generate.v1` 投递到 Asynq 交互队列。检索、生成、引用校验与终态事件都在 worker 执行。API 进程不再承载长耗时的生成。
 - 事件序列：`answer_jobs.next_sequence` 由 `UPDATE ... RETURNING` 原子分配，API 预检与 worker 共用同一计数器，因此跨进程仍保持 `1..N` 连续，`ReplayEvents` 与 `Last-Event-ID` 续流不会因序列冲突丢事件。
 - 幂等：`(tenant_id, user_id, conversation_id, request_id)` 唯一。重复请求命中已有 job 时不会再次入队，也不会重复写 user message 与事件；已存在答案时直接重放终态。Asynq 重复投递由条件 `UPDATE` claim 拦截，只有 lease 持有者执行。
+- 重试退避：非终态失败会把 inbox 标为 FAILED 但保留租约到 TTL，队列的下一次投递在租约到期前只能得到 `inbox lease retained until retry backoff` 并继续退避；终态失败才立即释放租约，交给运维重跑。
+- 已知限制：`ANSWER_ASYNC_ENABLED=false` 的同步路径仍会在请求 goroutine 内完成检索与生成，慢客户端会长期占用连接池；生产应保持异步路径。预览/下载在写响应头前提交租户请求事务，不把对象流式读取期间的事务钉在连接上。
 - 租约：worker claim 时写入 `lease_owner/lease_until`（默认 300 秒，`ANSWER_ASYNC_LEASE_SECONDS`）。worker 维护循环把租约过期仍为 `RUNNING` 的 job 置 `FAILED`（`worker_lost`）并追加终态 `error` + `complete` 事件，SSE 客户端因此不会无限等待。生成超时受请求超时约束（≤ 60 秒），正常结束远早于 lease 过期。
 - SSE：`GET /api/v1/requests/:request_id/events` 默认仍是一次性 JSON 回放；加 `?stream=1` 后每 `ANSWER_ASYNC_POLL_INTERVAL_MS`（默认 250ms）轮询 `ReplayEvents`，直到 `complete`/`error` 或 `ANSWER_TAIL_TIMEOUT_SECONDS`（默认 180）。超时返回 `tail_timeout` 错误事件，客户端可以带 `after`/`Last-Event-ID` 再次续流。同一请求可以有多个并发 tail。
 - 回滚：设置 `ANSWER_ASYNC_ENABLED=false` 并重建 api（worker 保留新版本也可）。API 回到同步路径，`answer_jobs` 表保留但不再新增行；已在队列中的异步任务仍会被新 worker 正常执行。

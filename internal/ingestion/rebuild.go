@@ -57,16 +57,76 @@ func RebuildEmbeddings(ctx context.Context, db *gorm.DB, writer EvidenceIndexWri
 		Count(&result.Scanned).Error; err != nil {
 		return result, fmt.Errorf("count active chunks: %w", err)
 	}
+	targets, err := knowledgeBasesNeedingRebuild(ctx, db, model, dimension)
+	if err != nil {
+		return result, err
+	}
+	for _, knowledgeBaseID := range targets {
+		affected, reembedded, err := rebuildKnowledgeBaseEmbeddings(ctx, db, writer, embedder, knowledgeBaseID, batchSize)
+		if err != nil {
+			return result, err
+		}
+		result.Reembedded += reembedded
+		result.Versions += len(affected)
+		// A knowledge base switches only after every one of its chunks is on the
+		// new vector and its evidence packages are refreshed. An interruption
+		// leaves the remaining KBs on their old binding, and the old binding
+		// keeps their old vectors searchable; no KB is left with mixed bindings.
+		if err := db.WithContext(ctx).Model(&models.KnowledgeBase{}).Where("id = ?", knowledgeBaseID).
+			Updates(map[string]any{"embedding_model": model, "embedding_dimension": dimension, "updated_at": time.Now()}).Error; err != nil {
+			return result, fmt.Errorf("rebind knowledge base %s: %w", knowledgeBaseID, err)
+		}
+	}
+	return result, nil
+}
+
+// knowledgeBasesNeedingRebuild includes KBs with stale chunks and KBs whose
+// binding is stale but whose chunks already finished (for example, an
+// interruption between the vector writes and the binding update).
+func knowledgeBasesNeedingRebuild(ctx context.Context, db *gorm.DB, model string, dimension int) ([]string, error) {
+	seen := make(map[string]struct{})
+	var ids []string
+	appendIDs := func(values []string) {
+		for _, id := range values {
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	var staleChunks []string
+	if err := db.WithContext(ctx).Table("chunks").
+		Where("parent_id IS NOT NULL AND status IN ? AND (embedding_dimension <> ? OR embedding_model <> ?)", activeChildChunkStatuses, dimension, model).
+		Distinct().Pluck("knowledge_base_id", &staleChunks).Error; err != nil {
+		return nil, fmt.Errorf("list knowledge bases with stale chunks: %w", err)
+	}
+	appendIDs(staleChunks)
+	var staleBindings []string
+	if err := db.WithContext(ctx).Model(&models.KnowledgeBase{}).
+		Where("embedding_model <> ? OR embedding_dimension <> ?", model, dimension).
+		Pluck("id", &staleBindings).Error; err != nil {
+		return nil, fmt.Errorf("list knowledge bases with stale embedding bindings: %w", err)
+	}
+	appendIDs(staleBindings)
+	return ids, nil
+}
+
+func rebuildKnowledgeBaseEmbeddings(ctx context.Context, db *gorm.DB, writer EvidenceIndexWriter, embedder Embedder, knowledgeBaseID string, batchSize int) (map[string]struct{}, int64, error) {
+	dimension := embedder.Dimension()
+	model := embedder.Name()
 	affected := make(map[string]struct{})
+	var reembedded int64
 	for {
-		// Each pass re-queries the mismatched set instead of tracking an offset:
-		// updated rows drop out of the predicate, so the next pass sees the rest.
+		// Each pass re-queries this KB's mismatched set instead of tracking an
+		// offset: updated rows drop out of the predicate, so the next pass sees
+		// the rest and an interrupted run resumes at the same predicate.
 		var chunks []chunkToEmbed
 		if err := db.WithContext(ctx).Table("chunks").
 			Select("id, document_version_id, content").
-			Where("parent_id IS NOT NULL AND status IN ? AND (embedding_dimension <> ? OR embedding_model <> ?)", activeChildChunkStatuses, dimension, model).
+			Where("knowledge_base_id = ? AND parent_id IS NOT NULL AND status IN ? AND (embedding_dimension <> ? OR embedding_model <> ?)", knowledgeBaseID, activeChildChunkStatuses, dimension, model).
 			Order("id").Limit(batchSize).Scan(&chunks).Error; err != nil {
-			return result, fmt.Errorf("load chunks needing re-embedding: %w", err)
+			return nil, 0, fmt.Errorf("load chunks needing re-embedding for KB %s: %w", knowledgeBaseID, err)
 		}
 		if len(chunks) == 0 {
 			break
@@ -77,15 +137,15 @@ func RebuildEmbeddings(ctx context.Context, db *gorm.DB, writer EvidenceIndexWri
 		}
 		vectors, err := embedder.Embed(ctx, texts)
 		if err != nil {
-			return result, fmt.Errorf("embedding_error: %w", err)
+			return nil, 0, fmt.Errorf("embedding_error: %w", err)
 		}
 		if len(vectors) != len(chunks) {
-			return result, fmt.Errorf("embedding_error: vector count mismatch")
+			return nil, 0, fmt.Errorf("embedding_error: vector count mismatch")
 		}
 		records := make([]EmbeddingRecord, len(chunks))
 		for i := range chunks {
 			if len(vectors[i]) != dimension {
-				return result, fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunks[i].ID, len(vectors[i]), dimension)
+				return nil, 0, fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunks[i].ID, len(vectors[i]), dimension)
 			}
 			records[i] = EmbeddingRecord{ChunkID: chunks[i].ID, Vector: vectors[i]}
 			affected[chunks[i].DocumentVersionID] = struct{}{}
@@ -93,23 +153,27 @@ func RebuildEmbeddings(ctx context.Context, db *gorm.DB, writer EvidenceIndexWri
 		// An empty version id tells the writer to update vectors without changing
 		// the published status of each version.
 		if err := writer.WriteEmbeddings(ctx, "", model, records); err != nil {
-			return result, err
+			return nil, 0, err
 		}
-		result.Reembedded += int64(len(chunks))
+		reembedded += int64(len(chunks))
+	}
+	if len(affected) == 0 {
+		// The vectors already finished in an earlier interrupted run; refresh
+		// every published version in this KB before flipping the binding.
+		var versions []string
+		if err := db.WithContext(ctx).Table("chunks").
+			Where("knowledge_base_id = ? AND parent_id IS NOT NULL AND status IN ?", knowledgeBaseID, activeChildChunkStatuses).
+			Distinct().Pluck("document_version_id", &versions).Error; err != nil {
+			return nil, 0, fmt.Errorf("load versions for KB %s: %w", knowledgeBaseID, err)
+		}
+		for _, versionID := range versions {
+			affected[versionID] = struct{}{}
+		}
 	}
 	if err := refreshEvidencePackages(ctx, db, affected); err != nil {
-		return result, err
+		return nil, 0, err
 	}
-	// The rebuild is the managed switch for this single-model deployment, so it
-	// moves every knowledge base's binding with the vectors. Leaving the
-	// bindings behind would make retrieval and ingestion reject the new model.
-	if err := db.WithContext(ctx).Model(&models.KnowledgeBase{}).
-		Where("embedding_model <> ? OR embedding_dimension <> ?", model, dimension).
-		Updates(map[string]any{"embedding_model": model, "embedding_dimension": dimension, "updated_at": time.Now()}).Error; err != nil {
-		return result, fmt.Errorf("rebind knowledge bases: %w", err)
-	}
-	result.Versions = len(affected)
-	return result, nil
+	return affected, reembedded, nil
 }
 
 // VerifyEmbeddings counts active child chunks that still carry a vector from a

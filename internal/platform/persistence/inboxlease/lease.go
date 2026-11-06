@@ -169,7 +169,7 @@ func take(ctx context.Context, db *gorm.DB, key string, tenantID *string, lease 
 	}
 	result := inboxDB(db).WithContext(ctx).Model(&models.TaskInbox{}).
 		Where("idempotency_key = ? AND status <> ?", key, StatusSucceeded).
-		Where("(status <> ? OR lease_until IS NULL OR lease_until <= ?)", StatusProcessing, now).
+		Where("(lease_until IS NULL OR lease_until <= ?)", now).
 		Updates(values)
 	if result.Error != nil {
 		return false, result.Error

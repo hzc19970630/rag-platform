@@ -76,8 +76,15 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	if err != nil || !claimed {
 		return err
 	}
-	processCtx, releaseLease, leaseLost := w.runtime().Heartbeat(ctx, task.IdempotencyKey)
-	defer releaseLease()
+	processCtx, releaseLease, retainLease, leaseLost := w.runtime().Heartbeat(ctx, task.IdempotencyKey)
+	retainOnReturn := false
+	defer func() {
+		if retainOnReturn {
+			retainLease()
+			return
+		}
+		releaseLease()
+	}()
 	current, err := w.isCurrent(ctx, task)
 	if err != nil {
 		return err
@@ -122,6 +129,10 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 		if terminal {
 			return w.finishInbox(ctx, task.IdempotencyKey, inboxFailed, processErr)
 		}
+		if err := pipeline.RetainFailedInbox(ctx, w.db, task.IdempotencyKey, processErr.Error()); err != nil {
+			return err
+		}
+		retainOnReturn = true
 		return processErr
 	}
 	return w.completeStage(ctx, task)

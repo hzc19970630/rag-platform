@@ -104,7 +104,7 @@ func TestRuntimeHeartbeatReleasesLease(t *testing.T) {
 	if claimed, err := runtime.Claim(context.Background(), "run:parse", "ingestion", 1); err != nil || !claimed {
 		t.Fatalf("claim = %v, %v", claimed, err)
 	}
-	_, release, lost := runtime.Heartbeat(context.Background(), "run:parse")
+	_, release, _, lost := runtime.Heartbeat(context.Background(), "run:parse")
 	if lost() {
 		t.Fatal("a fresh lease must not be reported lost")
 	}
@@ -115,6 +115,42 @@ func TestRuntimeHeartbeatReleasesLease(t *testing.T) {
 	}
 	if row.Status != InboxProcessing {
 		t.Fatalf("release must not change status, got %q", row.Status)
+	}
+}
+
+func TestRuntimeHeartbeatRetainKeepsLease(t *testing.T) {
+	db := newTestDB(t)
+	runtime := NewRuntime(db, nil, time.Minute)
+	if claimed, err := runtime.Claim(context.Background(), "run:parse", "ingestion", 1); err != nil || !claimed {
+		t.Fatalf("claim = %v, %v", claimed, err)
+	}
+	_, _, retain, _ := runtime.Heartbeat(context.Background(), "run:parse")
+	retain()
+	row := loadInbox(t, db, "run:parse")
+	if row.LeaseOwner == "" || row.LeaseUntil == nil {
+		t.Fatalf("retain must keep the lease, got owner=%q until=%v", row.LeaseOwner, row.LeaseUntil)
+	}
+}
+
+func TestRuntimeClaimHonoursRetainedLease(t *testing.T) {
+	db := newTestDB(t)
+	runtime := NewRuntime(db, nil, time.Minute)
+	if claimed, err := runtime.Claim(context.Background(), "run:parse", "ingestion", 1); err != nil || !claimed {
+		t.Fatalf("claim = %v, %v", claimed, err)
+	}
+	if err := RetainFailedInbox(context.Background(), db, "run:parse", "provider timeout"); err != nil {
+		t.Fatalf("retain failed inbox: %v", err)
+	}
+	if claimed, err := NewRuntime(db, nil, time.Minute).Claim(context.Background(), "run:parse", "ingestion", 1); !errors.Is(err, ErrLeaseRetained) || claimed {
+		t.Fatalf("retained lease claim = %v, %v; want ErrLeaseRetained", claimed, err)
+	}
+	expired := time.Now().Add(-time.Second)
+	if err := db.Model(&models.TaskInbox{}).Where("idempotency_key = ?", "run:parse").
+		Updates(map[string]any{"lease_until": &expired}).Error; err != nil {
+		t.Fatalf("expire lease: %v", err)
+	}
+	if claimed, err := NewRuntime(db, nil, time.Minute).Claim(context.Background(), "run:parse", "ingestion", 1); err != nil || !claimed {
+		t.Fatalf("expired retained lease claim = %v, %v; want success", claimed, err)
 	}
 }
 
@@ -129,7 +165,7 @@ func TestRuntimeHeartbeatReportsLostLease(t *testing.T) {
 		Updates(map[string]any{"lease_owner": "another-worker", "lease_until": &expired}).Error; err != nil {
 		t.Fatalf("steal lease: %v", err)
 	}
-	ctx, release, lost := runtime.Heartbeat(context.Background(), "run:parse")
+	ctx, release, _, lost := runtime.Heartbeat(context.Background(), "run:parse")
 	defer release()
 	deadline := time.After(2 * time.Second)
 	for !lost() {

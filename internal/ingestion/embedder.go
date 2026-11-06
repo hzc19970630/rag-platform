@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/example/rag-platform/internal/platform/netprobe"
+	"github.com/example/rag-platform/internal/platform/resilience"
 )
 
 // LocalEmbedder provides a deterministic, offline embedding adapter for local
@@ -69,6 +70,7 @@ type RemoteEmbedder struct {
 	batchSize int
 	healthURL string
 	client    *http.Client
+	guard     *resilience.Guard
 }
 
 type RemoteEmbedderOptions struct {
@@ -81,6 +83,9 @@ type RemoteEmbedderOptions struct {
 	// HealthURL overrides the liveness endpoint. Empty uses /models, which is
 	// part of the OpenAI-compatible surface this adapter targets.
 	HealthURL string
+	// Guard is optional; nil creates a breaker and tenant bulkhead. The batch
+	// retry policy stays inside this adapter, so the guard does not retry again.
+	Guard *resilience.Guard
 }
 
 func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
@@ -104,6 +109,12 @@ func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
 	if healthURL == "" {
 		healthURL = baseURL + "/models"
 	}
+	guard := opts.Guard
+	if guard == nil {
+		cfg := resilience.DefaultConfig()
+		cfg.MaxAttempts = 1
+		guard = resilience.New(cfg)
+	}
 	return &RemoteEmbedder{
 		baseURL:   baseURL,
 		apiKey:    opts.APIKey,
@@ -112,6 +123,7 @@ func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
 		batchSize: opts.BatchSize,
 		healthURL: healthURL,
 		client:    &http.Client{Timeout: opts.Timeout},
+		guard:     guard,
 	}, nil
 }
 
@@ -146,8 +158,12 @@ func (e *RemoteEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 		if end > len(texts) {
 			end = len(texts)
 		}
-		batch, err := e.embedBatchWithRetry(ctx, texts[start:end])
-		if err != nil {
+		var batch [][]float32
+		if err := e.guard.Do(ctx, func(attemptCtx context.Context) error {
+			var err error
+			batch, err = e.embedBatchWithRetry(attemptCtx, texts[start:end])
+			return err
+		}); err != nil {
 			return nil, err
 		}
 		result = append(result, batch...)

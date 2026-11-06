@@ -180,6 +180,39 @@ func TestValidateEnforceRequiresSplitRoles(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnknownAppEnv(t *testing.T) {
+	for _, appEnv := range []string{"staging", "prod", "productionx"} {
+		cfg := LoadFrom(lookupFrom(map[string]string{"APP_ENV": appEnv}))
+		err := cfg.Validate("api")
+		if err == nil || !strings.Contains(err.Error(), "APP_ENV") {
+			t.Fatalf("APP_ENV %q: expected APP_ENV validation error, got %v", appEnv, err)
+		}
+	}
+	cfg := LoadFrom(lookupFrom(map[string]string{"APP_ENV": " Production "}))
+	if cfg.AppEnv != "production" {
+		t.Fatalf("APP_ENV normalization = %q, want production", cfg.AppEnv)
+	}
+}
+
+func TestProductionMetricsAddrMustBeLoopbackOrPrivate(t *testing.T) {
+	accepted := []string{"127.0.0.1:9091", "localhost:9091", "192.168.1.10:9091", "[::1]:9091", "[fd00::1]:9091"}
+	for _, address := range accepted {
+		env := productionAPIEnv()
+		env["METRICS_ADDR"] = address
+		if err := LoadFrom(lookupFrom(env)).Validate("api"); err != nil {
+			t.Fatalf("production METRICS_ADDR %q rejected: %v", address, err)
+		}
+	}
+	rejected := []string{":9091", "0.0.0.0:9091", "[::]:9091", "203.0.113.10:9091", "metrics.example.com:9091"}
+	for _, address := range rejected {
+		env := productionAPIEnv()
+		env["METRICS_ADDR"] = address
+		if err := LoadFrom(lookupFrom(env)).Validate("api"); err == nil {
+			t.Fatalf("production METRICS_ADDR %q accepted", address)
+		}
+	}
+}
+
 func TestValidateMetricsAddr(t *testing.T) {
 	valid := map[string]string{
 		"DATABASE_URL":             "postgres://user:pass@localhost:5432/rag",

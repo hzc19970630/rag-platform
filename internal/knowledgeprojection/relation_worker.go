@@ -11,6 +11,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/example/rag-platform/internal/knowledgeprojection/relation"
+	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/relationstore"
 	"github.com/example/rag-platform/internal/retrieval"
@@ -48,8 +49,15 @@ func (s *Service) processRelation(ctx context.Context, task Task) error {
 	if err != nil || !claimed {
 		return err
 	}
-	processCtx, releaseLease, leaseLost := s.runtime().Heartbeat(ctx, task.IdempotencyKey)
-	defer releaseLease()
+	processCtx, releaseLease, retainLease, leaseLost := s.runtime().Heartbeat(ctx, task.IdempotencyKey)
+	retainOnReturn := false
+	defer func() {
+		if retainOnReturn {
+			retainLease()
+			return
+		}
+		releaseLease()
+	}()
 	run, err := s.loadRun(ctx, task.TenantID, task.ProjectionRunID)
 	if err != nil {
 		return s.finishInbox(ctx, task.IdempotencyKey, inboxFailed, err)
@@ -91,6 +99,10 @@ func (s *Service) processRelation(ctx context.Context, task Task) error {
 		if terminal {
 			return s.finishInbox(ctx, task.IdempotencyKey, inboxFailed, processErr)
 		}
+		if err := pipeline.RetainFailedInbox(ctx, s.db, task.IdempotencyKey, processErr.Error()); err != nil {
+			return err
+		}
+		retainOnReturn = true
 		return processErr
 	}
 	return s.runtime().Complete(ctx, task.IdempotencyKey, projectionStage{task: task, run: run})

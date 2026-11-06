@@ -13,6 +13,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/formats"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/secrets"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -286,20 +287,20 @@ func (w *Worker) Process(ctx context.Context, task SyncTask) error {
 		} else if cancelled {
 			return w.finishRun(ctx, connector, run, StatusCancelled, state, counters, appendSummary(summary, "", "cancelled by operator"), false)
 		}
-		if mapping.DocumentID != nil && *mapping.DocumentID != "" {
-			if err := w.ingestion.TombstoneExternal(ctx, connector.TenantID, *mapping.DocumentID, connector.CreatedBy); err != nil && !errors.Is(err, apperror.ErrNotFound) {
-				if saveErr := w.saveProgress(ctx, run.ID, state, counters, summary); saveErr != nil {
-					return saveErr
-				}
-				return fmt.Errorf("tombstone document for %q: %w", mapping.ExternalID, err)
-			}
-		}
 		itemNow := time.Now()
 		counters.deleted++
-		// Persist the counter with the mapping transition. The cursor is already
+		// The document soft-delete and the mapping transition share one
+		// transaction: a crash can leave neither or both, never a tombstoned
+		// document with an ACTIVE mapping (or the reverse). The cursor is already
 		// in the tombstone phase, so a retry re-scans remaining ACTIVE mappings
 		// without double-counting this one.
 		err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+			if mapping.DocumentID != nil && *mapping.DocumentID != "" {
+				txCtx := tenantdb.WithTx(ctx, tx)
+				if err := w.ingestion.TombstoneExternal(txCtx, connector.TenantID, *mapping.DocumentID, connector.CreatedBy); err != nil && !errors.Is(err, apperror.ErrNotFound) {
+					return fmt.Errorf("tombstone document for %q: %w", mapping.ExternalID, err)
+				}
+			}
 			if err := tx.Model(&models.ConnectorItem{}).Where("id = ? AND status = ?", mapping.ID, ItemActive).
 				Updates(map[string]any{"status": ItemTombstoned, "tombstoned_at": &itemNow, "updated_at": itemNow}).Error; err != nil {
 				return err

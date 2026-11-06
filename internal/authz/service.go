@@ -714,7 +714,16 @@ func (s *Service) UpdateTenantMember(ctx context.Context, principal Principal, u
 			return fmt.Errorf("the last tenant owner cannot be demoted")
 		}
 	}
-	if err := s.db.WithContext(ctx).Model(&membership).Updates(map[string]any{"role": role, "updated_at": nowUTC()}).Error; err != nil {
+	roleChanged := membership.Role != role
+	if err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := tx.Model(&membership).Updates(map[string]any{"role": role, "updated_at": nowUTC()}).Error; err != nil {
+			return err
+		}
+		if !roleChanged {
+			return nil
+		}
+		return revokeMemberSessions(ctx, tx, principal.TenantID, userID)
+	}); err != nil {
 		return fmt.Errorf("update tenant member: %w", err)
 	}
 	if err := s.BumpRevision(ctx, principal.TenantID); err != nil {
@@ -745,7 +754,10 @@ func (s *Service) RemoveTenantMember(ctx context.Context, principal Principal, u
 		if err := tx.Where("tenant_id = ? AND user_id = ?", principal.TenantID, userID).Delete(&models.Membership{}).Error; err != nil {
 			return err
 		}
-		return tx.Where("user_id = ? AND knowledge_base_id IN (SELECT id FROM knowledge_bases WHERE tenant_id = ?)", userID, principal.TenantID).Delete(&models.KnowledgeBaseMember{}).Error
+		if err := tx.Where("user_id = ? AND knowledge_base_id IN (SELECT id FROM knowledge_bases WHERE tenant_id = ?)", userID, principal.TenantID).Delete(&models.KnowledgeBaseMember{}).Error; err != nil {
+			return err
+		}
+		return revokeMemberSessions(ctx, tx, principal.TenantID, userID)
 	})
 	if err != nil {
 		return fmt.Errorf("remove tenant member: %w", err)
@@ -755,6 +767,15 @@ func (s *Service) RemoveTenantMember(ctx context.Context, principal Principal, u
 	}
 	_ = s.recordAdminAudit(ctx, principal, "remove_member", "membership", userID, "")
 	return nil
+}
+
+// revokeMemberSessions makes a role change or removal take effect on the next
+// request instead of waiting for the JWT/session to expire.
+func revokeMemberSessions(ctx context.Context, tx *gorm.DB, tenantID, userID string) error {
+	now := nowUTC()
+	return tx.WithContext(ctx).Model(&models.AuthSession{}).
+		Where("tenant_id = ? AND user_id = ? AND revoked_at IS NULL", tenantID, userID).
+		Updates(map[string]any{"revoked_at": &now, "updated_at": now}).Error
 }
 
 // RequireTenantOperator gates operator surfaces (task inspection, dead-letter

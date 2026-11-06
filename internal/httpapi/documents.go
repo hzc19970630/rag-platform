@@ -9,6 +9,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/config"
 	"github.com/example/rag-platform/internal/ingestion"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/gin-gonic/gin"
 )
 
@@ -85,6 +86,15 @@ func RegisterDocumentRoutes(router *gin.Engine, cfg config.Config, deps Ingestio
 	documents.GET("/preview", func(c *gin.Context) {
 		source, err := deps.Ingestion.SourceDocument(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
+			writeError(c, err)
+			return
+		}
+		// The body streams for as long as the client reads it; release the
+		// request transaction before the first response byte.
+		if err := tenantdb.CommitRequestTx(c.Request.Context()); err != nil {
+			if source.Body != nil {
+				_ = source.Body.Close()
+			}
 			writeError(c, err)
 			return
 		}

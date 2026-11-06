@@ -78,11 +78,13 @@ func authenticationMiddleware(cfg config.Config, deps MiddlewareDeps) gin.Handle
 // transaction when RLS is enforced. Outside enforce mode BeginRequestTx is a
 // no-op, so shadow deployments and tests keep the pooled behavior.
 func runWithTenantTx(c *gin.Context, db *gorm.DB, tenantID string) {
+	ctx := tenantdb.WithTenant(c.Request.Context(), tenantID)
+	c.Request = c.Request.WithContext(ctx)
 	if db == nil {
 		c.Next()
 		return
 	}
-	ctx, finish, err := tenantdb.BeginRequestTx(c.Request.Context(), db, tenantID)
+	ctx, finish, err := tenantdb.BeginRequestTx(ctx, db, tenantID)
 	if err != nil {
 		writeError(c, err)
 		return

@@ -1,4 +1,4 @@
-.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance
+.PHONY: deps dev-up dev-down logs migrate seed api-test web-install web-build test lint acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill backup-postgres
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -93,6 +93,12 @@ m13-rls-acceptance:
 # question, restarts the worker and requires a terminal SSE event.
 m13-async-acceptance:
 	./scripts/m13_async_acceptance.sh
+
+m13-backup-drill:
+	./scripts/m13_backup_drill.sh
+
+backup-postgres:
+	./scripts/backup_postgres.sh
 
 # Compares bounded graph queries with pure Evidence RAG on the fixed M7 QA set
 # and records reachability/path metrics. The keep-or-drop decision for complex

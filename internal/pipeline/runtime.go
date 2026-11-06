@@ -5,6 +5,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync/atomic"
 	"time"
@@ -13,6 +14,11 @@ import (
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
+
+// ErrLeaseRetained tells the queue handler that a failed attempt deliberately
+// kept its inbox lease until the retry backoff expires. The task must be
+// retried later instead of being acknowledged as a duplicate.
+var ErrLeaseRetained = errors.New("inbox lease retained until retry backoff")
 
 const (
 	InboxProcessing = inboxlease.StatusProcessing
@@ -51,15 +57,33 @@ func (r *Runtime) lease() inboxlease.Lease {
 }
 
 // Claim elects exactly one owner for the inbox row, or reports false when
-// another worker holds a live lease.
+// another worker holds a live lease. A failed attempt that retained its lease
+// is reported as ErrLeaseRetained so the queue retries later instead of
+// acknowledging the delivery as a duplicate.
 func (r *Runtime) Claim(ctx context.Context, key, taskType string, stageRunID uint64) (bool, error) {
-	return inboxlease.Claim(ctx, r.db, key, taskType, stageRunID, r.lease())
+	claimed, err := inboxlease.Claim(ctx, r.db, key, taskType, stageRunID, r.lease())
+	if err != nil || claimed {
+		return claimed, err
+	}
+	var row models.TaskInbox
+	if err := r.db.WithContext(ctx).Where("idempotency_key = ?", key).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	if row.Status == InboxFailed && row.LeaseUntil != nil && row.LeaseUntil.After(time.Now()) {
+		return false, ErrLeaseRetained
+	}
+	return false, nil
 }
 
 // Heartbeat renews the lease while the stage runs. The returned context is
-// canceled when the lease is lost, release always drops this owner's lease, and
-// lost reports whether another worker may already own the row.
-func (r *Runtime) Heartbeat(ctx context.Context, key string) (context.Context, func(), func() bool) {
+// canceled when the lease is lost. release drops this owner's lease; retain
+// stops the heartbeat but keeps the lease until its TTL, which is how a
+// retryable failure honours the queue's retry backoff. lost reports whether
+// another worker may already own the row.
+func (r *Runtime) Heartbeat(ctx context.Context, key string) (context.Context, func(), func(), func() bool) {
 	lease := r.lease()
 	leaseCtx, cancel := context.WithCancel(ctx)
 	var lost atomic.Bool
@@ -67,16 +91,31 @@ func (r *Runtime) Heartbeat(ctx context.Context, key string) (context.Context, f
 		lost.Store(true)
 		cancel()
 	})
-	release := func() {
+	retain := func() {
 		stop()
 		cancel()
+	}
+	release := func() {
+		retain()
 		releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer releaseCancel()
 		if err := inboxlease.Release(releaseCtx, r.db, key, lease.Owner); err != nil {
 			slog.Warn("inbox_lease_release_failed", "idempotency_key", key, "error", err)
 		}
 	}
-	return leaseCtx, release, lost.Load
+	return leaseCtx, release, retain, lost.Load
+}
+
+// RetainFailedInbox marks a retryable failure while keeping the current lease
+// intact. The next claim cannot start before the lease expires, so a fast retry
+// cannot bypass the queue's exponential backoff.
+func RetainFailedInbox(ctx context.Context, db *gorm.DB, key, message string) error {
+	now := time.Now()
+	return db.WithContext(ctx).Model(&models.TaskInbox{}).
+		Where("idempotency_key = ? AND status = ?", key, InboxProcessing).
+		Updates(map[string]any{
+			"status": InboxFailed, "last_error": message, "updated_at": now,
+		}).Error
 }
 
 func (r *Runtime) Start(ctx context.Context, stage Stage) error {
