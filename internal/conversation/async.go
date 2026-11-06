@@ -264,7 +264,9 @@ func (s *Service) claimAnswerJob(ctx context.Context, task tasks.Answer) (models
 }
 
 func (s *Service) requeueAnswerJob(ctx context.Context, job *models.AnswerJob) error {
-	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+	defer cancel()
+	if err := s.jobs.Update(writeCtx, job.ID, job.TenantID, map[string]any{
 		"status": AnswerJobQueued, "lease_owner": "", "lease_until": nil, "error_code": "", "updated_at": time.Now(),
 	}); err != nil {
 		return fmt.Errorf("requeue answer job: %w", err)
@@ -277,7 +279,9 @@ func (s *Service) requeueAnswerJob(ctx context.Context, job *models.AnswerJob) e
 }
 
 func (s *Service) releaseAnswerJob(ctx context.Context, job *models.AnswerJob, cause error) error {
-	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+	defer cancel()
+	if err := s.jobs.Update(writeCtx, job.ID, job.TenantID, map[string]any{
 		"status": AnswerJobQueued, "lease_owner": "", "lease_until": nil,
 		"error_code": CodeWorkerError, "updated_at": time.Now(),
 	}); err != nil {
@@ -292,7 +296,9 @@ func (s *Service) completeAnswerJob(ctx context.Context, job *models.AnswerJob, 
 	case AnswerFailed, AnswerTimedOut, AnswerCancelled:
 		status = AnswerJobFailed
 	}
-	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+	defer cancel()
+	if err := s.jobs.Update(writeCtx, job.ID, job.TenantID, map[string]any{
 		"status": status, "error_code": code, "lease_owner": "", "lease_until": nil, "updated_at": time.Now(),
 	}); err != nil {
 		return fmt.Errorf("complete answer job %s: %w", job.ID, err)
@@ -311,7 +317,9 @@ func (s *Service) abortAnswerJob(ctx context.Context, job *models.AnswerJob, cod
 // SSE tail waits for. Event failures are best effort: the job row is the
 // durable signal.
 func (s *Service) failAnswerJob(ctx context.Context, job *models.AnswerJob, code string, cause error) error {
-	if err := s.jobs.Update(ctx, job.ID, job.TenantID, map[string]any{
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+	defer cancel()
+	if err := s.jobs.Update(writeCtx, job.ID, job.TenantID, map[string]any{
 		"status": AnswerJobFailed, "error_code": code, "lease_owner": "", "lease_until": nil, "updated_at": time.Now(),
 	}); err != nil {
 		return fmt.Errorf("fail answer job %s: %w", job.ID, err)
@@ -326,7 +334,15 @@ func (s *Service) failAnswerJob(ctx context.Context, job *models.AnswerJob, code
 // runs; the HTTP tail replays the persisted rows.
 func (s *Service) jobEvents(ctx context.Context, job *models.AnswerJob, emit Emitter) func(string, map[string]any) error {
 	return func(eventType string, data map[string]any) error {
-		sequence, err := s.nextAnswerSequence(ctx, job.ID, job.TenantID)
+		sequenceCtx := ctx
+		cancel := func() {}
+		// A canceled client or shutting-down worker must still allocate the
+		// terminal sequence: the durable answer is already being written.
+		if eventType == EventAnswer || eventType == EventComplete || eventType == EventError {
+			sequenceCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), terminalPersistTimeout)
+		}
+		defer cancel()
+		sequence, err := s.nextAnswerSequence(sequenceCtx, job.ID, job.TenantID)
 		if err != nil {
 			return err
 		}

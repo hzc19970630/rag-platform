@@ -21,12 +21,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, "checktenancy:", err)
 		os.Exit(1)
 	}
-	if len(violations) == 0 {
-		return
+	gormViolations, err := archtest.CheckGormTenancy(files)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "checktenancy:", err)
+		os.Exit(1)
 	}
 	for _, violation := range violations {
 		fmt.Fprintln(os.Stderr, violation)
 	}
-	fmt.Fprintf(os.Stderr, "checktenancy: %d raw statement(s) can cross tenants\n", len(violations))
+	for _, violation := range gormViolations {
+		fmt.Fprintln(os.Stderr, violation)
+	}
+	if len(violations) == 0 && len(gormViolations) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "checktenancy: %d raw statement(s) and %d GORM chain(s) can cross tenants\n", len(violations), len(gormViolations))
 	os.Exit(1)
 }

@@ -217,8 +217,7 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 
 func cancelOtherPipelines(tx *gorm.DB, tenantID, documentID, keepVersionID string) error {
 	now := time.Now()
-	scoped := tenantdb.MustScoped(tx, tenantID)
-	return scoped.Model(&models.PipelineRun{}).Where("document_id = ? AND document_version_id <> ? AND status NOT IN ?", documentID, keepVersionID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).
+	return tenantdb.MustScoped(tx, tenantID).Model(&models.PipelineRun{}).Where("document_id = ? AND document_version_id <> ? AND status NOT IN ?", documentID, keepVersionID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).
 		Updates(map[string]any{"status": StatusCancelled, "error_code": "superseded", "error_message": "superseded by another version", "updated_at": now}).Error
 }
 
@@ -228,6 +227,5 @@ func cancelOtherPipelines(tx *gorm.DB, tenantID, documentID, keepVersionID strin
 
 func cancelPendingOutbox(tx *gorm.DB, tenantID string, versionIDs []string) error {
 	now := time.Now()
-	scoped := tenantdb.MustScoped(tx, tenantID)
-	return scoped.Model(&models.OutboxEvent{}).Where("aggregate_id IN ? AND published_at IS NULL", versionIDs).Updates(map[string]any{"published_at": &now, "last_error": "cancelled"}).Error
+	return tenantdb.MustScoped(tx, tenantID).Model(&models.OutboxEvent{}).Where("aggregate_id IN ? AND published_at IS NULL", versionIDs).Updates(map[string]any{"published_at": &now, "last_error": "cancelled"}).Error
 }

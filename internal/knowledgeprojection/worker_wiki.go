@@ -11,6 +11,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/pipeline"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/example/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -257,7 +258,7 @@ func (s *Service) persistPage(ctx context.Context, run *models.ProjectionRun, kn
 			}
 		}
 		var nextVersion int
-		if err := tx.Model(&models.WikiPageVersion{}).Where("wiki_page_id = ?", pageRow.ID).
+		if err := tenantdb.MustScoped(tx, knowledgeBase.TenantID).Model(&models.WikiPageVersion{}).Where("wiki_page_id = ?", pageRow.ID).
 			Select("COALESCE(MAX(version), 0)").Scan(&nextVersion).Error; err != nil {
 			return err
 		}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -36,5 +37,6 @@ func Open(databaseURL string, pool PoolOptions) (*gorm.DB, error) {
 	if pool.ConnMaxLifetime > 0 {
 		sqlDB.SetConnMaxLifetime(pool.ConnMaxLifetime)
 	}
+	tenantdb.InstallTenantScopeCallbacks(database)
 	return database, nil
 }

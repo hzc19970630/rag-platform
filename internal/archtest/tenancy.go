@@ -17,55 +17,21 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 )
 
-// TenantTables own a tenant_id column. Keep this list in sync with the models
-// and the RLS migration; the count is asserted by tenancy_test.go.
-var TenantTables = []string{
-	"answer_jobs",
-	"api_keys",
-	"audit_logs",
-	"auth_sessions",
-	"authorization_revisions",
-	"chunks",
-	"connector_items",
-	"connectors",
-	"conversations",
-	"document_versions",
-	"documents",
-	"evidence_packages",
-	"graph_entities",
-	"graph_entity_aliases",
-	"graph_relation_sources",
-	"graph_relations",
-	"graph_snapshots",
-	"knowledge_bases",
-	"knowledge_index_records",
-	"knowledge_projection_states",
-	"memberships",
-	"message_citations",
-	"messages",
-	"outbox_events",
-	"pipeline_runs",
-	"projection_generation_cache",
-	"projection_runs",
-	"stream_events",
-	"sync_runs",
-	"task_dead_letters",
-	"wiki_page_sources",
-	"wiki_page_versions",
-	"wiki_pages",
-}
+// TenantTables own a tenant_id column. The runtime catalog is the single
+// source of truth so the callback, migration arrays and this gate cannot drift.
+var TenantTables = tenantdb.TenantTables()
 
 // tenantChildTables have no tenant_id and are scoped through their parent.
 // A raw statement touching one of them must reference the parent table in the
-// same statement (an EXISTS or JOIN), unless the statement carries an explicit
-// tenant_id (task_inbox gains one in the RLS migration).
+// same statement (an EXISTS or JOIN).
 var tenantChildTables = map[string][]string{
 	"stage_runs":             {"pipeline_runs"},
 	"projection_stage_runs":  {"projection_runs"},
 	"knowledge_base_members": {"knowledge_bases"},
-	"task_inbox":             {"pipeline_runs", "projection_runs"},
 }
 
 // TenancyFile is one Go source file handed to CheckTenancy. Path is

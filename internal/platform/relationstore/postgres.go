@@ -190,10 +190,10 @@ func (s *Store) Counts(ctx context.Context, tenantID, knowledgeBaseID string) (r
 		Order("version DESC").First(&active).Error
 	if activeErr == nil {
 		counts.ActiveSnapshot = active.ID
-		if err := s.db.WithContext(ctx).Model(&models.GraphEntity{}).Where("snapshot_id = ?", active.ID).Count(&counts.Entities).Error; err != nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.GraphEntity{}).Where("snapshot_id = ?", active.ID).Count(&counts.Entities).Error; err != nil {
 			return counts, err
 		}
-		if err := s.db.WithContext(ctx).Model(&models.GraphRelation{}).Where("snapshot_id = ?", active.ID).Count(&counts.Relations).Error; err != nil {
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.GraphRelation{}).Where("snapshot_id = ?", active.ID).Count(&counts.Relations).Error; err != nil {
 			return counts, err
 		}
 	} else if !errors.Is(activeErr, gorm.ErrRecordNotFound) {
@@ -225,15 +225,15 @@ func (s *Store) ReplaceRunSnapshot(ctx context.Context, write relationstore.Snap
 		// Children are removed explicitly rather than relying on ON DELETE CASCADE
 		// so the replacement also works on databases without FK enforcement.
 		var previous []string
-		if err := tx.Model(&models.GraphSnapshot{}).Where("projection_run_id = ?", write.Snapshot.ProjectionRunID).Pluck("id", &previous).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, write.Snapshot.TenantID).Model(&models.GraphSnapshot{}).Where("projection_run_id = ?", write.Snapshot.ProjectionRunID).Pluck("id", &previous).Error; err != nil {
 			return err
 		}
 		if len(previous) > 0 {
 			var entityIDs, relationIDs []string
-			if err := tx.Model(&models.GraphEntity{}).Where("snapshot_id IN ?", previous).Pluck("id", &entityIDs).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, write.Snapshot.TenantID).Model(&models.GraphEntity{}).Where("snapshot_id IN ?", previous).Pluck("id", &entityIDs).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(&models.GraphRelation{}).Where("snapshot_id IN ?", previous).Pluck("id", &relationIDs).Error; err != nil {
+			if err := tenantdb.MustScoped(tx, write.Snapshot.TenantID).Model(&models.GraphRelation{}).Where("snapshot_id IN ?", previous).Pluck("id", &relationIDs).Error; err != nil {
 				return err
 			}
 			if len(entityIDs) > 0 {
@@ -258,7 +258,7 @@ func (s *Store) ReplaceRunSnapshot(ctx context.Context, write relationstore.Snap
 		}
 
 		var nextVersion int
-		if err := tx.Model(&models.GraphSnapshot{}).Where("knowledge_base_id = ?", write.Snapshot.KnowledgeBaseID).
+		if err := tenantdb.MustScoped(tx, write.Snapshot.TenantID).Model(&models.GraphSnapshot{}).Where("knowledge_base_id = ?", write.Snapshot.KnowledgeBaseID).
 			Select("COALESCE(MAX(version), 0)").Scan(&nextVersion).Error; err != nil {
 			return err
 		}
@@ -392,12 +392,12 @@ func (s *Store) Approve(ctx context.Context, tenantID, snapshotID, knowledgeBase
 		now = time.Now().UTC()
 	}
 	return tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Model(&models.GraphSnapshot{}).
+		if err := tenantdb.MustScoped(tx, tenantID).Model(&models.GraphSnapshot{}).
 			Where("knowledge_base_id = ? AND status = ? AND id <> ?", knowledgeBaseID, models.GraphSnapshotActive, snapshotID).
 			Updates(map[string]any{"status": models.GraphSnapshotSuperseded, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		return tx.Model(&models.GraphSnapshot{}).Where("id = ?", snapshotID).Updates(map[string]any{
+		return tenantdb.MustScoped(tx, tenantID).Model(&models.GraphSnapshot{}).Where("id = ?", snapshotID).Updates(map[string]any{
 			"status": update.Status, "review_note": update.Note, "reviewed_by": update.Reviewer,
 			"reviewed_at": &now, "updated_at": now,
 		}).Error

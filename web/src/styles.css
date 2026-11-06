@@ -260,9 +260,9 @@ body.resizing { cursor: col-resize; user-select: none; }
 .chat-sessions { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); overflow: hidden; }
 .chat-sessions-heading { padding: 14px 14px 10px; }
 .chat-sessions-empty { padding: 8px 14px; font-size: 0.8rem; }
-.chat-session-groups { overflow: auto; padding: 0 8px 12px; }
+.chat-session-groups { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 12px; }
 .chat-session-group { display: block; padding: 12px 8px 4px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
-.chat-session { display: block; padding: 9px 10px !important; border-radius: var(--radius); border: 0 !important; cursor: pointer; }
+.chat-session { display: block; width: 100%; padding: 9px 10px !important; border-radius: var(--radius); border: 0 !important; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .chat-session:hover { background: var(--bg-subtle); }
 .chat-session.active { background: var(--brand-soft); }
 .chat-session.active .ant-typography { color: var(--brand-ink); }

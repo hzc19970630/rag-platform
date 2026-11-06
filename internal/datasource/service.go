@@ -239,18 +239,18 @@ func (s *Service) createRun(ctx context.Context, connector models.Connector, mod
 	return run, nil
 }
 
-func (s *Service) cancelActiveRuns(ctx context.Context, connectorIDs []string) (int, error) {
+func (s *Service) cancelActiveRuns(ctx context.Context, tenantID string, connectorIDs []string) (int, error) {
 	if len(connectorIDs) == 0 {
 		return 0, nil
 	}
 	now := time.Now()
-	result := s.db.WithContext(ctx).Model(&models.SyncRun{}).
+	result := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.SyncRun{}).
 		Where("connector_id IN ? AND status = ?", connectorIDs, StatusPending).
 		Updates(map[string]any{"status": StatusCancelled, "cancel_requested": true, "finished_at": &now, "updated_at": now})
 	if result.Error != nil {
 		return 0, fmt.Errorf("cancel pending sync runs: %w", result.Error)
 	}
-	running := s.db.WithContext(ctx).Model(&models.SyncRun{}).
+	running := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.SyncRun{}).
 		Where("connector_id IN ? AND status = ?", connectorIDs, StatusRunning).
 		Updates(map[string]any{"cancel_requested": true, "updated_at": now})
 	if running.Error != nil {

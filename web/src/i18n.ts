@@ -158,6 +158,7 @@ const zhCN = {
     me: "我",
     answer: "回答",
     processing: "处理中",
+    reconnecting: "连接中断，正在续传…",
     completed: "完成状态",
     noMessages: "还没有消息，提出第一个问题。",
     selectConversation: "选择左侧会话，或新建会话。",

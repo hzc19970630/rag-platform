@@ -119,5 +119,5 @@ func Unscoped(db *gorm.DB, reason string) *gorm.DB {
 	if _, logged := bypassLogged.LoadOrStore(reason, struct{}{}); !logged {
 		slog.Info("tenant_scope_bypassed", "reason", reason)
 	}
-	return db
+	return db.Set(bypassSetting, true)
 }

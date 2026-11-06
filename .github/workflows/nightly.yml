@@ -1,0 +1,55 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+env:
+  GO_PROXY: https://proxy.golang.org,direct
+  COMPOSE_PROJECT_NAME: rag-nightly
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ACCEPTANCE_ENV_FILE: .env
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Prepare enforce profile
+        run: |
+          cp deploy/ci/enforce.env .env
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml config --quiet
+      - name: Start dependencies
+        run: |
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml \
+            up -d --build --wait postgres redis minio docreader
+      - name: Migrate, roles and seed
+        run: |
+          make migrate
+          make m13-rls-setup
+          make seed
+      - name: Nightly scale and load tests
+        env:
+          TEST_POSTGRES_URL: postgres://rag_platform:change-me-local-only@localhost:5432/rag_platform?sslmode=disable
+        run: go test -tags nightly -race -count=1 ./tests/nightly/...
+      - name: Dump compose logs
+        if: failure()
+        run: |
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml \
+            logs --tail=200 postgres api worker || true
+      - name: Stop stack
+        if: always()
+        run: |
+          docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml down -v || true

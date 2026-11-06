@@ -22,7 +22,12 @@ compose run --rm --no-deps migrate -check
 ```
 
 - 预期日志包含 `migrations_compatible`。校验和漂移表示已发布的迁移文件被修改，必须先恢复文件内容，不能直接覆盖数据库记录。
-- 迁移只允许向前执行；回滚通过恢复备份或编写补偿迁移完成。
+- 迁移默认只向前执行。带 `<version>.down.sql` 的迁移可单独回滚：`-down <version>` 会在一个事务内执行 down SQL 并删除 `schema_migrations` 记录；未提供 down 文件的迁移仍通过恢复备份或补偿迁移处理。
+- 当前可回滚的迁移：`0027_drop_casbin_rule`（恢复空的 Casbin 表，便于旧版本二进制启动）。
+
+```bash
+compose run --rm --no-deps migrate -down 0027_drop_casbin_rule
+```
 
 ## 2. 优雅关闭
 
@@ -272,10 +277,10 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 - `TENANT_RLS_MODE=off|shadow|enforce`，默认 `shadow`。`off` 不设置 `app.tenant_id`，可用 `./scripts/m13_rls_mode.sh off` 关闭 RLS；`shadow` 使用允许策略并在租户作用域查询中设置该 GUC，写路径触发器据此审计；`enforce` 使用迁移 0024 的严格策略。代码只提供开关与验收，是否切换是部署决策。
 - API 在 enforce 下把每个已认证请求放进一个数据库事务：`tenantdb.BeginRequestTx` 开启事务并执行 `SELECT set_config('app.tenant_id', <tenant>, true)`，普通查询与 `tenantdb.InTx` 服务事务都加入该事务（GORM 的显式 `Transaction` 不经过重定向回调，因此服务层必须用 `InTx`）。handler 返回 5xx、panic 或任一嵌套事务失败时整体回滚；事务级 GUC 随连接归还自动清空。worker 在 enforce 下整体使用 `MAINTENANCE_DATABASE_URL`，跨租户任务不依赖 GUC；API 只对认证前的身份查询使用维护连接。
-- 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`；0026 新增 `answer_jobs` 后总数为 37 张（33 张租户表 + 4 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
+- 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`（因此它按父表口径统计）；0026 新增 `answer_jobs` 后总数为 37 张（34 张租户表 + 3 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
 - 角色：`rag_app`（`NOSUPERUSER NOBYPASSRLS`，API 租户流量）与 `rag_maintenance`（`BYPASSRLS`，worker 与跨租户维护）。enforce 下 API/worker 的 `DATABASE_URL` 必须是 `rag_app`，且 `MAINTENANCE_DATABASE_URL` 必填并必须使用不同角色；migrate/seed/embedctl 使用 `ADMIN_DATABASE_URL`（所有者角色，缺省回退 `DATABASE_URL`）。启动时查询 `pg_roles` 校验：API 运行时角色不得是超级用户或 `BYPASSRLS`，worker 维护角色必须具备 `BYPASSRLS`，否则拒绝启动。密码与授权由 `make m13-rls-setup` 设置，需先导出 `RAG_APP_DB_PASSWORD`、`RAG_MAINTENANCE_DB_PASSWORD`；脚本幂等，可对已有库重复执行。全新数据卷由 `deploy/docker-compose/initdb/01-roles.sh` 自动创建角色。
 - `APP_ENV=production` 时 `TENANT_RLS_MODE` 必须是 `enforce`；`shadow`/`off` 或未设置都会让启动校验失败（原 M14 A2，已交付）。CI 使用 `APP_ENV=development` + dev auth，但以 `rag_app`/`rag_maintenance` 整栈运行 enforce；`ENFORCE_LAYOUT=1 make m13-rls-acceptance` 会额外断言容器内 `TENANT_RLS_MODE=enforce`、`DATABASE_URL` 角色为 `rag_app`、维护角色不同，以及 `pg_stat_activity` 中同时存在两种连接。production 的 OIDC 登录不在 CI 中模拟，由配置单测覆盖启动拒绝。
-- 影子审计范围：触发器只记录写操作。仅当 `current_user = 'rag_app'` 或 GUC 已设置时写入 `rls_shadow_violations`；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 `tenantdb` 的应用 guard、静态门禁 `cmd/checktenancy` 与 `tests/postgres/tenantrls_test.go` 承担，**不承诺对生产读流量做数据库级拦截采样**。
+- 影子审计范围：触发器只记录写操作。仅当 `current_user = 'rag_app'` 或 GUC 已设置时写入 `rls_shadow_violations`；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 `tenantdb` 的应用 guard、GORM 注入回调、静态门禁 `cmd/checktenancy`（raw SQL + 直接 GORM 链）与 `tests/postgres/tenantrls_test.go` 承担，**不承诺对生产读流量做数据库级拦截采样**。GORM 回调在存在租户上下文时自动为租户表补 `tenant_id`；`tenantdb.Unscoped` 是唯一显式绕过，自动注入会以 `tenant_scope_injected` 告警记录。
 - 审计 SQL：
 
   ```sql

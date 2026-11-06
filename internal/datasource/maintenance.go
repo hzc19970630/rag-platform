@@ -56,8 +56,7 @@ func (s *MaintenanceManager) ScheduleDue(ctx context.Context, limit int) (int, e
 // ExpireStaleRuns recovers work that Redis lost after the run row was written.
 // Without it the one-active-run index would block that connector forever.
 func (s *MaintenanceManager) ExpireStaleRuns(ctx context.Context, now time.Time) (int, error) {
-	base := tenantdb.Unscoped(s.db.WithContext(ctx), "connector maintenance: expire stale sync runs across tenants")
-	result := base.Model(&models.SyncRun{}).
+	result := tenantdb.Unscoped(s.db.WithContext(ctx), "connector maintenance: expire stale sync runs across tenants").Model(&models.SyncRun{}).
 		Where("status = ? AND lease_until IS NOT NULL AND lease_until < ?", StatusRunning, now.Add(-5*time.Minute)).
 		Updates(map[string]any{"status": StatusFailed, "error_summary": "worker lease expired", "finished_at": &now, "updated_at": now})
 	if result.Error != nil {

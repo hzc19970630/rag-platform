@@ -8,6 +8,7 @@ import (
 	"github.com/example/rag-platform/internal/apperror"
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 	"strings"
 	"time"
@@ -192,7 +193,7 @@ func (s *ConnectorManager) Delete(ctx context.Context, principal authz.Principal
 		return err
 	}
 	var active int64
-	if err := s.db.WithContext(ctx).Model(&models.SyncRun{}).Where("connector_id = ? AND status IN ?", connector.ID, []string{StatusPending, StatusRunning}).Count(&active).Error; err != nil {
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.SyncRun{}).Where("connector_id = ? AND status IN ?", connector.ID, []string{StatusPending, StatusRunning}).Count(&active).Error; err != nil {
 		return fmt.Errorf("check active sync runs: %w", err)
 	}
 	if active > 0 {

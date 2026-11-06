@@ -1,52 +1,52 @@
-type Scope = {
-  subjectId: string;
-  tenantId: string;
-  knowledgeBaseIds: string[];
-  capabilities: string[];
-  aclVersion: string;
-};
+import type { components } from "./generated";
+
+// API DTOs come from the generated OpenAPI schema so a spec change breaks the
+// TypeScript build (and `npm run codegen:check` catches the generated file).
+// DeepRequired keeps the client's existing required-field ergonomics where the
+// spec marks response fields optional.
+type Schemas = components["schemas"];
+type DeepRequired<T> = T extends (infer U)[]
+  ? DeepRequired<U>[]
+  : T extends object
+    ? { [K in keyof T]-?: DeepRequired<T[K]> }
+    : T;
+
+export type Scope = DeepRequired<NonNullable<Schemas["MeResponse"]["scope"]>>;
 
 export type MeResponse = {
-  principal: { subjectId: string; tenantId: string };
+  principal: DeepRequired<NonNullable<Schemas["MeResponse"]["principal"]>>;
   scope: Scope;
   developmentIdentity: boolean;
 };
 
-export type AuthConfig = {
-  oidcEnabled: boolean;
-  oidcIssuer: string;
-  devAuthEnabled: boolean;
-  sessionCookie: string;
-  sessionTTLHours: number;
-};
+export type AuthConfig = Schemas["AuthConfig"];
 
+export type KnowledgeBase = DeepRequired<Schemas["KnowledgeBase"]>;
+
+export type Member = DeepRequired<Schemas["KnowledgeBaseMember"]>;
+
+export type ChunkView = DeepRequired<Schemas["Chunk"]>;
+
+export type ChunkPage = DeepRequired<Schemas["ChunkPage"]>;
+
+export type Conversation = DeepRequired<Schemas["Conversation"]>;
+
+export type StreamEvent = Schemas["StreamEvent"];
+
+export type APIKeyView = DeepRequired<Schemas["APIKey"]>;
+
+export type Connector = DeepRequired<Schemas["Connector"]>;
+
+export type ConnectorRun = DeepRequired<Schemas["ConnectorRun"]>;
+
+// The schemas below are intentionally generic or inline in the OpenAPI spec
+// (additionalProperties maps), so the typed view models stay hand-written.
 export type IndexingStrategy = {
   vector_enabled: boolean;
   keyword_enabled: boolean;
   wiki_enabled: boolean;
   graph_enabled: boolean;
   required_capabilities: string[];
-};
-
-export type KnowledgeBase = {
-  id: string;
-  tenantId: string;
-  ownerId: string;
-  name: string;
-  description: string;
-  aclVersion: number;
-  retrievalConfig: string;
-  indexingStrategy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type Member = {
-  knowledgeBaseId: string;
-  userId: string;
-  role: string;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type DocumentView = {
@@ -140,27 +140,6 @@ export type DocumentPreview = {
   blocks: PreviewBlock[];
 };
 
-export type ChunkView = {
-  chunkId: string;
-  documentId: string;
-  documentVersionId: string;
-  knowledgeBaseId: string;
-  parentId?: string;
-  ordinal: number;
-  content: string;
-  headingPath: string;
-  pageNumber: number;
-  sourcePath: string;
-  status: string;
-};
-
-export type ChunkPage = {
-  items: ChunkView[];
-  nextCursor: number;
-  hasMore: boolean;
-  status: string;
-};
-
 export type Citation = {
   index: number;
   chunkId: string;
@@ -171,15 +150,6 @@ export type Citation = {
   quote: string;
   rank: number;
   score: number;
-};
-
-export type Conversation = {
-  id: string;
-  knowledgeBaseId: string;
-  userId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type MessageView = {
@@ -193,26 +163,6 @@ export type MessageView = {
     createdAt: string;
   };
   citations: Citation[];
-};
-
-export type StreamEvent = {
-  event_id: string;
-  request_id: string;
-  sequence: number;
-  type: string;
-  data?: Record<string, unknown>;
-};
-
-export type APIKeyView = {
-  id: string;
-  name: string;
-  keyPrefix: string;
-  capabilities: string[];
-  knowledgeBaseIds: string[];
-  expiresAt?: string;
-  revokedAt?: string;
-  lastUsedAt?: string;
-  createdAt: string;
 };
 
 export type DeadLetter = {
@@ -317,46 +267,4 @@ export type ProjectionStatus = {
   relationRuns: ProjectionRun[];
   pages: PageCounts;
   graph: GraphCounts;
-};
-
-export type Connector = {
-  id: string;
-  tenantId: string;
-  knowledgeBaseId: string;
-  name: string;
-  type: string;
-  config: {
-    manifestUrl: string;
-    requestsPerSecond?: number;
-    maxItemsPerRun: number;
-    aclMode: string;
-  };
-  enabled: boolean;
-  syncIntervalSeconds: number;
-  nextSyncAt?: string;
-  lastSyncAt?: string;
-  hasCredential: boolean;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type ConnectorRun = {
-  id: string;
-  connectorId: string;
-  knowledgeBaseId: string;
-  mode: string;
-  status: string;
-  triggeredBy: string;
-  itemsTotal: number;
-  itemsCreated: number;
-  itemsUpdated: number;
-  itemsDeleted: number;
-  itemsSkipped: number;
-  itemsFailed: number;
-  errorSummary?: string;
-  attempts: number;
-  startedAt?: string;
-  finishedAt?: string;
-  createdAt: string;
 };

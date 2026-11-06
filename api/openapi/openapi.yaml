@@ -724,6 +724,22 @@ components:
         pipelinesCancelled: {type: integer}
         inboxesExpired: {type: integer, format: int64}
         deadLettersResolved: {type: integer, format: int64}
+    StreamEvent:
+      type: object
+      description: One persisted answer-stream event. The SSE id is `<request_id>:<sequence>`.
+      required: [request_id, sequence, type]
+      properties:
+        event_id:
+          type: string
+        request_id:
+          type: string
+        sequence:
+          type: integer
+        type:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
 paths:
 
   /api/v1/api-keys:
@@ -2127,7 +2143,8 @@ paths:
           description: Server-sent events
           content:
             text/event-stream:
-              schema: {type: string}
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -2242,7 +2259,8 @@ paths:
           description: Server-sent events
           content:
             text/event-stream:
-              schema: {type: string}
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':

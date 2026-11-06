@@ -151,7 +151,7 @@ func (s *SyncRunManager) CancelConnector(ctx context.Context, principal authz.Pr
 	if err != nil {
 		return 0, err
 	}
-	count, err := s.cancelActiveRuns(ctx, []string{connector.ID})
+	count, err := s.cancelActiveRuns(ctx, principal.TenantID, []string{connector.ID})
 	if err != nil {
 		return 0, err
 	}
@@ -172,7 +172,7 @@ func (s *SyncRunManager) CancelKnowledgeBase(ctx context.Context, principal auth
 	if err := s.db.WithContext(ctx).Model(&models.Connector{}).Where("tenant_id = ? AND knowledge_base_id = ?", principal.TenantID, knowledgeBaseID).Pluck("id", &ids).Error; err != nil {
 		return 0, fmt.Errorf("list knowledge base connectors: %w", err)
 	}
-	count, err := s.cancelActiveRuns(ctx, ids)
+	count, err := s.cancelActiveRuns(ctx, principal.TenantID, ids)
 	if err != nil {
 		return 0, err
 	}

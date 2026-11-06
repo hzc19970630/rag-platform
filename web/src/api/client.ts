@@ -2,7 +2,10 @@ import type { DocumentView, StreamEvent } from "./types";
 
 export const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8082/api/v1";
 
-const devHeaders = { "X-Dev-User-ID": "dev-user", "X-Dev-Tenant-ID": "dev-tenant" };
+// Development identity headers must never ship in a production build.
+export function devHeaders(dev = import.meta.env.DEV): Record<string, string> {
+  return dev ? { "X-Dev-User-ID": "dev-user", "X-Dev-Tenant-ID": "dev-tenant" } : {};
+}
 
 export class ApiError extends Error {
   status: number;
@@ -33,12 +36,47 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
+let refreshPromise: Promise<boolean> | null = null;
+
+// refreshSession is single-flight: a burst of 401s shares one refresh call and
+// the next request retries against the rotated cookie.
+function refreshSession(): Promise<boolean> {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${apiBase}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: devHeaders(),
+    })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+async function rawFetch(path: string, init: RequestInit): Promise<Response> {
+  return fetch(`${apiBase}${path}`, {
     ...init,
     credentials: "include",
-    headers: { ...devHeaders, ...init.headers },
+    headers: { ...devHeaders(), ...init.headers },
   });
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const response = await rawFetch(path, init);
+  if (response.status !== 401 || path === "/auth/refresh") {
+    return response;
+  }
+  if (!(await refreshSession())) {
+    return response;
+  }
+  return rawFetch(path, init);
+}
+
+export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await request(path, init);
   if (!response.ok) throw await toApiError(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -60,7 +98,7 @@ export function uploadDocument(knowledgeBaseId: string, file: File, documentId?:
 }
 
 export async function openDocumentPreview(documentId: string): Promise<void> {
-  const response = await fetch(`${apiBase}/documents/${documentId}/preview`, { credentials: "include", headers: devHeaders });
+  const response = await request(`/documents/${documentId}/preview`);
   if (!response.ok) throw await toApiError(response);
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
@@ -86,31 +124,64 @@ function parseSSEBlock(raw: string): StreamEvent | undefined {
   }
 }
 
-// EventSource cannot attach the development identity headers, so the answer
-// stream is consumed from fetch with the same headers as every other call.
-export async function streamPost(path: string, body: unknown, onEvent: (event: StreamEvent) => void): Promise<void> {
-  const response = await fetch(`${apiBase}${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers: { ...devHeaders, "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw await toApiError(response);
+export type StreamOptions = {
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+};
+
+async function consumeSSE(response: Response, onEvent: (event: StreamEvent) => void, signal?: AbortSignal): Promise<void> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error("当前浏览器不支持流式响应");
   const decoder = new TextDecoder();
   let buffer = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let separator = buffer.indexOf("\n\n");
-    while (separator >= 0) {
-      const block = buffer.slice(0, separator);
-      buffer = buffer.slice(separator + 2);
-      const event = parseSSEBlock(block);
-      if (event) onEvent(event);
-      separator = buffer.indexOf("\n\n");
+  try {
+    for (;;) {
+      if (signal?.aborted) return;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let separator = buffer.indexOf("\n\n");
+      while (separator >= 0) {
+        const block = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+        const event = parseSSEBlock(block);
+        if (event) onEvent(event);
+        separator = buffer.indexOf("\n\n");
+      }
     }
+  } finally {
+    reader.releaseLock();
   }
+}
+
+// EventSource cannot attach the development identity headers, so the answer
+// stream is consumed from fetch with the same headers as every other call.
+export async function streamPost(
+  path: string,
+  body: unknown,
+  onEvent: (event: StreamEvent) => void,
+  options: StreamOptions = {},
+): Promise<void> {
+  const response = await request(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+  if (!response.ok) throw await toApiError(response);
+  await consumeSSE(response, onEvent, options.signal);
+}
+
+export async function streamGet(
+  path: string,
+  onEvent: (event: StreamEvent) => void,
+  options: StreamOptions = {},
+): Promise<void> {
+  const response = await request(path, {
+    method: "GET",
+    headers: { Accept: "text/event-stream", ...options.headers },
+    signal: options.signal,
+  });
+  if (!response.ok) throw await toApiError(response);
+  await consumeSSE(response, onEvent, options.signal);
 }

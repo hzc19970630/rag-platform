@@ -28,7 +28,12 @@ const migrationAdvisoryLockKey int64 = 0x7261675F6D6967
 
 func main() {
 	checkOnly := flag.Bool("check", false, "verify applied migrations match the SQL files without applying anything")
+	downVersion := flag.String("down", "", "roll back one applied migration using <version>.down.sql")
 	flag.Parse()
+	if *checkOnly && *downVersion != "" {
+		fmt.Fprintln(os.Stderr, "migrate: -check and -down are mutually exclusive")
+		os.Exit(1)
+	}
 
 	cfg := config.Load()
 	logger := logging.New(cfg.LogLevel)
@@ -56,6 +61,13 @@ func main() {
 		logger.Error("migration_database_ping_failed", "error", pingErr)
 		os.Exit(1)
 	}
+	if *downVersion != "" {
+		if err := rollbackMigration(ctx, database, migrationDir(), *downVersion, logger); err != nil {
+			logger.Error("migration_rollback_failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := runMigrations(ctx, database, migrationDir(), logger, *checkOnly); err != nil {
 		logger.Error("migration_failed", "error", err)
 		os.Exit(1)
@@ -63,6 +75,56 @@ func main() {
 	if *checkOnly {
 		logger.Info("migrations_compatible")
 	}
+}
+
+// rollbackMigration applies one <version>.down.sql file and removes its
+// schema_migrations row in the same transaction. Only migrations that ship a
+// down file can be rolled back; the historical set intentionally has none.
+func rollbackMigration(ctx context.Context, database *sql.DB, directory, version string, logger *slog.Logger) error {
+	if version == "" || filepath.Base(version) != version {
+		return fmt.Errorf("invalid migration version %q", version)
+	}
+	releaseLock, err := lockMigrations(ctx, database, logger)
+	if err != nil {
+		return err
+	}
+	defer releaseLock()
+
+	if _, err := database.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(128) PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`); err != nil {
+		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+	applied := false
+	if err := database.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)", version).Scan(&applied); err != nil {
+		return fmt.Errorf("check applied migration %s: %w", version, err)
+	}
+	if !applied {
+		return fmt.Errorf("migration %s is not applied", version)
+	}
+	path := filepath.Join(directory, version+".down.sql")
+	sqlBytes, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read down migration %s: %w", version, err)
+	}
+	transaction, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin rollback %s: %w", version, err)
+	}
+	if _, err := transaction.ExecContext(ctx, string(sqlBytes)); err != nil {
+		_ = transaction.Rollback()
+		return fmt.Errorf("execute rollback %s: %w", version, err)
+	}
+	if _, err := transaction.ExecContext(ctx, "DELETE FROM schema_migrations WHERE version = $1", version); err != nil {
+		_ = transaction.Rollback()
+		return fmt.Errorf("record rollback %s: %w", version, err)
+	}
+	if err := transaction.Commit(); err != nil {
+		return fmt.Errorf("commit rollback %s: %w", version, err)
+	}
+	logger.Info("migration_rolled_back", "version", version)
+	return nil
 }
 
 type migrationFile struct {
@@ -210,7 +272,7 @@ func readMigrationFiles(directory string) ([]migrationFile, error) {
 	}
 	files := make([]migrationFile, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") || strings.HasSuffix(entry.Name(), ".down.sql") {
 			continue
 		}
 		path := filepath.Join(directory, entry.Name())

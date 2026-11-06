@@ -23,14 +23,17 @@ import {
   Typography,
 } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, jsonInit, streamPost } from "../api/client";
+import { streamAnswer, type AnswerStreamPhase } from "../api/answerStream";
+import { api, jsonInit } from "../api/client";
 import { queryKeys, useConversations, useKnowledgeBases, useMessages } from "../api/hooks";
 import type { Citation, Conversation, MessageView, StreamEvent } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
+import { VirtualMessageList } from "../components/VirtualMessageList";
+import { VirtualSessionList } from "../components/VirtualSessionList";
 import { usePermissions } from "../session";
 import { formatTime } from "../utils/format";
 
@@ -52,6 +55,21 @@ type StreamedAnswer = {
   citations: Citation[];
   status: string;
 };
+
+type ChatRow =
+  | { key: string; kind: "loading" }
+  | { key: string; kind: "error"; error: unknown }
+  | { key: string; kind: "empty" }
+  | { key: string; kind: "message"; item: MessageView }
+  | { key: string; kind: "pending"; content: string }
+  | { key: string; kind: "asking" }
+  | { key: string; kind: "stream-error"; message: string };
+
+type SessionRow =
+  | { key: string; kind: "group"; name: string }
+  | { key: string; kind: "conversation"; conversation: Conversation };
+
+const noMessages: MessageView[] = [];
 
 export function ChatPage() {
   const { conversationId = "" } = useParams();
@@ -75,31 +93,59 @@ export function ChatPage() {
   const [pendingUser, setPendingUser] = useState("");
   const [streamed, setStreamed] = useState<StreamedAnswer>();
   const [streamError, setStreamError] = useState("");
+  const [streamPhase, setStreamPhase] = useState<AnswerStreamPhase>();
   const [citationDrawer, setCitationDrawer] = useState<{ title: string; citations: Citation[] }>();
+  const mounted = useRef(true);
+  const activeStream = useRef<AbortController | null>(null);
 
   const knowledgeBaseNames = useMemo(
     () => new Map((knowledgeBases.data ?? []).map((kb) => [kb.id, kb.name])),
     [knowledgeBases.data],
   );
 
-  const groups = useMemo(() => {
+  const sessionRows = useMemo<SessionRow[]>(() => {
     const grouped = new Map<string, Conversation[]>();
     for (const conversation of conversations.data ?? []) {
       const rows = grouped.get(conversation.knowledgeBaseId) ?? [];
       rows.push(conversation);
       grouped.set(conversation.knowledgeBaseId, rows);
     }
-    return [...grouped.entries()].map(([knowledgeBaseId, rows]) => ({
-      knowledgeBaseId,
-      name: knowledgeBaseNames.get(knowledgeBaseId) ?? knowledgeBaseId,
-      conversations: rows,
-    }));
+    const rows: SessionRow[] = [];
+    for (const [knowledgeBaseId, groupedConversations] of grouped) {
+      rows.push({
+        key: `group:${knowledgeBaseId}`,
+        kind: "group",
+        name: knowledgeBaseNames.get(knowledgeBaseId) ?? knowledgeBaseId,
+      });
+      for (const conversation of groupedConversations) {
+        rows.push({ key: `conversation:${conversation.id}`, kind: "conversation", conversation });
+      }
+    }
+    return rows;
   }, [conversations.data, knowledgeBaseNames]);
 
   const listedConversation = (conversations.data ?? []).find((item) => item.id === conversationId);
   const current = session?.id === conversationId ? session : listedConversation;
   const currentKnowledgeBaseId = current?.knowledgeBaseId ?? "";
   const currentKnowledgeBaseName = knowledgeBaseNames.get(currentKnowledgeBaseId) ?? currentKnowledgeBaseId;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      activeStream.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    activeStream.current?.abort();
+    setAsking(false);
+    setPendingUser("");
+    setStates([]);
+    setStreamed(undefined);
+    setStreamError("");
+    setStreamPhase(undefined);
+  }, [conversationId]);
 
   useEffect(() => {
     if (conversationId || !knowledgeBaseFromQuery || !canChat) return;
@@ -151,6 +197,9 @@ export function ChatPage() {
   async function send() {
     const query = question.trim();
     if (!query || asking || !current) return;
+    const controller = new AbortController();
+    activeStream.current?.abort();
+    activeStream.current = controller;
     setQuestion("");
     setAsking(true);
     setStates([]);
@@ -158,24 +207,32 @@ export function ChatPage() {
     setStreamError("");
     setPendingUser(query);
     try {
-      await streamPost(`/sessions/${current.id}/messages`, { query, requestId: crypto.randomUUID() }, (event: StreamEvent) => {
-        if (event.type === "status") {
-          const state = String(event.data?.state ?? "");
-          if (state) setStates((existing) => (existing.includes(state) ? existing : [...existing, state]));
-        } else if (event.type === "answer") {
-          setStreamed({
-            content: String(event.data?.content ?? ""),
-            citations: (event.data?.citations as Citation[] | undefined) ?? [],
-            status: String(event.data?.status ?? "COMPLETED"),
-          });
-        } else if (event.type === "complete") {
-          setStreamed((existing) => existing
-            ? { ...existing, status: String(event.data?.status ?? existing.status) }
-            : existing);
-        } else if (event.type === "error") {
-          setStreamError(String(event.data?.message ?? event.data?.code ?? t("chat.failed")));
-        }
+      await streamAnswer({
+        conversationId: current.id,
+        query,
+        requestId: crypto.randomUUID(),
+        signal: controller.signal,
+        onStatus: setStreamPhase,
+        onEvent: (event: StreamEvent) => {
+          if (event.type === "status") {
+            const state = String(event.data?.state ?? "");
+            if (state) setStates((existing) => (existing.includes(state) ? existing : [...existing, state]));
+          } else if (event.type === "answer") {
+            setStreamed({
+              content: String(event.data?.content ?? ""),
+              citations: (event.data?.citations as Citation[] | undefined) ?? [],
+              status: String(event.data?.status ?? "COMPLETED"),
+            });
+          } else if (event.type === "complete") {
+            setStreamed((existing) => existing
+              ? { ...existing, status: String(event.data?.status ?? existing.status) }
+              : existing);
+          } else if (event.type === "error") {
+            setStreamError(String(event.data?.message ?? event.data?.code ?? t("chat.failed")));
+          }
+        },
       });
+      if (!mounted.current) return;
       setPendingUser("");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.messages(current.id) }),
@@ -184,9 +241,14 @@ export function ChatPage() {
       setStreamed(undefined);
       setStates([]);
     } catch (cause) {
+      if (controller.signal.aborted || !mounted.current) return;
       setStreamError(cause instanceof Error ? cause.message : t("chat.failed"));
     } finally {
-      setAsking(false);
+      if (activeStream.current === controller) activeStream.current = null;
+      if (mounted.current) {
+        setAsking(false);
+        setStreamPhase(undefined);
+      }
     }
   }
 
@@ -195,7 +257,18 @@ export function ChatPage() {
     navigate(`/documents/${citation.documentId}?chunk=${encodeURIComponent(citation.chunkId)}${from}`);
   }
 
-  const history = messages.data ?? [];
+  const history = messages.data ?? noMessages;
+  const messageRows = useMemo<ChatRow[]>(() => {
+    const rows: ChatRow[] = [];
+    if (messages.isLoading) rows.push({ key: "loading", kind: "loading" });
+    if (messages.error) rows.push({ key: "error", kind: "error", error: messages.error });
+    if (!messages.isLoading && history.length === 0 && !pendingUser) rows.push({ key: "empty", kind: "empty" });
+    for (const item of history) rows.push({ key: `message:${item.message.id}`, kind: "message", item });
+    if (pendingUser) rows.push({ key: "pending", kind: "pending", content: pendingUser });
+    if (asking) rows.push({ key: "asking", kind: "asking" });
+    if (streamError) rows.push({ key: "stream-error", kind: "stream-error", message: streamError });
+    return rows;
+  }, [messages.isLoading, messages.error, history, pendingUser, asking, streamError]);
 
   return (
     <div className="chat-workspace">
@@ -208,36 +281,31 @@ export function ChatPage() {
         </Flex>
         {conversations.isLoading && <LoadingBlock />}
         {conversations.error && <QueryFallback error={conversations.error} retry={() => void conversations.refetch()} />}
-        {!conversations.isLoading && groups.length === 0 && (
+        {!conversations.isLoading && sessionRows.length === 0 && (
           <Typography.Paragraph type="secondary" className="chat-sessions-empty">
             {t("chat.noConversations")}
           </Typography.Paragraph>
         )}
-        <div className="chat-session-groups">
-          {groups.map((group) => (
-            <section key={group.knowledgeBaseId}>
-              <Typography.Text type="secondary" className="chat-session-group">
-                {group.name}
-              </Typography.Text>
-              <List
-                size="small"
-                split={false}
-                dataSource={group.conversations}
-                renderItem={(conversation) => (
-                  <List.Item
-                    className={conversation.id === conversationId ? "chat-session active" : "chat-session"}
-                    onClick={() => navigate(`/chat/${conversation.id}`)}
-                  >
-                    <Flex vertical gap={2} className="chat-session-body">
-                      <Typography.Text ellipsis>{conversation.title || t("chat.untitled")}</Typography.Text>
-                      <Typography.Text type="secondary" className="chat-session-time">{formatTime(conversation.updatedAt)}</Typography.Text>
-                    </Flex>
-                  </List.Item>
-                )}
-              />
-            </section>
-          ))}
-        </div>
+        <VirtualSessionList
+          rows={sessionRows}
+          estimateSize={(index) => (sessionRows[index]?.kind === "group" ? 38 : 56)}
+          renderRow={(row) => row.kind === "group" ? (
+            <Typography.Text type="secondary" className="chat-session-group">
+              {row.name}
+            </Typography.Text>
+          ) : (
+            <button
+              type="button"
+              className={row.conversation.id === conversationId ? "chat-session active" : "chat-session"}
+              onClick={() => navigate(`/chat/${row.conversation.id}`)}
+            >
+              <Flex vertical gap={2} className="chat-session-body">
+                <Typography.Text ellipsis>{row.conversation.title || t("chat.untitled")}</Typography.Text>
+                <Typography.Text type="secondary" className="chat-session-time">{formatTime(row.conversation.updatedAt)}</Typography.Text>
+              </Flex>
+            </button>
+          )}
+        />
       </aside>
 
       <section className="chat-main">
@@ -264,49 +332,59 @@ export function ChatPage() {
               <Typography.Text type="secondary">{formatTime(current.updatedAt)}</Typography.Text>
             </header>
 
-            <div className="chat-scroll">
-              {messages.isLoading && <LoadingBlock />}
-              {messages.error && <QueryFallback error={messages.error} retry={() => void messages.refetch()} />}
-              {!messages.isLoading && history.length === 0 && !pendingUser && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("chat.noMessages")} />
-              )}
-              <ol className="chat-messages">
-                {history.map((item) => (
-                  <MessageBubble
-                    key={item.message.id}
-                    item={item}
-                    onOpenCitation={openCitation}
-                    onShowCitations={(citations) => setCitationDrawer({ title: current.title || t("chat.untitled"), citations })}
-                  />
-                ))}
-                {pendingUser && (
-                  <li className="message-row user">
-                    <div className="chat-bubble user">
-                      <Typography.Paragraph>{pendingUser}</Typography.Paragraph>
-                    </div>
-                  </li>
-                )}
-                {asking && (
-                  <li className="message-row assistant">
-                    <div className="chat-bubble assistant">
-                      <Flex align="center" gap={8} className="chat-progress">
-                        <Spin size="small" />
-                        <Typography.Text type="secondary">
-                          {states.length > 0 ? states.join(" → ") : t("chat.processing")}
-                        </Typography.Text>
-                      </Flex>
-                      {streamed && (
-                        <AnswerText content={streamed.content} citations={streamed.citations} onOpen={openCitation} />
-                      )}
-                      {streamed && streamed.citations.length > 0 && (
-                        <CitationList citations={streamed.citations} onOpen={openCitation} />
-                      )}
-                    </div>
-                  </li>
-                )}
-              </ol>
-              {streamError && <Alert type="error" showIcon message={streamError} className="chat-error" />}
-            </div>
+            <VirtualMessageList
+              rows={messageRows}
+              autoScrollKey={`${history.length}:${pendingUser}:${asking}:${states.length}:${streamed?.content ? 1 : 0}`}
+              renderRow={(row) => {
+                switch (row.kind) {
+                  case "loading":
+                    return <LoadingBlock />;
+                  case "error":
+                    return <QueryFallback error={row.error} retry={() => void messages.refetch()} />;
+                  case "empty":
+                    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("chat.noMessages")} />;
+                  case "message":
+                    return (
+                      <MessageBubble
+                        item={row.item}
+                        onOpenCitation={openCitation}
+                        onShowCitations={(citations) => setCitationDrawer({ title: current.title || t("chat.untitled"), citations })}
+                      />
+                    );
+                  case "pending":
+                    return (
+                      <div className="message-row user">
+                        <div className="chat-bubble user">
+                          <Typography.Paragraph>{row.content}</Typography.Paragraph>
+                        </div>
+                      </div>
+                    );
+                  case "asking":
+                    return (
+                      <div className="message-row assistant">
+                        <div className="chat-bubble assistant">
+                          <Flex align="center" gap={8} className="chat-progress">
+                            <Spin size="small" />
+                            <Typography.Text type="secondary">
+                              {streamPhase === "reconnecting"
+                                ? t("chat.reconnecting")
+                                : states.length > 0 ? states.join(" → ") : t("chat.processing")}
+                            </Typography.Text>
+                          </Flex>
+                          {streamed && (
+                            <AnswerText content={streamed.content} citations={streamed.citations} onOpen={openCitation} />
+                          )}
+                          {streamed && streamed.citations.length > 0 && (
+                            <CitationList citations={streamed.citations} onOpen={openCitation} />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  case "stream-error":
+                    return <Alert type="error" showIcon message={row.message} className="chat-error" />;
+                }
+              }}
+            />
 
             <div className="chat-composer">
               <Input.TextArea
@@ -396,7 +474,7 @@ function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Ci
   const { t } = useTranslation();
   const isUser = item.message.role === "user";
   return (
-    <li className={`message-row ${isUser ? "user" : "assistant"}`}>
+    <div className={`message-row ${isUser ? "user" : "assistant"}`}>
       <div className={`chat-bubble ${isUser ? "user" : "assistant"}`}>
         <Flex justify="space-between" align="center" gap={8} className="chat-bubble-meta">
           <Tag color={isUser ? "default" : "green"}>{isUser ? t("chat.me") : t("chat.answer")}</Tag>
@@ -423,7 +501,7 @@ function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Ci
           </>
         )}
       </div>
-    </li>
+    </div>
   );
 }
 

@@ -49,6 +49,7 @@ jobs:
         working-directory: web
         run: |
           npm ci
+          npm run codegen:check
           npm test -- --passWithNoTests
           npm run build
       - name: Compose configuration

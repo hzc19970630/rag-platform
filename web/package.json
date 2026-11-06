@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
+    "codegen": "openapi-typescript ../api/openapi/openapi.yaml -o src/api/generated.ts",
+    "codegen:check": "npm run codegen && git diff --exit-code -- src/api/generated.ts",
     "test": "vitest run"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
     "@tanstack/react-query": "^5.105.3",
+    "@tanstack/react-virtual": "3.14.26",
     "@vitejs/plugin-react": "6.1.2",
     "antd": "^6.6.8",
     "i18next": "^26.7.1",
@@ -28,6 +31,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "jsdom": "^29.1.1",
+    "openapi-typescript": "7.13.0",
     "vitest": "5.0.3"
   }
 }

@@ -148,6 +148,7 @@ export function OpsPage() {
     {
       title: t("ops.task"),
       key: "task",
+      width: 360,
       render: (_, row) => (
         <Flex vertical gap={2}>
           <Typography.Text strong>{row.taskType}</Typography.Text>
@@ -161,6 +162,7 @@ export function OpsPage() {
       title: t("ops.lastError"),
       dataIndex: "lastError",
       key: "lastError",
+      width: 320,
       render: (value?: string) => value ? <Typography.Text type="danger" className="mono-small">{value}</Typography.Text> : "-",
     },
     { title: t("common.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 180, render: (value: string) => formatTime(value) },
@@ -311,7 +313,8 @@ export function OpsPage() {
           columns={deadLetterColumns}
           dataSource={deadLetters.data}
           pagination={false}
-          scroll={{ x: true }}
+          scroll={{ x: 1090, y: 360 }}
+          virtual
         />
       )}
     </Card>
