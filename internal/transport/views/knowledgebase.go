@@ -190,7 +190,7 @@ func ReadOnlySystemConfiguration(view knowledgebase.ReadOnlySystemConfigurationV
 			Size: view.Chunking.Size, Overlap: view.Chunking.Overlap,
 			SplitMarkers: view.Chunking.SplitMarkers, MinSize: view.Chunking.MinSize,
 		},
-		Chat: httpapi.ReadOnlyChat{Source: view.Chat.Source, Model: view.Chat.Model},
+		Chat:   httpapi.ReadOnlyChat{Source: view.Chat.Source, Model: view.Chat.Model},
 		Rerank: httpapi.ReadOnlyRerank{Source: view.Rerank.Source, Model: view.Rerank.Model},
 		Parser: httpapi.ReadOnlyParser{Version: view.Parser.Version, SupportedFormats: cloneStrings(view.Parser.SupportedFormats)},
 	}

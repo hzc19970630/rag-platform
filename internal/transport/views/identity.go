@@ -12,8 +12,8 @@ import (
 
 func Me(principal authz.Principal, scope authz.AuthorizationScope, developmentIdentity bool) httpapi.MeResponse {
 	return httpapi.MeResponse{
-		Principal: Principal(principal),
-		Scope:     Scope(scope),
+		Principal:           Principal(principal),
+		Scope:               Scope(scope),
 		DevelopmentIdentity: developmentIdentity,
 	}
 }

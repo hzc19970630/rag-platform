@@ -183,10 +183,10 @@ func TestPrincipalAndScopeCloneSlices(t *testing.T) {
 func TestTaskInspectionKeepsOptionalSections(t *testing.T) {
 	task := ingestion.Task{Stage: "parse"}
 	view := TaskInspection(ingestion.TaskInspection{
-		Task:   task,
-		Inbox:  &models.TaskInbox{IdempotencyKey: "key"},
-		Stage:  &models.StageRun{ID: 7},
-		Outbox: []models.OutboxEvent{{ID: 1}},
+		Task:       task,
+		Inbox:      &models.TaskInbox{IdempotencyKey: "key"},
+		Stage:      &models.StageRun{ID: 7},
+		Outbox:     []models.OutboxEvent{{ID: 1}},
 		DeadLetter: &models.TaskDeadLetter{ID: 9},
 	})
 	if !reflect.DeepEqual(view.Task, task) {
