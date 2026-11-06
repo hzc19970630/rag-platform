@@ -78,10 +78,13 @@ func TestOnlineChunksIndexBuildKeepsWritesAvailable(t *testing.T) {
 	const dimension = 4
 	const rows = 200_000
 
+	// parent_id marks searchable child chunks; EnsureChunksIndex reads it when
+	// deciding which dimension indexes must survive a rebuild.
 	statements := []string{
-		fmt.Sprintf("CREATE TABLE %s.chunks (id TEXT PRIMARY KEY, embedding halfvec, embedding_dimension INT NOT NULL)", schema),
-		fmt.Sprintf(`INSERT INTO %s.chunks (id, embedding, embedding_dimension)
+		fmt.Sprintf("CREATE TABLE %s.chunks (id TEXT PRIMARY KEY, parent_id TEXT, embedding halfvec, embedding_dimension INT NOT NULL)", schema),
+		fmt.Sprintf(`INSERT INTO %s.chunks (id, parent_id, embedding, embedding_dimension)
 SELECT 'chunk-' || g,
+       'parent-' || (g %% 1000),
        ('[' || (g %% 97) || ',' || ((g / 97) %% 89) || ',' || ((g / 7919) %% 83) || ',' || ((g / 7919) %% 79) || ']')::halfvec(%d),
        %d
 FROM generate_series(1, %d) g`, schema, dimension, dimension, rows),
@@ -99,7 +102,7 @@ FROM generate_series(1, %d) g`, schema, dimension, dimension, rows),
 	insert := func(id string) time.Duration {
 		start := time.Now()
 		_, err := sqlDB.ExecContext(ctx,
-			fmt.Sprintf("INSERT INTO %s.chunks (id, embedding, embedding_dimension) VALUES ($1, '[1,2,3,4]'::halfvec(%d), %d)", schema, dimension, dimension),
+			fmt.Sprintf("INSERT INTO %s.chunks (id, parent_id, embedding, embedding_dimension) VALUES ($1, 'parent-fixture', '[1,2,3,4]'::halfvec(%d), %d)", schema, dimension, dimension),
 			id,
 		)
 		if err != nil {
@@ -207,10 +210,10 @@ FROM generate_series(1, %d) g`, schema, dimension, dimension, rows),
 func TestChunksIndexDimensionReadsLegacyName(t *testing.T) {
 	admin, gormDB, schema := openIndexFixture(t)
 	ctx := context.Background()
-	if _, err := admin.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s.chunks (id TEXT PRIMARY KEY, embedding halfvec, embedding_dimension INT NOT NULL)", schema)); err != nil {
+	if _, err := admin.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s.chunks (id TEXT PRIMARY KEY, parent_id TEXT, embedding halfvec, embedding_dimension INT NOT NULL)", schema)); err != nil {
 		t.Fatalf("create chunks: %v", err)
 	}
-	if _, err := admin.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s.chunks VALUES ('legacy-1', '[1,2,3]'::halfvec(3), 3)", schema)); err != nil {
+	if _, err := admin.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s.chunks (id, parent_id, embedding, embedding_dimension) VALUES ('legacy-1', 'parent-legacy', '[1,2,3]'::halfvec(3), 3)", schema)); err != nil {
 		t.Fatalf("insert chunk: %v", err)
 	}
 	if _, err := admin.ExecContext(ctx, fmt.Sprintf(
