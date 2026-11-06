@@ -1,0 +1,24 @@
+# Example Compose override for a single-node PITR demo. Merge explicitly:
+#   docker compose -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/postgres/pitr.compose.example.yml up -d postgres
+#
+# Production must point archive_command at storage outside the database node
+# (NFS/object gateway with versioning and replication), not a local volume.
+# The local volume below is only to make the preflight/drill runnable.
+services:
+  postgres:
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /var/lib/postgresql/wal-archive/%f && cp %p /var/lib/postgresql/wal-archive/%f
+      - -c
+      - archive_timeout=60
+    volumes:
+      - postgres-wal-archive:/var/lib/postgresql/wal-archive
+
+volumes:
+  postgres-wal-archive:

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "M13BackupDrillReportV1",
+  "startedAt": "2026-11-06T08:26:19Z",
+  "finishedAt": "2026-11-06T08:26:40Z",
+  "rtoTargetSeconds": 3600,
+  "rpoTargetSeconds": 900,
+  "rtoObservedSeconds": 21,
+  "rpoObservedSeconds": 21,
+  "rtoPassed": true,
+  "rpoPassed": true,
+  "scope": "logical pg_dump/pg_restore drill; production WAL/PITR and object-storage versioning are deployment inputs"
+}

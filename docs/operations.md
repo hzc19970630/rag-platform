@@ -54,16 +54,28 @@ compose logs --no-color worker | grep worker_shutting_down
 
 ### 3.2 WAL/PITR 与对象存储
 
-`deploy/postgres/pitr.conf.example` 给出 `wal_level=replica`、`archive_mode=on`、`archive_command` 与 `archive_timeout=60` 的模板。启用前必须把 WAL 归档目录放到独立、可复制、可恢复的存储，并按目标 RPO 调整 `archive_timeout`/WAL 投递频率。对象存储需启用版本化与跨副本复制（MinIO/S3 的 `mc version enable`、`mc replicate add` 或云厂商等价能力），否则 `pg_dump`/PITR 不包含原始文件与 `normalized.json`。
+`deploy/postgres/pitr.conf.example` 与 `deploy/postgres/pitr.compose.example.yml` 给出 `wal_level=replica`、`archive_mode=on`、`archive_command` 与 `archive_timeout=60` 的模板。启用前必须把 WAL 归档目录放到独立、可复制、可恢复的存储，并按目标 RPO 调整 `archive_timeout`/WAL 投递频率。对象存储需启用版本化与跨副本复制（MinIO/S3 的 `mc version enable`、`mc replicate add` 或云厂商等价能力），否则 `pg_dump`/PITR 不包含原始文件与 `normalized.json`。
+
+预检命令：
+
+```bash
+make m13-pitr-check              # 要求 wal_level=replica、archive_mode=on、archive_timeout<=60、归档失败数为 0
+make m13-object-storage-check    # 要求 bucket versioning + replication
+# 本地开发：PITR 未启用时用 --allow-disabled；单机 MinIO 无复制目标时用 --allow-single-node
+./scripts/m13_pitr_check.sh --allow-disabled
+./scripts/m13_object_storage_check.sh --allow-single-node
+```
+
+`m13-object-storage-check --apply` 会先开启 bucket versioning 再检查；复制目标必须由部署方创建，脚本不会自动猜测远端端点。PITR 模板已在一次性 ParadeDB 容器中验证：`archive_mode=on`、`archive_timeout=60`，`pg_switch_wal` 后 4 个 WAL 成功归档且 `pg_stat_archiver.failed_count=0`；本地开发栈仍保持 `archive_mode=off`，生产需按 3.2 的模板和外部归档存储启用。
 
 ### 3.3 恢复演练与 RTO 记录
 
-`scripts/m13_backup_drill.sh` 包装现有的逻辑 dump/restore 演练，并强制要求显式提供 `RTO_TARGET_SECONDS` 与 `RPO_TARGET_SECONDS`；缺省直接失败，避免用臆造目标值通过验收。运行后把实测 RTO/RPO 写入 `tests/eval/m13_backup_drill_report.json`，超过目标则退出 1。
+`scripts/m13_backup_drill.sh` 包装现有的逻辑 dump/restore 演练，并强制要求显式提供 `RTO_TARGET_SECONDS` 与 `RPO_TARGET_SECONDS`；缺省直接失败，避免用臆造目标值通过验收。企业 GA 基线已批准为 **RTO 3600s / RPO 900s**；运行后把实测 RTO/RPO 写入 `tests/eval/m13_backup_drill_report.json`，超过目标则退出 1。
 
 ```bash
-RTO_TARGET_SECONDS=900 RPO_TARGET_SECONDS=300 ./scripts/m13_backup_drill.sh
+RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 ./scripts/m13_backup_drill.sh
 # 只校验输入和计划，不执行恢复：
-RTO_TARGET_SECONDS=900 RPO_TARGET_SECONDS=300 ./scripts/m13_backup_drill.sh --dry-run
+RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 ./scripts/m13_backup_drill.sh --dry-run
 ```
 
 季度演练仍需运维按计划执行并归档报告；本脚本只保证流程可重复、输入明确、结果可核对。
