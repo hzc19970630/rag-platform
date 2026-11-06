@@ -299,3 +299,4 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - SBOM：CI 用 trivy 对 api 镜像生成 CycloneDX artifact。本地可运行 `trivy image --format cyclonedx --output sbom-api.cdx.json <image>`。
 - 漏洞门禁：govulncheck、trivy（HIGH/CRITICAL，忽略未修复）与 `npm audit --audit-level=high` 失败即阻断。确实无法立即修复的条目必须写入 `.trivyignore` 或审计说明，包含 CVE、影响、原因与到期日，并在此节登记。
 - `.github/workflows/ci.yml` 的推送可能需要 workflow-scope PAT；不要通过修改 git 凭证绕过。
+- `main` 分支保护（2026-11-06 启用）：必须通过 PR 合并，0 审批即可在检查通过后自行合并；必需检查为 `verify`、`integration`、`security` 且要求分支保持最新；对话必须解决，禁止强制推送和删除分支；`enforce_admins=true`，仓库 owner 也不能绕过。CI 工作流本身损坏时需临时关闭保护、修复后恢复。
