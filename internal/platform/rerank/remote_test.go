@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/contracts/ports"
+	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
 )
 
 func TestRemoteRerankerUsesTheResolvedModel(t *testing.T) {

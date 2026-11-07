@@ -12,11 +12,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/example/rag-platform/internal/contracts/evidence"
-	"github.com/example/rag-platform/internal/contracts/model"
-	"github.com/example/rag-platform/internal/contracts/projectioncache"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/prompts"
+	"github.com/hzc19970630/rag-platform/internal/contracts/evidence"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/contracts/projectioncache"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/prompts"
 )
 
 const (

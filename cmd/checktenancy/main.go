@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/example/rag-platform/internal/archtest"
+	"github.com/hzc19970630/rag-platform/internal/archtest"
 )
 
 func main() {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/contracts/model"
-	"github.com/example/rag-platform/internal/modelregistry"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/modelregistry"
 	"gorm.io/gorm"
 )
 

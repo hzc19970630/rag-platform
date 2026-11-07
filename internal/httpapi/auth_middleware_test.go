@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 )
 
 func TestNestedProtectedGroupInheritsAuthentication(t *testing.T) {

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/contracts/tasks"
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/contracts/tasks"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // Async answer job states. They describe durable hand-off, not the answer:

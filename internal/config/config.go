@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/rag-platform/internal/platform/formats"
+	"github.com/hzc19970630/rag-platform/internal/platform/formats"
 )
 
 // DefaultParserVersion must stay in sync with services/docreader/main.py.

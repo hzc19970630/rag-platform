@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	contract "github.com/example/rag-platform/contracts/httpapi"
+	contract "github.com/hzc19970630/rag-platform/contracts/httpapi"
 	"gopkg.in/yaml.v3"
 )
 

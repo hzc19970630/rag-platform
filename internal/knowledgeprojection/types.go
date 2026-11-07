@@ -7,9 +7,9 @@ package knowledgeprojection
 import (
 	"context"
 
-	"github.com/example/rag-platform/contracts/tasks"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/status"
+	"github.com/hzc19970630/rag-platform/contracts/tasks"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/status"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/example/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )

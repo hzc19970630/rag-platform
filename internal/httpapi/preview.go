@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
 )
 
 // writeSourcePreview streams the original file without ever exposing the object

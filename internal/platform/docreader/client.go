@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	docreaderv1 "github.com/example/rag-platform/contracts/proto/docreader/v1"
-	"github.com/example/rag-platform/internal/contracts/ports"
+	docreaderv1 "github.com/hzc19970630/rag-platform/contracts/proto/docreader/v1"
+	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

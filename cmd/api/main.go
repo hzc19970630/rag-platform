@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,16 +12,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/rag-platform/internal/app"
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/httpapi"
-	"github.com/example/rag-platform/internal/logging"
-	"github.com/example/rag-platform/internal/platform/observability"
+	"github.com/hzc19970630/rag-platform/internal/app"
+	"github.com/hzc19970630/rag-platform/internal/buildinfo"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/logging"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(buildinfo.String())
+		return
+	}
 	cfg := config.Load()
 	logger := logging.New(cfg.LogLevel)
+	buildinfo.Log(logger)
 	if err := cfg.Validate("api"); err != nil {
 		logger.Error("configuration_invalid", "component", "api", "error", err)
 		os.Exit(1)

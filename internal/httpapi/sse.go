@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/rag-platform/internal/conversation"
-	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
 
 // ssePingInterval is the idle-heartbeat cadence. Comment frames keep proxies

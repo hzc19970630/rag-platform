@@ -1,6 +1,6 @@
 package datasource
 
-import "github.com/example/rag-platform/contracts/tasks"
+import "github.com/hzc19970630/rag-platform/contracts/tasks"
 
 const (
 	// TaskTypeSync is the Asynq task type for one connector sync attempt. It is

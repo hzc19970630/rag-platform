@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

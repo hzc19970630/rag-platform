@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
-	"github.com/example/rag-platform/internal/relationstore"
-	"github.com/example/rag-platform/internal/status"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/relationstore"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 

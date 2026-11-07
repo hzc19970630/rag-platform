@@ -3,8 +3,8 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/example/rag-platform/internal/platform/observability"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"

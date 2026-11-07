@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/platform/rerank"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/platform/rerank"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // NewReranker resolves the reranking adapter from configuration. The retrieval

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/conversation"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
 

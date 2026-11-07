@@ -11,21 +11,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/example/rag-platform/internal/app"
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/datasource"
-	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/knowledgeprojection"
-	"github.com/example/rag-platform/internal/logging"
-	"github.com/example/rag-platform/internal/platform/observability"
-	"github.com/example/rag-platform/internal/platform/persistence"
-	"github.com/example/rag-platform/internal/platform/queue"
 	"github.com/hibiken/asynq"
+	"github.com/hzc19970630/rag-platform/internal/app"
+	"github.com/hzc19970630/rag-platform/internal/buildinfo"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/datasource"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection"
+	"github.com/hzc19970630/rag-platform/internal/logging"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence"
+	"github.com/hzc19970630/rag-platform/internal/platform/queue"
 )
 
 func main() {
 	cfg := config.Load()
 	logger := logging.New(cfg.LogLevel)
+	buildinfo.Log(logger)
 	if err := cfg.Validate("worker"); err != nil {
 		logger.Error("configuration_invalid", "component", "worker", "error", err)
 		os.Exit(1)

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/rag-platform/internal/ingestion"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
 )
 
 func TestPreviewDispositionNeverInlinesActiveContent(t *testing.T) {

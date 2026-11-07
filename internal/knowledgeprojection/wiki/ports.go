@@ -1,6 +1,6 @@
 package wiki
 
-import "github.com/example/rag-platform/internal/contracts/model"
+import "github.com/hzc19970630/rag-platform/internal/contracts/model"
 
 // Chatter is the shared generation port.
 type Chatter = model.Chatter

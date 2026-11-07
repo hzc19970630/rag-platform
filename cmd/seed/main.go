@@ -13,8 +13,8 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/logging"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/logging"
 )
 
 const defaultSeedDir = "migrations/seeds"

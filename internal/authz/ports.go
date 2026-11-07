@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
 // TenantPolicyData is the tenant-scoped input of the Casbin projection. It is

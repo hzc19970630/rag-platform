@@ -18,7 +18,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 )
 
 // TenantTables own a tenant_id column. The runtime catalog is the single

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/example/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/authz"
 )
 
 type fakeKeywordSearcher struct {

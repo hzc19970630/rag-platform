@@ -10,7 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/example/rag-platform/internal/contracts/evidence"
+	"github.com/hzc19970630/rag-platform/internal/contracts/evidence"
 )
 
 // Key identifies one generated package result. InputHash covers the package

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/contracts/model"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 )
 

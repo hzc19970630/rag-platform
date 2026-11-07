@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
 )
 
 type fakeJoin struct {

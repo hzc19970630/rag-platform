@@ -1,0 +1,220 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_PROXY: https://proxy.golang.org,direct
+  REGISTRY: ghcr.io
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Tag format
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag ${GITHUB_REF_NAME} is not a semantic version (expected vX.Y.Z[-prerelease], no build metadata)" >&2
+            exit 1
+          fi
+      - name: Go format check
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Dependency direction
+        run: go run ./cmd/checkdeps
+      - name: OpenAPI drift check
+        run: go run ./cmd/openapi -check
+      - name: Tenancy static gate
+        run: go run ./cmd/checktenancy
+      - name: Go tests
+        run: go test ./...
+      - name: Go vet
+        run: go vet ./...
+      - name: Go module checksums
+        run: go mod verify
+      - name: Web tests and build
+        working-directory: web
+        run: |
+          npm ci
+          npm run codegen:check
+          npm test -- --passWithNoTests
+          npm run build
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Release metadata
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "IMAGE_PREFIX=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(git log -1 --format=%cI)" >> "$GITHUB_ENV"
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}/api:${{ env.VERSION }}
+          build-args: |
+            GOPROXY=${{ env.GO_PROXY }}
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.SHORT_SHA }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+
+      - name: Trivy api image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/api:${{ env.VERSION }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate api SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/api:${{ env.VERSION }}
+          format: cyclonedx
+          output: rag-platform-api-${{ env.VERSION }}.cdx.json
+
+      - name: Build docreader image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/docreader/Dockerfile
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}/docreader:${{ env.VERSION }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.SHORT_SHA }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+
+      - name: Trivy docreader image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/docreader:${{ env.VERSION }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate docreader SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/docreader:${{ env.VERSION }}
+          format: cyclonedx
+          output: rag-platform-docreader-${{ env.VERSION }}.cdx.json
+
+      - name: Publish images
+        run: |
+          set -euo pipefail
+          for image in api docreader; do
+            docker tag "${IMAGE_PREFIX}/${image}:${VERSION}" "${IMAGE_PREFIX}/${image}:sha-${SHORT_SHA}"
+            docker push "${IMAGE_PREFIX}/${image}:${VERSION}"
+            docker push "${IMAGE_PREFIX}/${image}:sha-${SHORT_SHA}"
+            digest=$(docker buildx imagetools inspect "${IMAGE_PREFIX}/${image}:${VERSION}" --format '{{.Manifest.Digest}}')
+            echo "${image^^}_DIGEST=${digest}" >> "$GITHUB_ENV"
+            echo "${image}@${digest}"
+          done
+
+      - uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: v2.4.1
+
+      - name: Sign image digests
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE_PREFIX}/api@${API_DIGEST}"
+          cosign sign --yes "${IMAGE_PREFIX}/docreader@${DOCREADER_DIGEST}"
+
+      - name: Build web dist
+        working-directory: web
+        run: |
+          npm ci
+          VITE_API_BASE_URL=/api/v1 npm run build
+
+      - name: Package release artifacts
+        run: |
+          set -euo pipefail
+          tar -C web/dist -czf "rag-platform-web-${VERSION}.tar.gz" .
+          cat > release-manifest.txt <<EOF
+          version=${VERSION}
+          commit=${SHORT_SHA}
+          commit_full=${GITHUB_SHA}
+          built_at=${BUILD_DATE}
+          api=${IMAGE_PREFIX}/api:${VERSION}@${API_DIGEST}
+          docreader=${IMAGE_PREFIX}/docreader:${VERSION}@${DOCREADER_DIGEST}
+          web=rag-platform-web-${VERSION}.tar.gz
+          EOF
+          sha256sum release-manifest.txt rag-platform-web-*.tar.gz rag-platform-*.cdx.json > SHA256SUMS
+          cosign sign-blob --yes --bundle SHA256SUMS.cosign.bundle SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          files=(
+            release-manifest.txt
+            SHA256SUMS
+            SHA256SUMS.cosign.bundle
+            rag-platform-web-"${VERSION}".tar.gz
+            rag-platform-api-"${VERSION}".cdx.json
+            rag-platform-docreader-"${VERSION}".cdx.json
+          )
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            gh release upload "${VERSION}" "${files[@]}" --clobber
+          else
+            args=(--title "${VERSION}" --generate-notes)
+            if [[ "${PRERELEASE}" == "true" ]]; then
+              args+=(--prerelease)
+            fi
+            gh release create "${VERSION}" "${args[@]}" "${files[@]}"
+          fi

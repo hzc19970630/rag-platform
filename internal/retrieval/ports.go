@@ -3,7 +3,7 @@ package retrieval
 import (
 	"context"
 
-	"github.com/example/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/authz"
 )
 
 // RecallRequest is the scope-bearing recall query. Authorization filters are

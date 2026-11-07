@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/contracts/tasks"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/contracts/metrics"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantquota"
-	"github.com/example/rag-platform/internal/prompts"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/contracts/tasks"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
+	"github.com/hzc19970630/rag-platform/internal/prompts"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // localChatName identifies the offline generation adapter. It is used only to

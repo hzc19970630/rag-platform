@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/persistence/inboxlease"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 )
 

@@ -1,8 +1,8 @@
 package knowledgeprojection
 
 import (
-	"github.com/example/rag-platform/internal/knowledgeprojection/relation"
-	"github.com/example/rag-platform/internal/prompts"
+	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection/relation"
+	"github.com/hzc19970630/rag-platform/internal/prompts"
 )
 
 // Extractor lives in the relation subpackage; the alias keeps the shared

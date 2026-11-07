@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/contracts/evidence"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/status"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/contracts/evidence"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 

@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	contract "github.com/example/rag-platform/contracts/httpapi"
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/identity"
 	"github.com/gin-gonic/gin"
+	contract "github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/identity"
 	"gopkg.in/yaml.v3"
 )
 

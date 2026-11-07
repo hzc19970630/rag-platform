@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/relationstore"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/relationstore"
 )
 
 // graph_snapshot.go owns this slice of the service. Behavior and external contracts are

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/example/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/authz"
 )
 
 func TestEvidencePlannerMatchesLegacyPlan(t *testing.T) {

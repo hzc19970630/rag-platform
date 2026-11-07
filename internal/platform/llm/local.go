@@ -6,10 +6,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/example/rag-platform/internal/platform/cjk"
-	"github.com/example/rag-platform/internal/platform/token"
+	"github.com/hzc19970630/rag-platform/internal/platform/cjk"
+	"github.com/hzc19970630/rag-platform/internal/platform/token"
 
-	"github.com/example/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
 )
 
 // LocalChatter is a deterministic, offline generation adapter for local

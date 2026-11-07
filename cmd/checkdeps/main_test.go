@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/example/rag-platform/internal/archtest"
+	"github.com/hzc19970630/rag-platform/internal/archtest"
 )
 
 func TestDependencyRuleRejectsAdapterImportingDomainImplementation(t *testing.T) {

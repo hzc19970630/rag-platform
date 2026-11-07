@@ -30,8 +30,8 @@ func TestCheckGormTenancyRequiresScopeOnTenantTables(t *testing.T) {
 	source := `package sample
 import (
 	"gorm.io/gorm"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 )
 func load(db *gorm.DB, rows *[]models.Chunk) {
 	db.Model(&models.Chunk{}).Where("status = ?", "READY").Find(rows)
@@ -58,7 +58,7 @@ func TestCheckGormTenancyAcceptsTableChainsAndTenantCreates(t *testing.T) {
 	source := `package sample
 import (
 	"gorm.io/gorm"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 func load(db *gorm.DB, rows *[]models.Chunk) {
 	db.Table("chunks").Where("tenant_id = ?", "t1").Find(rows)

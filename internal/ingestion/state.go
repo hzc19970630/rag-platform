@@ -3,7 +3,7 @@ package ingestion
 import (
 	"fmt"
 
-	"github.com/example/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/pipeline"
 )
 
 var transitions = map[string]map[string]bool{

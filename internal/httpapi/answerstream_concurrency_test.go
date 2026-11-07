@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/config"
 )
 
 // A single-connection pool with many concurrent tails is the worst case for the

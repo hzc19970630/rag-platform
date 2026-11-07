@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/netprobe"
-	"github.com/example/rag-platform/internal/platform/observability"
+	"github.com/hzc19970630/rag-platform/internal/platform/netprobe"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	"github.com/example/rag-platform/internal/contracts/model"
-	"github.com/example/rag-platform/internal/platform/resilience"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/platform/resilience"
 )
 
 // RemoteChatter calls an OpenAI-compatible /chat/completions endpoint, which

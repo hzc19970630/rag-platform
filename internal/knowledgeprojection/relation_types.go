@@ -1,8 +1,8 @@
 package knowledgeprojection
 
 import (
-	"github.com/example/rag-platform/internal/knowledgeprojection/relation"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection/relation"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
 // Relation extraction types live in the relation subpackage; aliases keep the

@@ -3,7 +3,7 @@ package ingestion
 import (
 	"testing"
 
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
 func TestStateMachineAllowsOnlySequentialStages(t *testing.T) {

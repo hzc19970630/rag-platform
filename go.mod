@@ -1,4 +1,4 @@
-module github.com/example/rag-platform
+module github.com/hzc19970630/rag-platform
 
 go 1.26.0
 

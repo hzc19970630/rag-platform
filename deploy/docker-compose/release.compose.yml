@@ -1,0 +1,29 @@
+# Overlay that runs published release images instead of local builds.
+#
+#   RAG_VERSION=v0.1.0 docker compose --env-file .env \
+#     -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/docker-compose/release.compose.yml \
+#     up -d --no-build postgres redis minio docreader worker api
+#
+# The web frontend ships as a static dist tarball, not an image, so the `web`
+# service from the base file stays development-only. See docs/releases.md.
+services:
+  docreader:
+    image: ${RAG_DOCREADER_IMAGE:-ghcr.io/hzc19970630/rag-platform/docreader:${RAG_VERSION:?set RAG_VERSION or RAG_DOCREADER_IMAGE}}
+    build: !reset null
+
+  api:
+    image: ${RAG_API_IMAGE:-ghcr.io/hzc19970630/rag-platform/api:${RAG_VERSION:?set RAG_VERSION or RAG_API_IMAGE}}
+    build: !reset null
+
+  migrate:
+    image: ${RAG_API_IMAGE:-ghcr.io/hzc19970630/rag-platform/api:${RAG_VERSION:?set RAG_VERSION or RAG_API_IMAGE}}
+    build: !reset null
+
+  seed:
+    image: ${RAG_API_IMAGE:-ghcr.io/hzc19970630/rag-platform/api:${RAG_VERSION:?set RAG_VERSION or RAG_API_IMAGE}}
+    build: !reset null
+
+  worker:
+    image: ${RAG_API_IMAGE:-ghcr.io/hzc19970630/rag-platform/api:${RAG_VERSION:?set RAG_VERSION or RAG_API_IMAGE}}
+    build: !reset null

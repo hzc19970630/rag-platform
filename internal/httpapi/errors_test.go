@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/retrieval"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // The error contract is part of the API surface: a documented constraint

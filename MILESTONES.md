@@ -432,7 +432,7 @@ B 段分两条线：
 - [ ] B7a 文档解析广度：OCR（混合 PDF、置信度、人工复核）、扫描件/图片入库与版面/表格抽取；按目标客户真实语料建立 OCR 评估集。验收：扫描件与混合 PDF 可检索，OCR 失败有明确状态和人工复核入口，检索质量不低于数字文档基线的约定阈值。
 - [ ] B7b 连接器广度：在 `http_manifest` 之外，按客户优先级补 SharePoint/Confluence/飞书/企微/S3 等目标连接器；沿用增量同步、tombstone、限流、凭据加密和权限继承语义。验收：至少两个目标数据源可增量同步，删除/恢复/撤权不回归。
 - [ ] B8 合规加固：静态加密（磁盘/对象存储/KMS）、审计防篡改与导出、PII/DLP、渗透测试、等保/ISO 差距评估。验收：通过客户安全评审。
-- [ ] B9 发布工程：semver/tag/CHANGELOG、镜像签名、升级回滚文档、替换 `github.com/example/rag-platform` 占位模块路径。验收：可重复发布与回滚。
+- [ ] B9 发布工程：semver/tag/CHANGELOG、镜像签名、升级回滚文档、替换占位模块路径 `github.com/example/rag-platform`。验收：可重复发布与回滚。实现完成（2026-11-07），待首次真实 tag 发布与升级/回滚窗口验收：模块路径已迁移到 `github.com/hzc19970630/rag-platform`（230 个 Go 文件；docreader 生成代码用 protoc 重新生成并新增描述符回归测试，避免手改内嵌 descriptor 导致启动 panic）；`internal/buildinfo` 注入 version/commit/date，`api --version`、启动日志 `build_info` 与 api/docreader 镜像 OCI 标签可用；新增 `CHANGELOG.md` 与 `.github/workflows/release.yml`（tag 触发 verify → Trivy 扫描 → CycloneDX SBOM → GHCR 推送 → cosign keyless 签名镜像 digest 与校验和 → GitHub Release）；`docs/releases.md` 覆盖产物校验、migrate→docreader→worker→api 升级顺序、兼容/不兼容回滚与备份恢复边界；`deploy/docker-compose/release.compose.yml` 支持 tag 或 digest 固定镜像。本地验证通过：gofmt、`go build`、checkdeps、OpenAPI 漂移、checktenancy、`go vet`、`go test ./...`、actionlint、Compose 解析、web `/api/v1` 构建打包、api/docreader 镜像构建与 `--version`/OCI 标签/五个二进制/`migrate -h` 检查；尚未推送 tag，也未在真实环境执行升级/回滚窗口。
 - [ ] B10 前端 E2E：Playwright 覆盖上传→解析→检索→问答→删除主链路；补可访问性检查。验收：核心流程自动化回归。
 
 **商业化与产品化线（不阻塞企业 GA，但阻塞对外商业化）**

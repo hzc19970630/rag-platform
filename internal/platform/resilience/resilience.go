@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/circuitbreaker"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/platform/circuitbreaker"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 )
 
 // ErrCircuitOpen is returned without calling the provider while the breaker is

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/hibiken/asynq"
+	"github.com/hzc19970630/rag-platform/contracts/tasks"
 )
 
 const (

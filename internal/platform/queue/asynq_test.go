@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/example/rag-platform/contracts/tasks"
 	"github.com/hibiken/asynq"
+	"github.com/hzc19970630/rag-platform/contracts/tasks"
 )
 
 func TestPoolForIsolatesOperatorAndBulkWork(t *testing.T) {

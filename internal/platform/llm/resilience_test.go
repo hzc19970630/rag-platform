@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/contracts/model"
-	"github.com/example/rag-platform/internal/platform/resilience"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/platform/resilience"
 )
 
 const chatSuccessBody = `{"model":"test","choices":[{"message":{"role":"assistant","content":"answer"}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`

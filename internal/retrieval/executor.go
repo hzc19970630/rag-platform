@@ -3,8 +3,8 @@ package retrieval
 import (
 	"context"
 	"fmt"
-	"github.com/example/rag-platform/internal/contracts/metrics"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"sort"
 	"strings"
 	"sync"

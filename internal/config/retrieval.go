@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/example/rag-platform/internal/platform/param"
+	"github.com/hzc19970630/rag-platform/internal/platform/param"
 	"gopkg.in/yaml.v3"
 )
 

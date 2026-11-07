@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // citationPattern matches the short citation ids the model is allowed to use.

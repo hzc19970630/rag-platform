@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/rag-platform/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"

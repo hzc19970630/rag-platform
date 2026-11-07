@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 func evidence(items ...retrieval.Candidate) retrieval.EvidenceSet {

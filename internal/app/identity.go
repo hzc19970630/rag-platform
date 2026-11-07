@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/identity"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/identity"
 )
 
 // identityOptions maps deployment configuration onto the identity package's own

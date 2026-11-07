@@ -4,8 +4,8 @@
 package conversation
 
 import (
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // Online answer state machine (design 7.5). The terminal states are the ones

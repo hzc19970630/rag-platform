@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/app"
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/logging"
-	"github.com/example/rag-platform/internal/platform/evidenceindex"
-	"github.com/example/rag-platform/internal/platform/persistence"
-	"github.com/example/rag-platform/internal/platform/vector"
+	"github.com/hzc19970630/rag-platform/internal/app"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/logging"
+	"github.com/hzc19970630/rag-platform/internal/platform/evidenceindex"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence"
+	"github.com/hzc19970630/rag-platform/internal/platform/vector"
 	"gorm.io/gorm"
 )
 

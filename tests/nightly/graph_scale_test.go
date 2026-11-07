@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/relationstore"
 	"github.com/glebarez/sqlite"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/relationstore"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

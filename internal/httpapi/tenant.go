@@ -3,10 +3,10 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/example/rag-platform/contracts/httpapi"
-	"github.com/example/rag-platform/internal/platform/tenantquota"
-	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
+	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
 
 // RegisterTenantRoutes exposes the tenant administration surface. Every route

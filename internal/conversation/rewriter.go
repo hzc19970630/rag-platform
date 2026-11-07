@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/contracts/metrics"
-	"github.com/example/rag-platform/internal/contracts/model"
-	"github.com/example/rag-platform/internal/prompts"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
+	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/prompts"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 const queryRewriteMaxRunes = 400

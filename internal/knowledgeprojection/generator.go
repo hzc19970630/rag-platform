@@ -1,8 +1,8 @@
 package knowledgeprojection
 
 import (
-	"github.com/example/rag-platform/internal/knowledgeprojection/wiki"
-	"github.com/example/rag-platform/internal/prompts"
+	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection/wiki"
+	"github.com/hzc19970630/rag-platform/internal/prompts"
 )
 
 // Generator and GeneratedPage live in the wiki subpackage. Aliases keep the

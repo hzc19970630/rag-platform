@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/contracts/ports"
-	"github.com/example/rag-platform/internal/platform/netprobe"
+	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
+	"github.com/hzc19970630/rag-platform/internal/platform/netprobe"
 )
 
 // RemoteReranker calls an OpenAI compatible /rerank endpoint. The retrieval

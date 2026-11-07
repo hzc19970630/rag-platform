@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/example/rag-platform/internal/contracts/ports"
-	"github.com/example/rag-platform/internal/platform/cjk"
-	"github.com/example/rag-platform/internal/status"
+	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
+	"github.com/hzc19970630/rag-platform/internal/platform/cjk"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 

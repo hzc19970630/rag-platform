@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/config"
 )
 
 // clientIP returns the client address resolved through the configured trusted

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/vector"
+	"github.com/hzc19970630/rag-platform/internal/platform/vector"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"

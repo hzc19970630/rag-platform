@@ -257,6 +257,12 @@ make m13-dataplane-validate   # 只校验报告 schema 与内部一致性，不�
 
 脚本在独立的 `m13_dataplane` schema 中用 SQL 生成 100 万条 1024 维确定性向量（16 个租户 × 2 个 KB，无模型调用），按 A2 的在线索引定义执行 `CREATE INDEX CONCURRENTLY`，构建期间用限速写入采样写延迟，随后以 16 个并发客户端执行与 `vector/search.go`、`search/bm25.go` 同形的租户绑定查询，记录 P50/P95/P99、QPS、underfill 与执行计划节点，并抽样 200 条查询与精确扫描对比召回。`--rls` 会在合成表上安装 0024 的严格策略并以 `rag_app` + `app.tenant_id` 运行测量，用于对比 enforce 路径。默认结束后 `DROP SCHEMA ... CASCADE`；`--keep` 保留现场，`--rows/--workers/--iterations` 可缩小规模做冒烟。报告版本为 `M13DataplaneReportV1`，包含 pgvector/PostgreSQL 版本、主机与磁盘资源、资源预估和 limitations。单机结果只作为容量证据，不替代 M8 的启动门槛。
 
+## 发布、升级与回滚
+
+发布由语义化 tag 驱动：`v*` tag 会先跑完整验证，再构建并扫描镜像，推送 GHCR、生成 CycloneDX SBOM、用 cosign 无密钥签名镜像 digest 与校验和文件，最后创建带附件的 GitHub Release。前端以静态 `dist` 包发布，不构建生产 Web 镜像。
+
+版本规则、产物校验命令、升级顺序（migrate → docreader → worker → api）和回滚边界见 [docs/releases.md](docs/releases.md)。
+
 关闭环境：
 
 ```bash

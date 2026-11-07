@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/example/rag-platform/contracts/httpapi"
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/knowledgebase"
-	"github.com/example/rag-platform/internal/transport/views"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/knowledgebase"
+	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
 
 func RegisterKnowledgeBaseConfigRoutes(protected *gin.RouterGroup, cfg config.Config, deps KnowledgeBaseDeps, mw MiddlewareDeps, logger *slog.Logger) {

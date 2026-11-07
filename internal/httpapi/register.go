@@ -3,8 +3,8 @@ package httpapi
 import (
 	"log/slog"
 
-	"github.com/example/rag-platform/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/config"
 )
 
 // RegisterRoutes composes every resource surface. cmd/api calls this once;

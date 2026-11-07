@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/identity"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/identity"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 

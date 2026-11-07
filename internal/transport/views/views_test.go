@@ -6,15 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/rag-platform/contracts/httpapi"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/conversation"
-	"github.com/example/rag-platform/internal/datasource"
-	"github.com/example/rag-platform/internal/identity"
-	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/knowledgeprojection"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/datasource"
+	"github.com/hzc19970630/rag-platform/internal/identity"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // TestResponseViewsPreserveWireShape serializes a zero-valued source and its

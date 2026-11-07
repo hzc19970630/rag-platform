@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/rag-platform/internal/pipeline"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 

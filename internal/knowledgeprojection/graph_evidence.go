@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/relationstore"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/relationstore"
 )
 
 // graph_evidence.go owns this slice of the service. Behavior and external contracts are

@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 // retrievalDefaults converts the YAML tier into the retrieval domain's own

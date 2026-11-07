@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/example/rag-platform/internal/contracts/evidence"
+	"github.com/hzc19970630/rag-platform/internal/contracts/evidence"
 )
 
 const (

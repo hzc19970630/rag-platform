@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	cachecontract "github.com/example/rag-platform/internal/contracts/projectioncache"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/glebarez/sqlite"
+	cachecontract "github.com/hzc19970630/rag-platform/internal/contracts/projectioncache"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

@@ -7,8 +7,8 @@
 package ports
 
 import (
-	"github.com/example/rag-platform/internal/ingestion"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 type (

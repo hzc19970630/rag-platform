@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
 type AuditQuery struct {

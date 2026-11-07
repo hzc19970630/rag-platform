@@ -350,7 +350,7 @@ const file_contracts_proto_docreader_v1_docreader_proto_rawDesc = "" +
 	"\n" +
 	"end_offset\x18\b \x01(\x05R\tendOffset2j\n" +
 	"\x0eDocumentReader\x12X\n" +
-	"\rParseDocument\x12\".docreader.v1.ParseDocumentRequest\x1a#.docreader.v1.ParseDocumentResponseBJZHgithub.com/example/rag-platform/services/docreader/generated;docreaderv1b\x06proto3"
+	"\rParseDocument\x12\".docreader.v1.ParseDocumentRequest\x1a#.docreader.v1.ParseDocumentResponseBNZLgithub.com/hzc19970630/rag-platform/services/docreader/generated;docreaderv1b\x06proto3"
 
 var (
 	file_contracts_proto_docreader_v1_docreader_proto_rawDescOnce sync.Once

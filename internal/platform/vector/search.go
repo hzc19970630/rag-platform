@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"strconv"
 
-	"github.com/example/rag-platform/internal/contracts/metrics"
-	"github.com/example/rag-platform/internal/contracts/ports"
-	"github.com/example/rag-platform/internal/platform/tenantdb"
-	"github.com/example/rag-platform/internal/platform/vecutil"
-	"github.com/example/rag-platform/internal/status"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
+	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/platform/vecutil"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 

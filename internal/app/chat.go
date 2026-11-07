@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/rag-platform/internal/config"
-	"github.com/example/rag-platform/internal/conversation"
-	"github.com/example/rag-platform/internal/platform/llm"
+	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/platform/llm"
 )
 
 // NewChatter resolves the generation adapter from configuration. The

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package docreader.v1;
 
-option go_package = "github.com/example/rag-platform/services/docreader/generated;docreaderv1";
+option go_package = "github.com/hzc19970630/rag-platform/services/docreader/generated;docreaderv1";
 
 service DocumentReader {
   rpc ParseDocument(ParseDocumentRequest) returns (ParseDocumentResponse);

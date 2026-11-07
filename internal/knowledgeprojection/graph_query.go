@@ -6,11 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
-	"github.com/example/rag-platform/internal/knowledgeprojection/relation"
-	"github.com/example/rag-platform/internal/relationstore"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection/relation"
+	"github.com/hzc19970630/rag-platform/internal/relationstore"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 const (

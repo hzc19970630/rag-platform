@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const tracerName = "github.com/example/rag-platform"
+const tracerName = "github.com/hzc19970630/rag-platform"
 
 // InitTracing installs the global tracer provider. An empty endpoint keeps
 // spans local (IDs are still generated for log correlation) and starts no

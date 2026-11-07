@@ -18,6 +18,12 @@ require_digest() {
 
 shopt -s nullglob
 for compose_file in deploy/docker-compose/*.yml; do
+  # The release overlay intentionally references repo-built images by version
+  # tag; production pins them with RAG_API_IMAGE/RAG_DOCREADER_IMAGE@sha256.
+  # Base compose files and third-party images remain digest-pinned.
+  if [[ "$(basename "$compose_file")" == "release.compose.yml" ]]; then
+    continue
+  fi
   while IFS= read -r reference; do
     [[ -n "$reference" ]] || continue
     require_digest "$compose_file" "$reference"

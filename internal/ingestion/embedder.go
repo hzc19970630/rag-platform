@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/rag-platform/internal/platform/netprobe"
-	"github.com/example/rag-platform/internal/platform/resilience"
+	"github.com/hzc19970630/rag-platform/internal/platform/netprobe"
+	"github.com/hzc19970630/rag-platform/internal/platform/resilience"
 )
 
 // LocalEmbedder provides a deterministic, offline embedding adapter for local

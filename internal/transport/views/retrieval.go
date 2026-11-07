@@ -1,8 +1,8 @@
 package views
 
 import (
-	"github.com/example/rag-platform/contracts/httpapi"
-	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
 
 func EvidenceSet(view retrieval.EvidenceSet) httpapi.EvidenceSet {

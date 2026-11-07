@@ -1,9 +1,9 @@
 package views
 
 import (
-	"github.com/example/rag-platform/contracts/httpapi"
-	"github.com/example/rag-platform/internal/conversation"
-	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
 func Conversation(row models.Conversation) httpapi.Conversation {

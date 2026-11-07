@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/example/rag-platform/internal/apperror"
-	"github.com/example/rag-platform/internal/authz"
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/authz"
 )
 
 const accessContextKey = "access_context"

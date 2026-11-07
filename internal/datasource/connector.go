@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/example/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
 )
 
 // Connector is the source-specific half of a sync run. The worker owns run,
