@@ -18,6 +18,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/formats"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
 	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/example/rag-platform/internal/platform/tenantquota"
 	"gorm.io/gorm"
 )
 
@@ -31,7 +32,19 @@ type Service struct {
 	maxBytes  int64
 	retention time.Duration
 	quota     Quota
+	quotas    QuotaResolver
 	index     EvidenceIndexWriter
+}
+
+// QuotaResolver reads the tenant's current limits. The service keeps the
+// deployment defaults for tests and for a composition root that has no
+// per-tenant store.
+type QuotaResolver interface {
+	Limits(ctx context.Context, tenantID string) (tenantquota.Limits, error)
+}
+
+func (s *Service) SetQuotaResolver(resolver QuotaResolver) {
+	s.quotas = resolver
 }
 
 // SetIndexWriter wires the Evidence Index write port. It is optional at
@@ -43,7 +56,7 @@ func (s *Service) SetIndexWriter(writer EvidenceIndexWriter) {
 
 // Quota is the tenant-level ceiling for durable content. Zero disables a limit.
 type Quota struct {
-	MaxDocuments    int
+	MaxDocuments    int64
 	MaxStorageBytes int64
 }
 
@@ -103,7 +116,15 @@ func NewService(db *gorm.DB, authorizer *authz.Service, objects ObjectStore, pub
 // fast-fail; the upload transaction calls it again under lock as the
 // authoritative check.
 func (s *Service) checkQuota(ctx context.Context, db *gorm.DB, tenantID string, additionalBytes int64) error {
-	if s.quota.MaxDocuments <= 0 && s.quota.MaxStorageBytes <= 0 {
+	limits := s.quota
+	if s.quotas != nil {
+		resolved, err := s.quotas.Limits(ctx, tenantID)
+		if err != nil {
+			return fmt.Errorf("resolve tenant quota: %w", err)
+		}
+		limits = Quota{MaxDocuments: resolved.MaxDocuments, MaxStorageBytes: resolved.MaxStorageBytes}
+	}
+	if limits.MaxDocuments <= 0 && limits.MaxStorageBytes <= 0 {
 		return nil
 	}
 	var stats struct {
@@ -116,10 +137,10 @@ func (s *Service) checkQuota(ctx context.Context, db *gorm.DB, tenantID string, 
 	if err := db.WithContext(ctx).Raw(query, tenantID, tenantID).Scan(&stats).Error; err != nil {
 		return fmt.Errorf("check tenant quota: %w", err)
 	}
-	if s.quota.MaxDocuments > 0 && stats.Documents >= int64(s.quota.MaxDocuments) {
-		return fmt.Errorf("%w: the tenant document limit of %d has been reached", apperror.ErrQuotaExceeded, s.quota.MaxDocuments)
+	if limits.MaxDocuments > 0 && stats.Documents >= limits.MaxDocuments {
+		return fmt.Errorf("%w: the tenant document limit of %d has been reached", apperror.ErrQuotaExceeded, limits.MaxDocuments)
 	}
-	if s.quota.MaxStorageBytes > 0 && stats.Bytes+additionalBytes > s.quota.MaxStorageBytes {
+	if limits.MaxStorageBytes > 0 && stats.Bytes+additionalBytes > limits.MaxStorageBytes {
 		return fmt.Errorf("%w: the tenant storage limit has been reached", apperror.ErrQuotaExceeded)
 	}
 	return nil

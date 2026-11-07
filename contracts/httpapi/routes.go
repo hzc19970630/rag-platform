@@ -122,6 +122,12 @@ var Routes = []Route{
 		Request: jsonBody((*TenantMemberUpdateRequest)(nil)), Success: noContent(), Errors: commonErrors},
 	{Method: http.MethodDelete, Path: "/api/v1/tenant/members/{userID}", OperationID: "delete_tenant_members_userID", Tag: "identity",
 		Success: noContent(), Errors: deleteErrors},
+	{Method: http.MethodGet, Path: "/api/v1/tenant", OperationID: "get_tenant", Tag: "tenant",
+		Success: ok((*TenantOverview)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/tenant/quota", OperationID: "get_tenant_quota", Tag: "tenant",
+		Success: ok((*TenantQuota)(nil)), Errors: commonErrors},
+	{Method: http.MethodPatch, Path: "/api/v1/tenant/quota", OperationID: "patch_tenant_quota", Tag: "tenant",
+		Request: jsonBody((*TenantQuotaUpdateRequest)(nil)), Success: ok((*TenantQuota)(nil)), Errors: commonErrors},
 
 	// knowledge bases
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases", OperationID: "get_knowledge_bases", Tag: "knowledge-bases",

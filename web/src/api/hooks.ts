@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
   APIKeyView,
+  AuditEvent,
   AuthConfig,
   ChunkPage,
   ChunkView,
@@ -20,6 +21,9 @@ import type {
   MessageView,
   OpsMetrics,
   ProjectionStatus,
+  TenantMember,
+  TenantOverview,
+  TenantQuota,
 } from "./types";
 
 export const queryKeys = {
@@ -43,6 +47,18 @@ export const queryKeys = {
   apiKeys: ["api-keys"] as const,
   deadLetters: ["ops", "dead-letters"] as const,
   metrics: ["ops", "metrics"] as const,
+  tenantOverview: ["tenant", "overview"] as const,
+  tenantQuota: ["tenant", "quota"] as const,
+  tenantMembers: ["tenant", "members"] as const,
+  audit: (filters: AuditFilters) => ["audit", filters] as const,
+};
+
+export type AuditFilters = {
+  actorId?: string;
+  action?: string;
+  resourceType?: string;
+  allowed?: "true" | "false";
+  limit?: number;
 };
 
 export const terminalVersionStatuses = new Set(["EVIDENCE_READY", "FAILED", "CANCELLED"]);
@@ -216,4 +232,46 @@ export function useDeadLetters() {
 
 export function useOpsMetrics() {
   return useQuery({ queryKey: queryKeys.metrics, queryFn: () => api<OpsMetrics>("/ops/metrics") });
+}
+
+export function useTenantOverview(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tenantOverview,
+    queryFn: () => api<TenantOverview>("/tenant"),
+    enabled,
+  });
+}
+
+export function useTenantQuota(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tenantQuota,
+    queryFn: () => api<TenantQuota>("/tenant/quota"),
+    enabled,
+  });
+}
+
+export function useTenantMembers(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tenantMembers,
+    queryFn: () => api<{ items: TenantMember[] }>("/tenant/members"),
+    select: (data) => data.items,
+    enabled,
+  });
+}
+
+export function useAuditEvents(filters: AuditFilters, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.audit(filters),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filters.actorId) params.set("actorId", filters.actorId);
+      if (filters.action) params.set("action", filters.action);
+      if (filters.resourceType) params.set("resourceType", filters.resourceType);
+      if (filters.allowed) params.set("allowed", filters.allowed);
+      params.set("limit", String(filters.limit ?? 100));
+      return api<{ items: AuditEvent[] }>(`/audit?${params.toString()}`);
+    },
+    select: (data) => data.items,
+    enabled,
+  });
 }

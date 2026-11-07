@@ -93,7 +93,9 @@ func resourcePath(id string) string { return "/knowledge-bases/" + id }
 func capabilitiesForRole(role string) []string {
 	switch role {
 	case "owner", "admin":
-		return []string{"knowledge_base:read", "knowledge_base:write", "knowledge_base:delete", "knowledge_base:manage_members"}
+		// tenant:admin marks the tenant-wide operator surface. It is derived from
+		// the session role only; API keys cannot carry it (see KnownCapability).
+		return []string{"knowledge_base:read", "knowledge_base:write", "knowledge_base:delete", "knowledge_base:manage_members", "tenant:admin"}
 	case "editor":
 		return []string{"knowledge_base:read", "knowledge_base:write"}
 	default:

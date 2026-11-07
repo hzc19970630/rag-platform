@@ -25,11 +25,18 @@ describe("sidebar navigation", () => {
     expect(keys(result.current)).toEqual(["knowledge-bases", "chat"]);
   });
 
-  it("adds operations only for member managers or deleters", () => {
+  it("adds administration and operations for tenant operators", () => {
+    const { result } = renderHook(() => useNavigation(), {
+      wrapper: wrapper(["knowledge_base:read", "knowledge_base:manage_members", "tenant:admin"]),
+    });
+    expect(keys(result.current)).toEqual(["knowledge-bases", "chat", "admin", "ops"]);
+  });
+
+  it("keeps tenant surfaces off for knowledge-base managers", () => {
     const { result } = renderHook(() => useNavigation(), {
       wrapper: wrapper(["knowledge_base:read", "knowledge_base:manage_members"]),
     });
-    expect(keys(result.current)).toEqual(["knowledge-bases", "chat", "ops"]);
+    expect(keys(result.current)).toEqual(["knowledge-bases", "chat"]);
   });
 
   it("hides chat without knowledge-base read access", () => {

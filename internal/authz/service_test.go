@@ -17,8 +17,8 @@ func TestCapabilitiesForRole(t *testing.T) {
 		role string
 		want []string
 	}{
-		{role: "owner", want: []string{"knowledge_base:read", "knowledge_base:write", "knowledge_base:delete", "knowledge_base:manage_members"}},
-		{role: "admin", want: []string{"knowledge_base:read", "knowledge_base:write", "knowledge_base:delete", "knowledge_base:manage_members"}},
+		{role: "owner", want: []string{"knowledge_base:read", "knowledge_base:write", "knowledge_base:delete", "knowledge_base:manage_members", "tenant:admin"}},
+		{role: "admin", want: []string{"knowledge_base:read", "knowledge_base:write", "knowledge_base:delete", "knowledge_base:manage_members", "tenant:admin"}},
 		{role: "editor", want: []string{"knowledge_base:read", "knowledge_base:write"}},
 		{role: "viewer", want: []string{"knowledge_base:read"}},
 	}

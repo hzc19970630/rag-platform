@@ -13,6 +13,7 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/contracts/metrics"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantquota"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
 )
@@ -40,6 +41,7 @@ type Service struct {
 	prompts     *prompts.Registry
 	timeout     time.Duration
 	dailyCap    int
+	quotas      QuotaResolver
 	historyTurn int
 	historyMax  int
 	answers     AnswerPublisher
@@ -59,6 +61,12 @@ type AnswerPublisher interface {
 	PublishAnswer(ctx context.Context, task tasks.Answer) error
 }
 
+// QuotaResolver reads the tenant's current limits. When set, it supersedes the
+// deployment-level ChatRequestsPerDay default captured at construction.
+type QuotaResolver interface {
+	Limits(ctx context.Context, tenantID string) (tenantquota.Limits, error)
+}
+
 type Options struct {
 	// Stores are the narrow persistence ports. The service holds no *gorm.DB,
 	// so an alternate backend can provide its own implementation.
@@ -70,9 +78,12 @@ type Options struct {
 	Metrics   metrics.Recorder
 	Prompts   *prompts.Registry
 	Timeout   time.Duration
-	// ChatRequestsPerDay is the tenant-level daily question budget. Zero
-	// disables the limit.
+	// ChatRequestsPerDay is the deployment-level daily question budget. Zero
+	// disables the limit. QuotaResolver, when set, supplies the per-tenant value.
 	ChatRequestsPerDay int
+	// QuotaResolver supplies the tenant's effective limits, including overrides
+	// stored in tenants.quota.
+	QuotaResolver QuotaResolver
 	// HistoryTurns is the number of completed user/assistant turns replayed to
 	// generation. Zero disables history.
 	HistoryTurns int
@@ -112,6 +123,7 @@ func NewService(options Options) *Service {
 		prompts:     options.Prompts,
 		timeout:     timeout,
 		dailyCap:    options.ChatRequestsPerDay,
+		quotas:      options.QuotaResolver,
 		historyTurn: options.HistoryTurns,
 		historyMax:  options.HistoryTokenLimit,
 		answers:     options.AnswerPublisher,

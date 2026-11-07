@@ -1917,6 +1917,24 @@ components:
         userId:
           type: string
       type: object
+    TenantMemberCounts:
+      properties:
+        admins:
+          format: int64
+          type: integer
+        members:
+          format: int64
+          type: integer
+        owners:
+          format: int64
+          type: integer
+        total:
+          format: int64
+          type: integer
+        viewers:
+          format: int64
+          type: integer
+      type: object
     TenantMemberCreateRequest:
       properties:
         role:
@@ -1942,6 +1960,67 @@ components:
           type: string
       required:
         - role
+      type: object
+    TenantOverview:
+      properties:
+        chatQuestionsToday:
+          format: int64
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        documents:
+          format: int64
+          type: integer
+        id:
+          type: string
+        knowledgeBases:
+          format: int64
+          type: integer
+        members:
+          $ref: '#/components/schemas/TenantMemberCounts'
+        name:
+          type: string
+        storageBytes:
+          format: int64
+          type: integer
+      type: object
+    TenantQuota:
+      properties:
+        chatRequestsPerDay:
+          $ref: '#/components/schemas/TenantQuotaField'
+        maxDocuments:
+          $ref: '#/components/schemas/TenantQuotaField'
+        maxStorageBytes:
+          $ref: '#/components/schemas/TenantQuotaField'
+      type: object
+    TenantQuotaField:
+      properties:
+        default:
+          format: int64
+          type: integer
+        source:
+          type: string
+        unlimited:
+          type: boolean
+        value:
+          format: int64
+          type: integer
+      type: object
+    TenantQuotaUpdateRequest:
+      properties:
+        chatRequestsPerDay:
+          format: int64
+          minimum: 0
+          type: integer
+        maxDocuments:
+          format: int64
+          minimum: 0
+          type: integer
+        maxStorageBytes:
+          format: int64
+          minimum: 0
+          type: integer
       type: object
     User:
       properties:
@@ -4118,6 +4197,27 @@ paths:
       summary: POST /api/v1/sessions/{id}/messages
       tags:
         - conversations
+  /api/v1/tenant:
+    get:
+      operationId: get_tenant
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantOverview'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/tenant
+      tags:
+        - tenant
   /api/v1/tenant/members:
     get:
       operationId: get_tenant_members
@@ -4212,6 +4312,53 @@ paths:
       summary: PATCH /api/v1/tenant/members/{userID}
       tags:
         - identity
+  /api/v1/tenant/quota:
+    get:
+      operationId: get_tenant_quota
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantQuota'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/tenant/quota
+      tags:
+        - tenant
+    patch:
+      operationId: patch_tenant_quota
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantQuotaUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantQuota'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/tenant/quota
+      tags:
+        - tenant
   /api/v1/wiki/pages/{pageId}:
     get:
       operationId: get_wiki_pages_pageId
@@ -4431,6 +4578,7 @@ servers:
 tags:
   - name: auth
   - name: identity
+  - name: tenant
   - name: knowledge-bases
   - name: documents
   - name: conversations

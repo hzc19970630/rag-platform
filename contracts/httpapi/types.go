@@ -121,6 +121,51 @@ type TenantMemberUpdateRequest struct {
 	Role string `json:"role" binding:"required"`
 }
 
+type TenantMemberCounts struct {
+	Total   int64 `json:"total"`
+	Owners  int64 `json:"owners"`
+	Admins  int64 `json:"admins"`
+	Members int64 `json:"members"`
+	Viewers int64 `json:"viewers"`
+}
+
+// TenantOverview is the operator-facing tenant snapshot. Counts exclude
+// soft-deleted documents and cover the caller's tenant only.
+type TenantOverview struct {
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	CreatedAt          time.Time          `json:"createdAt"`
+	Members            TenantMemberCounts `json:"members"`
+	KnowledgeBases     int64              `json:"knowledgeBases"`
+	Documents          int64              `json:"documents"`
+	StorageBytes       int64              `json:"storageBytes"`
+	ChatQuestionsToday int64              `json:"chatQuestionsToday"`
+}
+
+// TenantQuotaField carries the effective limit plus its origin. Unlimited is
+// true when Value is zero; Source is "tenant" or "deployment".
+type TenantQuotaField struct {
+	Value     int64  `json:"value"`
+	Default   int64  `json:"default"`
+	Source    string `json:"source"`
+	Unlimited bool   `json:"unlimited"`
+}
+
+type TenantQuota struct {
+	MaxDocuments       TenantQuotaField `json:"maxDocuments"`
+	MaxStorageBytes    TenantQuotaField `json:"maxStorageBytes"`
+	ChatRequestsPerDay TenantQuotaField `json:"chatRequestsPerDay"`
+}
+
+// TenantQuotaUpdateRequest replaces the tenant override object. A null or
+// omitted field inherits the deployment default; zero means explicitly
+// unlimited. Negative values are rejected.
+type TenantQuotaUpdateRequest struct {
+	MaxDocuments       *int64 `json:"maxDocuments" oa:"min=0"`
+	MaxStorageBytes    *int64 `json:"maxStorageBytes" oa:"min=0"`
+	ChatRequestsPerDay *int64 `json:"chatRequestsPerDay" oa:"min=0"`
+}
+
 type AuditEvent struct {
 	ID           uint64    `json:"id"`
 	TenantID     string    `json:"tenantId"`

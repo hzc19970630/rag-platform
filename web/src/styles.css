@@ -300,6 +300,18 @@ body.resizing { cursor: col-resize; user-select: none; }
 .ops-report { max-height: 240px; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--border-secondary); border-radius: var(--radius); background: var(--bg-subtle); font-size: 0.78rem; }
 .token-box { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); overflow-wrap: anywhere; }
 
+/* Administration */
+.admin-stack { display: grid; gap: 16px; }
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.admin-stat { border-color: var(--border-secondary) !important; box-shadow: var(--shadow-card); }
+.admin-quota-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.admin-quota-field { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--border-secondary); border-radius: var(--radius); background: var(--bg-subtle); }
+.admin-quota-field .ant-input-number { width: 100%; }
+.admin-quota-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.admin-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.admin-filter-field { display: grid; gap: 4px; flex: 1 1 170px; min-width: 150px; }
+.admin-filter-actions { padding-bottom: 1px; }
+
 /* Login */
 .login-shell { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr); align-items: center; gap: 48px; padding: 48px max(6vw, 24px); background:
   radial-gradient(900px 480px at 10% 0%, var(--brand-soft), transparent 60%),

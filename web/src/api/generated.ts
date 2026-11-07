@@ -1104,6 +1104,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/tenant */
+        get: operations["get_tenant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenant/members": {
         parameters: {
             query?: never;
@@ -1138,6 +1155,24 @@ export interface paths {
         head?: never;
         /** PATCH /api/v1/tenant/members/{userID} */
         patch: operations["patch_tenant_members_userID"];
+        trace?: never;
+    };
+    "/api/v1/tenant/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/tenant/quota */
+        get: operations["get_tenant_quota"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** PATCH /api/v1/tenant/quota */
+        patch: operations["patch_tenant_quota"];
         trace?: never;
     };
     "/api/v1/wiki/pages/{pageId}": {
@@ -2225,6 +2260,18 @@ export interface components {
             role?: string;
             userId?: string;
         };
+        TenantMemberCounts: {
+            /** Format: int64 */
+            admins?: number;
+            /** Format: int64 */
+            members?: number;
+            /** Format: int64 */
+            owners?: number;
+            /** Format: int64 */
+            total?: number;
+            /** Format: int64 */
+            viewers?: number;
+        };
         TenantMemberCreateRequest: {
             role: string;
             userId: string;
@@ -2234,6 +2281,42 @@ export interface components {
         };
         TenantMemberUpdateRequest: {
             role: string;
+        };
+        TenantOverview: {
+            /** Format: int64 */
+            chatQuestionsToday?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: int64 */
+            documents?: number;
+            id?: string;
+            /** Format: int64 */
+            knowledgeBases?: number;
+            members?: components["schemas"]["TenantMemberCounts"];
+            name?: string;
+            /** Format: int64 */
+            storageBytes?: number;
+        };
+        TenantQuota: {
+            chatRequestsPerDay?: components["schemas"]["TenantQuotaField"];
+            maxDocuments?: components["schemas"]["TenantQuotaField"];
+            maxStorageBytes?: components["schemas"]["TenantQuotaField"];
+        };
+        TenantQuotaField: {
+            /** Format: int64 */
+            default?: number;
+            source?: string;
+            unlimited?: boolean;
+            /** Format: int64 */
+            value?: number;
+        };
+        TenantQuotaUpdateRequest: {
+            /** Format: int64 */
+            chatRequestsPerDay?: number;
+            /** Format: int64 */
+            maxDocuments?: number;
+            /** Format: int64 */
+            maxStorageBytes?: number;
         };
         User: {
             /** Format: date-time */
@@ -4336,6 +4419,30 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    get_tenant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     get_tenant_members: {
         parameters: {
             query?: never;
@@ -4431,6 +4538,58 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_tenant_quota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantQuota"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patch_tenant_quota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantQuotaUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantQuota"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];

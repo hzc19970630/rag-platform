@@ -9,6 +9,7 @@ import { ApiError } from "./api/client";
 import { useMe } from "./api/hooks";
 import { AppShell } from "./components/AppShell";
 import i18n from "./i18n";
+import { AdminPage } from "./pages/AdminPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DocumentPage } from "./pages/DocumentPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
@@ -94,6 +95,7 @@ export function App() {
                 <Route path="/documents/:documentId" element={<DocumentPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/chat/:conversationId" element={<ChatPage />} />
+                <Route path="/admin" element={<AdminPage />} />
                 <Route path="/ops" element={<OpsPage />} />
               </Route>
               <Route path="/" element={<Navigate to="/knowledge-bases" replace />} />

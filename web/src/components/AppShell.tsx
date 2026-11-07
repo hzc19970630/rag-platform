@@ -9,6 +9,7 @@ import {
   MenuOutlined,
   MessageOutlined,
   MoonOutlined,
+  SafetyCertificateOutlined,
   SearchOutlined,
   SunOutlined,
   UserOutlined,
@@ -26,14 +27,15 @@ import { clampSidebarWidth, usePreferences, type Language, type ThemeMode } from
 const { Sider, Content } = Layout;
 
 export function useNavigation() {
-  const { canChat, canOperate } = usePermissions();
+  const { canChat, canAdmin } = usePermissions();
   const { t } = useTranslation();
   return useMemo<MenuProps["items"]>(() => {
     const items: MenuProps["items"] = [{ key: "knowledge-bases", icon: <AppstoreOutlined />, label: t("nav.knowledgeBases") }];
     if (canChat) items.push({ key: "chat", icon: <MessageOutlined />, label: t("nav.chat") });
-    if (canOperate) items.push({ key: "ops", icon: <ControlOutlined />, label: t("nav.ops") });
+    if (canAdmin) items.push({ key: "admin", icon: <SafetyCertificateOutlined />, label: t("nav.admin") });
+    if (canAdmin) items.push({ key: "ops", icon: <ControlOutlined />, label: t("nav.ops") });
     return items;
-  }, [canChat, canOperate, t]);
+  }, [canChat, canAdmin, t]);
 }
 
 function ThemeMenu({ onSelect }: { onSelect: (mode: ThemeMode) => void }) {
@@ -61,9 +63,11 @@ function SidebarContent({ collapsed, onNavigate }: { collapsed: boolean; onNavig
 
   const selected = location.pathname.startsWith("/chat")
     ? "chat"
-    : location.pathname.startsWith("/ops")
-      ? "ops"
-      : "knowledge-bases";
+    : location.pathname.startsWith("/admin")
+      ? "admin"
+      : location.pathname.startsWith("/ops")
+        ? "ops"
+        : "knowledge-bases";
 
   async function logout() {
     try {

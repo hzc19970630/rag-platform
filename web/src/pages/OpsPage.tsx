@@ -49,7 +49,7 @@ export function OpsPage() {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
-  const { canOperate } = usePermissions();
+  const { canAdmin } = usePermissions();
   const metrics = useOpsMetrics();
   const deadLetters = useDeadLetters();
   const apiKeys = useAPIKeys();
@@ -64,7 +64,7 @@ export function OpsPage() {
   const [creatingKey, setCreatingKey] = useState(false);
   const [issuedToken, setIssuedToken] = useState("");
 
-  if (!canOperate) {
+  if (!canAdmin) {
     return (
       <div className="page">
         <Alert type="error" showIcon message={t("common.noPermission")} description={t("ops.noPermission")} />

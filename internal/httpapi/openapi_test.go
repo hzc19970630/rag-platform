@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 87
+const businessRouteCount = 90
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -181,6 +181,7 @@ func TestOpenAPIDocumentsMigratedRequestBodies(t *testing.T) {
 		"POST /api/v1/sessions/{id}/messages":                          "MessageCreateRequest",
 		"POST /api/v1/tenant/members":                                  "TenantMemberCreateRequest",
 		"PATCH /api/v1/tenant/members/{userID}":                        "TenantMemberUpdateRequest",
+		"PATCH /api/v1/tenant/quota":                                   "TenantQuotaUpdateRequest",
 		"POST /api/v1/wiki/pages/{pageId}/rollback":                    "WikiRollbackRequest",
 		"POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review": "WikiReviewRequest",
 	}
@@ -240,6 +241,7 @@ func TestOpenAPIRequestSchemasMatchContractDTOs(t *testing.T) {
 		{"POST /api/v1/sessions/{id}/messages", "MessageCreateRequest", contract.MessageCreateRequest{}},
 		{"POST /api/v1/tenant/members", "TenantMemberCreateRequest", contract.TenantMemberCreateRequest{}},
 		{"PATCH /api/v1/tenant/members/{userID}", "TenantMemberUpdateRequest", contract.TenantMemberUpdateRequest{}},
+		{"PATCH /api/v1/tenant/quota", "TenantQuotaUpdateRequest", contract.TenantQuotaUpdateRequest{}},
 		{"POST /api/v1/wiki/pages/{pageId}/rollback", "WikiRollbackRequest", contract.WikiRollbackRequest{}},
 		{"POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review", "WikiReviewRequest", contract.WikiReviewRequest{}},
 	}
@@ -311,6 +313,9 @@ func TestOpenAPIResponseSchemasMatchContractDTOs(t *testing.T) {
 		{"GET /api/v1/sessions/{id}/messages", "MessageList", contract.MessageList{}},
 		{"GET /api/v1/tenant/members", "TenantMemberList", contract.TenantMemberList{}},
 		{"POST /api/v1/tenant/members", "TenantMember", contract.TenantMember{}},
+		{"GET /api/v1/tenant", "TenantOverview", contract.TenantOverview{}},
+		{"GET /api/v1/tenant/quota", "TenantQuota", contract.TenantQuota{}},
+		{"PATCH /api/v1/tenant/quota", "TenantQuota", contract.TenantQuota{}},
 		{"GET /api/v1/wiki/pages/{pageId}", "WikiPageDetail", contract.WikiPageDetail{}},
 		{"GET /api/v1/wiki/pages/{pageId}/versions", "WikiVersionList", contract.WikiVersionList{}},
 		{"GET /api/v1/wiki/runs/{runId}", "WikiRunDetail", contract.WikiRunDetail{}},

@@ -29,9 +29,11 @@ import (
 	"github.com/example/rag-platform/internal/platform/secrets"
 	"github.com/example/rag-platform/internal/platform/storage"
 	"github.com/example/rag-platform/internal/platform/tenantdb"
+	"github.com/example/rag-platform/internal/platform/tenantquota"
 	"github.com/example/rag-platform/internal/platform/vector"
 	"github.com/example/rag-platform/internal/prompts"
 	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/example/rag-platform/internal/tenant"
 	"gorm.io/gorm"
 )
 
@@ -55,6 +57,7 @@ type Application struct {
 	Models        *modelregistry.Registry
 	Prompts       *prompts.Registry
 	Ops           *ops.Service
+	Tenant        *tenant.Service
 	Objects       *storage.S3Store
 	Queue         *queue.Publisher
 	Docreader     *docreader.Client
@@ -197,8 +200,14 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		return nil, err
 	}
 	indexWriter := evidenceindex.New(database)
-	ingestionService := ingestion.NewService(database, authorization, objects, publisher, cfg.MaxFileBytes, cfg.Limits.DocumentRetentionDays, ingestion.Quota{MaxDocuments: cfg.Limits.TenantMaxDocuments, MaxStorageBytes: cfg.Limits.TenantMaxStorageBytes})
+	quotaResolver := tenantquota.NewResolver(database, tenantquota.Limits{
+		MaxDocuments:       int64(cfg.Limits.TenantMaxDocuments),
+		MaxStorageBytes:    cfg.Limits.TenantMaxStorageBytes,
+		ChatRequestsPerDay: int64(cfg.Limits.TenantChatRequestsPerDay),
+	})
+	ingestionService := ingestion.NewService(database, authorization, objects, publisher, cfg.MaxFileBytes, cfg.Limits.DocumentRetentionDays, ingestion.Quota{MaxDocuments: int64(cfg.Limits.TenantMaxDocuments), MaxStorageBytes: cfg.Limits.TenantMaxStorageBytes})
 	ingestionService.SetIndexWriter(indexWriter)
+	ingestionService.SetQuotaResolver(quotaResolver)
 	credentialCipher, err := secrets.NewKeyring(cfg.Connector.EncryptionKeys, cfg.Connector.EncryptionKey, cfg.Connector.ActiveKeyID)
 	if err != nil {
 		_ = reader.Close()
@@ -286,6 +295,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: chatter, Models: modelCatalog,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
 		ChatRequestsPerDay: cfg.Limits.TenantChatRequestsPerDay,
+		QuotaResolver:      quotaResolver,
 		HistoryTurns:       cfg.Chat.HistoryTurns,
 		HistoryTokenLimit:  cfg.Chat.HistoryTokenLimit,
 		Metrics:            recorder,
@@ -293,7 +303,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

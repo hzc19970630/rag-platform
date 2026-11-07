@@ -14,6 +14,7 @@ import (
 	"github.com/example/rag-platform/internal/platform/queue"
 	"github.com/example/rag-platform/internal/platform/ratelimit"
 	"github.com/example/rag-platform/internal/retrieval"
+	"github.com/example/rag-platform/internal/tenant"
 	"gorm.io/gorm"
 )
 
@@ -45,6 +46,10 @@ type DataSourceDeps struct {
 
 type ProjectionDeps struct {
 	Projection *knowledgeprojection.Service
+}
+
+type TenantDeps struct {
+	Tenant *tenant.Service
 }
 
 type OperationsDeps struct {
@@ -81,6 +86,7 @@ type RouteDeps struct {
 	DataSources   *datasource.Service
 	Projection    *knowledgeprojection.Service
 	Ops           *ops.Service
+	Tenant        *tenant.Service
 	Queue         *queue.Publisher
 	Tasks         *ingestion.TaskInspector
 	Metrics       *observability.Registry

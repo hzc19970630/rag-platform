@@ -25,4 +25,5 @@ func RegisterRoutes(router *gin.Engine, cfg config.Config, deps RouteDeps, logge
 	RegisterWikiProjectionRoutes(protected, cfg, ProjectionDeps{Projection: deps.Projection}, mw, logger)
 	RegisterGraphProjectionRoutes(protected, cfg, ProjectionDeps{Projection: deps.Projection}, mw, logger)
 	RegisterOperationsRoutes(protected, cfg, OperationsDeps{Ingestion: deps.Ingestion, Ops: deps.Ops, Queue: deps.Queue, Tasks: deps.Tasks, Metrics: deps.Metrics, Models: deps.Models}, mw, logger)
+	RegisterTenantRoutes(protected, TenantDeps{Tenant: deps.Tenant}, mw)
 }

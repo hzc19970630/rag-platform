@@ -8,6 +8,8 @@ import (
 	"github.com/example/rag-platform/internal/authz"
 	"github.com/example/rag-platform/internal/identity"
 	"github.com/example/rag-platform/internal/platform/persistence/models"
+	"github.com/example/rag-platform/internal/platform/tenantquota"
+	"github.com/example/rag-platform/internal/tenant"
 )
 
 func Me(principal authz.Principal, scope authz.AuthorizationScope, developmentIdentity bool) httpapi.MeResponse {
@@ -114,6 +116,46 @@ func TenantMembers(rows []authz.TenantMemberView) []httpapi.TenantMember {
 		items = append(items, TenantMember(row))
 	}
 	return items
+}
+
+func TenantOverview(overview tenant.Overview) httpapi.TenantOverview {
+	return httpapi.TenantOverview{
+		ID:        overview.ID,
+		Name:      overview.Name,
+		CreatedAt: overview.CreatedAt,
+		Members: httpapi.TenantMemberCounts{
+			Total:   overview.Members.Total,
+			Owners:  overview.Members.Owners,
+			Admins:  overview.Members.Admins,
+			Members: overview.Members.Members,
+			Viewers: overview.Members.Viewers,
+		},
+		KnowledgeBases:     overview.KnowledgeBases,
+		Documents:          overview.Documents,
+		StorageBytes:       overview.StorageBytes,
+		ChatQuestionsToday: overview.ChatQuestionsToday,
+	}
+}
+
+func TenantQuota(effective tenantquota.Effective) httpapi.TenantQuota {
+	return httpapi.TenantQuota{
+		MaxDocuments:       tenantQuotaField(effective.MaxDocuments),
+		MaxStorageBytes:    tenantQuotaField(effective.MaxStorageBytes),
+		ChatRequestsPerDay: tenantQuotaField(effective.ChatRequestsPerDay),
+	}
+}
+
+func tenantQuotaField(field tenantquota.Field) httpapi.TenantQuotaField {
+	source := "deployment"
+	if field.Overridden {
+		source = "tenant"
+	}
+	return httpapi.TenantQuotaField{
+		Value:     field.Value,
+		Default:   field.Default,
+		Source:    source,
+		Unlimited: field.Value <= 0,
+	}
 }
 
 func AuditEvent(row models.AuditLog) httpapi.AuditEvent {

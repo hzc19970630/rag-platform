@@ -435,7 +435,15 @@ func citationView(index int, candidate retrieval.Candidate) CitationView {
 // with the same request id returns the recorded answer before this point, so it
 // does not consume budget twice.
 func (s *Service) checkDailyQuota(ctx context.Context, tenantID string) error {
-	if s.dailyCap <= 0 {
+	dailyCap := int64(s.dailyCap)
+	if s.quotas != nil {
+		limits, err := s.quotas.Limits(ctx, tenantID)
+		if err != nil {
+			return fmt.Errorf("resolve tenant quota: %w", err)
+		}
+		dailyCap = limits.ChatRequestsPerDay
+	}
+	if dailyCap <= 0 {
 		return nil
 	}
 	start := time.Now().UTC().Truncate(24 * time.Hour)
@@ -443,8 +451,8 @@ func (s *Service) checkDailyQuota(ctx context.Context, tenantID string) error {
 	if err != nil {
 		return err
 	}
-	if count >= int64(s.dailyCap) {
-		return fmt.Errorf("%w: the daily chat budget of %d questions has been consumed", apperror.ErrQuotaExceeded, s.dailyCap)
+	if count >= dailyCap {
+		return fmt.Errorf("%w: the daily chat budget of %d questions has been consumed", apperror.ErrQuotaExceeded, dailyCap)
 	}
 	return nil
 }

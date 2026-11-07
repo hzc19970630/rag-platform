@@ -23,6 +23,10 @@ export function usePermissions() {
   const canWrite = hasCapability(me, "knowledge_base:write");
   const canManage = hasCapability(me, "knowledge_base:manage_members");
   const canDelete = hasCapability(me, "knowledge_base:delete");
+  // Tenant-wide surfaces (administration and operations) require the role-derived
+  // capability, not just knowledge-base management rights; canOperate still
+  // covers knowledge-base-scoped operator actions such as connector sync.
+  const canAdmin = hasCapability(me, "tenant:admin");
   return {
     me,
     canRead,
@@ -30,6 +34,7 @@ export function usePermissions() {
     canManage,
     canDelete,
     canChat: canRead,
+    canAdmin,
     canOperate: canManage || canDelete,
   };
 }

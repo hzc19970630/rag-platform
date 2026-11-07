@@ -25,6 +25,20 @@ export type KnowledgeBase = DeepRequired<Schemas["KnowledgeBase"]>;
 
 export type Member = DeepRequired<Schemas["KnowledgeBaseMember"]>;
 
+export type TenantMember = DeepRequired<Schemas["TenantMember"]>;
+
+export type TenantMemberCounts = DeepRequired<Schemas["TenantMemberCounts"]>;
+
+export type TenantOverview = DeepRequired<Schemas["TenantOverview"]>;
+
+export type TenantQuotaField = DeepRequired<Schemas["TenantQuotaField"]>;
+
+export type TenantQuota = DeepRequired<Schemas["TenantQuota"]>;
+
+export type TenantQuotaUpdateRequest = Schemas["TenantQuotaUpdateRequest"];
+
+export type AuditEvent = DeepRequired<Schemas["AuditEvent"]>;
+
 export type ChunkView = DeepRequired<Schemas["Chunk"]>;
 
 export type ChunkPage = DeepRequired<Schemas["ChunkPage"]>;
