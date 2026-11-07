@@ -207,4 +207,6 @@ RAG_DOCREADER_IMAGE=ghcr.io/hzc19970630/rag-platform/docreader@sha256:fedcba9876
 # 4) 在维护窗口演练：拉取真实 Release，执行第 5.2 节升级，再用第 6 节切回上一 digest
 ```
 
+Windows 上直接构建的基础镜像会把迁移 SQL 以 CRLF 写入镜像，而发布镜像由 Linux CI 以 LF 构建；用前者初始化的本地库切换到发布镜像时，`migrate -check` 会报 `checksum mismatch`。演练前应让构建上下文保持 LF（例如临时设置 `core.autocrlf=false` 后重新检出），不要通过修改校验和绕过生产库检查。
+
 生产升级/回滚演练必须记录：开始与结束时间、源/目标 digest、`migrate -check` 结果、`readyz` 恢复时间、登录/上传/问答抽查结果、回滚是否恢复备份。演练报告归档到运维记录，不提交到仓库。
