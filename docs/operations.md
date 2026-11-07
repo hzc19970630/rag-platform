@@ -1,6 +1,6 @@
-# 运维手册（M4）
+# 运维手册
 
-本手册覆盖 M4 引入的企业治理与可运营性能力：迁移兼容检查、备份恢复、优雅关闭、Redis/Worker 故障、Outbox/Inbox 幂等、死信处理、reconciliation、模型网关故障演练和告警指标。
+本手册覆盖平台的企业治理与可运营性能力：迁移兼容检查、备份恢复、优雅关闭、Redis/Worker 故障、Outbox/Inbox 幂等、死信处理、reconciliation、模型网关故障演练和告警指标。
 
 所有命令默认在仓库根目录执行，并使用本地 Compose 栈：
 
@@ -219,7 +219,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 
 - **APP_ENV 枚举**：只接受 `development`、`test`、`production`（忽略首尾空白与大小写）；未知值让所有进程在启动校验阶段失败，避免把拼写错误当成非生产环境绕过 production fail-fast。
 - **CONFIG_PROFILE**：`dev`（默认，保持现有默认值）、`eval`（`CHAT_SOURCE`/`EMBEDDING_SOURCE=local`、`TENANT_RLS_MODE=off`、异步答案关闭）、`on-prem`（`TENANT_RLS_MODE=enforce`、异步答案开启、开发身份关闭）、`saas`（在 on-prem 基础上强制 secure cookie）。profile 只在变量未显式设置时提供默认值，显式环境变量始终优先；未知 profile 启动失败。
-- **生产密钥 fail-fast（原 M14 A1，已交付）**：`APP_ENV=production` 时启动校验拒绝仓库默认值。JWT 必须显式设置 `JWT_SIGNING_KEYS`，不能回落到 `JWT_SIGNING_KEY` 的开发单键；`API_KEY_PEPPER`、`S3_ACCESS_KEY`/`S3_SECRET_KEY`（含 MinIO 默认值），以及 `DATABASE_URL`、`MAINTENANCE_DATABASE_URL`、`ADMIN_DATABASE_URL` 中的占位密码都会让进程以 `configuration_invalid` 退出。被拒绝的值包括 `.env.example` 的 `replace-with-a-random-*`、`change-me-*`、`rag-local` 和编译内置的 `local-*-change-me`。非生产环境保留这些默认值；生产允许数据库 URL 不带密码（证书/peer 认证），但不接受已知占位密码。
+- **生产密钥 fail-fast**：`APP_ENV=production` 时启动校验拒绝仓库默认值。JWT 必须显式设置 `JWT_SIGNING_KEYS`，不能回落到 `JWT_SIGNING_KEY` 的开发单键；`API_KEY_PEPPER`、`S3_ACCESS_KEY`/`S3_SECRET_KEY`（含 MinIO 默认值），以及 `DATABASE_URL`、`MAINTENANCE_DATABASE_URL`、`ADMIN_DATABASE_URL` 中的占位密码都会让进程以 `configuration_invalid` 退出。被拒绝的值包括 `.env.example` 的 `replace-with-a-random-*`、`change-me-*`、`rag-local` 和编译内置的 `local-*-change-me`。非生产环境保留这些默认值；生产允许数据库 URL 不带密码（证书/peer 认证），但不接受已知占位密码。
 - **JWT 会话**：`JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2` + `JWT_ACTIVE_KID=kid2`。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 `JWT_SIGNING_KEY` 时使用该单键（仅限非生产）。
 - **API Key**：数据库只保存 `sha256(pepper + raw)`；明文只在创建响应返回一次。轮换 `API_KEY_PEPPER` 会让全部已签发 key 立即失效，需重新签发并通知调用方。
 - **连接器凭据密钥**：新信封固定为 `v2:<kid>:<base64(nonce||sealed)>`，AAD 绑定 `v2:<kid>`。单键模式继续使用 `CONNECTOR_ENCRYPTION_KEY`（kid 固定为 `legacy`）；轮换时改用 `CONNECTOR_ENCRYPTION_KEYS=kid1:key1,kid2:key2` + `CONNECTOR_ENCRYPTION_ACTIVE_KID=kid2`，新写入用 active kid，旧 kid 保留用于解密历史信封。移除某个 kid 会让引用它的连接器立即不可解密（本轮没有批量重加密），所以轮换只加不删；历史的 `v1:` 信封始终用 `legacy` 键解密。设置 `CONNECTOR_ENCRYPTION_KEYS` 时 `CONNECTOR_ENCRYPTION_ACTIVE_KID` 必填，重复/空 kid、非法 key 和缺失的 active kid 都会让启动失败。
@@ -273,13 +273,13 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - 2026-11-05 真实语料只读复核（1463 条 1024 维；小 KB 选择性约 2.6%–6.1%，以 chunk 自身 embedding 查询、精确扫描 Top-20 为基准并排除自身）：自然计划走 HNSW；`ef_search=40`、过采样 1 且关闭迭代扫描仅返回 7.0–8.7/20，过采样 1/4/10 无改善；`relaxed_order` 在 ef_search=40 恢复 20/20，recall 0.982–1.000，P95 1.3–2.2ms。与合成探针结论一致。
 - 监控：`vector_recall_underfill_total{ef_search,oversample}` 非零表示过滤后的 ANN 扫描未填满 TopK；同时检查 `vector_recall_underfill` 日志中的 tenant、KB 数和 requested/returned。该指标出现时，优先确认 `vector_iterative_scan=true`，再评估分区或外部向量库。
 
-## 15. 租户 RLS（原 M13 A1，已交付）
+## 15. 租户 RLS
 
 - `TENANT_RLS_MODE=off|shadow|enforce`，默认 `shadow`。`off` 不设置 `app.tenant_id`，可用 `./scripts/m13_rls_mode.sh off` 关闭 RLS；`shadow` 使用允许策略并在租户作用域查询中设置该 GUC，写路径触发器据此审计；`enforce` 使用迁移 0024 的严格策略。代码只提供开关与验收，是否切换是部署决策。
 - API 在 enforce 下把每个已认证请求放进一个数据库事务：`tenantdb.BeginRequestTx` 开启事务并执行 `SELECT set_config('app.tenant_id', <tenant>, true)`，普通查询与 `tenantdb.InTx` 服务事务都加入该事务（GORM 的显式 `Transaction` 不经过重定向回调，因此服务层必须用 `InTx`）。handler 返回 5xx、panic 或任一嵌套事务失败时整体回滚；事务级 GUC 随连接归还自动清空。worker 在 enforce 下整体使用 `MAINTENANCE_DATABASE_URL`，跨租户任务不依赖 GUC；API 只对认证前的身份查询使用维护连接。
 - 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`（因此它按父表口径统计）；0026 新增 `answer_jobs` 后总数为 37 张（34 张租户表 + 3 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
 - 角色：`rag_app`（`NOSUPERUSER NOBYPASSRLS`，API 租户流量）与 `rag_maintenance`（`BYPASSRLS`，worker 与跨租户维护）。enforce 下 API/worker 的 `DATABASE_URL` 必须是 `rag_app`，且 `MAINTENANCE_DATABASE_URL` 必填并必须使用不同角色；migrate/seed/embedctl 使用 `ADMIN_DATABASE_URL`（所有者角色，缺省回退 `DATABASE_URL`）。启动时查询 `pg_roles` 校验：API 运行时角色不得是超级用户或 `BYPASSRLS`，worker 维护角色必须具备 `BYPASSRLS`，否则拒绝启动。密码与授权由 `make m13-rls-setup` 设置，需先导出 `RAG_APP_DB_PASSWORD`、`RAG_MAINTENANCE_DB_PASSWORD`；脚本幂等，可对已有库重复执行。全新数据卷由 `deploy/docker-compose/initdb/01-roles.sh` 自动创建角色。
-- `APP_ENV=production` 时 `TENANT_RLS_MODE` 必须是 `enforce`；`shadow`/`off` 或未设置都会让启动校验失败（原 M14 A2，已交付）。CI 使用 `APP_ENV=development` + dev auth，但以 `rag_app`/`rag_maintenance` 整栈运行 enforce；`ENFORCE_LAYOUT=1 make m13-rls-acceptance` 会额外断言容器内 `TENANT_RLS_MODE=enforce`、`DATABASE_URL` 角色为 `rag_app`、维护角色不同，以及 `pg_stat_activity` 中同时存在两种连接。production 的 OIDC 登录不在 CI 中模拟，由配置单测覆盖启动拒绝。
+- `APP_ENV=production` 时 `TENANT_RLS_MODE` 必须是 `enforce`；`shadow`/`off` 或未设置都会让启动校验失败。CI 使用 `APP_ENV=development` + dev auth，但以 `rag_app`/`rag_maintenance` 整栈运行 enforce；`ENFORCE_LAYOUT=1 make m13-rls-acceptance` 会额外断言容器内 `TENANT_RLS_MODE=enforce`、`DATABASE_URL` 角色为 `rag_app`、维护角色不同，以及 `pg_stat_activity` 中同时存在两种连接。production 的 OIDC 登录不在 CI 中模拟，由配置单测覆盖启动拒绝。
 - 影子审计范围：触发器只记录写操作。仅当 `current_user = 'rag_app'` 或 GUC 已设置时写入 `rls_shadow_violations`；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 `tenantdb` 的应用 guard、GORM 注入回调、静态门禁 `cmd/checktenancy`（raw SQL + 直接 GORM 链）与 `tests/postgres/tenantrls_test.go` 承担，**不承诺对生产读流量做数据库级拦截采样**。GORM 回调在存在租户上下文时自动为租户表补 `tenant_id`；`tenantdb.Unscoped` 是唯一显式绕过，自动注入会以 `tenant_scope_injected` 告警记录。
 - 审计 SQL：
 
@@ -303,7 +303,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - Enforce 前置检查（缺一不可）：`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user` 中 `current_user = rag_app` 且两项均为 false；`task_inbox` 无 `tenant_id IS NULL` 行；`rls_shadow_violations` 无跨租户（`row_tenant_id` 与 `session_tenant_id` 不一致）记录；m1–m4 以 `rag_app` 通过。任何一项不满足都保持 shadow。
 - 验收：`make m13-rls-acceptance` 校验 37 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 `tenant_shadow_allow`（shadow）或 `tenant_isolation`（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。`ENFORCE_LAYOUT=1` 时只接受严格布局，并增加迁移 0024、容器环境、运行角色与 `pg_stat_activity` 断言。`tests/postgres/rls_runtime_test.go`（需 `TEST_POSTGRES_URL` 与 `make m13-rls-setup`）以 `SET LOCAL ROLE rag_app` 在真实 `audit_logs` 表上验证跨租户读写被拒与无 GUC 时 fail-closed。
 
-## 16. 在线 HNSW 索引变更（原 M13 A2，已交付）
+## 16. 在线 HNSW 索引变更
 
 - 索引契约：一个索引名只服务一个 `halfvec(N)` 维度。当前实现使用版本化名 `chunks_vector_idx_<dim>_v<N>`，旧的无版本名 `chunks_vector_idx` 仍被识别并可作为服务索引复用。
 - `embedctl create-index` 的执行顺序：读取 `pgvector` 版本（要求 ≥ 0.7.0）、应用会话超时、读取仍有可检索 chunk 的维度、清理 `indisvalid=false` 的残留候选、在独立连接上执行 `CREATE INDEX CONCURRENTLY`、校验 `indisvalid` 与 `halfvec(dim)`/`embedding_dimension = dim`、最后 `DROP INDEX CONCURRENTLY` 删除被替换的旧索引。若其他维度仍有可检索 chunk，其索引会保留，错误的 `EMBEDDING_DIMENSION` 不会删除线上索引；`reembed` 完成后重跑 `create-index` 即可清理旧维度索引。会话超时必须在第一次目录读取之前设置，因为 `pg_get_indexdef` 会持有 `chunks` 的表锁；否则一个已运行的 `ACCESS EXCLUSIVE` 事务会在超时生效前把构建挂住。CONCURRENTLY 不能在事务块内运行，因此不要把它塞进迁移；迁移只负责表结构与策略。
@@ -313,7 +313,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - 确认：`create-index` 是非日常的受管操作。运行时会提示输入 `y`；非交互调用（stdin 立即 EOF，包括 `docker run` 未加 `-i`）会直接失败，必须传 `--confirm` 或设置 `EMBED_INDEX_CONFIRM=1`；`--dry-run` 只输出“将创建/将删除”的计划，不修改目录。
 - 验收：`make embed-acceptance` 在 3↔4 维之间切换，断言新索引生效、旧维度索引已删除、reembed/verify 无残留；`tests/postgres/vectorindex_test.go`（需 `TEST_POSTGRES_URL`）在 20 万行合成表上于构建期间持续写入，要求写 P99 ≤ 2× 基线（低于 5ms 的基线按 5ms 计，避免调度噪声误报），并验证查询计划命中新索引。
 
-## 17. 异步答案生成（原 M13 A3，已交付）
+## 17. 异步答案生成
 
 - 默认 `ANSWER_ASYNC_ENABLED=true`：`POST /sessions/:id/messages` 只做预检（会话、scope、配额、模型、历史），在同一事务内写入 user message、`RECEIVED/AUTHORIZED/PLANNED` 三条事件和 `answer_jobs` 行（`QUEUED`），然后把 `answer.generate.v1` 投递到 Asynq 交互队列。检索、生成、引用校验与终态事件都在 worker 执行。API 进程不再承载长耗时的生成。
 - 事件序列：`answer_jobs.next_sequence` 由 `UPDATE ... RETURNING` 原子分配，API 预检与 worker 共用同一计数器，因此跨进程仍保持 `1..N` 连续，`ReplayEvents` 与 `Last-Event-ID` 续流不会因序列冲突丢事件。
@@ -337,7 +337,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
   再对照该请求在 `stream_events` 中的 `sequence` 是否连续。
 - 验收：`make m13-async-acceptance` 在真实栈上验证正常异步答案（终态 `complete`、job `COMPLETED`、事件连续）与 worker 停机演练（任务保留、worker 恢复后仍得到终态或明确错误）。
 
-## 18. CI 门禁与供应链（原 M14 A3/A4，已交付）
+## 18. CI 门禁与供应链
 
 - CI 分三个 job：`verify`（gofmt、checkdeps、checktenancy、`go test`、`-race`、vet、`go mod verify`、前端 `npm ci`/test/build、compose config）、`integration`（整栈 enforce + 迁移 + RLS 负向 + m0/m1/m13 验收）、`security`（govulncheck、npm audit、trivy fs/image、SBOM、镜像 pin 校验）。
 - `integration` 使用受版本控制的 `deploy/ci/enforce.env`（全部为一次性 runner 的 dummy 凭据），复制为工作区 `.env`，并以 `COMPOSE_PROJECT_NAME=rag-ci` 隔离。启动顺序固定为：依赖服务 → `make migrate` → `make m13-rls-setup` → `make seed` → `make embed-index` → api/worker。API/worker 在 `APP_ENV=development` 下运行 enforce，因为 production 还要求 OIDC；production 的启动拒绝由配置单测覆盖。`m0/m1` 通过 `ACCEPTANCE_ENV_FILE=.env` 选择 enforce 配置，m0 的空库 migrate/seed 还会覆盖 `ADMIN_DATABASE_URL`。

@@ -1,0 +1,67 @@
+name: Bug report
+description: Report a reproducible defect
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, API keys, customer data, or security vulnerabilities.
+        Security issues must follow SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Release tag, image digest, or commit SHA.
+      placeholder: v0.1.0 / sha-...
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - Local Docker Compose
+        - Self-hosted Compose
+        - Kubernetes/Helm
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps that reliably reproduce the issue.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and diagnostics
+      description: Relevant logs, trace IDs, or screenshots. Remove secrets and personal data.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Docker/Compose version, browser, database image, model provider (no keys).
+    validations:
+      required: false

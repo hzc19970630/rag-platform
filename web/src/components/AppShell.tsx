@@ -22,7 +22,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useKnowledgeBases } from "../api/hooks";
 import { usePermissions } from "../session";
-import { clampSidebarWidth, usePreferences, type Language, type ThemeMode } from "../store/preferences";
+import { clampSidebarWidth, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, usePreferences, type Language, type ThemeMode } from "../store/preferences";
 
 const { Sider, Content } = Layout;
 
@@ -221,6 +221,9 @@ export function AppShell() {
               role="separator"
               aria-orientation="vertical"
               aria-label="Resize sidebar"
+              aria-valuemin={SIDEBAR_MIN_WIDTH}
+              aria-valuemax={SIDEBAR_MAX_WIDTH}
+              aria-valuenow={width}
               tabIndex={0}
               onPointerDown={() => {
                 dragging.current = true;

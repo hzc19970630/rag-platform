@@ -2,11 +2,11 @@
 
 - 状态：已接受
 - 日期：2026-11-03
-- 相关：`DESIGN.md` §4.2 / §4.3、`MILESTONES.md` M8
+- 相关：`DESIGN.md` §4.2 / §4.3
 
 ## 背景
 
-M8 要求：评估 Neo4j/其他图数据库时，迁移必须通过 `RelationStore` 端口，不泄漏厂商查询类型。此前代码没有该接口，`knowledgeprojection` 直接通过 GORM 读写 `graph_snapshots`、`graph_entities`、`graph_entity_aliases`、`graph_relations`、`graph_relation_sources`，迁移会扩散到查询、投影 worker、生命周期与测试。
+评估 Neo4j/其他图数据库时，迁移必须通过 `RelationStore` 端口，不泄漏厂商查询类型。此前代码没有该接口，`knowledgeprojection` 直接通过 GORM 读写 `graph_snapshots`、`graph_entities`、`graph_entity_aliases`、`graph_relations`、`graph_relation_sources`，迁移会扩散到查询、投影 worker、生命周期与测试。
 
 ## 决策
 
@@ -41,8 +41,8 @@ M8 要求：评估 Neo4j/其他图数据库时，迁移必须通过 `RelationSto
 
 ## 被否决的方案
 
-- **继续直连**：改动最小，但 M8 的迁移承诺无法兑现。
-- **端口 + 遍历下推**：把种子匹配/BFS/路径也放入端口，能让 Neo4j 发挥原生遍历性能，但 ACL 复核与证据有效性仍在外部，适配器需要回调领域判断；当前图查询本来就是全量加载后内存 BFS，收益不足。触发条件是 M8 容量数据证明图规模或多跳延迟成为瓶颈。
+- **继续直连**：改动最小，但后续图存储迁移无法兑现。
+- **端口 + 遍历下推**：把种子匹配/BFS/路径也放入端口，能让 Neo4j 发挥原生遍历性能，但 ACL 复核与证据有效性仍在外部，适配器需要回调领域判断；当前图查询本来就是全量加载后内存 BFS，收益不足。触发条件是容量数据证明图规模或多跳延迟成为瓶颈。
 
 ## 后果
 
@@ -50,7 +50,7 @@ M8 要求：评估 Neo4j/其他图数据库时，迁移必须通过 `RelationSto
 - 代价：跨存储原子性降低；端口快照与 API 模型之间增加一层映射；新增适配器需要维护 `StaleSnapshotIDs` 等完整性语义。
 - 非目标：证据读取端口、projection run 存储、检索索引写入端口。
 
-## 迁移检查清单（仅 M8 触发后执行）
+## 迁移检查清单（触发后执行）
 
 1. 新适配器通过 `internal/platform/relationstore` 的契约测试（快照替换、审核 ACTIVE 唯一、来源引用、计数、失效扫描）。
 2. 数据迁移与回滚方案经评审；旧 PostgreSQL 图表保留只读窗口。

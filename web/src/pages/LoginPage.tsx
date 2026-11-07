@@ -46,7 +46,7 @@ export function LoginPage() {
           <>
             <Divider />
             <Typography.Paragraph type="secondary">{t("auth.devHint")}</Typography.Paragraph>
-            <Button block href="/knowledge-bases" onClick={(event) => { event.preventDefault(); window.location.assign("/knowledge-bases"); }}>
+            <Button data-testid="login-dev-continue" block href="/knowledge-bases" onClick={(event) => { event.preventDefault(); window.location.assign("/knowledge-bases"); }}>
               {t("login.continueDev")}
             </Button>
           </>

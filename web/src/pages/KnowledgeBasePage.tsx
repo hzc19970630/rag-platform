@@ -223,9 +223,11 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
       key: "name",
       render: (_, item) => (
         <div className="doc-name">
-          <Typography.Link onClick={() => navigate(`/documents/${item.document.id}?from=${encodeURIComponent(knowledgeBaseId)}`)}>
-            {item.document.filename}
-          </Typography.Link>
+          <span data-testid="document-name" data-document-id={item.document.id}>
+            <Typography.Link onClick={() => navigate(`/documents/${item.document.id}?from=${encodeURIComponent(knowledgeBaseId)}`)}>
+              {item.document.filename}
+            </Typography.Link>
+          </span>
           <Typography.Text type="secondary" className="doc-id">{item.document.id}</Typography.Text>
         </div>
       ),
@@ -262,8 +264,8 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
               <Button size="small" type="primary" icon={<UploadOutlined />} loading={uploading} onClick={() => uploadRef.current?.click()}>
                 {t("knowledgeBase.upload")}
               </Button>
-              <input ref={uploadRef} type="file" accept={accept} hidden onChange={(event) => void upload(event)} />
-              <input ref={replaceRef} type="file" accept={accept} hidden onChange={(event) => void replace(event)} />
+              <input ref={uploadRef} data-testid="document-upload-input" type="file" accept={accept} hidden onChange={(event) => void upload(event)} />
+              <input ref={replaceRef} data-testid="document-replace-input" type="file" accept={accept} hidden onChange={(event) => void replace(event)} />
             </>
           )}
         </Space>

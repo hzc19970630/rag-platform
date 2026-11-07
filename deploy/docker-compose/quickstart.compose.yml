@@ -1,0 +1,22 @@
+# Local quickstart overlay. Never use this file for a shared or production stack:
+# it forces development identity and deterministic offline models.
+#
+# Usage:
+#   docker compose --env-file .env \
+#     -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/docker-compose/quickstart.compose.yml up -d --build
+services:
+  api:
+    environment:
+      APP_ENV: development
+      CONFIG_PROFILE: dev
+      DEV_AUTH_ENABLED: "true"
+      OIDC_ENABLED: "false"
+      CHAT_SOURCE: local
+      EMBEDDING_SOURCE: local
+  worker:
+    environment:
+      APP_ENV: development
+      CONFIG_PROFILE: dev
+      CHAT_SOURCE: local
+      EMBEDDING_SOURCE: local

@@ -1,0 +1,60 @@
+site_name: RAG Platform
+site_description: 多租户、证据驱动的企业知识库平台
+site_url: https://hzc19970630.github.io/rag-platform/
+repo_url: https://github.com/hzc19970630/rag-platform
+repo_name: hzc19970630/rag-platform
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+exclude_docs: |
+  internal/*
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: 切换到深色模式
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到浅色模式
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+nav:
+  - 首页: index.md
+  - 快速开始: quickstart.md
+  - 故障排查: troubleshooting.md
+  - 测试: testing.md
+  - 架构: architecture.md
+  - API: api.md
+  - 运维: operations.md
+  - 发布与回滚: releases.md
+  - 竞品对比: comparison.md
+  - Demo: demo.md
+  - 安全策略: security.md
+  - 贡献指南: contributing.md
+  - 许可证: licensing.md
+  - 架构决策: adr/0001-relationstore-port.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - tables
+  - toc:
+      permalink: true

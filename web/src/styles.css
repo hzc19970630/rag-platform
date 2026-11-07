@@ -172,6 +172,13 @@ body.resizing { cursor: col-resize; user-select: none; }
 .kb-card-title-row { min-width: 0; }
 .kb-card-title-row h4 { flex: 1 1 auto; min-width: 0; margin: 0 !important; }
 .kb-card-title-row .ant-tag { flex: 0 0 auto; }
+
+/* The preset green tag fails WCAG AA on the light theme; dark tokens already pass. */
+html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
+  color: #145214;
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
 .kb-description { margin: 0 !important; min-height: 2.8em; }
 .kb-capabilities { min-height: 24px; }
 .kb-meta { font-size: 0.78rem; }

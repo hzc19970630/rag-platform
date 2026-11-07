@@ -100,7 +100,7 @@ export function KnowledgeBasesPage() {
         style={{ width: 140 }}
       />
       {canWrite && (
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+        <Button data-testid="kb-create-open" type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           {t("knowledgeBase.new")}
         </Button>
       )}

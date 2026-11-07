@@ -1,4 +1,4 @@
-# 发布、升级与回滚（B9）
+# 发布、升级与回滚
 
 本文件是发布工程的操作入口：版本规则、发布产物、签名与 SBOM 校验、升级步骤和回滚边界。日常运维（备份恢复、优雅关闭、故障演练）见 [operations.md](operations.md)。
 
@@ -6,7 +6,7 @@
 
 - 版本遵循 [Semantic Versioning](https://semver.org/)：`vMAJOR.MINOR.PATCH`，预发布追加 `-rc.N` 等后缀（如 `v0.2.0-rc.1`）。tag 不使用 build metadata（`+...`），因为 Docker 镜像 tag 不允许 `+`。
 - tag 必须打在 `main` 上；`main` 受分支保护，发布内容只能通过 PR 合入。
-- 每个版本在 [CHANGELOG.md](../CHANGELOG.md) 有对应条目；`Unreleased` 只记录尚未发布的变更。
+- 每个版本在 [CHANGELOG.md](https://github.com/hzc19970630/rag-platform/blob/main/CHANGELOG.md) 有对应条目；`Unreleased` 只记录尚未发布的变更。
 - 破坏性变更、需要人工迁移的变更和回滚限制必须写进 CHANGELOG 与本文第 6 节。
 - 版本、提交和构建时间通过 `-ldflags -X` 注入：`api --version`、API/worker 启动日志 `build_info`、镜像 OCI 标签（`org.opencontainers.image.version/revision/created/source`）三处一致。
 
@@ -36,7 +36,7 @@ git tag -a v0.1.0 -m "rag-platform v0.1.0"
 git push origin v0.1.0
 ```
 
-4. tag 推送触发 [release.yml](../.github/workflows/release.yml)：
+4. tag 推送触发 [release.yml](https://github.com/hzc19970630/rag-platform/blob/main/.github/workflows/release.yml)：
    - `verify`：tag 语义化格式、gofmt、checkdeps、OpenAPI 漂移、租户静态门禁、`go test`、`go vet`、`go mod verify`、前端测试与构建。
    - `publish`：构建两个镜像 → Trivy HIGH/CRITICAL 门禁（未修复项忽略）→ 生成 SBOM → 推送 GHCR → cosign keyless 签名 digest → 打包前端 → 校验和签名 → 创建 GitHub Release（预发布 tag 自动标记 prerelease）。
    - 镜像先扫描后推送；扫描失败时不会产生签名，也不会创建 Release。

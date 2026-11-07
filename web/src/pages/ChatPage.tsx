@@ -353,7 +353,7 @@ export function ChatPage() {
                     );
                   case "pending":
                     return (
-                      <div className="message-row user">
+                      <div className="message-row user" data-testid="message-user">
                         <div className="chat-bubble user">
                           <Typography.Paragraph>{row.content}</Typography.Paragraph>
                         </div>
@@ -361,7 +361,7 @@ export function ChatPage() {
                     );
                   case "asking":
                     return (
-                      <div className="message-row assistant">
+                      <div className="message-row assistant" data-testid="message-streaming">
                         <div className="chat-bubble assistant">
                           <Flex align="center" gap={8} className="chat-progress">
                             <Spin size="small" />
@@ -386,7 +386,7 @@ export function ChatPage() {
               }}
             />
 
-            <div className="chat-composer">
+            <div className="chat-composer" data-testid="chat-composer">
               <Input.TextArea
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
@@ -474,7 +474,7 @@ function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Ci
   const { t } = useTranslation();
   const isUser = item.message.role === "user";
   return (
-    <div className={`message-row ${isUser ? "user" : "assistant"}`}>
+    <div className={`message-row ${isUser ? "user" : "assistant"}`} data-testid={isUser ? "message-user" : "message-assistant"}>
       <div className={`chat-bubble ${isUser ? "user" : "assistant"}`}>
         <Flex justify="space-between" align="center" gap={8} className="chat-bubble-meta">
           <Tag color={isUser ? "default" : "green"}>{isUser ? t("chat.me") : t("chat.answer")}</Tag>
@@ -508,7 +508,7 @@ function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Ci
 export function CitationList(props: { citations: Citation[]; onOpen: (citation: Citation) => void }) {
   const { t } = useTranslation();
   return (
-    <ul className="citation-list">
+    <ul className="citation-list" data-testid="citation-list">
       {props.citations.map((citation) => (
         <li key={citation.chunkId}>
           <Button type="link" className="citation-link" onClick={() => props.onOpen(citation)}>

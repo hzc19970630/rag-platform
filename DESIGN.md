@@ -1,8 +1,8 @@
 # 企业级知识库平台设计方案
 
-> 基于本地 `/Users/admin/WeKnora` 的架构调研，面向企业内部知识管理、文档问答、知识检索和多租户治理场景。
+> 面向企业内部知识管理、文档问答、知识检索和多租户治理场景的架构设计基线。
 >
-> 当前阶段：架构设计稿。`/Users/admin/rag-platform` 当前以本文件作为设计基线，后续实现应以本文的边界、Schema 和状态机为准。
+> 本文件描述系统边界、数据模型、状态机与关键取舍；实现与验收以仓库代码和测试为准。公开文档不包含内部研发编号或本地路径。
 
 ## 1. 设计目标
 
@@ -23,34 +23,34 @@
 - 首期不建设面向 Agent 任意代码执行的通用沙箱平台；不可信文档解析的容器隔离基线属于首期安全要求。
 - 首期不把所有基础设施抽象成可替换插件；只为确实存在多实现的边界定义端口。
 
-## 2. 对 WeKnora 的借鉴结论
+## 2. 设计参考与取舍
 
-本地 WeKnora 已经验证了以下架构方向：
+本方案参考了同类开源知识库产品的公开架构与交互模式，但不复制其源码、主题或内部实现。采用的方向包括：
 
-| 借鉴点 | 采用方式 | 本方案的约束 |
+| 设计点 | 采用方式 | 本方案的约束 |
 | --- | --- | --- |
 | Go 主服务 + Python 文档解析 | 保留 | API、业务编排和异步任务在 Go；解析能力通过 gRPC 独立部署 |
-| 知识条目预览接口 + Chunk 列表/详情接口 | 保留并加强 | 保留 Viewer 可预览解析结果与浏览 Chunk 的交互；本方案统一按文档反查知识库并强制 `AuthorizationScope`，不复制按 Chunk ID 直接放行的做法 |
-| Handler → Service → Repository | 保留职责分层 | 改成按领域组织，避免全局 Service/Repository 包持续膨胀 |
-| 文档处理异步化 | 保留 | 用任务状态机、幂等键、重试和死信保证可运营 |
+| 知识条目预览 + Chunk 列表/详情 | 保留并加强 | Viewer 可预览解析结果与浏览 Chunk；统一按文档反查知识库并强制 `AuthorizationScope` |
+| Handler → Service → Repository | 保留职责分层 | 按领域组织，避免全局 Service/Repository 包持续膨胀 |
+| 文档处理异步化 | 保留 | 任务状态机、幂等键、重试和死信保证可运营 |
 | BM25 + Dense 混合检索 | 保留 | 首期 PostgreSQL/ParadeDB + pgvector，规模增长后可接 OpenSearch |
 | 模型、向量库、对象存储注册表 | 保留 | 注册表只放在基础设施层，领域层不感知供应商 SDK |
-| 模型与检索参数配置化 | 保留并强化 | 模型、Embedding、切分、Prompt、检索参数全部外置为配置或模板，代码不内置任何具体模型名、维度或阈值 |
-| 知识库工作台与可视化配置 | 保留并重写 | 采用左侧导航、卡片网格、分区设置弹窗和“设置行”表单；组件用 Ant Design 重写，不复制 WeKnora 的 TDesign 主题或源码；只开放数据库级可安全热改的配置 |
+| 模型与检索参数配置化 | 保留并强化 | 模型、Embedding、切分、Prompt、检索参数全部外置；代码不内置具体模型名、维度或阈值 |
+| 知识库工作台与可视化配置 | 保留并重写 | 左侧导航、卡片网格、分区设置弹窗和“设置行”表单；组件用 Ant Design 实现；只开放可安全热改的配置 |
 | 多租户 RBAC、API Key、审计 | 保留并前置 | 所有应用服务入口都带租户和资源访问上下文 |
 | SSE 流式回答与引用 | 保留 | 统一事件协议，支持断线续传和引用回查 |
 | 统一 DI 容器 | 部分采用 | 优先显式构造函数注入；组合根集中装配，避免隐藏依赖 |
 
-WeKnora 的代码规模已经覆盖 Agent、Wiki、MCP、沙箱、IM 等大量能力。新平台应先稳定知识库主链路，再将这些能力作为独立模块接入，避免首期形成难以测试和部署的“大而全”系统。
+同类产品往往同时覆盖 Agent、Wiki、MCP、沙箱和 IM 等能力。本方案坚持先稳定知识库主链路，再以独立模块接入扩展能力，避免首期形成难以测试和部署的“大而全”系统。
 
-本方案对本地 WeKnora 实现的具体吸收：
+具体吸收点：
 
-- 采用类似 `IndexingStrategy` 的独立能力开关：`vector_enabled`、`keyword_enabled`、`wiki_enabled`、`graph_enabled`，使 Wiki/关系投影可以独立启停，不把所有知识库强制升级为三层能力。
-- 采用统一的队列定义和任务路由表，Worker、运行时监控和取消逻辑读取同一份定义；保留 WeKnora 的专用 Worker Pool 和按知识库/文档范围取消任务的运维能力。
-- 将 WeKnora 的知识库访问中间件思路上收为统一 `AuthorizationScope`：共享知识库先解析有效租户和资源范围，再进入业务服务与检索器，避免只在接口层做一次权限判断。
-- 保留 WeKnora 混合检索按知识库分组、显式传递访问范围的做法；本方案进一步要求 Evidence、Wiki 和 Relation 三类检索器都使用同一个授权端口。
-- 保留 Wiki 页面的来源文档和 Chunk 引用关系；本方案把它扩展为 `wiki_page_sources`、`graph_relation_sources` 和不可变 Package，以支持版本、ACL 和投影重建。
-- 吸收 WeKnora 的 `config/config.yaml`、`config/builtin_models.yaml` 和 `config/prompt_templates/` 三层配置组织方式，形成本方案第 4.5 节的配置化规范。
+- 采用独立的 `IndexingStrategy` 能力开关：`vector_enabled`、`keyword_enabled`、`wiki_enabled`、`graph_enabled`，使 Wiki/关系投影可以独立启停。
+- 采用统一的队列定义和任务路由表，Worker、运行时监控和取消逻辑读取同一份定义。
+- 将知识库访问中间件上收为统一 `AuthorizationScope`：共享知识库先解析有效租户和资源范围，再进入业务服务与检索器。
+- 混合检索按知识库分组并显式传递访问范围；Evidence、Wiki 和 Relation 三类检索器使用同一个授权端口。
+- Wiki 页面保留来源文档和 Chunk 引用关系，并扩展为 `wiki_page_sources`、`graph_relation_sources` 和不可变 Package，以支持版本、ACL 和投影重建。
+- 配置采用 `config/config.yaml` 与 `config/prompt_templates/` 分层组织，形成第 4.5 节的配置化规范。
 
 ## 3. 总体架构
 
@@ -117,7 +117,7 @@ graph LR
 | 部署 | 目标：Docker Compose + Helm/Kubernetes；当前：仅 Docker Compose | 本地开发、私有化和生产集群统一交付方式 |
 | API 契约 | REST 使用 OpenAPI 3，DTO 与路由清单定义在 `contracts/httpapi`，`api/openapi/openapi.yaml` 由 `cmd/openapi` 生成；gRPC 使用 Protobuf；异步任务使用 `contracts/tasks` 的版本化 Go Schema | 前后端、解析服务和异步任务的稳定边界 |
 
-`web/` 已完成 M9 迁移：React Router + Ant Design + TanStack Query + Zustand + i18next 已接入。`contracts/httpapi` 是 HTTP wire 契约的唯一事实源：请求/响应 DTO 和 87 条业务路由清单都在此定义，`internal/transport/views` 负责把领域投影与 GORM 行映射为契约类型，`internal/httpapi` 生产代码不直接引用 `models`（测试夹具仍用 `models` 建表播种数据）。`api/openapi/openapi.yaml` 由 `go run ./cmd/openapi` 反射生成，`go run ./cmd/openapi -check`（Makefile test/lint 与 CI verify）拦截未重新生成的契约变更；前端继续用 `openapi-typescript` 生成 `web/src/api/generated.ts`，`npm run codegen:check` 再拦截一次客户端漂移。`internal/httpapi` 的契约测试仍校验 Gin 路由与路由清单/OpenAPI 的双向覆盖、schema 与 DTO 字段一致以及引用完整性。
+`web/` 已接入 React Router + Ant Design + TanStack Query + Zustand + i18next。`contracts/httpapi` 是 HTTP wire 契约的唯一事实源：请求/响应 DTO 和 87 条业务路由清单都在此定义，`internal/transport/views` 负责把领域投影与 GORM 行映射为契约类型，`internal/httpapi` 生产代码不直接引用 `models`（测试夹具仍用 `models` 建表播种数据）。`api/openapi/openapi.yaml` 由 `go run ./cmd/openapi` 反射生成，`go run ./cmd/openapi -check`（Makefile test/lint 与 CI verify）拦截未重新生成的契约变更；前端继续用 `openapi-typescript` 生成 `web/src/api/generated.ts`，`npm run codegen:check` 再拦截一次客户端漂移。`internal/httpapi` 的契约测试仍校验 Gin 路由与路由清单/OpenAPI 的双向覆盖、schema 与 DTO 字段一致以及引用完整性。
 
 ### 4.2 检索存储策略
 
@@ -354,11 +354,11 @@ EMBEDDING_TIMEOUT_SECONDS 单次模型调用超时
 - `APP_ENV=production` 时禁止 `EMBEDDING_SOURCE=local`，避免哈希向量静默进入生产检索。
 - 开发环境未配置时默认落到 `local` 源，保证零依赖启动；生产环境缺失配置必须启动失败。
 
-迁移 `migrations/postgres/0005_embedding_model_config.sql` 只记录模型元数据，不把生产维度硬编码进 SQL；`migrations/postgres/0012_knowledge_base_embedding_binding.sql` 增加知识库级绑定。当前 M2 继续使用 3 维本地验收索引。切换到真实模型时，由受管部署/重建命令按 `EMBEDDING_DIMENSION=N` 创建 `halfvec(N)` HNSW 索引，完成全量重建（同时更新知识库绑定）后再切换检索流量，并人工确认没有遗留旧维度 Chunk。
+迁移 `migrations/postgres/0005_embedding_model_config.sql` 只记录模型元数据，不把生产维度硬编码进 SQL；`migrations/postgres/0012_knowledge_base_embedding_binding.sql` 增加知识库级绑定。本地验收配置继续使用 3 维确定性索引。切换到真实模型时，由受管部署/重建命令按 `EMBEDDING_DIMENSION=N` 创建 `halfvec(N)` HNSW 索引，完成全量重建（同时更新知识库绑定）后再切换检索流量，并人工确认没有遗留旧维度 Chunk。
 
 #### 4.5.3 Chat / Rerank 模型绑定（Model Registry）
 
-M12 在既有 Embedding 绑定的基础上引入最小 Model Registry。它解决的是「同一个部署要服务多个模型，且每个知识库可以选择不同模型」的问题，不改变 Embedding 的索引契约。
+模型目录在既有 Embedding 绑定基础上引入最小 Model Registry。它解决的是「同一个部署要服务多个模型，且每个知识库可以选择不同模型」的问题，不改变 Embedding 的索引契约。
 
 ```text
 LLM_CHAT_MODEL            部署默认 chat 模型（CHAT_SOURCE=remote 必填）
@@ -390,7 +390,7 @@ CHUNK_MIN_SIZE       小于该长度的块与相邻块合并
 
 已实现：`Chunker` 是端口，默认实现 `RuneChunker` 采用「标记优先 + 定长窗口」策略。窗口内存在可用标记时，在最后一个标记处切分并放弃重叠（否则整段重复）；没有标记时回退为带重叠的定长切分。尾部不足 `CHUNK_MIN_SIZE` 的块并入前一块。`CHUNK_OVERLAP` 和 `CHUNK_MIN_SIZE` 允许显式取 0，`CHUNK_SPLIT_MARKERS` 支持 `\n`、`\t` 转义，便于在 `.env` 中表达换行标记。启动时校验 `Size > 0`、`0 <= Overlap < Size`、`0 <= MinSize < Size`，不满足则启动失败。
 
-Prompt 模板在 M3 生成层落地时外置为 `config/prompt_templates/*.yaml`，配置中只保存模板 ID 引用，与 WeKnora 的 `xxx_prompt_id` 方式一致。首批模板：系统提示、上下文模板、fallback、会话标题、Wiki 生成、关系抽取。约束：
+Prompt 模板在生成层落地时外置为 `config/prompt_templates/*.yaml`，配置中只保存模板 ID 引用，与同类产品的 Prompt ID 引用方式一致。首批模板：系统提示、上下文模板、fallback、会话标题、Wiki 生成、关系抽取。约束：
 
 - Go 代码不出现中文字符串拼接的 Prompt 字面量。
 - 模板 ID 引用在启动时校验，缺失或重复的模板 ID 导致启动失败。
@@ -398,13 +398,13 @@ Prompt 模板在 M3 生成层落地时外置为 `config/prompt_templates/*.yaml`
 
 #### 4.5.5 检索参数三级覆盖
 
-检索参数（`embedding_top_k`、阈值、Rerank 开关和 `top_k`）采用 WeKnora 的三级覆盖模型：
+检索参数（`embedding_top_k`、阈值、Rerank 开关和 `top_k`）采用三级覆盖模型：
 
 ```text
 YAML 全局默认  ->  知识库级覆盖（数据库，运行时可改，审计）  ->  会话级覆盖（可选，请求内）
 ```
 
-阈值和 `top_k` 必须在服务端做区间校验，参考 WeKnora `internal/handler/tenant.go:1764-1776` 的校验区间（向量阈值 0-1、Rerank 阈值 -10 到 10、`top_k` 0-200）。会话级覆盖只开放给有权限的用户，避免普通用户绕过知识库级检索质量约束。
+阈值和 `top_k` 必须在服务端做区间校验，参考同类产品的公开校验区间（向量阈值 0-1、Rerank 阈值 -10 到 10、`top_k` 0-200）。会话级覆盖只开放给有权限的用户，避免普通用户绕过知识库级检索质量约束。
 
 参数与区间清单（每一级都过同一套校验；`config/config.yaml` 为全局默认）：
 
@@ -436,7 +436,7 @@ Rerank 适配器由 `RERANK_SOURCE` 选择（`none` 直通 / `lexical` 离线词
 
 ### 4.6 前端工作台与可视化配置
 
-M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了 API、权限和文档链路，但还不是目标形态：没有统一导航和路由，知识库设置、检索参数和索引开关只能直接调用 API，运行人员无法在界面上确认当前生效配置。本节定义整体 UI 重构的目标形态。布局、信息密度和设置交互参考本地 WeKnora；组件库沿用 4.1 的 React + Ant Design，不引入 TDesign/Vue，不复制 WeKnora 源码或主题文件。
+早期 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了 API、权限和文档链路，但还不是目标形态：没有统一导航和路由，知识库设置、检索参数和索引开关只能直接调用 API，运行人员无法在界面上确认当前生效配置。本节定义整体 UI 重构的目标形态。布局、信息密度和设置交互参考同类开源知识库产品；组件库沿用 4.1 的 React + Ant Design，不引入 TDesign/Vue，不复制参考项目源码或主题文件。
 
 #### 4.6.1 目标与原则
 
@@ -444,7 +444,7 @@ M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了
 2. **配置分级可见**：数据库级可热改配置提供表单；环境变量/YAML 配置只读展示；影响索引契约的配置不提供热改入口，只展示当前值和受管变更流程。
 3. **状态先于装饰**：文档流水线、投影、队列和配置保存的状态必须可定位；颜色只作辅助，状态同时有文字和图标。
 4. **权限即界面**：按钮、页签和设置分区按 capability 显隐或禁用；前端判断只改善体验，服务端仍是授权事实源。
-5. **参考不复制**：借鉴 WeKnora 的布局、设置行和交互节奏；主题 token、组件和代码由本项目管理，避免引入第二套 Vue 技术栈。
+5. **参考不复制**：借鉴同类产品的布局、设置行和交互节奏；主题 token、组件和代码由本项目管理，避免引入第二套 Vue 技术栈。
 6. **渐进迁移**：先应用壳和视觉 token，再逐页替换单文件视图；每个阶段保持现有 API 和浏览器流程可用。
 
 #### 4.6.2 信息架构与导航
@@ -466,7 +466,7 @@ M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了
 | --- | --- | --- |
 | 知识库工作台 | 搜索、排序、卡片网格、新建/编辑入口 | 卡片显示名称、描述、文档数、处理中数量、能力徽标（向量/关键词/Wiki/图谱）、ACL 版本和更新时间；卡片点击进入详情，更多操作放溢出菜单 |
 | 知识库详情 | 文档、成员、投影三个页签 | 文档页签是默认页；成员页签只对有 `manage_members` 的用户显示；投影页签只展示已启用的 Wiki/图谱状态 |
-| 文档详情 | 处理状态、解析内容、Chunk、版本历史、原始预览 | 处理中显示阶段和进度，不显示空白页；版本历史、替换和回滚沿用 M4 API |
+| 文档详情 | 处理状态、解析内容、Chunk、版本历史、原始预览 | 处理中显示阶段和进度，不显示空白页；版本历史、替换和回滚沿用文档生命周期 API |
 | 问答工作台 | 会话列表、消息流、输入区、引用抽屉 | 流式回答显示连接/生成/完成/中断状态；引用点击回到同一文档版本和 Chunk 权限边界 |
 | 运维 | 死信、队列、指标、API Key | 只对有运维能力的角色显示；API Key 明文只展示一次 |
 | 设置弹窗 | 应用设置、知识库设置 | 全屏遮罩 + 1080×780 面板 + 左侧分组导航 + 右侧内容 + 吸底操作栏；小屏改为全屏 |
@@ -479,12 +479,12 @@ M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了
 | 检索与索引 | 索引开关、检索参数、生效值 | 读权限可见，写权限可编辑 |
 | 成员 | 成员列表与角色 | `manage_members` 可见 |
 | 投影 | Wiki/图谱运行状态、重试、重建入口 | 对应能力启用时显示 |
-| 数据源 | M5 连接器与同步运行 | 已有 API 后接入；无 API 的功能不显示空壳 |
+| 数据源 | 连接器与同步运行 | 已有 API 后接入；无 API 的功能不显示空壳 |
 | 危险区 | 删除知识库 | `knowledge_base:delete` 可见 |
 
 #### 4.6.3 视觉规范
 
-视觉语言以 WeKnora 的绿色品牌梯度、浅灰工作区、白色卡片和轻边框为参考，落到 Ant Design 主题 token 和 CSS 变量。页面和组件不得写死颜色、圆角或阴影，明暗主题共用同一套变量。
+视觉语言以浅灰工作区、白色卡片和轻边框为参考，落到 Ant Design 主题 token 和 CSS 变量。页面和组件不得写死颜色、圆角或阴影，明暗主题共用同一套变量。
 
 | 类别 | 规则 |
 | --- | --- |
@@ -527,7 +527,7 @@ M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了
 | Chat / Rerank / Parser 源与模型 | 环境变量 | 系统信息（只读） | 无 | 重启或重新解析 | 只展示非敏感值和解析器版本；密钥、端点和对象存储键不返回 |
 | API Key | 数据库哈希 | 运维 | 按现有能力 | 立即生效 | 明文只展示一次；列表只显示前缀和状态 |
 | 成员与角色 | 数据库 | 成员 | `manage_members` | 立即生效 | Owner/Admin 可管理；Editor/Viewer 不可见成员写操作 |
-| 连接器与同步 | 数据库 | 数据源 | 按 M5 能力 | 下一次同步 | 凭据只写不读；同步运行和错误可查看 |
+| 连接器与同步 | 数据库 | 数据源 | 按连接器能力 | 下一次同步 | 凭据只写不读；同步运行和错误可查看 |
 | 审计记录 | 数据库 | 运维 | 只读 | - | 配置保存写入审计；界面不展示密钥或对象存储键 |
 
 **4.6.5.1 配置分级规则**
@@ -539,7 +539,7 @@ M1-M4 的 React 页面用单文件、原生 CSS 和 `view` 状态切换验证了
 
 **4.6.5.2 配置面 API**
 
-现有 `PATCH /api/v1/knowledge-bases/{id}` 已支持 `retrieval_config` 和 `indexing_strategy`，但它是合并语义，无法把某一项恢复为全局默认。M9 增加两个接口，仍由 `knowledgebase.Service` 校验和审计，不改变领域边界：
+现有 `PATCH /api/v1/knowledge-bases/{id}` 已支持 `retrieval_config` 和 `indexing_strategy`，但它是合并语义，无法把某一项恢复为全局默认。补充两个配置接口，仍由 `knowledgebase.Service` 校验和审计，不改变领域边界：
 
 ```text
 GET /api/v1/knowledge-bases/{id}/configuration
@@ -610,18 +610,18 @@ PUT /api/v1/knowledge-bases/{id}/retrieval-config
 2. **知识库工作台与文档体验**：卡片网格、搜索/排序、知识库详情页签、文档列表轮询、文档详情三区、版本历史入口和空态/错误态。
 3. **可视化配置**：新增 `GET configuration` 与 `PUT retrieval-config`；知识库设置弹窗、索引开关、检索参数分组表单、继承/覆盖/生效值、确认框和审计提示。
 4. **问答与运维打磨**：会话列表、流式状态、引用抽屉、死信/队列/指标页面、API Key 明文仅展示一次、暗色主题、响应式和小屏适配。
-5. **回归与验收**：Vitest + React Testing Library 覆盖配置表单、权限门和状态渲染；浏览器回归现有 M1-M4 流程；运行构建、静态检查和现有验收脚本。
+5. **回归与验收**：Vitest + React Testing Library 覆盖配置表单、权限门和状态渲染；浏览器回归既有主流程；运行构建、静态检查和现有验收脚本。
 
 #### 4.6.7 验收标准
 
-- 现有 M1-M4 浏览器流程不回归：登录/登出、知识库创建与删除、成员授权、上传与替换、文档详情、问答与引用、API Key、运行巡检。
+- 既有浏览器流程不回归：登录/登出、知识库创建与删除、成员授权、上传与替换、文档详情、问答与引用、API Key、运行巡检。
 - 知识库设置中可修改检索参数和索引开关；非法区间返回 400 并定位到字段；无写权限用户只读；Editor 不能管理成员；保存后刷新仍能看到配置；审计记录可查询。
 - 检索参数保存后下一次检索生效；向量/关键词开关关闭后对应通道不再参与召回；Wiki/图谱开关变更触发投影失效/重建，关闭后派生查询不可用。
 - `PUT retrieval-config` 发送 `{}` 后知识库覆盖被清除，`sources` 回到全局默认；没有该接口时界面不得显示“恢复默认”。
 - 界面不展示 API Key 明文（除一次性创建结果）、模型密钥、对象存储键、预签名 URL 或完整模型端点凭据。
 - 明/暗/跟随系统主题可用；1280px、768px、375px 三档布局可用；键盘可完成设置保存、弹窗关闭和主要导航；状态不只靠颜色表达。
 - `npm test`、`npm run build`、`tsc`（如启用）、`make lint` 通过；`./scripts/m1_acceptance.sh`、`m2`、`m3`、`m4` 在 API 不变的前提下保持通过。
-- 不引入 TDesign/Vue，不复制 WeKnora 源码；不新增 4.1 之外的重大前端框架；不开放切分、模型或 Embedding 维度的热改入口。
+- 不引入 TDesign/Vue，不复制参考项目源码；不新增 4.1 之外的重大前端框架；不开放切分、模型或 Embedding 维度的热改入口。
 
 ## 5. 领域模块划分
 
@@ -806,15 +806,15 @@ flowchart TD
 
 ### 7.1.1 文档内容可视化与预览
 
-“入库成功”和“用户能在界面看到内容”是两个不同的产品能力，不能只用 `EVIDENCE_READY` 状态代替内容展示。M2 负责把文件加工成 Evidence；M3 的 P0 前置能力负责把经过授权的原始文件和解析结果展示给用户。该能力不依赖 LLM，也不属于 RAG 召回。
+“入库成功”和“用户能在界面看到内容”是两个不同的产品能力，不能只用 `EVIDENCE_READY` 状态代替内容展示。Evidence Pipeline 负责把文件加工成可检索证据；内容展示能力负责把经过授权的原始文件和解析结果呈现给用户。该能力不依赖 LLM，也不属于 RAG 召回。
 
-本地 WeKnora 提供了两个值得保留的交互边界：
+同类产品通常提供三个值得保留的交互边界：
 
-| WeKnora 能力 | 本方案吸收方式 |
+| 能力 | 本方案吸收方式 |
 | --- | --- |
-| `GET /api/v1/knowledge/:id/preview`：在 Viewer + 知识访问校验后预览原始文件 | 保留“原始文件预览”和“下载”分离；本方案按 `document_id -> knowledge_base_id -> AuthorizationScope` 重新鉴权，不直接暴露对象存储地址 |
-| `GET /api/v1/chunks/:knowledge_id`：分页查看 Chunk，`GET /api/v1/chunks/by-id/:id`：查看单个 Chunk | 保留 Chunk 列表和详情；本方案增加 `document_version_id`、状态和来源定位约束，禁止只凭 Chunk ID 跨租户读取 |
-| `GET /api/v1/knowledge-bases/:id/knowledge`：分页枚举知识库下的知识条目 | 吸收为 `GET /api/v1/knowledge-bases/:id/documents`：按 `knowledge_base_id -> AuthorizationScope` 鉴权后，游标分页返回文档及其当前版本状态。M3 原先只提供“上传后进入详情页”的临时入口，刷新后已入库文档无法再次发现，该缺口在此补齐 |
+| 在 Viewer + 知识访问校验后预览原始文件 | 保留“原始文件预览”和“下载”分离；本方案按 `document_id -> knowledge_base_id -> AuthorizationScope` 重新鉴权，不直接暴露对象存储地址 |
+| 分页查看 Chunk、查看单个 Chunk | 保留 Chunk 列表和详情；本方案增加 `document_version_id`、状态和来源定位约束，禁止只凭 Chunk ID 跨租户读取 |
+| 分页枚举知识库下的知识条目 | 收敛为 `GET /api/v1/knowledge-bases/:id/documents`：按 `knowledge_base_id -> AuthorizationScope` 鉴权后，游标分页返回文档及其当前版本状态，刷新后仍可重新发现已入库文档 |
 
 预览拆为两个接口，不把二进制文件、NormalizedDocument 和 Chunk 混成一个响应：
 
@@ -838,7 +838,7 @@ GET /api/v1/knowledge-bases/{knowledge_base_id}/documents?cursor=&limit=
 接口规则：
 
 - 所有接口先从文档反查知识库，再构造 `AuthorizationScopeV1` 并执行 `read` 授权；客户端传入的文档、版本或 Chunk ID 不能替代租户和资源校验。
-- 默认只展示文档当前 `latest_version_id`。M3 不开放任意历史版本切换；M4 实现版本历史后，历史版本也必须单独校验状态和 ACL。
+- 默认只展示文档当前 `latest_version_id`。历史版本必须单独校验状态和 ACL，不能沿用当前版本的可读性判断。
 - 原始预览可在源对象已经 `STORED` 后提供；解析内容和 Chunk 预览只有在对应版本达到 `EVIDENCE_READY` 后提供。处理中只返回阶段状态，失败返回阶段、错误码和可重试信息，不静默展示部分解析结果。
 - `ChunkPageV1` 只列出当前版本可检索的子块。父块的文本恒为其子块文本的聚合，与子块同列会把同一段内容展示两遍；父块因此不进入列表，只通过 `GET /api/v1/chunks/{chunk_id}` 按需展开，列表、详情与引用展开共用同一条版本和权限边界。子块 `ordinal` 在版本内唯一，游标翻页不重不漏。
 - 文档被删除、版本被替换或 ACL 失效后，旧版本预览和 Chunk 详情立即拒绝或返回不可用状态；不得继续通过缓存、预签名 URL 或旧 Chunk ID 暴露内容。
@@ -847,9 +847,9 @@ GET /api/v1/knowledge-bases/{knowledge_base_id}/documents?cursor=&limit=
 - 前端文档详情页至少包含“处理状态”“解析内容”“Chunk”三个区域；知识库卡片进入知识库详情视图，上传成功后可直接看到该文档的处理进度，并从文档列表进入详情页。状态未就绪时展示状态机进度，不能显示空白页面让用户误以为入库丢失。
 - 知识库详情视图必须从 `DocumentPageV1` 读取文档列表，不能依赖上传响应或前端会话状态渲染“最近上传”：刷新后已入库文档仍须可发现、可进入详情、可替换和可删除。
 - 文档列表只返回未删除的文档，处理状态以 `latest_version_id` 对应版本为准；`documents.status` 只在流水线成功时更新，不能作为唯一依据。列表是只读投影，同样不得返回 `SourceObjectKey`、对象存储地址或凭据，分页统一使用 cursor。
-- 文档列表提供“详情 / 更新 / 删除”三个入口：“更新”复用带 `document_id` 的上传接口，将内容替换为新版本并让旧版本退出检索；“删除”复用文档删除接口。两者自 M2/M3 起即已实现，此前缺少界面入口。
-- 重新解析同一份文件、版本历史与回滚、Chunk 人工修订、删除后恢复与保留清理规则仍属于 M4，不在文档列表与其入口的范围内。
-- 预览是只读能力，不允许在 M3 直接修改 Chunk。人工 Chunk 编辑、版本回滚和编辑历史属于 M4，必须创建新修订或新版本，不能改写已发布的 `EvidencePackage`。
+- 文档列表提供“详情 / 更新 / 删除”三个入口：“更新”复用带 `document_id` 的上传接口，将内容替换为新版本并让旧版本退出检索；“删除”复用文档删除接口。
+- 重新解析同一份文件、版本历史与回滚、Chunk 人工修订、删除后恢复与保留清理规则属于文档生命周期能力，不在列表入口的范围内。
+- 预览是只读能力，不直接修改 Chunk。人工 Chunk 编辑、版本回滚和编辑历史必须创建新修订或新版本，不能改写已发布的 `EvidencePackage`。
 
 预览读取路径固定为：
 
@@ -955,7 +955,7 @@ Pipeline A 和 Pipeline B 是知识构建流水线，Pipeline C 是在线查询�
 
 这一层只回答“输入源是什么、原始内容是什么”。OCR 属于这一层，但不属于 MVP；后续启用时，OCR 结果仍需经过统一结构化，才能进入第二层。MVP 对纯扫描 PDF 和含扫描页的混合 PDF 明确返回 `unsupported_scanned_pdf`，不得把扫描页静默当空内容跳过。
 
-MVP 的 Office/HTML 解析约束：docreader 用 Python 标准库实现 DOCX/XLSX/PPTX/HTML 解析（`zipfile` + `ElementTree` + `html.parser`），不引入 openpyxl/python-pptx；不解析图片、形状位置和 OCR，OLE 二进制 `.xls/.ppt` 明确拒绝。解析上限（部件解压大小、条目数、块数）与稳定错误码见 MILESTONES M2。
+MVP 的 Office/HTML 解析约束：docreader 用 Python 标准库实现 DOCX/XLSX/PPTX/HTML 解析（`zipfile` + `ElementTree` + `html.parser`），不引入 openpyxl/python-pptx；不解析图片、形状位置和 OCR，OLE 二进制 `.xls/.ppt` 明确拒绝。解析上限（部件解压大小、条目数、块数）与稳定错误码由解析器契约定义。
 
 #### 第二层：Evidence Construction & Indexing
 
@@ -1161,7 +1161,7 @@ RECEIVED
 
 ### 7.7 异步任务、幂等和补偿
 
-参考 WeKnora 已验证的 Asynq + Redis 设计，标准部署使用独立的 Worker Pool；队列定义是唯一事实来源，Worker 注册、运行时面板和取消逻辑都读取同一份定义，避免任务类型和运维展示发生漂移。
+队列采用 Asynq + Redis，标准部署使用独立的 Worker Pool；队列定义是唯一事实来源，Worker 注册、运行时面板和取消逻辑都读取同一份定义，避免任务类型和运维展示发生漂移。
 
 首期只保留四类队列：
 
@@ -1172,7 +1172,7 @@ RECEIVED
 | `maintenance` | datasource sync、cleanup、reconcile、reindex | 低优先级维护 |
 | `interactive` | query plan、retrieval、answer generation 的后台补偿 | 交互相关任务 |
 
-大规模部署再按真实积压拆出 `embedding`、`multimodal` 或 `wiki` 独立池，不首期复制 WeKnora 的全部队列拓扑。每个任务都携带 `tenant_id`、`pipeline_run_id`、`stage_run_id`、`document_version_id`、`schema_version`、`trace_id` 和 `idempotency_key`。
+大规模部署再按真实积压拆出 `embedding`、`multimodal` 或 `wiki` 独立池，不首期复制参考项目的全部队列拓扑。每个任务都携带 `tenant_id`、`pipeline_run_id`、`stage_run_id`、`document_version_id`、`schema_version`、`trace_id` 和 `idempotency_key`。
 
 任务执行约束：
 
@@ -1511,7 +1511,7 @@ AI 应用安全与质量：
 - 队列重复投递、Worker 重启、Outbox 重试和死信重跑不会产生重复索引或旧版本覆盖新版本。
 - 可视化配置只开放数据库级热改项：保存后按权限、校验范围和审计要求生效；环境/YAML 项和索引契约项只读展示且无伪造控件，界面不返回任何密钥或连接串。
 - 知识库设置保存失败时不修改本地“已生效”状态；`PATCH` 的合并语义与 `PUT` 的整体替换/清空语义在界面和文档中一致，不出现无法恢复默认值的假重置按钮。
-- 工作台重构后 M1-M4 的用户流程无回归，且在约定的断点范围内可用、键盘可操作、明暗主题下文字与控件对比度达标。
+- 工作台重构后既有用户流程无回归，且在约定的断点范围内可用、键盘可操作、明暗主题下文字与控件对比度达标。
 - 通过单元测试验证领域规则，通过集成测试验证 PostgreSQL/Redis/对象存储，通过端到端测试验证上传到问答链路。
 
 ## 14. P0/P1/P2 评审结论落地
@@ -1541,4 +1541,4 @@ AI 应用安全与质量：
 
 ## 16. 实施里程碑
 
-研发实施顺序、阶段范围、依赖关系、验收门槛和大模型执行约束统一维护在 [MILESTONES.md](./MILESTONES.md)。本设计方案定义最终架构边界，里程碑清单定义如何逐步交付；如两者出现冲突，以本方案为架构事实源，并先完成设计决策更新再继续实现。M0-M3 为内部试点 MVP，企业生产发布至少通过 M4，M5-M8 按对应需求和启动门槛实施；M9 前端工作台与可视化配置不依赖 M8，也不改变 M8 的条件启动门槛。
+研发实施顺序、阶段范围、依赖关系和验收门槛由维护者在 issue tracker 与内部计划中管理。本文件定义最终架构边界；实施计划定义如何逐步交付。如两者出现冲突，以本文件为架构事实源，并先完成设计决策更新再继续实现。企业生产发布前必须通过企业治理、备份恢复与安全评审；前端工作台与容量扩展门槛相互独立。

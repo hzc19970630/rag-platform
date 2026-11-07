@@ -16,7 +16,10 @@ type PreferencesState = {
   setLanguage: (language: Language) => void;
 };
 
-export const clampSidebarWidth = (width: number) => Math.min(320, Math.max(220, Math.round(width)));
+export const SIDEBAR_MIN_WIDTH = 220;
+export const SIDEBAR_MAX_WIDTH = 320;
+
+export const clampSidebarWidth = (width: number) => Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
 
 export const usePreferences = create<PreferencesState>()(
   persist(

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- 对外快速开始：`scripts/quickstart.sh`、`scripts/quickstart_check.sh`、`quickstart.compose.yml` 与示例语料，使用本地确定性模型和开发身份完成部署、入库、检索与问答自检。
+- 公开文档：快速开始、故障排查、架构、API、竞品对比、Demo 剧本、文档站（MkDocs Material + Mermaid）与 GitHub Pages 工作流。
+- 开源治理：`SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SUPPORT.md`、`GOVERNANCE.md`、`ROADMAP.md`、`THIRD_PARTY_NOTICES.md`、`CODEOWNERS`、Issue/PR 模板。
+- API 与 Web 服务健康检查，quickstart 依赖按健康状态就绪后再启动。
+- Playwright E2E：上传→解析→检索→问答→删除主链路、B4 管理台回归、axe WCAG 2.1 AA、375/768/1280 响应式检查，并接入 CI `e2e` job 与报告产物。
+
+### Changed
+
+- `README.md` 重写为公开产品文档；`DESIGN.md` 与公开文档移除内部里程碑编号和本地路径。
+
+### Fixed
+
+- quickstart 在 Windows Git Bash 下可完成首次初始化：脚本与迁移 SQL 固定为 LF，`embedctl` 改为按容器 PATH 解析，避免 CRLF shebang 与路径转换失败。
+- 可访问性：侧栏分隔条补齐 `aria-valuemin/aria-valuemax/aria-valuenow`，浅色主题绿色标签对比度达到 WCAG AA。
+
 ## [0.1.0] - 2026-11-07
 
 ### Added

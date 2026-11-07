@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/hzc19970630/rag-platform/security/advisories/new
+    about: Report vulnerabilities privately; do not open a public issue.
+  - name: Documentation
+    url: https://github.com/hzc19970630/rag-platform/tree/main/docs
+    about: Read quickstart, architecture, operations, and troubleshooting guides.
