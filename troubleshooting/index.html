@@ -1,0 +1,1495 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="多租户、证据驱动的企业知识库平台">
+      
+      
+      
+        <link rel="canonical" href="https://hzc19970630.github.io/rag-platform/troubleshooting/">
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../testing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>故障排查 - RAG Platform</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="RAG Platform" class="md-header__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RAG Platform
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              故障排查
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RAG Platform" class="md-nav__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RAG Platform
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    故障排查
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    故障排查
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-stack-does-not-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The stack does not start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The stack does not start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#port-already-in-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Port already in use
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-runs-out-of-memory-or-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker runs out of memory or disk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-is-unhealthy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API is unhealthy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migration-checksum-mismatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration checksum mismatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#login-and-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Login and identity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Login and identity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#login-page-has-no-oidc-button" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Login page has no OIDC button
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clicking-continue-returns-to-the-login-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clicking "Continue" returns to the login page
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oidc-redirect-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OIDC redirect fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upload-and-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload and parsing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upload and parsing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unsupported_scanned_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsupported_scanned_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsupported_legacy_office" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsupported_legacy_office
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#document-stays-in-a-non-terminal-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Document stays in a non-terminal state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#processing-is-slow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Processing is slow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrieval-and-answers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieval and answers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrieval and answers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search-returns-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search returns nothing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#answer-is-refused-with-insufficient_evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Answer is refused with insufficient_evidence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#answer-has-no-citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Answer has no citations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rerank-does-not-seem-to-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rerank does not seem to run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frontend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Frontend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#web-ui-cannot-reach-the-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web UI cannot reach the API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changes-do-not-appear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changes do not appear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reset-a-local-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset a local stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting help
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    运维
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    发布与回滚
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    竞品对比
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安全策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    贡献指南
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../licensing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    许可证
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-relationstore-port/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构决策
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-stack-does-not-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The stack does not start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The stack does not start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#port-already-in-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Port already in use
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docker-runs-out-of-memory-or-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Docker runs out of memory or disk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-is-unhealthy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API is unhealthy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#migration-checksum-mismatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration checksum mismatch
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#login-and-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Login and identity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Login and identity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#login-page-has-no-oidc-button" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Login page has no OIDC button
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clicking-continue-returns-to-the-login-page" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clicking "Continue" returns to the login page
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#oidc-redirect-fails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OIDC redirect fails
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upload-and-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upload and parsing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upload and parsing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unsupported_scanned_pdf" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsupported_scanned_pdf
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsupported_legacy_office" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unsupported_legacy_office
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#document-stays-in-a-non-terminal-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Document stays in a non-terminal state
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#processing-is-slow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Processing is slow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrieval-and-answers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrieval and answers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrieval and answers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search-returns-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search returns nothing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#answer-is-refused-with-insufficient_evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Answer is refused with insufficient_evidence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#answer-has-no-citations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Answer has no citations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rerank-does-not-seem-to-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rerank does not seem to run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frontend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Frontend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#web-ui-cannot-reach-the-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web UI cannot reach the API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changes-do-not-appear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changes do not appear
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reset-a-local-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reset a local stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#getting-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting help
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h1>
+<p>Start with service state and logs:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">COMPOSE</span><span class="o">=(</span>docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>deploy/docker-compose/docker-compose.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>deploy/docker-compose/quickstart.compose.yml<span class="o">)</span>
+<span class="s2">"</span><span class="si">${</span><span class="nv">COMPOSE</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>ps
+<span class="s2">"</span><span class="si">${</span><span class="nv">COMPOSE</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">200</span><span class="w"> </span>api<span class="w"> </span>worker<span class="w"> </span>web
+</code></pre></div>
+<p>For a production overlay, replace <code>quickstart.compose.yml</code> with
+<code>release.compose.yml</code> and add <code>RAG_VERSION</code>.</p>
+<h2 id="the-stack-does-not-start">The stack does not start<a class="headerlink" href="#the-stack-does-not-start" title="Permanent link">&para;</a></h2>
+<h3 id="port-already-in-use">Port already in use<a class="headerlink" href="#port-already-in-use" title="Permanent link">&para;</a></h3>
+<p>Typical errors mention <code>bind: address already in use</code> for 5173, 8082, 5432, 6379,
+9000, or 9001. Change the host port in <code>.env</code> (<code>API_PORT</code>, <code>POSTGRES_PORT</code>) or stop
+the conflicting process. Keep <code>API_PUBLIC_URL</code> aligned with <code>API_PORT</code>.</p>
+<h3 id="docker-runs-out-of-memory-or-disk">Docker runs out of memory or disk<a class="headerlink" href="#docker-runs-out-of-memory-or-disk" title="Permanent link">&para;</a></h3>
+<p>The first build compiles the Go API and installs frontend dependencies. Ensure
+Docker has at least 4 GB of memory and 8 GB of free disk. Reclaim space with
+<code>docker system df</code> and, if you accept the impact, <code>docker system prune</code>.</p>
+<h3 id="api-is-unhealthy">API is unhealthy<a class="headerlink" href="#api-is-unhealthy" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="s2">"</span><span class="si">${</span><span class="nv">COMPOSE</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">200</span><span class="w"> </span>api
+curl<span class="w"> </span>-i<span class="w"> </span>http://localhost:8082/healthz
+curl<span class="w"> </span>-i<span class="w"> </span>http://localhost:8082/readyz
+</code></pre></div>
+<ul>
+<li><code>configuration_invalid</code>: a production-only startup check rejected placeholder
+  credentials or development auth. Fix the environment; do not disable the check.</li>
+<li>Database connection errors: wait for PostgreSQL to become healthy, then rerun
+  migrations. Check <code>DATABASE_URL</code> and <code>ADMIN_DATABASE_URL</code>.</li>
+<li>Migration lock: another migration process is holding the advisory lock. Wait for
+  it to finish; do not delete lock rows manually.</li>
+</ul>
+<h3 id="migration-checksum-mismatch">Migration checksum mismatch<a class="headerlink" href="#migration-checksum-mismatch" title="Permanent link">&para;</a></h3>
+<p><code>migrate -check</code> reports <code>checksum mismatch</code> when an already-applied migration file
+changed. The fix is to restore the original file, not to edit <code>schema_migrations</code>.</p>
+<p>On Windows, an image built from a CRLF working tree can produce different checksums
+than a Linux CI image built from LF. Ensure the build context uses LF, or use the
+published Linux image. Never update production checksums to make the check pass.</p>
+<h2 id="login-and-identity">Login and identity<a class="headerlink" href="#login-and-identity" title="Permanent link">&para;</a></h2>
+<h3 id="login-page-has-no-oidc-button">Login page has no OIDC button<a class="headerlink" href="#login-page-has-no-oidc-button" title="Permanent link">&para;</a></h3>
+<p><code>OIDC_ENABLED=false</code>. Set it to <code>true</code> with a valid issuer/client, or use the
+quickstart development login.</p>
+<h3 id="clicking-continue-returns-to-the-login-page">Clicking "Continue" returns to the login page<a class="headerlink" href="#clicking-continue-returns-to-the-login-page" title="Permanent link">&para;</a></h3>
+<p>Development identity is disabled or the API is running in production mode.
+Check <code>DEV_AUTH_ENABLED=true</code> and <code>APP_ENV=development</code>. Never enable development
+identity in a shared deployment.</p>
+<h3 id="oidc-redirect-fails">OIDC redirect fails<a class="headerlink" href="#oidc-redirect-fails" title="Permanent link">&para;</a></h3>
+<p><code>OIDC_ISSUER</code> and <code>OIDC_REDIRECT_URL</code> must be reachable from both the browser and
+the API container. <code>localhost</code> inside the container refers to the container itself.
+For the bundled Keycloak fixture, set <code>KEYCLOAK_HOSTNAME</code> to a host reachable from
+both sides (for example <code>host.docker.internal:8083</code>).</p>
+<h2 id="upload-and-parsing">Upload and parsing<a class="headerlink" href="#upload-and-parsing" title="Permanent link">&para;</a></h2>
+<h3 id="unsupported_scanned_pdf"><code>unsupported_scanned_pdf</code><a class="headerlink" href="#unsupported_scanned_pdf" title="Permanent link">&para;</a></h3>
+<p>The PDF has no extractable text layer. OCR is not implemented. Use a digital PDF or
+convert the document to text first.</p>
+<h3 id="unsupported_legacy_office"><code>unsupported_legacy_office</code><a class="headerlink" href="#unsupported_legacy_office" title="Permanent link">&para;</a></h3>
+<p>Legacy <code>.xls</code> and <code>.ppt</code> binary formats are intentionally rejected. Convert to
+<code>.xlsx</code> or <code>.pptx</code>.</p>
+<h3 id="document-stays-in-a-non-terminal-state">Document stays in a non-terminal state<a class="headerlink" href="#document-stays-in-a-non-terminal-state" title="Permanent link">&para;</a></h3>
+<p>Check the worker and document reader:</p>
+<div class="highlight"><pre><span></span><code><span class="s2">"</span><span class="si">${</span><span class="nv">COMPOSE</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">200</span><span class="w"> </span>worker<span class="w"> </span>docreader
+curl<span class="w"> </span>-fsS<span class="w"> </span>http://localhost:8082/api/v1/documents/&lt;document-id&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s1">'X-Dev-User-ID: dev-user'</span><span class="w"> </span>-H<span class="w"> </span><span class="s1">'X-Dev-Tenant-ID: dev-tenant'</span>
+</code></pre></div>
+<p>Look at <code>pipeline.status</code> and <code>stages</code>. A failed stage usually contains an
+<code>errorCode</code> and <code>errorMessage</code>. <code>reconcile</code> repairs expired leases; it does not fix
+a deterministic parser or model error.</p>
+<h3 id="processing-is-slow">Processing is slow<a class="headerlink" href="#processing-is-slow" title="Permanent link">&para;</a></h3>
+<p>Local deterministic models are fast; remote providers may be slow or rate-limited.
+Check the model health snapshot in the operations view and the worker logs for
+timeouts. <code>DOCREADER_TASK_TIMEOUT_SECONDS</code> and <code>EMBEDDING_TIMEOUT_SECONDS</code> bound
+individual stages.</p>
+<h2 id="retrieval-and-answers">Retrieval and answers<a class="headerlink" href="#retrieval-and-answers" title="Permanent link">&para;</a></h2>
+<h3 id="search-returns-nothing">Search returns nothing<a class="headerlink" href="#search-returns-nothing" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Confirm the document and current version are <code>EVIDENCE_READY</code>.</li>
+<li>Confirm the vector index dimension matches <code>EMBEDDING_DIMENSION</code>:
+  <code>docker compose ... run --rm --no-deps --entrypoint /usr/local/bin/embedctl api check</code>.</li>
+<li>If you changed the embedding model or dimension, run the managed index workflow
+  (<code>create-index</code> → <code>reembed</code> → <code>verify</code>) before searching.</li>
+<li>The local hash embedder has no semantic meaning; use exact terms from the
+  document or configure a real embedding provider.</li>
+</ul>
+<h3 id="answer-is-refused-with-insufficient_evidence">Answer is refused with <code>insufficient_evidence</code><a class="headerlink" href="#answer-is-refused-with-insufficient_evidence" title="Permanent link">&para;</a></h3>
+<p>The retrieval set did not contain evidence that passed authorization and citation
+checks. Check the search endpoint with the same query, confirm the document is
+current, and ask a question that the document actually answers. The model is not
+allowed to answer from general knowledge.</p>
+<h3 id="answer-has-no-citations">Answer has no citations<a class="headerlink" href="#answer-has-no-citations" title="Permanent link">&para;</a></h3>
+<p>Citations are rejected if they cannot be located in the authorized evidence set or
+if the chunk became stale during generation. Check the stream <code>error</code> event and API
+logs. Re-upload or reparse the document if its version was replaced.</p>
+<h3 id="rerank-does-not-seem-to-run">Rerank does not seem to run<a class="headerlink" href="#rerank-does-not-seem-to-run" title="Permanent link">&para;</a></h3>
+<p>Rerank is off by default. It only runs when <code>rerank_enabled</code> is true in the
+knowledge-base or request configuration; <code>RERANK_SOURCE=none</code> is also a pass-through.</p>
+<h2 id="frontend">Frontend<a class="headerlink" href="#frontend" title="Permanent link">&para;</a></h2>
+<h3 id="web-ui-cannot-reach-the-api">Web UI cannot reach the API<a class="headerlink" href="#web-ui-cannot-reach-the-api" title="Permanent link">&para;</a></h3>
+<p>The browser calls <code>VITE_API_BASE_URL</code>. For local defaults this is
+<code>http://localhost:8082/api/v1</code>. If you changed <code>API_PORT</code>, update <code>API_PUBLIC_URL</code>
+and restart the web container. CORS allows the local development origin only.</p>
+<h3 id="changes-do-not-appear">Changes do not appear<a class="headerlink" href="#changes-do-not-appear" title="Permanent link">&para;</a></h3>
+<p>The web container runs the Vite dev server. After changing source code, rebuild the
+web service:</p>
+<div class="highlight"><pre><span></span><code><span class="s2">"</span><span class="si">${</span><span class="nv">COMPOSE</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--build<span class="w"> </span>web
+</code></pre></div>
+<h2 id="reset-a-local-stack">Reset a local stack<a class="headerlink" href="#reset-a-local-stack" title="Permanent link">&para;</a></h2>
+<p>Stopping keeps volumes:</p>
+<div class="highlight"><pre><span></span><code>./scripts/quickstart.sh<span class="w"> </span>--down
+</code></pre></div>
+<p>Deleting volumes is destructive and removes the database, Redis data, and object
+storage:</p>
+<div class="highlight"><pre><span></span><code><span class="s2">"</span><span class="si">${</span><span class="nv">COMPOSE</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>down<span class="w"> </span>-v
+</code></pre></div>
+<p>Run this only when you accept permanent data loss.</p>
+<h2 id="getting-help">Getting help<a class="headerlink" href="#getting-help" title="Permanent link">&para;</a></h2>
+<p>Open a bug report with version, deployment method, reproduction steps, and relevant
+logs. Remove secrets and personal data. Security issues follow
+<a href="https://github.com/hzc19970630/rag-platform/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

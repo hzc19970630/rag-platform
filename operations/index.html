@@ -1,0 +1,1736 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="多租户、证据驱动的企业知识库平台">
+      
+      
+      
+        <link rel="canonical" href="https://hzc19970630.github.io/rag-platform/operations/">
+      
+      
+        <link rel="prev" href="../api/">
+      
+      
+        <link rel="next" href="../releases/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>运维 - RAG Platform</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="RAG Platform" class="md-header__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RAG Platform
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              运维
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RAG Platform" class="md-nav__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RAG Platform
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    故障排查
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    运维
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    运维
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. 迁移兼容检查
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 优雅关闭
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. 备份与恢复演练
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. 备份与恢复演练">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 定时逻辑备份
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-walpitr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 WAL/PITR 与对象存储
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-rto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 恢复演练与 RTO 记录
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-redisworker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Redis/Worker 故障
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Redis/Worker 故障">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#redis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redis 重启
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker 停止
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-inbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 重复投递、Inbox 与死信
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Reconciliation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. 告警指标
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. 模型网关故障演练
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. 模型网关故障演练">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-chat-rerank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Chat / Rerank 模型绑定
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. 身份与密钥轮换
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. 文档生命周期与保留
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. 数据库连接池
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-tracingotel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Tracing（OTel）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. 投影生成缓存
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. 向量召回调参与探针
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-rls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. 租户 RLS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-hnsw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. 在线 HNSW 索引变更
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. 异步答案生成
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#18-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. CI 门禁与供应链
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    发布与回滚
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    竞品对比
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安全策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    贡献指南
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../licensing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    许可证
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-relationstore-port/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构决策
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. 迁移兼容检查
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 优雅关闭
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. 备份与恢复演练
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. 备份与恢复演练">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 定时逻辑备份
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-walpitr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 WAL/PITR 与对象存储
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-rto" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 恢复演练与 RTO 记录
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-redisworker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Redis/Worker 故障
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Redis/Worker 故障">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#redis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redis 重启
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker 停止
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-inbox" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 重复投递、Inbox 与死信
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Reconciliation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. 告警指标
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. 模型网关故障演练
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. 模型网关故障演练">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-chat-rerank" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Chat / Rerank 模型绑定
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. 身份与密钥轮换
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. 文档生命周期与保留
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. 数据库连接池
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-tracingotel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Tracing（OTel）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. 投影生成缓存
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. 向量召回调参与探针
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-rls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. 租户 RLS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-hnsw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. 在线 HNSW 索引变更
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. 异步答案生成
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#18-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. CI 门禁与供应链
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="_1">运维手册<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>本手册覆盖平台的企业治理与可运营性能力：迁移兼容检查、备份恢复、优雅关闭、Redis/Worker 故障、Outbox/Inbox 幂等、死信处理、reconciliation、模型网关故障演练和告警指标。</p>
+<p>所有命令默认在仓库根目录执行，并使用本地 Compose 栈：</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>deploy/docker-compose
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>../../.env<span class="w"> </span>-f<span class="w"> </span>docker-compose.yml<span class="w"> </span>&lt;command&gt;
+</code></pre></div>
+<p>下文用 <code>compose</code> 指代 <code>docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml</code>。</p>
+<h2 id="1">1. 迁移兼容检查<a class="headerlink" href="#1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>迁移版本与校验和记录在 <code>schema_migrations(version, checksum)</code>。</li>
+<li>迁移进程在独立连接上持有 PostgreSQL session 级 advisory lock（<code>pg_advisory_lock</code>），多副本同时启动时串行执行；等待期间日志停在 <code>migration_lock_acquired</code> 之前，拿到锁后记录该行。进程退出会释放锁，不会留下需要人工清理的锁记录。</li>
+<li>部署前执行只读检查；<code>-check</code> 不修改数据库，发现缺失/漂移的迁移或校验和不一致时以非零退出：</li>
+</ul>
+<div class="highlight"><pre><span></span><code>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--no-deps<span class="w"> </span>migrate<span class="w"> </span>-check
+</code></pre></div>
+<ul>
+<li>预期日志包含 <code>migrations_compatible</code>。校验和漂移表示已发布的迁移文件被修改，必须先恢复文件内容，不能直接覆盖数据库记录。</li>
+<li>迁移默认只向前执行。带 <code>&lt;version&gt;.down.sql</code> 的迁移可单独回滚：<code>-down &lt;version&gt;</code> 会在一个事务内执行 down SQL 并删除 <code>schema_migrations</code> 记录；未提供 down 文件的迁移仍通过恢复备份或补偿迁移处理。</li>
+<li>当前可回滚的迁移：<code>0027_drop_casbin_rule</code>（恢复空的 Casbin 表，便于旧版本二进制启动）。</li>
+</ul>
+<div class="highlight"><pre><span></span><code>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--no-deps<span class="w"> </span>migrate<span class="w"> </span>-down<span class="w"> </span>0027_drop_casbin_rule
+</code></pre></div>
+<h2 id="2">2. 优雅关闭<a class="headerlink" href="#2" title="Permanent link">&para;</a></h2>
+<ul>
+<li>API 与 Worker 都监听 <code>SIGINT</code>/<code>SIGTERM</code>，停止接收新请求/任务，等待在途工作结束后退出；超时由 <code>SHUTDOWN_TIMEOUT_SECONDS</code> 控制（默认 10 秒）。</li>
+<li>API 正常退出日志：<code>api_shutdown_complete</code>。Worker 正常退出日志：<code>worker_shutting_down</code>。</li>
+<li>Worker 的 Asynq 队列在关闭时先停止拉取新任务，再由 <code>server.Shutdown()</code> 等待在途任务；超过超时时间后强制 <code>Stop()</code> 并记录 <code>worker_shutdown_timeout</code> 警告。</li>
+<li>Compose 停止时给容器的宽限期应大于 <code>SHUTDOWN_TIMEOUT_SECONDS</code>，否则在途任务会被 SIGKILL 并留下 <code>PROCESSING</code> 租约，由 reconciliation 在租约过期后回收。</li>
+</ul>
+<p>验证：</p>
+<div class="highlight"><pre><span></span><code>compose<span class="w"> </span>restart<span class="w"> </span>api
+compose<span class="w"> </span>logs<span class="w"> </span>--no-color<span class="w"> </span>api<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>api_shutdown_complete
+compose<span class="w"> </span>stop<span class="w"> </span>worker<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>compose<span class="w"> </span>start<span class="w"> </span>worker
+compose<span class="w"> </span>logs<span class="w"> </span>--no-color<span class="w"> </span>worker<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>worker_shutting_down
+</code></pre></div>
+<h2 id="3">3. 备份与恢复演练<a class="headerlink" href="#3" title="Permanent link">&para;</a></h2>
+<h3 id="31">3.1 定时逻辑备份<a class="headerlink" href="#31" title="Permanent link">&para;</a></h3>
+<p><code>scripts/backup_postgres.sh</code> 提供可调度的 <code>pg_dump</code> 备份：必须显式设置 <code>BACKUP_DIR</code>（仓库外的运维目录），<code>BACKUP_RETENTION_DAYS</code> 默认 7 天；脚本会校验 dump 非空并清理过期文件。示例 cron：</p>
+<div class="highlight"><pre><span></span><code>17 2 * * * cd /opt/rag-platform &amp;&amp; BACKUP_DIR=/var/backups/rag ./scripts/backup_postgres.sh &gt;&gt;/var/log/rag-backup.log 2&gt;&amp;1
+</code></pre></div>
+<p>逻辑备份只是基础回退路径；生产 RPO 若要求分钟级，必须启用 WAL/PITR（见 3.2），逻辑备份不能替代 PITR。</p>
+<h3 id="32-walpitr">3.2 WAL/PITR 与对象存储<a class="headerlink" href="#32-walpitr" title="Permanent link">&para;</a></h3>
+<p><code>deploy/postgres/pitr.conf.example</code> 与 <code>deploy/postgres/pitr.compose.example.yml</code> 给出 <code>wal_level=replica</code>、<code>archive_mode=on</code>、<code>archive_command</code> 与 <code>archive_timeout=60</code> 的模板。启用前必须把 WAL 归档目录放到独立、可复制、可恢复的存储，并按目标 RPO 调整 <code>archive_timeout</code>/WAL 投递频率。对象存储需启用版本化与跨副本复制（MinIO/S3 的 <code>mc version enable</code>、<code>mc replicate add</code> 或云厂商等价能力），否则 <code>pg_dump</code>/PITR 不包含原始文件与 <code>normalized.json</code>。</p>
+<p>预检命令：</p>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>m13-pitr-check<span class="w">              </span><span class="c1"># 要求 wal_level=replica、archive_mode=on、archive_timeout&lt;=60、归档失败数为 0</span>
+make<span class="w"> </span>m13-object-storage-check<span class="w">    </span><span class="c1"># 要求 bucket versioning + replication</span>
+<span class="c1"># 本地开发：PITR 未启用时用 --allow-disabled；单机 MinIO 无复制目标时用 --allow-single-node</span>
+./scripts/m13_pitr_check.sh<span class="w"> </span>--allow-disabled
+./scripts/m13_object_storage_check.sh<span class="w"> </span>--allow-single-node
+</code></pre></div>
+<p><code>m13-object-storage-check --apply</code> 会先开启 bucket versioning 再检查；复制目标必须由部署方创建，脚本不会自动猜测远端端点。PITR 模板已在一次性 ParadeDB 容器中验证：<code>archive_mode=on</code>、<code>archive_timeout=60</code>，<code>pg_switch_wal</code> 后 4 个 WAL 成功归档且 <code>pg_stat_archiver.failed_count=0</code>；本地开发栈仍保持 <code>archive_mode=off</code>，生产需按 3.2 的模板和外部归档存储启用。</p>
+<h3 id="33-rto">3.3 恢复演练与 RTO 记录<a class="headerlink" href="#33-rto" title="Permanent link">&para;</a></h3>
+<p><code>scripts/m13_backup_drill.sh</code> 包装现有的逻辑 dump/restore 演练，并强制要求显式提供 <code>RTO_TARGET_SECONDS</code> 与 <code>RPO_TARGET_SECONDS</code>；缺省直接失败，避免用臆造目标值通过验收。企业 GA 基线已批准为 <strong>RTO 3600s / RPO 900s</strong>；运行后把实测 RTO/RPO 写入 <code>tests/eval/m13_backup_drill_report.json</code>，超过目标则退出 1。</p>
+<div class="highlight"><pre><span></span><code><span class="nv">RTO_TARGET_SECONDS</span><span class="o">=</span><span class="m">3600</span><span class="w"> </span><span class="nv">RPO_TARGET_SECONDS</span><span class="o">=</span><span class="m">900</span><span class="w"> </span>./scripts/m13_backup_drill.sh
+<span class="c1"># 只校验输入和计划，不执行恢复：</span>
+<span class="nv">RTO_TARGET_SECONDS</span><span class="o">=</span><span class="m">3600</span><span class="w"> </span><span class="nv">RPO_TARGET_SECONDS</span><span class="o">=</span><span class="m">900</span><span class="w"> </span>./scripts/m13_backup_drill.sh<span class="w"> </span>--dry-run
+</code></pre></div>
+<p>季度演练仍需运维按计划执行并归档报告；本脚本只保证流程可重复、输入明确、结果可核对。</p>
+<p><code>scripts/m4_backup_restore.sh</code> 会：</p>
+<ol>
+<li>用 <code>pg_dump --format=custom --no-owner --no-privileges</code> 导出当前开发库。</li>
+<li>启动一个一次性 <code>paradedb/paradedb:v0.22.6-pg17</code> 容器（随机容器名，不映射宿主机端口），等待镜像完成 initdb 的“初始化→重启”两阶段。</li>
+<li>过滤掉目标镜像已内置的 <code>paradedb</code> schema 与 <code>pg_search</code>/<code>vector</code> 扩展条目后 <code>pg_restore --exit-on-error</code>。</li>
+<li>对比全部 42 张 public 表的行数、<code>schema_migrations</code> 的版本与校验和、<code>authorization_revisions</code>、<code>kb-dev</code> 及其 owner 成员关系。</li>
+<li>对比 <code>chunks</code> 的全部索引定义，确认 <code>chunks_bm25_idx</code> 与 <code>chunks_vector_idx*</code>（<code>halfvec(1024)</code> HNSW，当前实现为版本化名 <code>chunks_vector_idx_&lt;dim&gt;_v&lt;N&gt;</code>）随备份恢复。</li>
+<li>结束时删除一次性容器和临时文件；源栈只读。</li>
+</ol>
+<div class="highlight"><pre><span></span><code>./scripts/m4_backup_restore.sh
+</code></pre></div>
+<p>生产恢复步骤（人工确认后执行）：</p>
+<ol>
+<li>在隔离环境准备与源库同版本的 PostgreSQL + ParadeDB/pgvector；恢复前不要运行 seed。</li>
+<li><code>pg_restore --no-owner --no-privileges --exit-on-error</code> 导入备份；目标镜像若预装扩展，按脚本方式过滤扩展/schema 条目。</li>
+<li>执行 <code>migrate -check</code> 确认迁移一致，再启动 API/Worker。</li>
+<li>恢复对象存储：<code>pg_dump</code> 不包含 MinIO/S3 中的原始文件与 <code>normalized.json</code>。生产必须同时备份对象存储桶；缺对象时预览/内容接口返回 409 <code>content_unavailable</code>（不回显对象键），重新解析失败，但已生成 Chunk 的检索仍可用。</li>
+<li>验证：<code>readyz</code>、<code>/api/v1/ops/metrics</code>、任选文档的详情/预览/检索，以及 <code>authorization_revisions</code> 与备份前一致。</li>
+<li>新环境上线后轮换 <code>JWT_SIGNING_KEYS</code>、<code>API_KEY_PEPPER</code> 和 OIDC client secret；更换 pepper 会使已签发 API Key 全部失效，需重新签发。</li>
+</ol>
+<h2 id="4-redisworker">4. Redis/Worker 故障<a class="headerlink" href="#4-redisworker" title="Permanent link">&para;</a></h2>
+<h3 id="redis">Redis 重启<a class="headerlink" href="#redis" title="Permanent link">&para;</a></h3>
+<ul>
+<li>授权缓存的唯一事实源是数据库中的 <code>authorization_revisions</code> 与成员关系表；Casbin 策略是进程内可重建投影，每次 <code>Authorize</code>/<code>BuildScope</code> 都会 <code>ensureFresh</code> 比对数据库 revision，因此 Redis 丢失不会让撤权回退。</li>
+<li>revision 按 tenant 缓存，只有该租户的 revision 变化时才重建策略；<code>BumpRevision</code> 只删除本实例的缓存并发布通知，不再同步全量重建。</li>
+<li>队列、Asynq 调度和 Pub/Sub 通知属于可丢失状态：在途任务由 Outbox 重新投递；已撤销角色的缓存会在下一次请求按 revision 重建。</li>
+<li>Redis 恢复后 API/Worker 会自动重连，无需重启进程；<code>/readyz</code> 的 <code>redis</code> 检查恢复为 <code>ok</code> 即可。</li>
+<li>演练：<code>compose restart redis</code>，确认 <code>/readyz</code> 恢复，重复执行一次“撤销成员→检索 403→重新添加→检索 200”。</li>
+</ul>
+<h3 id="worker">Worker 停止<a class="headerlink" href="#worker" title="Permanent link">&para;</a></h3>
+<ul>
+<li>API 只写业务表与 <code>outbox_events</code>，不直接投递 Asynq；Outbox Publisher 运行在 Worker 中。Worker 停止期间上传照常返回 202，事件保持 <code>published_at IS NULL</code>。</li>
+<li>Worker 每个 tick 按 <code>FOR UPDATE SKIP LOCKED</code> claim 最多 <code>OUTBOX_BATCH_SIZE</code> 条事件，写入 lease 后在事务外发布；发布成功批量标记，失败按 <code>attempts</code>/<code>next_attempt_at</code> 退避。</li>
+<li>发布是 at-least-once：进程在发布后、标记前崩溃会重投，由 Asynq <code>TaskID</code> 与 <code>task_inbox</code> 去重。</li>
+<li>超过 <code>OUTBOX_MAX_ATTEMPTS</code> 的事件不再计入 <code>outboxBacklog</code>，其对应任务由错误处理或 reconciliation 记录为死信。</li>
+</ul>
+<h2 id="5-inbox">5. 重复投递、Inbox 与死信<a class="headerlink" href="#5-inbox" title="Permanent link">&para;</a></h2>
+<ul>
+<li>每个阶段任务的 <code>TaskID</code> 等于 <code>idempotency_key</code>（<code>&lt;pipeline_run_id&gt;:&lt;stage&gt;</code>），Asynq 会拒绝重复入队；Worker 的 <code>task_inbox</code> 以同一键做二次幂等，<code>SUCCEEDED</code> 的任务直接跳过。</li>
+<li>Inbox 认领是条件更新：只有空闲（<code>PENDING</code>/<code>FAILED</code>）或 <code>lease_until</code> 已过期的行才能被认领；执行期间 Worker 每 TTL/3 续租 <code>lease_until</code>，因此重复投递的第二个 Worker 无法并发执行同一阶段。执行结束或失败后租约立即释放，Asynq 重试可直接再次认领。</li>
+<li>重复发布同一 Outbox 事件不会产生重复 Chunk/Inbox 行，可用以下查询核对：</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">chunks</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">document_version_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'&lt;version&gt;'</span><span class="p">;</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">task_inbox</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">idempotency_key</span><span class="w"> </span><span class="k">LIKE</span><span class="w"> </span><span class="s1">'&lt;pipeline&gt;:%'</span><span class="p">;</span>
+</code></pre></div>
+<ul>
+<li>任务失败会按 Asynq 重试预算（最多 5 次）重试；预算耗尽后 Worker 的错误处理器写入 <code>task_dead_letters</code>（状态 <code>PENDING</code>），同时把 Inbox 置为 <code>FAILED</code>。以 <code>terminal:</code> 开头的错误（如 <code>unsupported_scanned_pdf</code>）跳过重试并直接记录终态。</li>
+<li>运维接口（要求 session 凭据且为 tenant owner/admin）：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/ops/tasks/:key</code></td>
+<td>TaskInspector：查看 inbox、stage、pipeline 与最近错误</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/ops/dead-letters?status=</code></td>
+<td>列出死信</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/ops/dead-letters/:id/retry</code></td>
+<td>清理原队列 archived 后重新投递到 <code>interactive</code> 队列，Inbox/Stage 复位，写审计</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/ops/dead-letters/:id/discard</code></td>
+<td>清理原队列 archived 并放弃死信（不重放），写审计</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/ops/pipelines/:id/cancel</code></td>
+<td>取消流水线，阻止后续阶段</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/v1/ops/reconcile?staleAfterSeconds=</code></td>
+<td>手动触发当前租户的 reconciliation（只修复该租户的文档状态、inbox 租约、死信与阶段）</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/v1/ops/metrics</code></td>
+<td>指标快照（见第 7 节）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>表内操作都以调用者租户为边界：<code>stage_runs</code> 与 <code>task_inbox</code> 没有租户列，通过所属 <code>pipeline_runs</code> 或 <code>projection_runs</code> 确认归属；无法确认归属的任务按 404 处理，不会返回其他租户的数据。</li>
+<li>人工重试/放弃会先删除该任务在 Asynq 原队列中的 archived 记录，再分别重投或关闭死信；成功后 <code>queues.*.archived</code> 应回到 0。<code>RETRYING</code> 状态的死信不能再次重放，避免并发重复投递。</li>
+<li>人工重试后若任务成功，死信状态变为 <code>RETRYING</code>；下一次 reconciliation 确认 Inbox 已 <code>SUCCEEDED</code> 后置为 <code>RESOLVED</code>。也可直接调用 reconcile 立即收敛。</li>
+<li>死信重放必须保持 payload 原样；不要手工修改 <code>idempotency_key</code>，否则会绕过 Inbox 幂等。</li>
+</ul>
+<h2 id="6-reconciliation">6. Reconciliation<a class="headerlink" href="#6-reconciliation" title="Permanent link">&para;</a></h2>
+<p>Worker 每个 <code>RECONCILE_INTERVAL_SECONDS</code>（默认 60 秒）执行一次，也可通过接口触发：</p>
+<ul>
+<li>修复 <code>pipeline_runs</code>/<code>document_versions</code>/<code>documents</code> 之间的状态漂移。</li>
+<li>回收超过 <code>staleAfterSeconds</code> 仍处于 <code>PENDING</code>/<code>PROCESSING</code> 的 Stage；Inbox 只回收 <code>lease_until</code> 已过期的 <code>PROCESSING</code> 行，正在心跳续租的任务不会被误判为失败。</li>
+<li>对 Inbox 已 <code>SUCCEEDED</code> 的死信置为 <code>RESOLVED</code>。</li>
+<li>重新入队停滞阶段；若文档已删除、版本已被替换则取消，若 <code>attempts &gt;= 5</code> 则标记失败并写死信。</li>
+<li>reconciliation 是幂等的，可在任意时刻重复执行。</li>
+<li>通过 HTTP 触发时只处理当前租户的数据；全平台维护循环由持有 leader 锁的单个 Worker 执行，租户 owner/admin 没有全平台入口。</li>
+</ul>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">"Authorization: Bearer &lt;session-token&gt;"</span>
+</code></pre></div>
+<h2 id="7">7. 告警指标<a class="headerlink" href="#7" title="Permanent link">&para;</a></h2>
+<p><code>GET /api/v1/ops/metrics</code>（tenant owner/admin）返回：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+<th>建议告警</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>counters</code> / <code>timings</code></td>
+<td>进程内 HTTP 计数与耗时，重启清零</td>
+<td>5xx 比例、P95 延迟</td>
+</tr>
+<tr>
+<td><code>queues.{ingestion,interactive,maintenance}.pending/active/retry/archived</code></td>
+<td>各 Worker Pool 深度；未创建的队列按 0 返回</td>
+<td><code>pending</code> 持续增长、<code>archived &gt; 0</code></td>
+</tr>
+<tr>
+<td><code>operations.stages</code></td>
+<td>24 小时内按阶段/状态的 <code>stage_runs</code> 计数</td>
+<td><code>parse.failed</code> 增长</td>
+</tr>
+<tr>
+<td><code>operations.parseFailureRate</code></td>
+<td><code>parse.failed / (parse.succeeded + parse.failed)</code>，24 小时窗口</td>
+<td>&gt; 0.2 持续 10 分钟</td>
+</tr>
+<tr>
+<td><code>operations.modelErrors24h</code></td>
+<td>24 小时内失败的 assistant 消息（模型错误）</td>
+<td>任意增长</td>
+</tr>
+<tr>
+<td><code>operations.deadLetters</code></td>
+<td>按 <code>PENDING</code>/<code>RETRYING</code> 分组的死信数</td>
+<td>任意 <code>PENDING</code></td>
+</tr>
+<tr>
+<td><code>operations.outboxBacklog</code></td>
+<td><code>published_at IS NULL AND attempts &lt; OUTBOX_MAX_ATTEMPTS</code></td>
+<td>持续 &gt; 0 且不下降</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>operations</code> 来自数据库，跨进程重启保留；<code>counters</code>/<code>timings</code>/<code>queues</code> 是进程级或实时 Redis 状态，API 重启后归零。</li>
+<li>Prometheus 抓取走独立监听器：设置 <code>METRICS_ADDR</code>（开发/测试可用 <code>0.0.0.0:9091</code>；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 <code>GET /metrics</code>，返回 <code>text/plain; version=0.0.4</code>。<code>APP_ENV=production</code> 时只允许 <code>localhost</code> 或回环/RFC1918/ULA/link-local 的字面 IP，<code>:9091</code>、<code>0.0.0.0</code>、公网 IP 和普通主机名都会让启动校验失败。进程内 counters 输出为 <code>_total</code>，timings 输出为固定毫秒桶的 histogram（<code>_bucket{le="1|5|10|25|50|100|250|500|1000|2500|5000|10000|+Inf"}</code>、<code>_count</code>、<code>_sum</code>），另外保留 <code>&lt;name&gt;_max</code> gauge 供既有面板使用。P95 用 <code>histogram_quantile(0.95, sum by (le) (rate(&lt;name&gt;_bucket[5m])))</code> 计算。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target <code>api:9091</code> 与 <code>worker:9091</code>。该监听器<strong>没有租户鉴权</strong>，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 <code>127.0.0.1:9091:9091</code> 映射，不要暴露到公网。绑定失败只记录 <code>metrics_listener_stopped</code>，不会拖垮 API 或 worker。</li>
+<li><code>/api/v1/ops/metrics/prometheus</code> 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。</li>
+<li>独立监听器只包含本进程的指标，不包含数据库窗口内的 <code>operations</code>；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。</li>
+<li>解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。</li>
+<li>检索耗时可通过 <code>timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]</code> 观察。<code>model_errors_total</code> 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 <code>/metrics</code> 暴露；<code>/ops/metrics</code> 是 API 路由，看不到 worker 进程计数，入库失败仍可看 <code>operations.stages.embed.failed</code>。<code>rerank_degraded_total{reason=resolve|error|breaker_open}</code> 记录 Rerank 降级次数：<code>resolve</code> 为知识库绑定解析失败，<code>error</code> 为供应商调用失败，<code>breaker_open</code> 为熔断期间跳过调用；降级时检索仍返回关键词/向量融合结果（<code>rerankApplied=false</code>），<code>model_errors_total</code> 只统计真实的解析/调用错误。</li>
+</ul>
+<h2 id="8">8. 模型网关故障演练<a class="headerlink" href="#8" title="Permanent link">&para;</a></h2>
+<p>目标：确认解析/Embedding 失败可观测、可重试，并且不会静默产生不完整索引。</p>
+<ol>
+<li>选择隔离环境（<code>rag-eval</code> 或临时 Compose 项目），不要在生产执行。</li>
+<li>将 <code>EMBEDDING_BASE_URL</code> 指向不可达地址，或只停止 Worker 到模型网关的出口网络。</li>
+<li>上传一个小 Markdown 文档；观察阶段停在 <code>embed</code>，5 次重试后死信出现，<code>/ops/metrics</code> 的 <code>stages.embed.failed</code> 与 <code>deadLetters.PENDING</code> 增长（<code>modelErrors24h</code> 只统计问答生成失败，本演练中应保持 0）。</li>
+<li>恢复网关，调用 <code>/ops/dead-letters/:id/retry</code>；文档应达到 <code>EVIDENCE_READY</code>，死信经 reconcile 变为 <code>RESOLVED</code>。</li>
+<li>若只断开 Embedding，本地 <code>EMBEDDING_TIMEOUT_SECONDS</code>（默认 60 秒）决定单次失败耗时；演练前确认重试总时长在可接受范围。</li>
+</ol>
+<p>注意：纯检索不调用生成模型；<code>modelErrors24h</code> 只反映问答生成失败。入库 Embedding 失败体现在 <code>operations.stages.embed.failed</code>；Worker 进程内的 <code>model_errors_total{stage="embed"}</code> 不通过 <code>/ops/metrics</code> 暴露。</p>
+<h3 id="81-chat-rerank">8.1 Chat / Rerank 模型绑定<a class="headerlink" href="#81-chat-rerank" title="Permanent link">&para;</a></h3>
+<ul>
+<li>可路由模型来自部署配置：<code>LLM_CHAT_MODEL</code>、<code>CHAT_MODELS</code>、<code>LLM_RERANK_MODEL</code>、<code>RERANK_MODELS</code>。每项可写成 <code>name</code> 或 <code>name@version</code>；版本只用于审计，不参与供应商请求。<code>CHAT_MODELS</code>/<code>RERANK_MODELS</code> 只在对应 <code>*_SOURCE=remote</code> 时额外登记，离线适配器固定一个模型。改配置后需重启 api（目录在启动时构建）。</li>
+<li>知识库绑定通过 <code>PATCH /api/v1/knowledge-bases/{id}</code> 的 <code>chat_model</code>、<code>rerank_model</code> 字段设置；空串清除覆盖，回到部署默认。绑定写入前会校验模型已登记且能力匹配，未登记返回 400；每次实际变化都写 <code>audit_logs</code>（<code>resource_type=model_binding</code>，<code>reason</code> 含新/旧模型与版本），可用 <code>GET /api/v1/audit</code> 按资源排查。</li>
+<li>运行路径会做两次保护：绑定模型已不在目录中（例如回滚部署）时自动降级到部署默认；绑定供应商健康探测失败时也降级到默认，探测结果缓存 30 秒。默认模型同样不可用时请求失败（问答记录 <code>model_error</code>），不会静默切换。</li>
+<li>Chat 与 Embedding 适配器同样受熔断、租户并发舱壁与有界重试保护：连续 5 次失败熔断 30 秒，期间不调用供应商；每租户每能力最多 4 个并发调用；只对 transport/429/5xx 重试，Chat 最多 2 次尝试，Embedding 每批保持 3 次尝试。租户来自请求或任务上下文（<code>tenantdb.WithTenant</code>），缺失时使用进程级兜底舱壁。</li>
+<li>Rerank 是唯一允许降级的模型调用：绑定解析失败、供应商调用失败或熔断打开时，检索退回 rerank 前的关键词/向量融合顺序继续问答（<code>rerankApplied=false</code>），只损失重排序，不会让整次问答失败。降级原因通过 <code>rerank_degraded_total{reason=resolve|error|breaker_open}</code> 与 <code>rerank_degraded</code> 日志观察；<code>model_errors_total</code> 仍只统计真实的解析/调用错误。适配器连续失败 5 次后熔断 30 秒，期间直接使用融合顺序；冷却后只放行一个探针，成功即恢复。Chat 生成仍按上一条硬失败，不会静默降级。</li>
+<li>探测地址默认从各适配器的 base URL 推导：chat 与 embedding 用 <code>&lt;base&gt;/models</code>，rerank 用 <code>&lt;base&gt;/health</code>；可用 <code>CHAT_HEALTH_URL</code>、<code>EMBEDDING_HEALTH_URL</code>、<code>RERANK_HEALTH_URL</code> 覆盖（留空即用默认）。探测是带 Bearer 凭据的 <code>GET</code>，单次超时 3 秒；401/403（凭据被拒）和 5xx 判为不健康，其余状态（含 404）只要求网关可达，避免因供应商没有标准健康路径而误降级。</li>
+<li>当前健康快照可通过租户 owner/admin 的 <code>GET /api/v1/ops/metrics</code> 查看（<code>modelHealth</code> 数组，含 <code>model</code>、<code>provider</code>、<code>version</code>、<code>healthy</code>、<code>checkedAt</code>），也可从同一鉴权路由 <code>GET /api/v1/ops/metrics/prometheus</code> 抓取 <code>model_health{model,provider,version}</code> gauge（1 健康、0 不健康）。<code>model_health</code> 目前只在 API 进程的这条路由上暴露，不在 <code>METRICS_ADDR</code> 的无鉴权监听器里；需要自动告警时，让抓取端带 owner/admin 会话访问该路由，或对 <code>modelHealth</code> 做巡检。</li>
+<li><code>TENANT_MODEL_REQUESTS_PER_MINUTE</code> 限制每租户、每能力（chat/rerank/embedding）每分钟的模型解析次数，超限返回 <code>quota_exceeded</code>。它按进程内固定 1 分钟窗口计数，多副本部署时每个副本各自计数；需要全局硬预算时应在上游网关限流。</li>
+<li>Embedding 绑定不受这套运行时切换影响：知识库有文档后仍不能改模型或维度，需走受管重建。</li>
+<li>迁移 <code>migrations/postgres/0020_model_registry.sql</code> 只新增 <code>chat_model</code>、<code>chat_model_version</code>、<code>rerank_model</code>、<code>rerank_model_version</code> 四列，使用 <code>ADD COLUMN IF NOT EXISTS</code>，可重复执行；回滚时删除这四列即可（不触碰 Embedding 列）。</li>
+</ul>
+<h2 id="9">9. 身份与密钥轮换<a class="headerlink" href="#9" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>APP_ENV 枚举</strong>：只接受 <code>development</code>、<code>test</code>、<code>production</code>（忽略首尾空白与大小写）；未知值让所有进程在启动校验阶段失败，避免把拼写错误当成非生产环境绕过 production fail-fast。</li>
+<li><strong>CONFIG_PROFILE</strong>：<code>dev</code>（默认，保持现有默认值）、<code>eval</code>（<code>CHAT_SOURCE</code>/<code>EMBEDDING_SOURCE=local</code>、<code>TENANT_RLS_MODE=off</code>、异步答案关闭）、<code>on-prem</code>（<code>TENANT_RLS_MODE=enforce</code>、异步答案开启、开发身份关闭）、<code>saas</code>（在 on-prem 基础上强制 secure cookie）。profile 只在变量未显式设置时提供默认值，显式环境变量始终优先；未知 profile 启动失败。</li>
+<li><strong>生产密钥 fail-fast</strong>：<code>APP_ENV=production</code> 时启动校验拒绝仓库默认值。JWT 必须显式设置 <code>JWT_SIGNING_KEYS</code>，不能回落到 <code>JWT_SIGNING_KEY</code> 的开发单键；<code>API_KEY_PEPPER</code>、<code>S3_ACCESS_KEY</code>/<code>S3_SECRET_KEY</code>（含 MinIO 默认值），以及 <code>DATABASE_URL</code>、<code>MAINTENANCE_DATABASE_URL</code>、<code>ADMIN_DATABASE_URL</code> 中的占位密码都会让进程以 <code>configuration_invalid</code> 退出。被拒绝的值包括 <code>.env.example</code> 的 <code>replace-with-a-random-*</code>、<code>change-me-*</code>、<code>rag-local</code> 和编译内置的 <code>local-*-change-me</code>。非生产环境保留这些默认值；生产允许数据库 URL 不带密码（证书/peer 认证），但不接受已知占位密码。</li>
+<li><strong>JWT 会话</strong>：<code>JWT_SIGNING_KEYS=kid1:secret1,kid2:secret2</code> + <code>JWT_ACTIVE_KID=kid2</code>。新会话用 active kid 签发，旧 kid 继续验签；确认旧会话过期后移除旧 kid。只设置 <code>JWT_SIGNING_KEY</code> 时使用该单键（仅限非生产）。</li>
+<li><strong>API Key</strong>：数据库只保存 <code>sha256(pepper + raw)</code>；明文只在创建响应返回一次。轮换 <code>API_KEY_PEPPER</code> 会让全部已签发 key 立即失效，需重新签发并通知调用方。</li>
+<li><strong>连接器凭据密钥</strong>：新信封固定为 <code>v2:&lt;kid&gt;:&lt;base64(nonce||sealed)&gt;</code>，AAD 绑定 <code>v2:&lt;kid&gt;</code>。单键模式继续使用 <code>CONNECTOR_ENCRYPTION_KEY</code>（kid 固定为 <code>legacy</code>）；轮换时改用 <code>CONNECTOR_ENCRYPTION_KEYS=kid1:key1,kid2:key2</code> + <code>CONNECTOR_ENCRYPTION_ACTIVE_KID=kid2</code>，新写入用 active kid，旧 kid 保留用于解密历史信封。移除某个 kid 会让引用它的连接器立即不可解密（本轮没有批量重加密），所以轮换只加不删；历史的 <code>v1:</code> 信封始终用 <code>legacy</code> 键解密。设置 <code>CONNECTOR_ENCRYPTION_KEYS</code> 时 <code>CONNECTOR_ENCRYPTION_ACTIVE_KID</code> 必填，重复/空 kid、非法 key 和缺失的 active kid 都会让启动失败。</li>
+<li><strong>OIDC</strong>：<code>OIDC_ISSUER</code> 必须指向可发现（discovery）的 issuer；<code>OIDC_AUTO_PROVISION=false</code> 时只允许已存在的 membership 登录。登出会撤销 <code>auth_sessions</code> 行并清除 HttpOnly cookie；刷新沿用同一 <code>token_id</code>，不延长会话 TTL。</li>
+<li><strong>反向代理与客户端 IP</strong>：<code>HTTP_TRUSTED_PROXIES</code> 是逗号分隔的代理 IP/CIDR 列表，只有来自这些地址的 <code>X-Forwarded-For</code>/<code>X-Real-IP</code> 会被用于审计、限流和配额的客户端 IP。留空表示不信任任何代理，审计 IP 取 TCP 对端；<code>0.0.0.0/0</code> 与 <code>::/0</code> 会在启动校验被拒绝，避免把客户端 IP 重新交给调用方控制。部署在 Nginx/网关之后时，把实际的代理网段填入该变量，不要使用通配网段。</li>
+<li><strong>CSRF</strong>：会话 cookie 为 <code>HttpOnly</code> + <code>SameSite=Lax</code>；此外，携带会话 cookie 的写请求（POST/PUT/PATCH/DELETE）要求 <code>Origin</code>（缺失时回退 <code>Referer</code>）与请求 Host、<code>WEB_PUBLIC_URL</code> 或开发工作台源一致，否则返回 403。Bearer/API Key 请求不依赖 cookie，不受该检查影响。</li>
+<li><strong>撤销</strong>：删除知识库成员会同时提升 <code>knowledge_bases.acl_version</code> 与 <code>authorization_revisions</code>，后续检索按新 revision 重建 scope；不需要手工清 Redis。</li>
+<li><strong>租户成员变更</strong>：修改租户角色或移除租户成员时，在同一事务内按 <code>tenant_id + user_id</code> 撤销该用户的 <code>auth_sessions</code>；用户的下一次请求直接返回 401，不再等待 JWT 自然过期。仅删除知识库成员不会撤销租户会话，知识库权限仍按 revision 即时生效。</li>
+</ul>
+<h2 id="10">10. 文档生命周期与保留<a class="headerlink" href="#10" title="Permanent link">&para;</a></h2>
+<ul>
+<li>删除为软删除：<code>documents.deleted_at/deleted_by/purge_after</code> 写入，Chunk 与证据包保留以便恢复；检索、列表、详情和预览全部过滤已删除文档。</li>
+<li><code>DOCUMENT_RETENTION_DAYS</code>（默认 30）决定 <code>purge_after</code>。到期后 Worker 维护循环硬删除版本、Chunk、证据包、流水线、Outbox/Inbox 行、死信和对象存储文件。</li>
+<li><code>AUDIT_RETENTION_DAYS</code>（默认 180，0 表示永久保留）只作用于 <code>audit_logs</code>。Worker 每小时按 <code>created_at</code> 批量删除过期行（每批 1000 条，每轮最多 10 批），并由 <code>audit_logs_created_at_idx</code> 支撑。</li>
+<li><code>STREAM_EVENT_RETENTION_DAYS</code>（默认 7，0 表示永久保留）只作用于 <code>stream_events</code>。它保存的是 SSE 断线续传缓冲，不是问答历史；回答正文、引用和证据集都在 <code>messages</code> / <code>message_citations</code> / <code>evidence_set</code> 中。Worker 用同一套每小时批量清理（每批 1000 条，每轮最多 10 批），索引为 <code>stream_events_created_at_idx</code>。超过保留期后，旧请求的 <code>ReplayEvents</code> 返回空事件列表，但消息历史仍可正常读取；不建议从 <code>messages</code> 反向重建事件。</li>
+<li><code>TASK_HISTORY_RETENTION_DAYS</code>（默认 90，0 表示永久保留）只作用于入库任务历史：状态为 <code>EVIDENCE_READY</code>/<code>FAILED</code>/<code>CANCELLED</code> 且 <code>updated_at</code> 超过保留期的 <code>evidence</code> 流水线，以及状态为 <code>RESOLVED</code>/<code>DISCARDED</code> 且 <code>resolved_at</code> 超过保留期的死信。每轮每小时清理，每批 200 条、最多 10 批；删除顺序为 <code>stage_runs</code> → <code>outbox_events</code>（按流水线 ID 与文档版本 ID 两种聚合）→ <code>task_inbox</code>（<code>&lt;pipelineID&gt;:%</code>）→ <code>pipeline_runs</code>，死信按 <code>id</code> 删除。索引为 <code>pipeline_runs_status_updated_idx</code> 与 <code>task_dead_letters_status_resolved_idx</code>（迁移 0022）。<code>PENDING</code>/<code>RETRYING</code> 死信、未终态流水线以及文档版本/Chunk/证据包永远不会被这条规则删除；投影运行（<code>projection_runs</code>）也不受影响。保留期后若旧 Asynq 任务被重新投递，对应 <code>task_inbox</code> 键已不存在，worker 会重新校验版本并幂等重跑。</li>
+<li>SSE 回答流在空闲时每 15 秒写入一行 <code>: ping</code> 注释帧。EventSource 与 Web 端的 <code>parseSSEBlock</code> 都会忽略注释帧，但反向代理会把它当作流量，不再因等待模型输出期间没有数据而断开连接。</li>
+<li>恢复（<code>POST /documents/:id/restore</code>）清空删除标记并按最新版本是否完整恢复为 <code>EVIDENCE_READY</code> 或 <code>STORED</code>；超过保留窗口返回冲突。</li>
+<li>硬清理（<code>POST /documents/:id/purge</code>）只允许针对已软删除文档，立即删除全部派生数据与 S3 对象，不可恢复。</li>
+<li>版本回滚（<code>POST /documents/:id/versions/:versionID/activate</code>）会复用被替换版本的 STALE 证据包与 Chunk，不重新 Embedding；前一版本标记 <code>CANCELLED</code>。</li>
+</ul>
+<h2 id="11">11. 数据库连接池<a class="headerlink" href="#11" title="Permanent link">&para;</a></h2>
+<ul>
+<li>API、worker、embedctl 共用同一组连接池参数：<code>DATABASE_MAX_OPEN_CONNS</code>（默认 20）、<code>DATABASE_MAX_IDLE_CONNS</code>（默认 10）、<code>DATABASE_CONN_MAX_LIFETIME_SECONDS</code>（默认 1800）。<code>0</code> 空闲连接合法，其余非法值会让配置校验失败。</li>
+<li>规划容量时按 <code>副本数 × DATABASE_MAX_OPEN_CONNS &lt; PostgreSQL max_connections</code> 预留余量；迁移、备份和人工 psql 会话也要计入。</li>
+<li>连接寿命用于在 PostgreSQL 重启或主从切换后回收失效连接；不要设为 0（0 表示永不回收）。</li>
+</ul>
+<h2 id="12-tracingotel">12. Tracing（OTel）<a class="headerlink" href="#12-tracingotel" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>OTEL_EXPORTER_OTLP_ENDPOINT</code> 为空时，api/worker 仍生成 trace 并在响应头 <code>X-Trace-ID</code> 与 <code>http_request</code> 日志的 <code>trace_id</code> 中输出，但不导出；设置 OTLP/HTTP 端点（例如 <code>http://otel-collector:4318</code>）后按批导出到 collector，重启进程生效。</li>
+<li><code>OTEL_SERVICE_NAME</code> 默认 <code>rag-platform</code>，api 与 worker 共用；需要区分进程时可分别设置。</li>
+<li>HTTP 请求会继续上游 W3C <code>traceparent</code>；检索、远程模型调用是同一 trace 的子 span，模型 span 记录 <code>gen_ai.request.model</code> 与 token 用量。</li>
+<li>异步 worker 的 span 记录任务 envelope 的 <code>trace.id</code>、<code>pipeline_run.id</code>、<code>stage</code>，但当前尚未把 HTTP span 作为父 span 跨队列串联；排障时用 <code>trace_id</code> 关联 API 日志与 worker 日志。</li>
+<li>导出器故障只影响 tracing，不阻塞请求；collector 不可用时检查进程日志中的 <code>tracing_bootstrap_failed</code>（启动期）与 OTLP 导出错误。</li>
+</ul>
+<h2 id="13">13. 投影生成缓存<a class="headerlink" href="#13" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Pipeline B 的 Wiki 文档页、概览块和关系抽取结果按 EvidencePackage 缓存在 <code>projection_generation_cache</code>。主键为 <code>(tenant_id, knowledge_base_id, projection_type, artifact, package_id)</code>；<code>artifact</code> 区分 <code>document</code>、<code>overview-block</code>、<code>extraction</code>，同一 package 的多个产物不会互相覆盖。</li>
+<li>缓存键包含 package 内容摘要（chunk 级）、ACL、模型和 Prompt 版本；任一项变化都会 miss 并重算。package 内容未变时，运行日志出现 <code>projection_generation</code> 且 <code>reused</code> 增加、模型调用数下降。</li>
+<li>手动 <code>POST /knowledge-bases/:id/wiki/rebuild</code> 与 <code>POST /knowledge-bases/:id/graph/rebuild</code> 会先清空该知识库对应类型的缓存，保证“重建”是全量重算，不复用旧结果。</li>
+<li>Worker 维护周期调用 <code>PurgeGenerationCache</code>，删除 <code>evidence_packages</code> 已不存在的缓存行；当前 package 的缓存长期保留，因此很久未改的文档不会因为缓存过期而在下一次变更时被迫全量重算。</li>
+<li>回滚开关：<code>PROJECTION_INCREMENTAL_ENABLED=false</code> 并重启 api/worker，投影恢复为每次全量生成；缓存表可保留或直接 <code>TRUNCATE</code>，二者都不影响业务事实。</li>
+<li>观测：<code>projection_cache_hits_total{type="wiki|relation"}</code> 与 <code>projection_cache_misses_total{type="wiki|relation"}</code> 记录每次运行的 package 数；<code>projection_generation</code> 日志给出同一组计数。</li>
+</ul>
+<h2 id="14">14. 向量召回调参与探针<a class="headerlink" href="#14" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>vector_ef_search</code>（默认 40）、<code>vector_oversample</code>（默认 1）、<code>vector_iterative_scan</code>（默认 true → pgvector <code>relaxed_order</code>）是三级可覆盖的检索参数；<code>0</code> 的 ef_search 表示使用 pgvector 服务端默认。</li>
+<li>本地验证：<code>make vector-recall-probe</code> 在临时 schema 中构造 100:1 租户语料，输出 <code>tests/eval/vector_recall_report.json</code>，不触碰业务表。报告同时记录自然计划与强制 HNSW 计划的返回数、relevant recall、P95 和执行计划节点。</li>
+<li>Enforce 演练：<code>python3 scripts/vector_recall_probe.py --rls --report tests/eval/vector_recall_report_rls.json</code> 在临时 <code>chunks</code> 表上安装与 0024 相同的严格策略，并以 <code>rag_app</code>（<code>SET LOCAL ROLE</code>）执行测量；与不带 <code>--rls</code> 的基线报告比较计划节点和 P95，要求仍为 HNSW 且 P95 不超过基线 1.5×。</li>
+<li>2026-11-05 结论（pgvector 0.8.7）：自然计划选择精确过滤扫描时返回 20/20；强制 HNSW 且 iterative scan=off 时只返回 4–6/20，提高 ef_search 或过采样都无法补齐；<code>relaxed_order</code> 补到 20/20、recall 1.0、P95 10–32ms。若生产 pgvector 版本低于 0.8，把 <code>vector_iterative_scan</code> 设为 false，否则 <code>SET LOCAL</code> 会失败并在检索阶段暴露清晰错误。</li>
+<li>2026-11-05 真实语料只读复核（1463 条 1024 维；小 KB 选择性约 2.6%–6.1%，以 chunk 自身 embedding 查询、精确扫描 Top-20 为基准并排除自身）：自然计划走 HNSW；<code>ef_search=40</code>、过采样 1 且关闭迭代扫描仅返回 7.0–8.7/20，过采样 1/4/10 无改善；<code>relaxed_order</code> 在 ef_search=40 恢复 20/20，recall 0.982–1.000，P95 1.3–2.2ms。与合成探针结论一致。</li>
+<li>监控：<code>vector_recall_underfill_total{ef_search,oversample}</code> 非零表示过滤后的 ANN 扫描未填满 TopK；同时检查 <code>vector_recall_underfill</code> 日志中的 tenant、KB 数和 requested/returned。该指标出现时，优先确认 <code>vector_iterative_scan=true</code>，再评估分区或外部向量库。</li>
+</ul>
+<h2 id="15-rls">15. 租户 RLS<a class="headerlink" href="#15-rls" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>TENANT_RLS_MODE=off|shadow|enforce</code>，默认 <code>shadow</code>。<code>off</code> 不设置 <code>app.tenant_id</code>，可用 <code>./scripts/m13_rls_mode.sh off</code> 关闭 RLS；<code>shadow</code> 使用允许策略并在租户作用域查询中设置该 GUC，写路径触发器据此审计；<code>enforce</code> 使用迁移 0024 的严格策略。代码只提供开关与验收，是否切换是部署决策。</li>
+<li>API 在 enforce 下把每个已认证请求放进一个数据库事务：<code>tenantdb.BeginRequestTx</code> 开启事务并执行 <code>SELECT set_config('app.tenant_id', &lt;tenant&gt;, true)</code>，普通查询与 <code>tenantdb.InTx</code> 服务事务都加入该事务（GORM 的显式 <code>Transaction</code> 不经过重定向回调，因此服务层必须用 <code>InTx</code>）。handler 返回 5xx、panic 或任一嵌套事务失败时整体回滚；事务级 GUC 随连接归还自动清空。worker 在 enforce 下整体使用 <code>MAINTENANCE_DATABASE_URL</code>，跨租户任务不依赖 GUC；API 只对认证前的身份查询使用维护连接。</li>
+<li>迁移 0023 安装 36 张表的 <code>ENABLE/FORCE ROW LEVEL SECURITY</code>、允许策略 <code>tenant_shadow_allow</code> 与写审计触发器 <code>rls_shadow_write</code>，并为 <code>task_inbox</code> 回填 <code>tenant_id</code>（因此它按父表口径统计）；0026 新增 <code>answer_jobs</code> 后总数为 37 张（34 张租户表 + 3 张子表）。无法按 <code>&lt;runID&gt;:&lt;stage&gt;</code> 归属的 inbox 行会写入 <code>rls_shadow_violations</code>，enforce 前必须清零（<code>m13-rls-acceptance</code> 会检查）。</li>
+<li>角色：<code>rag_app</code>（<code>NOSUPERUSER NOBYPASSRLS</code>，API 租户流量）与 <code>rag_maintenance</code>（<code>BYPASSRLS</code>，worker 与跨租户维护）。enforce 下 API/worker 的 <code>DATABASE_URL</code> 必须是 <code>rag_app</code>，且 <code>MAINTENANCE_DATABASE_URL</code> 必填并必须使用不同角色；migrate/seed/embedctl 使用 <code>ADMIN_DATABASE_URL</code>（所有者角色，缺省回退 <code>DATABASE_URL</code>）。启动时查询 <code>pg_roles</code> 校验：API 运行时角色不得是超级用户或 <code>BYPASSRLS</code>，worker 维护角色必须具备 <code>BYPASSRLS</code>，否则拒绝启动。密码与授权由 <code>make m13-rls-setup</code> 设置，需先导出 <code>RAG_APP_DB_PASSWORD</code>、<code>RAG_MAINTENANCE_DB_PASSWORD</code>；脚本幂等，可对已有库重复执行。全新数据卷由 <code>deploy/docker-compose/initdb/01-roles.sh</code> 自动创建角色。</li>
+<li><code>APP_ENV=production</code> 时 <code>TENANT_RLS_MODE</code> 必须是 <code>enforce</code>；<code>shadow</code>/<code>off</code> 或未设置都会让启动校验失败。CI 使用 <code>APP_ENV=development</code> + dev auth，但以 <code>rag_app</code>/<code>rag_maintenance</code> 整栈运行 enforce；<code>ENFORCE_LAYOUT=1 make m13-rls-acceptance</code> 会额外断言容器内 <code>TENANT_RLS_MODE=enforce</code>、<code>DATABASE_URL</code> 角色为 <code>rag_app</code>、维护角色不同，以及 <code>pg_stat_activity</code> 中同时存在两种连接。production 的 OIDC 登录不在 CI 中模拟，由配置单测覆盖启动拒绝。</li>
+<li>影子审计范围：触发器只记录写操作。仅当 <code>current_user = 'rag_app'</code> 或 GUC 已设置时写入 <code>rls_shadow_violations</code>；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 <code>tenantdb</code> 的应用 guard、GORM 注入回调、静态门禁 <code>cmd/checktenancy</code>（raw SQL + 直接 GORM 链）与 <code>tests/postgres/tenantrls_test.go</code> 承担，<strong>不承诺对生产读流量做数据库级拦截采样</strong>。GORM 回调在存在租户上下文时自动为租户表补 <code>tenant_id</code>；<code>tenantdb.Unscoped</code> 是唯一显式绕过，自动注入会以 <code>tenant_scope_injected</code> 告警记录。</li>
+<li>审计 SQL：</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="k">table_name</span><span class="p">,</span><span class="w"> </span><span class="k">operation</span><span class="p">,</span><span class="w"> </span><span class="n">db_user</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">rls_shadow_violations</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">observed_at</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">NOW</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="nb">INTERVAL</span><span class="w"> </span><span class="s1">'1 hour'</span>
+<span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="k">DESC</span><span class="p">;</span>
+
+<span class="k">SELECT</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">rls_shadow_violations</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="n">row_tenant_id</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">DISTINCT</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">session_tenant_id</span>
+<span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="n">observed_at</span><span class="w"> </span><span class="k">DESC</span><span class="w"> </span><span class="k">LIMIT</span><span class="w"> </span><span class="mi">50</span><span class="p">;</span>
+</code></pre></div>
+<ul>
+<li>切换到 enforce（按顺序）：</li>
+<li><code>make m13-rls-setup</code> 创建或更新角色与授权。</li>
+<li>以所有者身份应用 0024：<code>make migrate</code>。0024 只替换策略、不改表结构，可重复执行。</li>
+<li>设置 <code>TENANT_RLS_MODE=enforce</code>、<code>DATABASE_URL</code>（<code>rag_app</code>）、<code>MAINTENANCE_DATABASE_URL</code>（<code>rag_maintenance</code>）与 <code>ADMIN_DATABASE_URL</code>（所有者）。容器只在创建时读取环境变量，需要重建 api/worker。</li>
+<li>启动后确认没有角色校验错误，运行 <code>make m13-rls-acceptance</code> 与 m1–m4；跨租户负向、直连 SQL 绕过探测、向量/BM25 执行计划与 P95 都通过后才保留 enforce。</li>
+<li>回滚：<code>./scripts/m13_rls_mode.sh shadow</code> 恢复允许策略，把 <code>TENANT_RLS_MODE</code> 改回 <code>shadow</code> 并重建 api/worker；<code>./scripts/m13_rls_mode.sh off</code> 会同时关闭 RLS。迁移历史仍记录 0024 已应用，如需再次 enforce，手动重放 <code>migrations/postgres/0024_tenant_rls_strict.sql</code>（幂等）。</li>
+<li>Enforce 前置检查（缺一不可）：<code>SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user</code> 中 <code>current_user = rag_app</code> 且两项均为 false；<code>task_inbox</code> 无 <code>tenant_id IS NULL</code> 行；<code>rls_shadow_violations</code> 无跨租户（<code>row_tenant_id</code> 与 <code>session_tenant_id</code> 不一致）记录；m1–m4 以 <code>rag_app</code> 通过。任何一项不满足都保持 shadow。</li>
+<li>验收：<code>make m13-rls-acceptance</code> 校验 37 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 <code>tenant_shadow_allow</code>（shadow）或 <code>tenant_isolation</code>（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。<code>ENFORCE_LAYOUT=1</code> 时只接受严格布局，并增加迁移 0024、容器环境、运行角色与 <code>pg_stat_activity</code> 断言。<code>tests/postgres/rls_runtime_test.go</code>（需 <code>TEST_POSTGRES_URL</code> 与 <code>make m13-rls-setup</code>）以 <code>SET LOCAL ROLE rag_app</code> 在真实 <code>audit_logs</code> 表上验证跨租户读写被拒与无 GUC 时 fail-closed。</li>
+</ul>
+<h2 id="16-hnsw">16. 在线 HNSW 索引变更<a class="headerlink" href="#16-hnsw" title="Permanent link">&para;</a></h2>
+<ul>
+<li>索引契约：一个索引名只服务一个 <code>halfvec(N)</code> 维度。当前实现使用版本化名 <code>chunks_vector_idx_&lt;dim&gt;_v&lt;N&gt;</code>，旧的无版本名 <code>chunks_vector_idx</code> 仍被识别并可作为服务索引复用。</li>
+<li><code>embedctl create-index</code> 的执行顺序：读取 <code>pgvector</code> 版本（要求 ≥ 0.7.0）、应用会话超时、读取仍有可检索 chunk 的维度、清理 <code>indisvalid=false</code> 的残留候选、在独立连接上执行 <code>CREATE INDEX CONCURRENTLY</code>、校验 <code>indisvalid</code> 与 <code>halfvec(dim)</code>/<code>embedding_dimension = dim</code>、最后 <code>DROP INDEX CONCURRENTLY</code> 删除被替换的旧索引。若其他维度仍有可检索 chunk，其索引会保留，错误的 <code>EMBEDDING_DIMENSION</code> 不会删除线上索引；<code>reembed</code> 完成后重跑 <code>create-index</code> 即可清理旧维度索引。会话超时必须在第一次目录读取之前设置，因为 <code>pg_get_indexdef</code> 会持有 <code>chunks</code> 的表锁；否则一个已运行的 <code>ACCESS EXCLUSIVE</code> 事务会在超时生效前把构建挂住。CONCURRENTLY 不能在事务块内运行，因此不要把它塞进迁移；迁移只负责表结构与策略。</li>
+<li>失败语义：构建失败会删除本次产生的 INVALID 索引并保留原服务索引；重跑是安全的。若旧索引因锁超时未被删除，新索引已经有效，重跑会继续清理多余索引。</li>
+<li>观测：<code>make embed-check</code>（只读）输出 pgvector 版本、每个 chunks 向量索引的名称/维度/是否有效/大小/定义、每个 <code>embedding_dimension</code> 的 chunk 数量、数据库与 <code>chunks</code> 堆大小，以及 embedctl 容器根文件系统的剩余空间（不是 PostgreSQL 数据卷的剩余空间，容器内无法直接读取后者）。</li>
+<li>超时：<code>EMBED_INDEX_LOCK_TIMEOUT_SECONDS</code>（默认 10）限制等待表锁的时间，覆盖目录读取与 <code>CREATE INDEX CONCURRENTLY</code> 的加锁阶段；被阻塞时命令在超时后失败退出，旧索引保持不变。<code>EMBED_INDEX_STATEMENT_TIMEOUT_SECONDS</code>（默认 0，不限制）限制整条 <code>CREATE INDEX</code>（含并发扫描）的执行时间；取消后会留下 INVALID 索引，由本次失败清理或下次运行清理。<code>--dry-run</code> 同样受锁超时保护。大表构建前先用 <code>df</code> 确认数据库卷有约 2× 新索引大小的空闲空间，因为新旧索引会短暂并存。</li>
+<li>确认：<code>create-index</code> 是非日常的受管操作。运行时会提示输入 <code>y</code>；非交互调用（stdin 立即 EOF，包括 <code>docker run</code> 未加 <code>-i</code>）会直接失败，必须传 <code>--confirm</code> 或设置 <code>EMBED_INDEX_CONFIRM=1</code>；<code>--dry-run</code> 只输出“将创建/将删除”的计划，不修改目录。</li>
+<li>验收：<code>make embed-acceptance</code> 在 3↔4 维之间切换，断言新索引生效、旧维度索引已删除、reembed/verify 无残留；<code>tests/postgres/vectorindex_test.go</code>（需 <code>TEST_POSTGRES_URL</code>）在 20 万行合成表上于构建期间持续写入，要求写 P99 ≤ 2× 基线（低于 5ms 的基线按 5ms 计，避免调度噪声误报），并验证查询计划命中新索引。</li>
+</ul>
+<h2 id="17">17. 异步答案生成<a class="headerlink" href="#17" title="Permanent link">&para;</a></h2>
+<ul>
+<li>默认 <code>ANSWER_ASYNC_ENABLED=true</code>：<code>POST /sessions/:id/messages</code> 只做预检（会话、scope、配额、模型、历史），在同一事务内写入 user message、<code>RECEIVED/AUTHORIZED/PLANNED</code> 三条事件和 <code>answer_jobs</code> 行（<code>QUEUED</code>），然后把 <code>answer.generate.v1</code> 投递到 Asynq 交互队列。检索、生成、引用校验与终态事件都在 worker 执行。API 进程不再承载长耗时的生成。</li>
+<li>事件序列：<code>answer_jobs.next_sequence</code> 由 <code>UPDATE ... RETURNING</code> 原子分配，API 预检与 worker 共用同一计数器，因此跨进程仍保持 <code>1..N</code> 连续，<code>ReplayEvents</code> 与 <code>Last-Event-ID</code> 续流不会因序列冲突丢事件。</li>
+<li>幂等：<code>(tenant_id, user_id, conversation_id, request_id)</code> 唯一。重复请求命中已有 job 时不会再次入队，也不会重复写 user message 与事件；已存在答案时直接重放终态。Asynq 重复投递由条件 <code>UPDATE</code> claim 拦截，只有 lease 持有者执行。</li>
+<li>重试退避：非终态失败会把 inbox 标为 FAILED 但保留租约到 TTL，队列的下一次投递在租约到期前只能得到 <code>inbox lease retained until retry backoff</code> 并继续退避；终态失败才立即释放租约，交给运维重跑。</li>
+<li>已知限制：<code>ANSWER_ASYNC_ENABLED=false</code> 的同步路径仍会在请求 goroutine 内完成检索与生成，慢客户端会长期占用连接池；生产应保持异步路径。预览/下载在写响应头前提交租户请求事务，不把对象流式读取期间的事务钉在连接上。</li>
+<li>租约：worker claim 时写入 <code>lease_owner/lease_until</code>（默认 300 秒，<code>ANSWER_ASYNC_LEASE_SECONDS</code>）。worker 维护循环把租约过期仍为 <code>RUNNING</code> 的 job 置 <code>FAILED</code>（<code>worker_lost</code>）并追加终态 <code>error</code> + <code>complete</code> 事件，SSE 客户端因此不会无限等待。生成超时受请求超时约束（≤ 60 秒），正常结束远早于 lease 过期。</li>
+<li>SSE：<code>GET /api/v1/requests/:request_id/events</code> 默认仍是一次性 JSON 回放；加 <code>?stream=1</code> 后每 <code>ANSWER_ASYNC_POLL_INTERVAL_MS</code>（默认 250ms）轮询 <code>ReplayEvents</code>，直到 <code>complete</code>/<code>error</code> 或 <code>ANSWER_TAIL_TIMEOUT_SECONDS</code>（默认 180）。超时返回 <code>tail_timeout</code> 错误事件，客户端可以带 <code>after</code>/<code>Last-Event-ID</code> 再次续流。同一请求可以有多个并发 tail。</li>
+<li>回滚：设置 <code>ANSWER_ASYNC_ENABLED=false</code> 并重建 api（worker 保留新版本也可）。API 回到同步路径，<code>answer_jobs</code> 表保留但不再新增行；已在队列中的异步任务仍会被新 worker 正常执行。</li>
+<li>升级顺序：<strong>先 worker 后 API</strong>。旧 worker 不认识 <code>answer.generate.v1</code>，会在 API 开始入队后把任务记为失败。回滚顺序相反：先 API 回同步，再降级 worker。</li>
+<li>观测：<code>answer_job_total{result}</code> 与 <code>answer_job_duration_ms</code> 在 worker 记录；<code>answer_jobs_expired</code> 日志给出本轮回收数量；<code>answer_preflight</code> 日志记录入队结果。排障 SQL：</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="k">SELECT</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">answer_jobs</span><span class="w"> </span><span class="k">GROUP</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">tenant_id</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">attempts</span><span class="p">,</span><span class="w"> </span><span class="n">lease_until</span><span class="p">,</span><span class="w"> </span><span class="n">error_code</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">answer_jobs</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'RUNNING'</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">lease_until</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">NOW</span><span class="p">();</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">status</span><span class="p">,</span><span class="w"> </span><span class="n">attempts</span><span class="p">,</span><span class="w"> </span><span class="n">lease_until</span><span class="p">,</span><span class="w"> </span><span class="n">error_code</span>
+<span class="k">FROM</span><span class="w"> </span><span class="n">answer_jobs</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">request_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">'&lt;id&gt;'</span><span class="p">;</span>
+</code></pre></div>
+<p>再对照该请求在 <code>stream_events</code> 中的 <code>sequence</code> 是否连续。
+- 验收：<code>make m13-async-acceptance</code> 在真实栈上验证正常异步答案（终态 <code>complete</code>、job <code>COMPLETED</code>、事件连续）与 worker 停机演练（任务保留、worker 恢复后仍得到终态或明确错误）。</p>
+<h2 id="18-ci">18. CI 门禁与供应链<a class="headerlink" href="#18-ci" title="Permanent link">&para;</a></h2>
+<ul>
+<li>CI 分三个 job：<code>verify</code>（gofmt、checkdeps、checktenancy、<code>go test</code>、<code>-race</code>、vet、<code>go mod verify</code>、前端 <code>npm ci</code>/test/build、compose config）、<code>integration</code>（整栈 enforce + 迁移 + RLS 负向 + m0/m1/m13 验收）、<code>security</code>（govulncheck、npm audit、trivy fs/image、SBOM、镜像 pin 校验）。</li>
+<li><code>integration</code> 使用受版本控制的 <code>deploy/ci/enforce.env</code>（全部为一次性 runner 的 dummy 凭据），复制为工作区 <code>.env</code>，并以 <code>COMPOSE_PROJECT_NAME=rag-ci</code> 隔离。启动顺序固定为：依赖服务 → <code>make migrate</code> → <code>make m13-rls-setup</code> → <code>make seed</code> → <code>make embed-index</code> → api/worker。API/worker 在 <code>APP_ENV=development</code> 下运行 enforce，因为 production 还要求 OIDC；production 的启动拒绝由配置单测覆盖。<code>m0/m1</code> 通过 <code>ACCEPTANCE_ENV_FILE=.env</code> 选择 enforce 配置，m0 的空库 migrate/seed 还会覆盖 <code>ADMIN_DATABASE_URL</code>。</li>
+<li><code>ENFORCE_LAYOUT=1 make m13-rls-acceptance</code> 是 CI 的防伪断言：除严格策略外，还要求 api/worker 容器内 <code>TENANT_RLS_MODE=enforce</code>、<code>DATABASE_URL</code> 角色为 <code>rag_app</code>、维护角色不同，并且 <code>pg_stat_activity</code> 中同时存在 <code>rag_app</code> 与 <code>rag_maintenance</code> 连接。</li>
+<li>镜像一律使用 <code>tag@sha256:&lt;多架构 index digest&gt;</code>：compose 的 ParadeDB/Redis/MinIO/Keycloak、Dockerfile 的 Go/Alpine/Node/Python 基础镜像以及 Makefile 的 <code>GO_IMAGE</code>。<code>scripts/check_image_pins.sh</code> 在 CI 中拒绝任何未带 digest 的 <code>image:</code>/<code>FROM</code>/<code>GO_IMAGE</code>。升级镜像时先 <code>docker buildx imagetools inspect &lt;tag&gt;</code> 取得新 digest，再替换并提交。</li>
+<li>前端依赖不再使用 <code>"latest"</code>，固定为 lockfile 已解析的精确版本；<code>make web-install</code> 使用 <code>npm ci</code>，CI 与 Dockerfile 同用 <code>npm ci</code>。</li>
+<li>可复现构建：Go 构建统一带 <code>-trimpath -buildvcs=false -ldflags=-buildid=</code>；验收方式是同一输入连续两次 <code>go build ./cmd/api</code> 的 SHA-256 相同。镜像层一致性由固定 digest、<code>go.sum</code> 与 <code>package-lock.json</code> 保证，不承诺跨构建机的镜像字节一致。</li>
+<li>SBOM：CI 用 trivy 对 api 镜像生成 CycloneDX artifact。本地可运行 <code>trivy image --format cyclonedx --output sbom-api.cdx.json &lt;image&gt;</code>。</li>
+<li>发布：推送 <code>v*</code> tag 触发 <code>.github/workflows/release.yml</code>，在 <code>verify</code> 通过后构建 api/docreader 镜像，先做 Trivy HIGH/CRITICAL 门禁再推送 GHCR，生成两个 CycloneDX SBOM，用 cosign 无密钥签名镜像 digest 和 <code>SHA256SUMS</code>，并创建 GitHub Release。升级、签名校验与回滚步骤见 <a href="../releases/">releases.md</a>。</li>
+<li>漏洞门禁：govulncheck、trivy（HIGH/CRITICAL，忽略未修复）与 <code>npm audit --audit-level=high</code> 失败即阻断。确实无法立即修复的条目必须写入 <code>.trivyignore</code> 或审计说明，包含 CVE、影响、原因与到期日，并在此节登记。</li>
+<li><code>.github/workflows/ci.yml</code> 的推送可能需要 workflow-scope PAT；不要通过修改 git 凭证绕过。</li>
+<li><code>main</code> 分支保护（2026-11-06 启用）：必须通过 PR 合并，0 审批即可在检查通过后自行合并；必需检查为 <code>verify</code>、<code>integration</code>、<code>security</code> 且要求分支保持最新；对话必须解决，禁止强制推送和删除分支；<code>enforce_admins=true</code>，仓库 owner 也不能绕过。CI 工作流本身损坏时需临时关闭保护、修复后恢复。</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
