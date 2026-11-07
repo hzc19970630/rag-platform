@@ -25,3 +25,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - 审计 CSV 导出对公式注入前缀做转义；发布镜像附带 SBOM 并提供签名校验步骤。
+- 升级 `golang.org/x/net` 至 0.62.0，修复 HTML 解析拒绝服务漏洞（CVE-2026-78661），发布镜像 Trivy 门禁通过。
