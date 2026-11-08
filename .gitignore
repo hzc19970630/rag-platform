@@ -13,6 +13,9 @@ __pycache__/
 coverage/
 *.tsbuildinfo
 
+# Evaluation reports produced by CI runs themselves
+tests/eval/ci/
+
 # Playwright
 web/playwright-report/
 web/test-results/

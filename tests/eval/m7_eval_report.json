@@ -1,10 +1,17 @@
 {
   "schemaVersion": "M7EvaluationReportV2",
-  "generatedAt": "2026-10-28T09:22:39.460244+00:00",
+  "generatedAt": "2026-11-08T05:11:52.522906+00:00",
   "baseUrl": "http://localhost:8082",
+  "auth": {
+    "mode": "dev",
+    "owner": {
+      "subjectId": "dev-user",
+      "tenantId": "dev-tenant"
+    }
+  },
   "set": "M7 relation projection: bounded graph query vs pure Evidence RAG (30 fixtures, 34 cases)",
   "setSchemaVersion": "M7EvaluationSetV2",
-  "knowledgeBaseId": "kb-7f4f1ee9ca2df6372649abbc",
+  "knowledgeBaseId": "kb-17caa5736d470ed6baa9a77e",
   "kept": false,
   "setStats": {
     "fixtures": 30,
@@ -38,6 +45,9 @@
       "RerankEnabled": false,
       "RerankTopK": 8,
       "RerankThreshold": -10,
+      "VectorEFSearch": 40,
+      "VectorOversample": 1,
+      "VectorIterativeScan": true,
       "ContextTokenLimit": 3000,
       "AdjacentExpansion": 1,
       "MaxAdjacentChunks": 2,
@@ -50,17 +60,17 @@
     "maxDepth": 3
   },
   "extractor": {
-    "model": "local-extractive",
+    "model": "gpt-6.1-sol",
     "promptVersion": "relation_extraction/35be37d92322",
-    "sourceHash": "1892b6950c0c612afa0a5502b9b64cac0648acea8675e21f100bff51b0b574c8"
+    "sourceHash": "89d13cc88c394808314830f88954b4a27f04ed2a9688e3bd18a7a57956d62ea8"
   },
   "snapshot": {
-    "id": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+    "id": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
     "status": "ACTIVE",
     "aclVersion": 2,
-    "entities": 23,
+    "entities": 134,
     "relations": 21,
-    "aliases": 2,
+    "aliases": 3,
     "traceable": true
   },
   "metrics": {
@@ -68,29 +78,28 @@
     "answerableCaseCount": 28,
     "multiHopCaseCount": 20,
     "negativeCaseCount": 6,
-    "ragStrictHitRate": 0.7857,
-    "ragLooseHitRate": 0.7857,
-    "ragDocumentHitRate": 0.9286,
-    "ragAnswerRankMedian": 3.0,
+    "ragStrictHitRate": 0.8214,
+    "ragLooseHitRate": 0.8214,
+    "ragDocumentHitRate": 0.8929,
+    "ragAnswerRankMedian": 3,
     "ragAnswerRankP95": 8,
-    "multiHopRagStrictHitRate": 0.7,
-    "multiHopRagLooseHitRate": 0.7,
+    "multiHopRagStrictHitRate": 0.75,
+    "multiHopRagLooseHitRate": 0.75,
     "multiHopGraphHitRate": 1.0,
     "multiHopHopExactRate": 1.0,
     "multiHopHopCheckedCount": 20,
     "graphSeedResolveRate": 1.0,
-    "graphRescueCount": 6,
+    "graphRescueCount": 5,
     "graphRescueIds": [
-      "two-hop-coolant",
       "two-hop-device",
-      "two-hop-regulator",
+      "two-hop-trial",
+      "two-hop-alias-seed",
       "three-hop-rail",
-      "three-hop-basin",
-      "three-hop-regulator-a"
+      "three-hop-basin"
     ],
     "ragOnlyCount": 0,
     "ragOnlyIds": [],
-    "bothHitCount": 14,
+    "bothHitCount": 15,
     "neitherCount": 0,
     "negativePassRate": 1.0,
     "negativeGraphFalsePositiveCount": 0,
@@ -110,10 +119,10 @@
     "ragDistractorFalsePositiveCount": 0,
     "ragDistractorFalsePositiveRate": 0.0,
     "truncatedQueryCount": 0,
-    "meanRagLatencyMs": 187.9,
-    "p95RagLatencyMs": 315.8,
-    "meanGraphLatencyMs": 20.3,
-    "p95GraphLatencyMs": 47.2,
+    "meanRagLatencyMs": 159.8,
+    "p95RagLatencyMs": 232.3,
+    "meanGraphLatencyMs": 14.0,
+    "p95GraphLatencyMs": 30.2,
     "perType": {
       "branch": {
         "count": 2,
@@ -124,8 +133,8 @@
       },
       "multi-hop": {
         "count": 20,
-        "ragStrictHitRate": 0.7,
-        "ragLooseHitRate": 0.7,
+        "ragStrictHitRate": 0.75,
+        "ragLooseHitRate": 0.75,
         "graphHitRate": 1.0,
         "graphHopExactRate": 1.0
       },
@@ -144,7 +153,7 @@
     "perTag": {
       "alias": {
         "count": 2,
-        "ragStrictHitRate": 1.0,
+        "ragStrictHitRate": 0.5,
         "graphHitRate": 1.0
       },
       "branch": {
@@ -154,7 +163,7 @@
       },
       "chain-a": {
         "count": 12,
-        "ragStrictHitRate": 0.8333,
+        "ragStrictHitRate": 0.9167,
         "graphHitRate": 1.0
       },
       "chain-b": {
@@ -184,7 +193,7 @@
       },
       "multi-hop": {
         "count": 20,
-        "ragStrictHitRate": 0.7,
+        "ragStrictHitRate": 0.75,
         "graphHitRate": 1.0
       },
       "negative": {
@@ -199,7 +208,7 @@
       },
       "rag-distractor": {
         "count": 2,
-        "ragStrictHitRate": 0.0,
+        "ragStrictHitRate": 0.5,
         "graphHitRate": 1.0
       },
       "unknown-seed": {
@@ -232,8 +241,8 @@
   },
   "decision": {
     "recommendation": "keep-bounded-graph-query",
-    "rationale": "on multi-hop cases graph reached the answer 100% versus strict RAG 70% (+30%), with 6 graph-only rescue(s)",
-    "delta": 0.3,
+    "rationale": "on multi-hop cases graph reached the answer 100% versus strict RAG 75% (+25%), with 5 graph-only rescue(s)",
+    "delta": 0.25,
     "guard": {
       "minMultiHopCases": 10,
       "minAnswerableCases": 20,
@@ -269,16 +278,16 @@
       "ragAnswerRank": 1,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-ad9e1bf1259ef7bc667d3f01",
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-fa57f5f1f6aea0976672b9ba"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-95aaf53a562bcbd2a4b19e04"
       ],
-      "ragLatencyMs": 315.8,
+      "ragLatencyMs": 414.0,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 2,
       "graphEdgeCount": 1,
       "graphPathCount": 1,
@@ -289,7 +298,7 @@
       "graphHops": 1,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 17.3
+      "graphLatencyMs": 26.7
     },
     {
       "id": "control-board-city",
@@ -317,15 +326,14 @@
       "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-39bf26d2a2448c5539a03db1",
-        "doc-44ec21b44e62f276dbc7b8a0",
-        "doc-4f283c5c925feb57fcc60ac7",
-        "doc-95cc3fc14c95587631d1fe45"
+        "doc-0f11dc7907ffbeb30e5d151a",
+        "doc-56577dcbe04ea2adb156f235",
+        "doc-ddd1548103326d612b3f8309"
       ],
-      "ragLatencyMs": 197.7,
+      "ragLatencyMs": 129.4,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -336,7 +344,7 @@
       "graphHops": 1,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 22.3
+      "graphLatencyMs": 19.4
     },
     {
       "id": "control-alias",
@@ -365,15 +373,16 @@
       "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-f7e5431fcd29ae4cdc9ba37f",
-        "doc-fc916b4277827fedba4dbbd6"
+        "doc-12b2aa4a6013bb2fdbedfbd7",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-c35ed69af75ed86c5249423d",
+        "doc-d0d5a423238817f1acf1f9e7",
+        "doc-ea6386d17d6ccd0004e7299d"
       ],
-      "ragLatencyMs": 176.8,
+      "ragLatencyMs": 168.8,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 2,
       "graphEdgeCount": 1,
       "graphPathCount": 1,
@@ -384,7 +393,7 @@
       "graphHops": 1,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 19.4
+      "graphLatencyMs": 6.6
     },
     {
       "id": "control-normalized",
@@ -413,15 +422,14 @@
       "ragAnswerRank": 4,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9aedce40b0cc615a9f1cc968",
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-fa57f5f1f6aea0976672b9ba"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-95aaf53a562bcbd2a4b19e04"
       ],
-      "ragLatencyMs": 317.7,
+      "ragLatencyMs": 162.7,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 2,
       "graphEdgeCount": 1,
       "graphPathCount": 1,
@@ -432,7 +440,7 @@
       "graphHops": 1,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 18.9
+      "graphLatencyMs": 18.7
     },
     {
       "id": "control-command-center",
@@ -457,17 +465,18 @@
       "ragStrictHit": true,
       "ragLooseHit": true,
       "ragDocumentHit": true,
-      "ragAnswerRank": 4,
+      "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-39bf26d2a2448c5539a03db1",
-        "doc-417f5850c1962729cb2bf172",
-        "doc-4f283c5c925feb57fcc60ac7"
+        "doc-117103aaf66621339ef0dd77",
+        "doc-56577dcbe04ea2adb156f235",
+        "doc-7ce976abfae85e76831de79a",
+        "doc-ddd1548103326d612b3f8309"
       ],
-      "ragLatencyMs": 187.0,
+      "ragLatencyMs": 135.3,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -478,7 +487,7 @@
       "graphHops": 1,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 23.5
+      "graphLatencyMs": 21.4
     },
     {
       "id": "control-regulator",
@@ -506,15 +515,15 @@
       "ragAnswerRank": 2,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-177dc2bcbe2d05b25d1ceada",
-        "doc-4d18a66e36421619801f6128",
-        "doc-7ea400c4895c88c67148ad82",
-        "doc-c06f9e4305025e4e6b2738ca"
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-9ce00367ef50ab027796143d",
+        "doc-cc3b1218d4b2f02f4a977575",
+        "doc-d0d5a423238817f1acf1f9e7"
       ],
-      "ragLatencyMs": 158.8,
+      "ragLatencyMs": 170.1,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -525,7 +534,7 @@
       "graphHops": 1,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 13.9
+      "graphLatencyMs": 5.9
     },
     {
       "id": "two-hop-plant",
@@ -553,15 +562,15 @@
       "ragAnswerRank": 4,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-ad9e1bf1259ef7bc667d3f01",
-        "doc-d3c95e1882fec594b6a04d3b"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-7ce976abfae85e76831de79a",
+        "doc-95aaf53a562bcbd2a4b19e04"
       ],
-      "ragLatencyMs": 186.6,
+      "ragLatencyMs": 155.9,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -572,7 +581,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 19.0
+      "graphLatencyMs": 25.7
     },
     {
       "id": "two-hop-coolant",
@@ -597,21 +606,21 @@
       "forbiddenEvidence": [
         "Delta Storage"
       ],
-      "ragStrictHit": false,
-      "ragLooseHit": false,
+      "ragStrictHit": true,
+      "ragLooseHit": true,
       "ragDocumentHit": true,
-      "ragAnswerRank": null,
+      "ragAnswerRank": 8,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-206556d6392a4f51aa150bd9",
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-9f79e2bf70eed684982cea58",
-        "doc-ad9e1bf1259ef7bc667d3f01"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-7ce976abfae85e76831de79a",
+        "doc-b1cc5068ef354d056a688aa9",
+        "doc-c35ed69af75ed86c5249423d"
       ],
-      "ragLatencyMs": 160.0,
+      "ragLatencyMs": 152.6,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 4,
       "graphEdgeCount": 3,
       "graphPathCount": 3,
@@ -622,7 +631,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 20.1
+      "graphLatencyMs": 6.8
     },
     {
       "id": "two-hop-board",
@@ -650,14 +659,14 @@
       "ragAnswerRank": 6,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9143a8e8ec7c09c072977218",
-        "doc-95cc3fc14c95587631d1fe45",
-        "doc-9f79e2bf70eed684982cea58"
+        "doc-0f11dc7907ffbeb30e5d151a",
+        "doc-c35ed69af75ed86c5249423d",
+        "doc-f96d08f048614eb75bb537ea"
       ],
-      "ragLatencyMs": 239.0,
+      "ragLatencyMs": 148.2,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -668,7 +677,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 29.4
+      "graphLatencyMs": 18.1
     },
     {
       "id": "two-hop-command",
@@ -696,15 +705,15 @@
       "ragAnswerRank": 5,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-39bf26d2a2448c5539a03db1",
-        "doc-44ec21b44e62f276dbc7b8a0",
-        "doc-4f283c5c925feb57fcc60ac7",
-        "doc-95cc3fc14c95587631d1fe45"
+        "doc-0f11dc7907ffbeb30e5d151a",
+        "doc-117103aaf66621339ef0dd77",
+        "doc-56577dcbe04ea2adb156f235",
+        "doc-ddd1548103326d612b3f8309"
       ],
-      "ragLatencyMs": 123.5,
+      "ragLatencyMs": 142.6,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -715,7 +724,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 18.4
+      "graphLatencyMs": 27.5
     },
     {
       "id": "two-hop-device",
@@ -742,19 +751,19 @@
       ],
       "ragStrictHit": false,
       "ragLooseHit": false,
-      "ragDocumentHit": false,
+      "ragDocumentHit": true,
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-ad9e1bf1259ef7bc667d3f01",
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-fa57f5f1f6aea0976672b9ba"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-95aaf53a562bcbd2a4b19e04"
       ],
-      "ragLatencyMs": 152.4,
+      "ragLatencyMs": 153.0,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -765,7 +774,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 12.5
+      "graphLatencyMs": 5.5
     },
     {
       "id": "two-hop-alloy",
@@ -793,14 +802,14 @@
       "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 153.0,
+      "ragLatencyMs": 122.3,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 4,
       "graphEdgeCount": 3,
       "graphPathCount": 3,
@@ -811,7 +820,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 16.9
+      "graphLatencyMs": 31.1
     },
     {
       "id": "two-hop-port",
@@ -836,18 +845,18 @@
       "ragStrictHit": true,
       "ragLooseHit": true,
       "ragDocumentHit": true,
-      "ragAnswerRank": 6,
+      "ragAnswerRank": 5,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-95aaf53a562bcbd2a4b19e04",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 135.0,
+      "ragLatencyMs": 135.1,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -858,7 +867,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 14.7
+      "graphLatencyMs": 5.1
     },
     {
       "id": "two-hop-trial",
@@ -880,20 +889,20 @@
       "expectedDocument": "serum-x.md",
       "forbiddenNodes": [],
       "forbiddenEvidence": [],
-      "ragStrictHit": true,
-      "ragLooseHit": true,
-      "ragDocumentHit": true,
-      "ragAnswerRank": 8,
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-c06f9e4305025e4e6b2738ca",
-        "doc-f7e5431fcd29ae4cdc9ba37f",
-        "doc-fc916b4277827fedba4dbbd6"
+        "doc-12b2aa4a6013bb2fdbedfbd7",
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-d0d5a423238817f1acf1f9e7"
       ],
-      "ragLatencyMs": 255.3,
+      "ragLatencyMs": 197.8,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -904,7 +913,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 54.2
+      "graphLatencyMs": 5.6
     },
     {
       "id": "two-hop-regulator",
@@ -926,22 +935,22 @@
       "expectedDocument": "trial-7.md",
       "forbiddenNodes": [],
       "forbiddenEvidence": [],
-      "ragStrictHit": false,
-      "ragLooseHit": false,
+      "ragStrictHit": true,
+      "ragLooseHit": true,
       "ragDocumentHit": true,
-      "ragAnswerRank": null,
+      "ragAnswerRank": 8,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-183436a00cfc101fd3affc55",
-        "doc-4d18a66e36421619801f6128",
-        "doc-7ea400c4895c88c67148ad82",
-        "doc-c06f9e4305025e4e6b2738ca",
-        "doc-fc916b4277827fedba4dbbd6"
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-7746bc4414ee8a02c8574860",
+        "doc-cc3b1218d4b2f02f4a977575",
+        "doc-d0d5a423238817f1acf1f9e7",
+        "doc-ea6386d17d6ccd0004e7299d"
       ],
-      "ragLatencyMs": 213.5,
+      "ragLatencyMs": 138.8,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -952,7 +961,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 14.5
+      "graphLatencyMs": 11.4
     },
     {
       "id": "two-hop-alias-seed",
@@ -975,20 +984,20 @@
       "expectedDocument": "serum-x.md",
       "forbiddenNodes": [],
       "forbiddenEvidence": [],
-      "ragStrictHit": true,
-      "ragLooseHit": true,
-      "ragDocumentHit": true,
-      "ragAnswerRank": 8,
+      "ragStrictHit": false,
+      "ragLooseHit": false,
+      "ragDocumentHit": false,
+      "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-c06f9e4305025e4e6b2738ca",
-        "doc-f7e5431fcd29ae4cdc9ba37f",
-        "doc-fc916b4277827fedba4dbbd6"
+        "doc-12b2aa4a6013bb2fdbedfbd7",
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-d0d5a423238817f1acf1f9e7"
       ],
-      "ragLatencyMs": 180.3,
+      "ragLatencyMs": 162.4,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -999,7 +1008,7 @@
       "graphHops": 2,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 35.3
+      "graphLatencyMs": 5.6
     },
     {
       "id": "three-hop-reservoir",
@@ -1028,16 +1037,15 @@
       "ragAnswerRank": 1,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-9143a8e8ec7c09c072977218",
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-9f79e2bf70eed684982cea58",
-        "doc-ad9e1bf1259ef7bc667d3f01"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-95aaf53a562bcbd2a4b19e04",
+        "doc-c35ed69af75ed86c5249423d",
+        "doc-f96d08f048614eb75bb537ea"
       ],
-      "ragLatencyMs": 202.9,
+      "ragLatencyMs": 129.9,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 4,
       "graphEdgeCount": 3,
       "graphPathCount": 3,
@@ -1048,7 +1056,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 47.2
+      "graphLatencyMs": 30.2
     },
     {
       "id": "three-hop-alloy",
@@ -1077,15 +1085,15 @@
       "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 132.3,
+      "ragLatencyMs": 172.2,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 4,
       "graphEdgeCount": 3,
       "graphPathCount": 3,
@@ -1096,7 +1104,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 12.9
+      "graphLatencyMs": 27.6
     },
     {
       "id": "three-hop-authority",
@@ -1124,16 +1132,16 @@
       "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-206556d6392a4f51aa150bd9",
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-9143a8e8ec7c09c072977218",
-        "doc-95cc3fc14c95587631d1fe45",
-        "doc-9f79e2bf70eed684982cea58"
+        "doc-0f11dc7907ffbeb30e5d151a",
+        "doc-7ce976abfae85e76831de79a",
+        "doc-b1cc5068ef354d056a688aa9",
+        "doc-c35ed69af75ed86c5249423d",
+        "doc-f96d08f048614eb75bb537ea"
       ],
-      "ragLatencyMs": 226.0,
+      "ragLatencyMs": 131.5,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -1144,7 +1152,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 23.8
+      "graphLatencyMs": 6.3
     },
     {
       "id": "three-hop-board",
@@ -1172,15 +1180,15 @@
       "ragAnswerRank": 7,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-9143a8e8ec7c09c072977218",
-        "doc-95cc3fc14c95587631d1fe45",
-        "doc-9f79e2bf70eed684982cea58"
+        "doc-0f11dc7907ffbeb30e5d151a",
+        "doc-7ce976abfae85e76831de79a",
+        "doc-c35ed69af75ed86c5249423d",
+        "doc-f96d08f048614eb75bb537ea"
       ],
-      "ragLatencyMs": 229.4,
+      "ragLatencyMs": 148.1,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 6,
       "graphEdgeCount": 5,
       "graphPathCount": 5,
@@ -1191,7 +1199,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 21.3
+      "graphLatencyMs": 6.2
     },
     {
       "id": "three-hop-city",
@@ -1219,15 +1227,14 @@
       "ragAnswerRank": 3,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-39bf26d2a2448c5539a03db1",
-        "doc-4f283c5c925feb57fcc60ac7",
-        "doc-9143a8e8ec7c09c072977218",
-        "doc-95cc3fc14c95587631d1fe45"
+        "doc-117103aaf66621339ef0dd77",
+        "doc-ddd1548103326d612b3f8309",
+        "doc-f96d08f048614eb75bb537ea"
       ],
-      "ragLatencyMs": 126.9,
+      "ragLatencyMs": 169.3,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 7,
       "graphEdgeCount": 6,
       "graphPathCount": 6,
@@ -1238,7 +1245,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 26.4
+      "graphLatencyMs": 6.8
     },
     {
       "id": "three-hop-port",
@@ -1266,16 +1273,16 @@
       "ragAnswerRank": 5,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-c253343a4b59278001855c81",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-be2326ba27d61958f7f6cc73",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 148.3,
+      "ragLatencyMs": 156.5,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -1286,7 +1293,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 13.0
+      "graphLatencyMs": 6.9
     },
     {
       "id": "three-hop-rail",
@@ -1314,15 +1321,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fa57f5f1f6aea0976672b9ba",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-26d59933f221444b3674a90c",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 227.1,
+      "ragLatencyMs": 179.1,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 7,
       "graphEdgeCount": 6,
       "graphPathCount": 6,
@@ -1333,7 +1340,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 22.7
+      "graphLatencyMs": 18.2
     },
     {
       "id": "three-hop-basin",
@@ -1361,15 +1368,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9aedce40b0cc615a9f1cc968",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-66d4049cebb4c108686b6b5e",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 145.6,
+      "ragLatencyMs": 122.4,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 7,
       "graphEdgeCount": 6,
       "graphPathCount": 6,
@@ -1380,7 +1387,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 16.0
+      "graphLatencyMs": 5.3
     },
     {
       "id": "three-hop-regulator-a",
@@ -1402,22 +1409,22 @@
       "expectedDocument": "trial-7.md",
       "forbiddenNodes": [],
       "forbiddenEvidence": [],
-      "ragStrictHit": false,
-      "ragLooseHit": false,
+      "ragStrictHit": true,
+      "ragLooseHit": true,
       "ragDocumentHit": true,
-      "ragAnswerRank": null,
+      "ragAnswerRank": 8,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-183436a00cfc101fd3affc55",
-        "doc-4d18a66e36421619801f6128",
-        "doc-7ea400c4895c88c67148ad82",
-        "doc-c06f9e4305025e4e6b2738ca",
-        "doc-f7e5431fcd29ae4cdc9ba37f"
+        "doc-12b2aa4a6013bb2fdbedfbd7",
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-7746bc4414ee8a02c8574860",
+        "doc-cc3b1218d4b2f02f4a977575",
+        "doc-d0d5a423238817f1acf1f9e7"
       ],
-      "ragLatencyMs": 173.0,
+      "ragLatencyMs": 142.1,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 5,
       "graphEdgeCount": 4,
       "graphPathCount": 4,
@@ -1428,7 +1435,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 18.6
+      "graphLatencyMs": 5.3
     },
     {
       "id": "three-hop-oversight",
@@ -1456,15 +1463,15 @@
       "ragAnswerRank": 1,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-177dc2bcbe2d05b25d1ceada",
-        "doc-4d18a66e36421619801f6128",
-        "doc-c06f9e4305025e4e6b2738ca",
-        "doc-fc916b4277827fedba4dbbd6"
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-9ce00367ef50ab027796143d",
+        "doc-d0d5a423238817f1acf1f9e7",
+        "doc-ea6386d17d6ccd0004e7299d"
       ],
-      "ragLatencyMs": 136.4,
+      "ragLatencyMs": 185.2,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 7,
       "graphEdgeCount": 6,
       "graphPathCount": 6,
@@ -1475,7 +1482,7 @@
       "graphHops": 3,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 17.8
+      "graphLatencyMs": 7.5
     },
     {
       "id": "branch-vantage-carriers",
@@ -1501,18 +1508,18 @@
       "ragStrictHit": true,
       "ragLooseHit": true,
       "ragDocumentHit": true,
-      "ragAnswerRank": 1,
+      "ragAnswerRank": 2,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9aedce40b0cc615a9f1cc968",
-        "doc-c253343a4b59278001855c81",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fa57f5f1f6aea0976672b9ba"
+        "doc-26d59933f221444b3674a90c",
+        "doc-66d4049cebb4c108686b6b5e",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-be2326ba27d61958f7f6cc73"
       ],
-      "ragLatencyMs": 160.0,
+      "ragLatencyMs": 138.7,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 4,
       "graphEdgeCount": 3,
       "graphPathCount": 3,
@@ -1524,7 +1531,7 @@
       "graphHops": null,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 15.0
+      "graphLatencyMs": 6.0
     },
     {
       "id": "branch-trial-regulators",
@@ -1553,14 +1560,14 @@
       "ragAnswerRank": 1,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-4d18a66e36421619801f6128",
-        "doc-c06f9e4305025e4e6b2738ca",
-        "doc-fc916b4277827fedba4dbbd6"
+        "doc-749d62fd42ecb3da904db8f0",
+        "doc-d0d5a423238817f1acf1f9e7",
+        "doc-ea6386d17d6ccd0004e7299d"
       ],
-      "ragLatencyMs": 302.6,
+      "ragLatencyMs": 160.4,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 4,
       "graphEdgeCount": 3,
       "graphPathCount": 3,
@@ -1572,7 +1579,7 @@
       "graphHops": null,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 15.1
+      "graphLatencyMs": 21.9
     },
     {
       "id": "negative-unknown-acme",
@@ -1598,15 +1605,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9c72f052bdec162bcfae5555",
-        "doc-ad9e1bf1259ef7bc667d3f01",
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-fa57f5f1f6aea0976672b9ba"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-95aaf53a562bcbd2a4b19e04"
       ],
-      "ragLatencyMs": 166.9,
+      "ragLatencyMs": 232.3,
       "graphHit": true,
       "graphSeedResolved": false,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 0,
       "graphEdgeCount": 0,
       "graphPathCount": 0,
@@ -1615,7 +1622,7 @@
       "graphHops": null,
       "graphJoined": false,
       "graphTruncated": false,
-      "graphLatencyMs": 15.5
+      "graphLatencyMs": 7.8
     },
     {
       "id": "negative-unknown-halcyon",
@@ -1641,16 +1648,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9aedce40b0cc615a9f1cc968",
-        "doc-c253343a4b59278001855c81",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fa57f5f1f6aea0976672b9ba",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-66d4049cebb4c108686b6b5e",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-be2326ba27d61958f7f6cc73",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 144.8,
+      "ragLatencyMs": 148.9,
       "graphHit": true,
       "graphSeedResolved": false,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 0,
       "graphEdgeCount": 0,
       "graphPathCount": 0,
@@ -1659,7 +1665,7 @@
       "graphHops": null,
       "graphJoined": false,
       "graphTruncated": false,
-      "graphLatencyMs": 16.2
+      "graphLatencyMs": 18.3
     },
     {
       "id": "negative-unknown-gamma",
@@ -1685,15 +1691,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-206556d6392a4f51aa150bd9",
-        "doc-80e4bd6c194f4646764efe29",
-        "doc-9a546fa8f28b04233d13b7da",
-        "doc-9f79e2bf70eed684982cea58"
+        "doc-7ce976abfae85e76831de79a",
+        "doc-8ab4b1092df09e379960abb0",
+        "doc-b1cc5068ef354d056a688aa9",
+        "doc-c35ed69af75ed86c5249423d"
       ],
-      "ragLatencyMs": 153.5,
+      "ragLatencyMs": 120.6,
       "graphHit": true,
       "graphSeedResolved": false,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 0,
       "graphEdgeCount": 0,
       "graphPathCount": 0,
@@ -1702,7 +1708,7 @@
       "graphHops": null,
       "graphJoined": false,
       "graphTruncated": false,
-      "graphLatencyMs": 14.1
+      "graphLatencyMs": 5.4
     },
     {
       "id": "negative-unknown-zeta",
@@ -1728,15 +1734,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-39bf26d2a2448c5539a03db1",
-        "doc-44ec21b44e62f276dbc7b8a0",
-        "doc-4f283c5c925feb57fcc60ac7",
-        "doc-95cc3fc14c95587631d1fe45"
+        "doc-0f11dc7907ffbeb30e5d151a",
+        "doc-117103aaf66621339ef0dd77",
+        "doc-56577dcbe04ea2adb156f235",
+        "doc-ddd1548103326d612b3f8309"
       ],
-      "ragLatencyMs": 144.8,
+      "ragLatencyMs": 136.5,
       "graphHit": true,
       "graphSeedResolved": false,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 0,
       "graphEdgeCount": 0,
       "graphPathCount": 0,
@@ -1745,7 +1751,7 @@
       "graphHops": null,
       "graphJoined": false,
       "graphTruncated": false,
-      "graphLatencyMs": 10.5
+      "graphLatencyMs": 19.0
     },
     {
       "id": "negative-depth-reservoir",
@@ -1774,14 +1780,14 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-9143a8e8ec7c09c072977218",
-        "doc-9f79e2bf70eed684982cea58",
-        "doc-ad9e1bf1259ef7bc667d3f01"
+        "doc-0668dfae8eccf3a9475221da",
+        "doc-c35ed69af75ed86c5249423d",
+        "doc-f96d08f048614eb75bb537ea"
       ],
-      "ragLatencyMs": 193.2,
+      "ragLatencyMs": 134.8,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -1790,7 +1796,7 @@
       "graphHops": null,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 15.7
+      "graphLatencyMs": 21.4
     },
     {
       "id": "negative-depth-alloy",
@@ -1819,15 +1825,15 @@
       "ragAnswerRank": null,
       "ragForbiddenEvidenceHit": false,
       "ragReturnedDocuments": [
-        "doc-bfcf717b0acfcfe56a91474b",
-        "doc-d3c95e1882fec594b6a04d3b",
-        "doc-d52b4c019ba04f0702608041",
-        "doc-fcbdc982770097aa4421a1fe"
+        "doc-3011a45b889cadc2f963b6a6",
+        "doc-4dc12344898142ecc1e11ae4",
+        "doc-6c88c6a7ca42781deb54f755",
+        "doc-dd0d76a0b0d684dd9f3441f9"
       ],
-      "ragLatencyMs": 220.8,
+      "ragLatencyMs": 135.6,
       "graphHit": true,
       "graphSeedResolved": true,
-      "graphSnapshotId": "gs-2457d683d596b9d6846a6654228d49b070f6f35b84f31371",
+      "graphSnapshotId": "gs-689d46a4fe1358fed63e3f6944da3d9c80a8f5964520fb74",
       "graphNodeCount": 3,
       "graphEdgeCount": 2,
       "graphPathCount": 2,
@@ -1836,7 +1842,7 @@
       "graphHops": null,
       "graphJoined": true,
       "graphTruncated": false,
-      "graphLatencyMs": 18.0
+      "graphLatencyMs": 16.3
     }
   ],
   "limitations": [
@@ -1845,7 +1851,7 @@
     "The set has 34 hand-authored cases over 30 fixtures (about 135 child chunks). It is a directional benefit check, not a statistically powered benchmark.",
     "Strict Evidence RAG hit requires the answer marker in a chunk from the expected document; the loose marker-anywhere reading is reported only as a diagnostic. Neither measures whether the chat model would answer correctly.",
     "RAG retrieval is measured against a single freshly built index per run; HNSW construction and ingestion-time embedding variation can change top-k membership across rebuilds. The graph side is deterministic because relations come from seeded triples, so the delta and the recommendation can shift between otherwise identical runs; treat this report as one sample and repeat the run before a release decision.",
-    "Extraction ran with the deterministic local chat adapter (CHAT_SOURCE=local), so the graph contains the seeded triples without model-added relations and depth-bound negatives cannot be polluted by extra edges; remote extraction may add edges.",
+    "Remote chat extraction may add relations and entities beyond the seeded triples; extra graph reachability is included in the result rather than filtered, and depth-bound negatives are reported separately for that reason.",
     "The corpus is synthetic operational prose; it does not represent production document length, formatting or query distribution."
   ]
 }

@@ -36,6 +36,7 @@ nav:
   - 快速开始: quickstart.md
   - 故障排查: troubleshooting.md
   - 测试: testing.md
+  - 评测方法与复现: evaluation.md
   - 架构: architecture.md
   - API: api.md
   - 运维: operations.md

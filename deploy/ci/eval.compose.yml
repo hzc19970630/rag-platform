@@ -1,0 +1,20 @@
+# CI evaluation overlay. Development identity keeps the harness independent of
+# OIDC, while the model sources stay remote so the M3 refusal gate is meaningful.
+# The task timeout covers remote relation extraction for the M7 corpus.
+services:
+  api:
+    environment:
+      APP_ENV: development
+      CONFIG_PROFILE: dev
+      DEV_AUTH_ENABLED: "true"
+      OIDC_ENABLED: "false"
+      CHAT_SOURCE: remote
+      EMBEDDING_SOURCE: remote
+      DOCREADER_TASK_TIMEOUT_SECONDS: "1800"
+  worker:
+    environment:
+      APP_ENV: development
+      CONFIG_PROFILE: dev
+      CHAT_SOURCE: remote
+      EMBEDDING_SOURCE: remote
+      DOCREADER_TASK_TIMEOUT_SECONDS: "1800"

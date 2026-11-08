@@ -23,9 +23,14 @@ depth-bound negatives require a forbidden node to stay outside the queried
 depth while the graph itself may be non-empty.
 
 Usage:
-    python3 scripts/m7_eval.py [--base-url http://localhost:8082] [--keep]
+    python3 scripts/m7_eval.py [--base-url http://localhost:8082] [--keep] \
+        [--auth dev|api-key] [--api-key KEY] [--report-dir DIR] [--redact-base-url]
     python3 scripts/m7_eval.py --validate-only
     python3 scripts/m7_eval.py --rag-top-k 3          # diagnostic only
+
+The owner credential is either a development identity (default) or an API key
+for a deployment with dev auth disabled. M7 has no permission probes, so it
+needs only the owner credential.
 
 The script exits non-zero when the harness itself fails (an invalid set, a
 document that never becomes EVIDENCE_READY, a failed relation run, a snapshot
@@ -37,18 +42,31 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import re
 import statistics
 import sys
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+from evalkit import (
+    AuthError,
+    Client,
+    Credentials,
+    DatasetError,
+    add_auth_arguments,
+    base_url_for_report,
+    load_set,
+    percentile,
+    rate,
+    resolve_report_path,
+    validate_common,
+    wait_document_ready,
+    wait_for,
+    write_report,
+)
 
 EVAL_SET = Path(__file__).resolve().parent.parent / "tests" / "eval" / "m7_qa_set.json"
 REPORT = Path(__file__).resolve().parent.parent / "tests" / "eval" / "m7_eval_report.json"
@@ -64,90 +82,6 @@ MIN_ANSWERABLE_CASES = 20
 TRIPLE_PATTERN = re.compile(
     r"\[\[\s*([^\[\]|]+?)\s*\|\s*([^\[\]|]+?)\s*\|\s*([^\[\]|]+?)\s*(?:\|\s*([^\[\]]*?)\s*)?\]\]"
 )
-
-
-class Client:
-    def __init__(self, base_url: str) -> None:
-        self.base = base_url.rstrip("/")
-        self.token = ""
-
-    def request(self, method: str, path: str, body: dict | None = None, raw: bytes | None = None, content_type: str | None = None, timeout: int = 120) -> tuple[int, bytes]:
-        data = raw
-        headers = {"Accept": "application/json"}
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
-        if body is not None:
-            data = json.dumps(body).encode()
-            headers["Content-Type"] = "application/json"
-        if content_type:
-            headers["Content-Type"] = content_type
-        request = urllib.request.Request(self.base + path, data=data, method=method, headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                return response.status, response.read()
-        except urllib.error.HTTPError as error:
-            return error.code, error.read()
-
-    def json(self, method: str, path: str, body: dict | None = None) -> tuple[int, dict]:
-        status, payload = self.request(method, path, body=body)
-        try:
-            return status, json.loads(payload or b"{}")
-        except json.JSONDecodeError:
-            return status, {}
-
-    def login(self) -> None:
-        status, payload = self.json("POST", "/api/v1/auth/dev-login", {"userId": "dev-user", "tenantId": "dev-tenant"})
-        if status != 200 or not payload.get("token"):
-            raise RuntimeError(f"dev login failed: {status} {payload}")
-        self.token = payload["token"]
-
-    def upload(self, knowledge_base_id: str, filename: str, content: str) -> dict:
-        boundary = "----m7eval" + uuid.uuid4().hex
-        body = (
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
-            f"Content-Type: text/markdown\r\n\r\n{content}\r\n--{boundary}--\r\n"
-        ).encode()
-        status, payload = self.request(
-            "POST",
-            f"/api/v1/knowledge-bases/{knowledge_base_id}/documents",
-            raw=body,
-            content_type=f"multipart/form-data; boundary={boundary}",
-        )
-        if status != 202:
-            raise RuntimeError(f"upload {filename} failed: {status} {payload[:400]!r}")
-        return json.loads(payload)
-
-
-def wait_for(description: str, timeout_seconds: int, probe):
-    deadline = time.monotonic() + timeout_seconds
-    last = None
-    while time.monotonic() < deadline:
-        result = probe()
-        if result is not None:
-            return result
-        last = time.monotonic()
-        time.sleep(1)
-    raise RuntimeError(f"timed out after {timeout_seconds}s waiting for {description} (last probe at {last})")
-
-
-def fetch_document(client: Client, document_id: str) -> dict:
-    status, payload = client.json("GET", f"/api/v1/documents/{document_id}")
-    if status != 200:
-        raise RuntimeError(f"document {document_id} detail failed: {status} {payload}")
-    return payload
-
-
-def wait_document_ready(client: Client, document_id: str) -> dict:
-    def probe():
-        payload = fetch_document(client, document_id)
-        status = (payload.get("pipeline") or {}).get("status")
-        if status == "EVIDENCE_READY":
-            return payload
-        if status == "FAILED":
-            raise RuntimeError(f"document {document_id} failed during ingestion: {payload.get('pipeline')}")
-        return None
-
-    return wait_for(f"document {document_id} EVIDENCE_READY", 300, probe)
 
 
 def wait_relation_ready(client: Client, knowledge_base_id: str) -> dict:
@@ -218,8 +152,12 @@ def parse_triples(fixtures: list[dict]) -> dict:
         "normalized_index": {},
     }
     for fixture in fixtures:
-        filename = fixture["filename"]
-        content = fixture["content"]
+        if not isinstance(fixture, dict):
+            continue
+        filename = fixture.get("filename")
+        content = fixture.get("content")
+        if not isinstance(filename, str) or not isinstance(content, str):
+            continue
         graph["docs"][filename] = content
         for match in TRIPLE_PATTERN.finditer(content):
             subject = match.group(1).strip()
@@ -284,33 +222,25 @@ def shortest_path_count(adjacency: dict, seed: str, target: str) -> int:
 
 
 def validate_set(evaluation: dict) -> list[str]:
-    errors: list[str] = []
-
-    if evaluation.get("schemaVersion") != SCHEMA_SET:
-        errors.append(f"schemaVersion must be {SCHEMA_SET}")
+    errors = validate_common(evaluation, schema_version=SCHEMA_SET)
     fixtures = evaluation.get("fixtures") or []
     cases = evaluation.get("cases") or []
-    if not fixtures:
-        errors.append("the set contains no fixtures")
-    if not cases:
-        errors.append("the set contains no cases")
 
     filenames: set[str] = set()
     role_counts: dict[str, int] = {}
     total_lines = 0
     all_content: list[str] = []
     for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            continue
         filename = fixture.get("filename") or ""
-        content = fixture.get("content") or ""
-        if not filename:
-            errors.append("a fixture has no filename")
-        elif filename in filenames:
-            errors.append(f"duplicate fixture filename {filename}")
-        filenames.add(filename)
+        content = fixture.get("content")
+        if filename:
+            filenames.add(filename)
         role = fixture.get("role") or ""
         role_counts[role] = role_counts.get(role, 0) + 1
-        if not content.strip():
-            errors.append(f"{filename}: fixture content is empty")
+        if not isinstance(content, str):
+            continue
         all_content.append(content)
         for line in content.splitlines():
             if not line.strip():
@@ -321,6 +251,9 @@ def validate_set(evaluation: dict) -> list[str]:
     corpus_text = "\n".join(all_content).casefold()
 
     corpus = evaluation.get("corpus") or {}
+    if not isinstance(corpus, dict):
+        errors.append("corpus must be an object")
+        corpus = {}
     chain_count = sum(role_counts.get(role, 0) for role in ("chain-a", "chain-b", "chain-c"))
     expected_counts = {
         "fixtures": len(fixtures),
@@ -353,24 +286,48 @@ def validate_set(evaluation: dict) -> list[str]:
                 errors.append(f"alias {alias!r} of {name!r} collides with entity {owner!r}")
             normalized_owner.setdefault(key, name)
 
-    seen_ids: set[str] = set()
     for case in cases:
+        if not isinstance(case, dict):
+            continue
         case_id = case.get("id") or ""
         if not case_id:
-            errors.append("a case has no id")
             continue
-        if case_id in seen_ids:
-            errors.append(f"duplicate case id {case_id}")
-        seen_ids.add(case_id)
 
-        question = case.get("question") or ""
-        seed = case.get("seed") or ""
+        question = case.get("question") if isinstance(case.get("question"), str) else ""
+        seed = case.get("seed")
+        if not isinstance(seed, str) or not seed.strip():
+            errors.append(f"{case_id}: seed must be a non-empty string")
+            seed = ""
         kind = case.get("seedKind") or "canonical"
+        if not isinstance(kind, str):
+            errors.append(f"{case_id}: seedKind must be a string")
+            kind = "canonical"
         depth = case.get("depth")
-        case_type = case.get("type") or ""
+        case_type = case.get("type") if isinstance(case.get("type"), str) else ""
         expected_nodes = case.get("expectedNodes") or []
+        if not isinstance(expected_nodes, list) or not all(isinstance(name, str) for name in expected_nodes):
+            errors.append(f"{case_id}: expectedNodes must be a list of strings")
+            expected_nodes = []
         forbidden_nodes = case.get("forbiddenNodes") or []
+        if not isinstance(forbidden_nodes, list) or not all(isinstance(name, str) for name in forbidden_nodes):
+            errors.append(f"{case_id}: forbiddenNodes must be a list of strings")
+            forbidden_nodes = []
         expected_document = case.get("expectedDocument") or ""
+        if not isinstance(expected_document, str):
+            errors.append(f"{case_id}: expectedDocument must be a string")
+            expected_document = ""
+        aligned_evidence = case.get("alignedEvidence") or []
+        if not isinstance(aligned_evidence, list) or not all(
+            isinstance(marker, str) for marker in aligned_evidence
+        ):
+            errors.append(f"{case_id}: alignedEvidence must be a list of strings")
+            aligned_evidence = []
+        forbidden_evidence = case.get("forbiddenEvidence") or []
+        if not isinstance(forbidden_evidence, list) or not all(
+            isinstance(phrase, str) for phrase in forbidden_evidence
+        ):
+            errors.append(f"{case_id}: forbiddenEvidence must be a list of strings")
+            forbidden_evidence = []
 
         if case_type not in ("single-hop", "multi-hop", "branch", "negative"):
             errors.append(f"{case_id}: unknown type {case_type!r}")
@@ -400,7 +357,7 @@ def validate_set(evaluation: dict) -> list[str]:
                 errors.append(f"{case_id}: question contains the answer or forbidden node {name!r}")
         if expected_document and expected_document not in filenames:
             errors.append(f"{case_id}: expectedDocument {expected_document!r} is not a fixture")
-        if expected_document and not case.get("alignedEvidence"):
+        if expected_document and not aligned_evidence:
             errors.append(f"{case_id}: expectedDocument is set but alignedEvidence is empty")
 
         if case_type == "negative":
@@ -447,6 +404,9 @@ def validate_set(evaluation: dict) -> list[str]:
             elif distances[name] > depth:
                 errors.append(f"{case_id}: expected node {name!r} needs {distances[name]} hops but depth is {depth}")
         expected_hops = case.get("expectedHops")
+        if expected_hops is not None and (not isinstance(expected_hops, int) or expected_hops < 1):
+            errors.append(f"{case_id}: expectedHops must be a positive integer")
+            expected_hops = None
         if expected_hops is not None:
             if len(expected_nodes) != 1:
                 errors.append(f"{case_id}: expectedHops requires exactly one expected node")
@@ -457,8 +417,11 @@ def validate_set(evaluation: dict) -> list[str]:
                     errors.append(f"{case_id}: expectedHops is {expected_hops}, triple graph says {actual}")
                 if actual is not None and shortest_path_count(graph["adjacency"], canonical, target) != 1:
                     errors.append(f"{case_id}: shortest path to {target!r} is ambiguous")
-        document_content = graph["docs"][expected_document]
-        for marker in case.get("alignedEvidence") or []:
+        document_content = graph["docs"].get(expected_document)
+        if document_content is None:
+            errors.append(f"{case_id}: expectedDocument {expected_document!r} has no fixture content")
+            continue
+        for marker in aligned_evidence:
             if marker not in document_content:
                 errors.append(f"{case_id}: marker {marker!r} does not appear in {expected_document}")
         hops = min(distances.get(name, MAX_GRAPH_DEPTH + 1) for name in expected_nodes)
@@ -467,10 +430,10 @@ def validate_set(evaluation: dict) -> list[str]:
                 errors.append(f"{case_id}: seed {canonical!r} leaks into {expected_document}")
             for seed_document in graph["entities"][canonical]["subject_docs"]:
                 content = graph["docs"][seed_document]
-                for marker in case.get("alignedEvidence") or []:
+                for marker in aligned_evidence:
                     if marker in content:
                         errors.append(f"{case_id}: marker {marker!r} already appears in seed document {seed_document}")
-        for phrase in case.get("forbiddenEvidence") or []:
+        for phrase in forbidden_evidence:
             if phrase in document_content:
                 errors.append(f"{case_id}: forbiddenEvidence {phrase!r} appears in {expected_document}")
             if not any(phrase in content for content in graph["docs"].values()):
@@ -600,18 +563,6 @@ def evaluate_case(client: Client, knowledge_base_id: str, case: dict, document_i
         "graphTruncated": graph_payload.get("truncated", False),
         "graphLatencyMs": round(graph_ms, 1),
     }
-
-
-def rate(hits: int, total: int) -> float:
-    return round(hits / total, 4) if total else 0.0
-
-
-def percentile(values: list[float], fraction: float) -> float | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    index = min(len(ordered) - 1, max(0, math.ceil(fraction * len(ordered)) - 1))
-    return round(ordered[index], 1)
 
 
 def summarize(cases: list[dict], set_stats: dict) -> dict:
@@ -793,13 +744,20 @@ def main() -> int:
     parser.add_argument("--keep", action="store_true", help="keep the evaluation knowledge base for inspection")
     parser.add_argument("--validate-only", action="store_true", help="validate the QA set without contacting the stack")
     parser.add_argument("--rag-top-k", type=int, default=0, help="diagnostic RAG top_k override; 0 keeps the service default")
+    parser.add_argument("--report-dir", default=None, help="directory for the report (default: tests/eval)")
+    parser.add_argument("--redact-base-url", action="store_true", help="write 'redacted' instead of the stack URL into the report")
+    add_auth_arguments(parser, actor_keys=False)
     arguments = parser.parse_args()
 
     if arguments.rag_top_k and not 1 <= arguments.rag_top_k <= 200:
         print("--rag-top-k must be between 1 and 200", file=sys.stderr)
         return 2
 
-    evaluation = json.loads(EVAL_SET.read_text(encoding="utf-8"))
+    try:
+        evaluation = load_set(EVAL_SET)
+    except DatasetError as error:
+        print(f"set validation: {error}", file=sys.stderr)
+        return 2
     errors = validate_set(evaluation)
     if errors:
         for error in errors:
@@ -815,12 +773,26 @@ def main() -> int:
     if arguments.validate_only:
         return 0
 
-    client = Client(arguments.base_url)
-    status, _ = client.json("GET", "/healthz")
+    try:
+        credentials = Credentials(arguments.base_url, arguments.auth, arguments.api_key)
+    except AuthError as error:
+        print(f"auth: {error}", file=sys.stderr)
+        return 2
+    client = credentials.owner_client()
+    try:
+        status, _ = client.json("GET", "/healthz")
+    except RuntimeError as error:
+        print(f"stack is not reachable at {arguments.base_url}: {error}", file=sys.stderr)
+        return 2
     if status != 200:
         print(f"stack is not reachable at {arguments.base_url}", file=sys.stderr)
         return 2
-    client.login()
+    try:
+        owner = credentials.verify_owner()
+    except AuthError as error:
+        print(f"auth: {error}", file=sys.stderr)
+        return 2
+    print(f"authenticated as {owner.subject_id}@{owner.tenant_id} via {arguments.auth}")
 
     suffix = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     status, knowledge_base = client.json(
@@ -905,7 +877,11 @@ def main() -> int:
         report = {
             "schemaVersion": SCHEMA_REPORT,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "baseUrl": arguments.base_url,
+            "baseUrl": base_url_for_report(arguments.base_url, arguments.redact_base_url),
+            "auth": {
+                "mode": arguments.auth,
+                "owner": {"subjectId": owner.subject_id, "tenantId": owner.tenant_id},
+            },
             "set": evaluation["name"],
             "setSchemaVersion": evaluation["schemaVersion"],
             "knowledgeBaseId": knowledge_base_id,
@@ -935,8 +911,11 @@ def main() -> int:
             "cases": cases,
             "limitations": dynamic_limitations(evaluation, metrics, arguments.rag_top_k, run.get("model", "")),
         }
-        REPORT.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        print(f"\nreport: {REPORT}")
+        report_path = write_report(
+            report,
+            resolve_report_path(arguments.report_dir, REPORT.parent, REPORT.name),
+        )
+        print(f"\nreport: {report_path}")
         print(
             f"multi-hop graph {metrics['multiHopGraphHitRate']:.0%} vs strict RAG {metrics['multiHopRagStrictHitRate']:.0%} "
             f"(loose {metrics['multiHopRagLooseHitRate']:.0%}); "

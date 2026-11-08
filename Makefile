@@ -1,4 +1,4 @@
-.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill backup-postgres m13-pitr-check m13-object-storage-check openapi openapi-check
+.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill backup-postgres m13-pitr-check m13-object-storage-check openapi openapi-check
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -183,6 +183,29 @@ vector-recall-probe:
 # the embedding model flags.
 m3-eval:
 	python3 scripts/m3_eval.py
+
+# Validates the M3 evaluation set (document roles, permission probes, JSON
+# overrides and gate coverage) without contacting the stack.
+m3-eval-validate:
+	python3 scripts/m3_eval.py --validate-only
+
+# Runs the shared harness tests (no stack required).
+eval-validation-tests:
+	python3 -m unittest discover -s scripts/evalkit/tests -p "test_*.py"
+
+# Validates both evaluation sets and the harness rules without a stack.
+eval-validate: m3-eval-validate m7-eval-validate eval-validation-tests
+
+# Runs both suites through one entry point. Pass --auth api-key and
+# --actor-key USER_ID=KEY for a deployment with dev auth disabled, and
+# --dry-run to inspect the commands without contacting the stack.
+eval-suite:
+	python3 scripts/eval_suite.py
+
+# Reproducible public baseline: validates first, redacts the stack URL and
+# writes both reports to tests/eval/public.
+eval-public: eval-validate
+	python3 scripts/eval_suite.py --public
 
 # create-index builds the halfvec(N) HNSW index CONCURRENTLY under a versioned
 # name and only drops the old index after the replacement is valid. The prompt
