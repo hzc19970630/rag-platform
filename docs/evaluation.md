@@ -169,6 +169,7 @@ DOCREADER_TASK_TIMEOUT_SECONDS=1800
 - M3 是硬门禁：`eval_suite.py` 以非零退出时 job 失败。M7 是建议：只有 harness 失败才非零，报告仍会生成。
 - 报告写到 `tests/eval/ci/`，以 `eval-reports` artifact 保留 7 天；栈结束时执行 `down -v` 清理。
 - 模型调用会消耗供应商配额；如只想在特定分支运行 live 门禁，可在仓库设置中按分支/环境保护 secrets，或调整 workflow 的触发条件。
+- workflow 支持 `workflow_dispatch`：配置凭据后可在 Actions 页面手动运行 `ci`，用于验证 live 门禁而无需额外推送。
 
 ### 使用 API Key 鉴权
 
