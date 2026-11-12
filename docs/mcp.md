@@ -10,7 +10,9 @@ MCP Server 不直接连接数据库，也不新增授权路径；它只是带着
 
 ## 1. 创建 API Key
 
-MCP 和 SDK 使用 API Key，不用浏览器会话。Key 至少需要 `knowledge_base:read` 和 `chat`，并建议用 `knowledgeBaseIds` 限定范围：
+在 Web 工作台的 **MCP 接入** 页（`/mcp`，需要租户 Owner 或 Admin）可以选择知识库并一键生成最小权限密钥（`knowledge_base:read` + `chat`，仅绑定该知识库），页面会给出可直接粘贴的 stdio 配置、8 个工具说明和构建/自检步骤。密钥明文只在创建时显示一次，之后可在 **运维 → API Key** 中吊销；页面不会回显已保存密钥的明文，也不会托管二进制或代理 MCP 会话。
+
+也可以直接调用 API 创建同样的 Key，供脚本或 SDK 使用。Key 至少需要 `knowledge_base:read` 和 `chat`，并建议用 `knowledgeBaseIds` 限定范围：
 
 ```bash
 curl -sS http://localhost:8082/api/v1/api-keys \

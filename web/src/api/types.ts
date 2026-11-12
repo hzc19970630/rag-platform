@@ -49,6 +49,10 @@ export type StreamEvent = Schemas["StreamEvent"];
 
 export type APIKeyView = DeepRequired<Schemas["APIKey"]>;
 
+export type APIKeyCreateRequest = Schemas["APIKeyCreateRequest"];
+
+export type APIKeyCreateResponse = Schemas["APIKeyCreateResponse"];
+
 export type Connector = DeepRequired<Schemas["Connector"]>;
 
 export type ConnectorRun = DeepRequired<Schemas["ConnectorRun"]>;

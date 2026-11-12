@@ -3,6 +3,7 @@ import {
   ControlOutlined,
   DesktopOutlined,
   GlobalOutlined,
+  LinkOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -34,6 +35,7 @@ export function useNavigation() {
     if (canChat) items.push({ key: "chat", icon: <MessageOutlined />, label: t("nav.chat") });
     if (canAdmin) items.push({ key: "admin", icon: <SafetyCertificateOutlined />, label: t("nav.admin") });
     if (canAdmin) items.push({ key: "ops", icon: <ControlOutlined />, label: t("nav.ops") });
+    if (canAdmin) items.push({ key: "mcp", icon: <LinkOutlined />, label: t("nav.mcp") });
     return items;
   }, [canChat, canAdmin, t]);
 }
@@ -67,7 +69,9 @@ function SidebarContent({ collapsed, onNavigate }: { collapsed: boolean; onNavig
       ? "admin"
       : location.pathname.startsWith("/ops")
         ? "ops"
-        : "knowledge-bases";
+        : location.pathname.startsWith("/mcp")
+          ? "mcp"
+          : "knowledge-bases";
 
   async function logout() {
     try {

@@ -306,6 +306,10 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .ops-stack { display: grid; gap: 16px; }
 .ops-report { max-height: 240px; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--border-secondary); border-radius: var(--radius); background: var(--bg-subtle); font-size: 0.78rem; }
 .token-box { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); overflow-wrap: anywhere; }
+.mcp-field { width: 100%; margin-top: 6px; }
+.mcp-inline-field { flex: 1 1 260px; min-width: 220px; }
+.mcp-inline-field .ant-typography { display: block; margin-bottom: 4px; }
+.mcp-steps { margin: 0; padding-left: 20px; line-height: 1.9; }
 
 /* Administration */
 .admin-stack { display: grid; gap: 16px; }

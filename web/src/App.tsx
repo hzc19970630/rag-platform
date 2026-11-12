@@ -15,6 +15,7 @@ import { DocumentPage } from "./pages/DocumentPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
 import { LoginPage } from "./pages/LoginPage";
+import { McpPage } from "./pages/McpPage";
 import { OpsPage } from "./pages/OpsPage";
 import { SessionProvider } from "./session";
 import { usePreferences } from "./store/preferences";
@@ -97,6 +98,7 @@ export function App() {
                 <Route path="/chat/:conversationId" element={<ChatPage />} />
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/ops" element={<OpsPage />} />
+                <Route path="/mcp" element={<McpPage />} />
               </Route>
               <Route path="/" element={<Navigate to="/knowledge-bases" replace />} />
               <Route path="*" element={<NotFound />} />

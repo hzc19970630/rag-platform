@@ -29,7 +29,7 @@ describe("sidebar navigation", () => {
     const { result } = renderHook(() => useNavigation(), {
       wrapper: wrapper(["knowledge_base:read", "knowledge_base:manage_members", "tenant:admin"]),
     });
-    expect(keys(result.current)).toEqual(["knowledge-bases", "chat", "admin", "ops"]);
+    expect(keys(result.current)).toEqual(["knowledge-bases", "chat", "admin", "ops", "mcp"]);
   });
 
   it("keeps tenant surfaces off for knowledge-base managers", () => {
