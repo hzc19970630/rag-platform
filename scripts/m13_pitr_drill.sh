@@ -146,7 +146,15 @@ run_restore() {
   rto_observed=$(( $(date +%s) - restore_started_epoch ))
 }
 
-file_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0; }
+file_mtime() {
+  if stat -c %Y "$1" >/dev/null 2>&1; then
+    stat -c %Y "$1"
+  elif stat -f %m "$1" >/dev/null 2>&1; then
+    stat -f %m "$1"
+  else
+    echo 0
+  fi
+}
 
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 

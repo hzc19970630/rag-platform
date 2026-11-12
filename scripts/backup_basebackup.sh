@@ -52,7 +52,7 @@ psql() { "${compose[@]}" exec -T postgres psql -U "$source_user" -d "$source_db"
 step "preflight: WAL archiving must be able to cover the interval after the backup"
 wal_level="$(psql 'SHOW wal_level;')"
 archive_mode="$(psql 'SHOW archive_mode;')"
-archive_timeout="$(psql 'SHOW archive_timeout;')"
+archive_timeout="$(psql "SELECT setting FROM pg_settings WHERE name = 'archive_timeout';")"
 [[ "$wal_level" == "replica" || "$wal_level" == "logical" ]] || fail "wal_level must be replica or logical, got $wal_level"
 if [[ "$archive_mode" != "on" && "$archive_mode" != "always" ]]; then
   [[ "$allow_no_archive" == "1" ]] || fail "archive_mode is off; enable WAL archiving for PITR (or pass --allow-no-archive for development only)"

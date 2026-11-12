@@ -27,7 +27,7 @@ psql() { "${compose[@]}" exec -T postgres psql -U "$source_user" -d "$source_db"
 wal_level="$(psql 'SHOW wal_level;')"
 archive_mode="$(psql 'SHOW archive_mode;')"
 archive_command="$(psql 'SHOW archive_command;')"
-archive_timeout="$(psql 'SHOW archive_timeout;')"
+archive_timeout="$(psql "SELECT setting FROM pg_settings WHERE name = 'archive_timeout';")"
 archiver="$(psql "SELECT archived_count || '|' || failed_count || '|' || COALESCE(last_failed_time::text, '') FROM pg_stat_archiver;")"
 printf 'wal_level=%s\narchive_mode=%s\narchive_command=%s\narchive_timeout=%s\npg_stat_archiver=%s\n' \
   "$wal_level" "$archive_mode" "$archive_command" "$archive_timeout" "$archiver"

@@ -127,7 +127,11 @@ target_indexes="$(target_psql "SELECT indexname || '|' || indexdef FROM pg_index
   fail "chunk index definitions differ after restore"
 }
 grep -q 'chunks_bm25_idx' <<<"$source_indexes" || fail "source is missing chunks_bm25_idx"
-grep -q 'chunks_vector_idx.*halfvec(1024)' <<<"$source_indexes" || fail "source vector index is not halfvec(1024)"
+# Dimension-agnostic: the quickstart stack uses a small local embedder, while
+# production uses 1024-dim vectors. The equality check above already proves the
+# restored definition matches the source; here we only require a real HNSW index.
+grep -q 'chunks_vector_idx' <<<"$source_indexes" || fail "source is missing chunks_vector_idx"
+grep -qi 'hnsw' <<<"$source_indexes" || fail "source vector index is not HNSW"
 printf '%s\n' "$target_indexes"
 
 step "restore drill complete"
