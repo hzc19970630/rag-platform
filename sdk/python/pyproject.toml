@@ -1,0 +1,13 @@
+[project]
+name = "rag-platform-sdk"
+version = "0.1.0"
+description = "Thin Python SDK for the RAG Platform HTTP API"
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.27"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

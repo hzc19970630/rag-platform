@@ -39,6 +39,7 @@ nav:
   - 评测方法与复现: evaluation.md
   - 架构: architecture.md
   - API: api.md
+  - MCP 与 SDK: mcp.md
   - 运维: operations.md
   - 发布与回滚: releases.md
   - 竞品对比: comparison.md
