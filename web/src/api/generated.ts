@@ -1880,6 +1880,17 @@ export interface components {
             principal?: components["schemas"]["PrincipalView"];
             scope?: components["schemas"]["ScopeView"];
         };
+        MechanismState: {
+            attempts?: number;
+            detail?: string;
+            lastError?: string;
+            /** Format: date-time */
+            leaseUntil?: string;
+            mechanism?: string;
+            /** Format: date-time */
+            nextAttemptAt?: string;
+            status?: string;
+        };
         Message: {
             authorizationScopeVersion?: string;
             content?: string;
@@ -2249,6 +2260,8 @@ export interface components {
         TaskInspection: {
             deadLetter?: components["schemas"]["TaskDeadLetter"];
             inbox?: components["schemas"]["TaskInbox"];
+            kind: string;
+            mechanisms: components["schemas"]["MechanismState"][];
             outbox: components["schemas"]["OutboxEvent"][];
             pipeline?: components["schemas"]["PipelineRun"];
             stage?: components["schemas"]["StageRun"];

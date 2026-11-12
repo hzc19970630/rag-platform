@@ -29,7 +29,7 @@ type knowledgeCandidate struct {
 	score float64
 }
 
-const knowledgeBM25Query = `
+var knowledgeBM25Query = fmt.Sprintf(`
 SELECT k.wiki_page_id AS page_id,
        k.wiki_page_version_id AS version_id,
        k.knowledge_base_id AS knowledge_base_id,
@@ -41,13 +41,13 @@ JOIN knowledge_bases kb ON kb.id = k.knowledge_base_id
 JOIN wiki_pages p ON p.id = k.wiki_page_id
 WHERE k.tenant_id = ?
   AND k.knowledge_base_id = ?
-  AND k.status = 'ACTIVE'
+  AND k.status = '%s'
   AND kb.acl_version = k.acl_version
-  AND p.status = 'PUBLISHED'
+  AND p.status = '%s'
   AND p.published_version_id = k.wiki_page_version_id
   AND k.content @@@ ?
 ORDER BY score DESC
-LIMIT ?`
+LIMIT ?`, status.Active, status.Published)
 
 const knowledgeVectorTemplate = `
 SELECT k.wiki_page_id AS page_id,
@@ -61,9 +61,9 @@ JOIN knowledge_bases kb ON kb.id = k.knowledge_base_id
 JOIN wiki_pages p ON p.id = k.wiki_page_id
 WHERE k.tenant_id = ?
   AND k.knowledge_base_id = ?
-  AND k.status = 'ACTIVE'
+  AND k.status = '%s'
   AND kb.acl_version = k.acl_version
-  AND p.status = 'PUBLISHED'
+  AND p.status = '%s'
   AND p.published_version_id = k.wiki_page_version_id
   AND k.embedding_model = ?
   AND k.embedding_dimension = %d
@@ -213,7 +213,7 @@ func (s *Service) searchKnowledgeVector(ctx context.Context, tenantID, knowledge
 		return nil, fmt.Errorf("embed knowledge query returned an unexpected vector")
 	}
 	dimension := len(vectors[0])
-	statement := fmt.Sprintf(knowledgeVectorTemplate, dimension, dimension, dimension, dimension, dimension)
+	statement := fmt.Sprintf(knowledgeVectorTemplate, dimension, dimension, status.Active, status.Published, dimension, dimension, dimension)
 	literal := vecutil.Literal(vectors[0])
 	rows, err := s.db.WithContext(ctx).Raw(statement, literal, tenantID, knowledgeBaseID, s.embedder.Name(), literal, limit).Rows()
 	if err != nil {

@@ -1,15 +1,19 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/hzc19970630/rag-platform/internal/status"
+)
 
 const (
-	GraphSnapshotBuilding   = "BUILDING"
-	GraphSnapshotPending    = "PENDING_REVIEW"
-	GraphSnapshotActive     = "ACTIVE"
-	GraphSnapshotRejected   = "REJECTED"
-	GraphSnapshotStale      = "STALE"
-	GraphSnapshotSuperseded = "SUPERSEDED"
-	GraphSnapshotFailed     = "FAILED"
+	GraphSnapshotBuilding   = status.Building
+	GraphSnapshotPending    = status.PendingReview
+	GraphSnapshotActive     = status.Active
+	GraphSnapshotRejected   = status.ReviewRejected
+	GraphSnapshotStale      = status.Stale
+	GraphSnapshotSuperseded = status.Superseded
+	GraphSnapshotFailed     = status.Failed
 )
 
 // GraphSnapshot is the reviewable and publishable unit of the Relation Store.

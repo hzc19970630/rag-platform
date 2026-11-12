@@ -22,28 +22,28 @@ const (
 	StageEmbed     = "embed"
 	StageIndex     = "index"
 
-	StatusReceived      = "RECEIVED"
-	StatusStored        = "STORED"
-	StatusParsing       = "PARSING"
-	StatusParsed        = "PARSED"
-	StatusNormalizing   = "NORMALIZING"
-	StatusNormalized    = "NORMALIZED"
-	StatusChunking      = "CHUNKING"
-	StatusChunked       = "CHUNKED"
-	StatusEmbedding     = "EMBEDDING"
-	StatusEmbedded      = "EMBEDDED"
-	StatusIndexing      = "INDEXING"
+	StatusReceived      = status.Received
+	StatusStored        = status.Stored
+	StatusParsing       = status.Parsing
+	StatusParsed        = status.Parsed
+	StatusNormalizing   = status.Normalizing
+	StatusNormalized    = status.Normalized
+	StatusChunking      = status.Chunking
+	StatusChunked       = status.Chunked
+	StatusEmbedding     = status.Embedding
+	StatusEmbedded      = status.Embedded
+	StatusIndexing      = status.Indexing
 	StatusEvidenceReady = status.EvidenceReady
-	StatusFailed        = "FAILED"
-	StatusCancelled     = "CANCELLED"
+	StatusFailed        = status.Failed
+	StatusCancelled     = status.Cancelled
 	StatusStale         = status.Stale
 	StatusParent        = status.Parent
 
-	StagePending    = "PENDING"
-	StageProcessing = "PROCESSING"
-	StageSucceeded  = "SUCCEEDED"
-	StageFailed     = "FAILED"
-	StageCancelled  = "CANCELLED"
+	StagePending    = status.Pending
+	StageProcessing = status.Processing
+	StageSucceeded  = status.Succeeded
+	StageFailed     = status.Failed
+	StageCancelled  = status.Cancelled
 )
 
 type Envelope = evidence.Envelope

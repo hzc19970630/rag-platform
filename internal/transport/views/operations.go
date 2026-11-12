@@ -8,8 +8,10 @@ import (
 
 func TaskInspection(view ingestion.TaskInspection) httpapi.TaskInspection {
 	result := httpapi.TaskInspection{
-		Task:   view.Task,
-		Outbox: OutboxEvents(view.Outbox),
+		Task:       view.Task,
+		Kind:       view.Kind,
+		Mechanisms: MechanismStates(view.Mechanisms),
+		Outbox:     OutboxEvents(view.Outbox),
 	}
 	if view.Inbox != nil {
 		inbox := TaskInbox(*view.Inbox)
@@ -28,6 +30,22 @@ func TaskInspection(view ingestion.TaskInspection) httpapi.TaskInspection {
 		result.DeadLetter = &deadLetter
 	}
 	return result
+}
+
+func MechanismStates(rows []ingestion.MechanismState) []httpapi.MechanismState {
+	states := make([]httpapi.MechanismState, 0, len(rows))
+	for _, row := range rows {
+		states = append(states, httpapi.MechanismState{
+			Mechanism:     row.Mechanism,
+			Status:        row.Status,
+			Attempts:      row.Attempts,
+			LeaseUntil:    row.LeaseUntil,
+			NextAttemptAt: row.NextAttemptAt,
+			LastError:     row.LastError,
+			Detail:        row.Detail,
+		})
+	}
+	return states
 }
 
 func TaskInbox(row models.TaskInbox) httpapi.TaskInbox {

@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 
 const (
-	DeadLetterPending   = "PENDING"
-	DeadLetterRetrying  = "RETRYING"
-	DeadLetterResolved  = "RESOLVED"
-	DeadLetterDiscarded = "DISCARDED"
+	DeadLetterPending   = status.Pending
+	DeadLetterRetrying  = status.Retrying
+	DeadLetterResolved  = status.Resolved
+	DeadLetterDiscarded = status.Discarded
 )
 
 // UpsertDeadLetter records a task whose retries are exhausted. Both the queue

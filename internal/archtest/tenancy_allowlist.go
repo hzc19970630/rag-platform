@@ -37,6 +37,11 @@ var TenancyAllowlist = []TenancyAllowlistEntry{
 		Tables: []string{"evidence_packages", "projection_generation_cache"},
 		Reason: "maintenance sweep: removes cache rows whose package is gone across all tenants; deleting a cache row only forces regeneration",
 	},
+	{
+		File:   "internal/ingestion/reconcile.go",
+		Tables: []string{"task_dead_letters", "task_inbox"},
+		Reason: "reconcile resolves recovered dead letters; the tenant predicate is injected for tenant-triggered runs and omitted for the platform maintenance loop",
+	},
 }
 
 func tenancyAllowed(file, table string) bool {

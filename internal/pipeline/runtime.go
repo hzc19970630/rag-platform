@@ -12,6 +12,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 
@@ -23,7 +24,7 @@ var ErrLeaseRetained = errors.New("inbox lease retained until retry backoff")
 const (
 	InboxProcessing = inboxlease.StatusProcessing
 	InboxSucceeded  = inboxlease.StatusSucceeded
-	InboxFailed     = "FAILED"
+	InboxFailed     = status.Failed
 )
 
 // Stage is the domain half of one queue stage. Every method runs inside the

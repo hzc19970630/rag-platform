@@ -6,33 +6,34 @@ package conversation
 import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/status"
 )
 
 // Online answer state machine (design 7.5). The terminal states are the ones
 // that describe how the answer was delivered.
 const (
-	AnswerReceived           = "RECEIVED"
-	AnswerAuthorized         = "AUTHORIZED"
-	AnswerPlanned            = "PLANNED"
-	AnswerRetrieving         = "RETRIEVING"
-	AnswerGrounded           = "GROUNDED"
-	AnswerGenerating         = "GENERATING"
-	AnswerCitationValidating = "CITATION_VALIDATING"
-	AnswerDelivering         = "DELIVERING"
-	AnswerCompleted          = "COMPLETED"
-	AnswerRefused            = "REFUSED"
-	AnswerFailed             = "FAILED"
-	AnswerTimedOut           = "TIMEOUT"
-	AnswerCancelled          = "CANCELLED"
+	AnswerReceived           = status.AnswerReceived
+	AnswerAuthorized         = status.AnswerAuthorized
+	AnswerPlanned            = status.AnswerPlanned
+	AnswerRetrieving         = status.AnswerRetrieving
+	AnswerGrounded           = status.AnswerGrounded
+	AnswerGenerating         = status.AnswerGenerating
+	AnswerCitationValidating = status.AnswerCitationValidating
+	AnswerDelivering         = status.AnswerDelivering
+	AnswerCompleted          = status.AnswerCompleted
+	AnswerRefused            = status.AnswerRefused
+	AnswerFailed             = status.Failed
+	AnswerTimedOut           = status.AnswerTimedOut
+	AnswerCancelled          = status.Cancelled
 )
 
 const (
 	MessageRoleUser      = "user"
 	MessageRoleAssistant = "assistant"
 
-	MessageStatusCompleted = "COMPLETED"
-	MessageStatusFailed    = "FAILED"
-	MessageStatusCancelled = "CANCELLED"
+	MessageStatusCompleted = status.AnswerCompleted
+	MessageStatusFailed    = status.Failed
+	MessageStatusCancelled = status.Cancelled
 
 	// Event types emitted over SSE. Each event carries event_id, request_id and
 	// sequence so a client can resume from the last id it saw.

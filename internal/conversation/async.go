@@ -14,6 +14,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
+	"github.com/hzc19970630/rag-platform/internal/status"
 )
 
 // Async answer job states. They describe durable hand-off, not the answer:
@@ -21,10 +22,10 @@ import (
 // message is a refusal or a timeout. FAILED means no terminal answer was
 // produced (lost worker, denied scope, queue unavailable).
 const (
-	AnswerJobQueued    = "QUEUED"
-	AnswerJobRunning   = "RUNNING"
-	AnswerJobCompleted = "COMPLETED"
-	AnswerJobFailed    = "FAILED"
+	AnswerJobQueued    = status.AnswerQueued
+	AnswerJobRunning   = status.AnswerRunning
+	AnswerJobCompleted = status.AnswerCompleted
+	AnswerJobFailed    = status.Failed
 )
 
 // errAnswerJobNotVisible is returned when a worker consumes the Asynq task

@@ -176,14 +176,15 @@ func (s *Service) resolveRecoveredDeadLetters(ctx context.Context, base *gorm.DB
 		tenantFilter = "AND task_dead_letters.tenant_id = ?"
 		args = append(args, tenantID)
 	}
-	result := base.WithContext(ctx).Exec(`
+	statement := fmt.Sprintf(`
 UPDATE task_dead_letters
-SET status = 'RESOLVED', resolved_at = ?, updated_at = ?
-WHERE task_dead_letters.status IN ('PENDING', 'RETRYING') `+tenantFilter+`
+SET status = '%s', resolved_at = ?, updated_at = ?
+WHERE task_dead_letters.status IN ('%s', '%s') %s
   AND EXISTS (
       SELECT 1 FROM task_inbox i
-      WHERE i.idempotency_key = task_dead_letters.idempotency_key AND i.status = 'SUCCEEDED'
-  )`, args...)
+      WHERE i.idempotency_key = task_dead_letters.idempotency_key AND i.status = '%s'
+  )`, deadLetterResolved, deadLetterPending, deadLetterRetrying, tenantFilter, status.Succeeded)
+	result := base.WithContext(ctx).Exec(statement, args...)
 	if result.Error != nil {
 		return 0, fmt.Errorf("resolve recovered dead letters: %w", result.Error)
 	}

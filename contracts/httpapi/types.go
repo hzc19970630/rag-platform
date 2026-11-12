@@ -1120,13 +1120,25 @@ type OutboxEvent struct {
 	CreatedAt      time.Time  `json:"createdAt"`
 }
 
+type MechanismState struct {
+	Mechanism     string     `json:"mechanism"`
+	Status        string     `json:"status"`
+	Attempts      int        `json:"attempts,omitempty"`
+	LeaseUntil    *time.Time `json:"leaseUntil,omitempty"`
+	NextAttemptAt *time.Time `json:"nextAttemptAt,omitempty"`
+	LastError     string     `json:"lastError,omitempty"`
+	Detail        string     `json:"detail,omitempty"`
+}
+
 type TaskInspection struct {
-	Task       any             `json:"task" oa:"required"`
-	Inbox      *TaskInbox      `json:"inbox,omitempty"`
-	Pipeline   *PipelineRun    `json:"pipeline,omitempty"`
-	Stage      *StageRun       `json:"stage,omitempty"`
-	Outbox     []OutboxEvent   `json:"outbox" oa:"required"`
-	DeadLetter *TaskDeadLetter `json:"deadLetter,omitempty"`
+	Task       any              `json:"task" oa:"required"`
+	Kind       string           `json:"kind" oa:"required"`
+	Mechanisms []MechanismState `json:"mechanisms" oa:"required"`
+	Inbox      *TaskInbox       `json:"inbox,omitempty"`
+	Pipeline   *PipelineRun     `json:"pipeline,omitempty"`
+	Stage      *StageRun        `json:"stage,omitempty"`
+	Outbox     []OutboxEvent    `json:"outbox" oa:"required"`
+	DeadLetter *TaskDeadLetter  `json:"deadLetter,omitempty"`
 }
 
 type ReconcileReport struct {

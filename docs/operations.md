@@ -210,6 +210,46 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
   -H "Authorization: Bearer <session-token>"
 ```
 
+### 6.1 跨机制任务状态与转移表
+
+`GET /api/v1/ops/tasks/:key`（tenant owner/admin）现在按 idempotency key 跨域解析：
+
+- `kind`：`ingestion`、`projection`、`sync`、`answer`；
+- `mechanisms[]`：归一化后的机制状态，字段包括 `mechanism`、`status`、`attempts`、`leaseUntil`、`nextAttemptAt`、`lastError`、`detail`；
+- 原有 `task`/`inbox`/`pipeline`/`stage`/`outbox`/`deadLetter` 字段保留，便于查看原始行。
+
+支持的 key 形式：Ingestion 的 stage key、Projection 的 `<runID>:<stage>`、同步的 `connector-sync:<runID>`、异步答案的 job ID。跨租户 key 一律返回 404；Projection stage 无 tenant 列，先按 run 的 tenant 校验。
+
+八套机制及其状态来源：
+
+| 机制 | 持久化位置 | 关键状态 | 运维动作 |
+| --- | --- | --- | --- |
+| Asynq retry | Redis（非任务表） | pending → retry → archived | 看 `/ops/metrics` 队列深度；耗尽后走死信 |
+| Inbox lease | `task_inbox` | `PROCESSING` → `SUCCEEDED`/`FAILED` | 过期租约由 reconcile 接管 |
+| Outbox attempts | `outbox_events` | 未发布 → `PUBLISHED`；`attempts`/`next_attempt_at` 退避 | 检查 Redis 与 outbox publisher |
+| Stage attempts | `stage_runs` / `projection_stage_runs` | `PENDING` → `PROCESSING` → `SUCCEEDED`/`FAILED` | 死信重试、reconcile 重排 |
+| Reconcile | 维护循环 | 修正漂移、回收过期 Stage、重开 outbox | `POST /ops/reconcile` |
+| Stale expiry | 维护循环 | 过期同步运行/答案任务置 `FAILED` | 检查租约与 worker 存活 |
+| Projection retry | `projection_runs`/`projection_stage_runs` | 运行中 → Ready/Failed；重试保留 attempt | 运营页重试失败阶段 |
+| Sync retry | `sync_runs` | `PENDING` → `RUNNING` → `SUCCEEDED`/`PARTIAL`/`FAILED` | 取消、续跑或重试连接器 |
+
+跨机制转移（节选，完整表见 `internal/status.Transitions`）：
+
+| 机制 | 转移 | 触发 |
+| --- | --- | --- |
+| outbox_attempts | `PENDING → PUBLISHED` | publisher 成功入队 |
+| outbox_attempts | `PENDING → PENDING` | 入队失败，attempts/next_attempt_at 前进 |
+| inbox_lease | `PROCESSING → SUCCEEDED / FAILED` | 阶段完成或终态失败 |
+| inbox_lease | `PROCESSING → PROCESSING` | 心跳续租；过期后由 reconcile 接管 |
+| stage_attempts | `PENDING → PROCESSING → SUCCEEDED` | worker 执行成功 |
+| stage_attempts | `PROCESSING → PENDING` | reconcile 重排停滞 Stage |
+| asynq_retry | `retry → archived` | MaxRetry 耗尽，写死信 |
+| reconcile | `STALE → PENDING / FAILED` | 租约过期后重排或耗尽重试 |
+| stale_expiry | `RUNNING → FAILED` | 同步/答案租约过期 |
+| projection_retry | `FAILED → PENDING` | 运营重试，新 attempt id |
+| sync_retry | `RUNNING → PARTIAL` | 部分条目失败但运行结束 |
+| answer_lease | `QUEUED/RUNNING → FAILED` | 维护扫描发现过期租约 |
+
 ## 7. 告警指标
 
 `GET /api/v1/ops/metrics`（tenant owner/admin）返回：

@@ -10,6 +10,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -37,6 +38,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 		&models.OutboxEvent{},
 		&models.ProjectionRun{},
 		&models.ProjectionStageRun{},
+		&models.SyncRun{},
+		&models.AnswerJob{},
 		&models.Membership{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -118,5 +121,88 @@ func TestInspectReturnsOwnTenantTask(t *testing.T) {
 	}
 	if inspection.Inbox == nil || inspection.Pipeline == nil || inspection.Stage == nil {
 		t.Fatalf("incomplete inspection: %+v", inspection)
+	}
+}
+
+func TestInspectResolvesProjectionSyncAndAnswerKeys(t *testing.T) {
+	db := newTestDB(t)
+	seedOperator(t, db, "tenant-a", "user-a", "admin")
+	now := time.Now()
+	rows := []any{
+		&models.ProjectionRun{
+			ID: "prj-a", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", EvidencePackageID: "pkg-a",
+			ProjectionType: "wiki", Status: status.WikiReady, CreatedAt: now, UpdatedAt: now,
+		},
+		&models.ProjectionStageRun{
+			ProjectionRunID: "prj-a", ProjectionType: "wiki", Stage: "GENERATE",
+			Status: status.Succeeded, Attempts: 2, IdempotencyKey: "prj-a:GENERATE", CreatedAt: now, UpdatedAt: now,
+		},
+		&models.OutboxEvent{
+			TenantID: "tenant-a", AggregateType: "projection_run", AggregateID: "prj-a",
+			EventType: "projection.wiki", IdempotencyKey: "prj-a:GENERATE", Payload: "{}", PublishedAt: &now,
+		},
+		&models.SyncRun{
+			ID: "sync-a", TenantID: "tenant-a", ConnectorID: "conn-a", KnowledgeBaseID: "kb-a",
+			Mode: "full", Status: status.SyncPartial, Attempts: 1, ErrorSummary: "one item failed", CreatedAt: now, UpdatedAt: now,
+		},
+		&models.AnswerJob{
+			ID: "job-a", TenantID: "tenant-a", UserID: "user-a", ConversationID: "conv-a",
+			RequestID: "req-a", Status: status.AnswerCompleted, Attempts: 1, CreatedAt: now, UpdatedAt: now,
+		},
+	}
+	for _, row := range rows {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatalf("seed %T: %v", row, err)
+		}
+	}
+	inspector := NewTaskInspector(db, nil)
+	principal := authz.Principal{SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session"}
+
+	projection, err := inspector.Inspect(context.Background(), principal, "prj-a:GENERATE")
+	if err != nil {
+		t.Fatalf("inspect projection: %v", err)
+	}
+	if projection.Kind != "projection" || len(projection.Mechanisms) < 2 {
+		t.Fatalf("projection inspection = %+v", projection)
+	}
+
+	syncInspection, err := inspector.Inspect(context.Background(), principal, "connector-sync:sync-a")
+	if err != nil {
+		t.Fatalf("inspect sync: %v", err)
+	}
+	if syncInspection.Kind != "sync" || syncInspection.Mechanisms[0].Mechanism != status.MechanismSyncRetry {
+		t.Fatalf("sync inspection = %+v", syncInspection)
+	}
+
+	answerInspection, err := inspector.Inspect(context.Background(), principal, "job-a")
+	if err != nil {
+		t.Fatalf("inspect answer: %v", err)
+	}
+	if answerInspection.Kind != "answer" || answerInspection.Mechanisms[0].Mechanism != status.MechanismAnswerLease {
+		t.Fatalf("answer inspection = %+v", answerInspection)
+	}
+}
+
+func TestInspectDoesNotLeakOtherTenantProjection(t *testing.T) {
+	db := newTestDB(t)
+	seedOperator(t, db, "tenant-a", "user-a", "admin")
+	now := time.Now()
+	if err := db.Create(&models.ProjectionRun{
+		ID: "prj-b", TenantID: "tenant-b", KnowledgeBaseID: "kb-b", EvidencePackageID: "pkg-b",
+		ProjectionType: "wiki", Status: status.WikiReady, CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed projection run: %v", err)
+	}
+	if err := db.Create(&models.ProjectionStageRun{
+		ProjectionRunID: "prj-b", ProjectionType: "wiki", Stage: "COLLECT",
+		Status: status.Succeeded, IdempotencyKey: "prj-b:COLLECT", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed projection stage: %v", err)
+	}
+	_, err := NewTaskInspector(db, nil).Inspect(context.Background(), authz.Principal{
+		SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session",
+	}, "prj-b:COLLECT")
+	if !errors.Is(err, apperror.ErrNotFound) {
+		t.Fatalf("cross-tenant projection lookup err = %v, want not_found", err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 
@@ -23,8 +24,8 @@ const (
 	// it every third of the TTL while the stage runs.
 	DefaultTTL = 2 * time.Minute
 
-	StatusProcessing = "PROCESSING"
-	StatusSucceeded  = "SUCCEEDED"
+	StatusProcessing = status.Processing
+	StatusSucceeded  = status.Succeeded
 )
 
 // Owner lazily assigns one immutable identity to a worker. A worker built as a

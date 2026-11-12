@@ -26,41 +26,41 @@ const (
 	StageGenerate = "GENERATE"
 	StageFinalize = "FINALIZE"
 
-	ProjectionPending   = "WIKI_PENDING"
-	ProjectionRunning   = "WIKI_GENERATING"
-	ProjectionReady     = "WIKI_READY"
-	ProjectionFailed    = "FAILED_WIKI"
-	ProjectionRetrying  = "RETRY_WIKI"
-	RelationPending     = "RELATION_PENDING"
-	RelationExtracting  = "RELATION_EXTRACTING"
-	RelationReady       = "RELATION_READY"
-	RelationFailed      = "FAILED_RELATION"
-	RelationRetrying    = "RETRY_RELATION"
-	ProjectionCancelled = "CANCELLED"
+	ProjectionPending   = status.WikiPending
+	ProjectionRunning   = status.WikiGenerating
+	ProjectionReady     = status.WikiReady
+	ProjectionFailed    = status.WikiFailed
+	ProjectionRetrying  = status.WikiRetrying
+	RelationPending     = status.RelationPending
+	RelationExtracting  = status.RelationExtracting
+	RelationReady       = status.RelationReady
+	RelationFailed      = status.RelationFailed
+	RelationRetrying    = status.RelationRetrying
+	ProjectionCancelled = status.Cancelled
 
-	StagePending    = "PENDING"
-	StageProcessing = "PROCESSING"
-	StageSucceeded  = "SUCCEEDED"
-	StageFailed     = "FAILED"
+	StagePending    = status.Pending
+	StageProcessing = status.Processing
+	StageSucceeded  = status.Succeeded
+	StageFailed     = status.Failed
 
-	ReviewPending  = "PENDING"
-	ReviewApproved = "APPROVED"
-	ReviewRejected = "REJECTED"
+	ReviewPending  = status.Pending
+	ReviewApproved = status.ReviewApproved
+	ReviewRejected = status.ReviewRejected
 
-	PageDraft          = "DRAFT"
-	PagePublished      = "PUBLISHED"
-	PageReviewRequired = "REVIEW_REQUIRED"
+	PageDraft          = status.Draft
+	PagePublished      = status.Published
+	PageReviewRequired = status.ReviewRequired
 	PageStale          = status.Stale
-	PageArchived       = "ARCHIVED"
+	PageArchived       = status.Archived
 
 	PageTypeOverview = "overview"
 	PageTypeDocument = "document"
 
 	JoinEvidenceReady    = status.EvidenceReady
-	JoinKnowledgeReady   = "KNOWLEDGE_READY"
-	JoinKnowledgePartial = "KNOWLEDGE_PARTIAL"
+	JoinKnowledgeReady   = status.KnowledgeReady
+	JoinKnowledgePartial = status.KnowledgePartial
 
-	IndexActive = "ACTIVE"
+	IndexActive = status.Active
 	IndexStale  = status.Stale
 )
 

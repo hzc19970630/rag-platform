@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	inboxProcessing = "PROCESSING"
-	inboxSucceeded  = "SUCCEEDED"
-	inboxFailed     = "FAILED"
+	inboxProcessing = pipeline.InboxProcessing
+	inboxSucceeded  = pipeline.InboxSucceeded
+	inboxFailed     = pipeline.InboxFailed
 )
 
 var wikiStageTable = pipeline.NewStageTable(

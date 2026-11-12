@@ -13,6 +13,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 
@@ -35,8 +36,20 @@ func NewTaskInspector(db *gorm.DB, publisher TaskPublisher) *TaskInspector {
 	return &TaskInspector{db: db, publisher: publisher}
 }
 
+type MechanismState struct {
+	Mechanism     string     `json:"mechanism"`
+	Status        string     `json:"status"`
+	Attempts      int        `json:"attempts,omitempty"`
+	LeaseUntil    *time.Time `json:"leaseUntil,omitempty"`
+	NextAttemptAt *time.Time `json:"nextAttemptAt,omitempty"`
+	LastError     string     `json:"lastError,omitempty"`
+	Detail        string     `json:"detail,omitempty"`
+}
+
 type TaskInspection struct {
-	Task       Task                   `json:"task"`
+	Task       any                    `json:"task"`
+	Kind       string                 `json:"kind"`
+	Mechanisms []MechanismState       `json:"mechanisms"`
 	Inbox      *models.TaskInbox      `json:"inbox,omitempty"`
 	Pipeline   *models.PipelineRun    `json:"pipeline,omitempty"`
 	Stage      *models.StageRun       `json:"stage,omitempty"`
@@ -44,6 +57,9 @@ type TaskInspection struct {
 	DeadLetter *models.TaskDeadLetter `json:"deadLetter,omitempty"`
 }
 
+// Inspect resolves one idempotency key across ingestion, projection, connector
+// sync and durable answer jobs. Each mechanism keeps its own enforcer; this view
+// only reads and normalizes their persisted state.
 func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, idempotencyKey string) (TaskInspection, error) {
 	if err := requireTenantOperator(ctx, i.db, principal); err != nil {
 		return TaskInspection{}, err
@@ -51,7 +67,7 @@ func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, 
 	if strings.TrimSpace(idempotencyKey) == "" {
 		return TaskInspection{}, apperror.Invalidf("idempotency key is required")
 	}
-	inspection := TaskInspection{Outbox: []models.OutboxEvent{}}
+	inspection := TaskInspection{Outbox: []models.OutboxEvent{}, Mechanisms: []MechanismState{}}
 	var inbox models.TaskInbox
 	inboxFound := false
 	if err := i.db.WithContext(ctx).First(&inbox, "idempotency_key = ?", idempotencyKey).Error; err == nil {
@@ -72,40 +88,163 @@ func (i *TaskInspector) Inspect(ctx context.Context, principal authz.Principal, 
 			inspection.Pipeline = &pipeline
 		}
 	}
-	var event models.OutboxEvent
-	if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).Where("idempotency_key = ?", idempotencyKey).First(&event).Error; err == nil {
-		inspection.Outbox = append(inspection.Outbox, event)
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return TaskInspection{}, fmt.Errorf("load task outbox event: %w", err)
-	}
 	var dead models.TaskDeadLetter
 	if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).Where("idempotency_key = ?", idempotencyKey).First(&dead).Error; err == nil {
 		inspection.DeadLetter = &dead
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return TaskInspection{}, fmt.Errorf("load task dead letter: %w", err)
 	}
+	outboxKeys := []string{idempotencyKey}
+	kind := ""
+	var projectionStage *models.ProjectionStageRun
+	var projectionRun *models.ProjectionRun
+	var syncRun *models.SyncRun
+	var answerJob *models.AnswerJob
+
+	baseEvents, err := i.loadOutboxEvents(ctx, principal.TenantID, outboxKeys)
+	if err != nil {
+		return TaskInspection{}, err
+	}
+	inspection.Outbox = baseEvents
 	// TaskInbox and StageRun have no tenant column. An inbox row is only
 	// evidence of this tenant's task when a tenant-owned pipeline, outbox event
-	// or dead letter carries the same idempotency key; otherwise the row belongs
-	// to another tenant and must not be returned.
-	owned := inspection.Pipeline != nil || inspection.DeadLetter != nil || len(inspection.Outbox) > 0
+	// or dead letter carries the same idempotency key.
+	owned := inspection.Pipeline != nil || inspection.DeadLetter != nil || len(baseEvents) > 0
+	if owned {
+		kind = "ingestion"
+		// A projection outbox event is tenant-owned but is not an ingestion
+		// pipeline. Classify by aggregate type before falling back.
+		if inspection.Pipeline == nil && len(baseEvents) > 0 && baseEvents[0].AggregateType == "projection_run" {
+			projectionStage, projectionRun, err = i.loadProjection(ctx, principal.TenantID, idempotencyKey)
+			if err != nil {
+				return TaskInspection{}, err
+			}
+			if projectionRun != nil {
+				kind = "projection"
+			}
+		}
+	} else {
+		var err error
+		projectionStage, projectionRun, err = i.loadProjection(ctx, principal.TenantID, idempotencyKey)
+		if err != nil {
+			return TaskInspection{}, err
+		}
+		if projectionRun != nil {
+			kind = "projection"
+			owned = true
+		}
+	}
+	if !owned && strings.HasPrefix(idempotencyKey, "connector-sync:") {
+		runID := strings.TrimPrefix(idempotencyKey, "connector-sync:")
+		var run models.SyncRun
+		if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).First(&run, "id = ?", runID).Error; err == nil {
+			syncRun = &run
+			kind = "sync"
+			owned = true
+			outboxKeys = append(outboxKeys, "sync-outbox:"+runID)
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return TaskInspection{}, fmt.Errorf("load sync run: %w", err)
+		}
+	}
+	if !owned {
+		var job models.AnswerJob
+		if err := tenantdb.MustScoped(i.db.WithContext(ctx), principal.TenantID).First(&job, "id = ?", idempotencyKey).Error; err == nil {
+			answerJob = &job
+			kind = "answer"
+			owned = true
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return TaskInspection{}, fmt.Errorf("load answer job: %w", err)
+		}
+	}
 	if !owned {
 		return TaskInspection{}, apperror.ErrNotFound
 	}
+	if len(outboxKeys) > 1 {
+		events, err := i.loadOutboxEvents(ctx, principal.TenantID, outboxKeys)
+		if err != nil {
+			return TaskInspection{}, err
+		}
+		inspection.Outbox = events
+	}
+	events := inspection.Outbox
 	if stageFound {
 		inspection.Stage = &stage
 	}
 	if inboxFound {
 		inspection.Inbox = &inbox
 	}
-	payload := event.Payload
+	var payload string
+	if len(events) > 0 {
+		payload = events[0].Payload
+	}
 	if payload == "" && inspection.DeadLetter != nil {
 		payload = inspection.DeadLetter.Payload
 	}
 	if payload != "" {
 		_ = json.Unmarshal([]byte(payload), &inspection.Task)
 	}
+	inspection.Kind = kind
+	inspection.Mechanisms = buildMechanisms(&inbox, &stage, events, inspection.DeadLetter, projectionStage, projectionRun, syncRun, answerJob)
 	return inspection, nil
+}
+
+func (i *TaskInspector) loadProjection(ctx context.Context, tenantID, key string) (*models.ProjectionStageRun, *models.ProjectionRun, error) {
+	var stage models.ProjectionStageRun
+	if err := i.db.WithContext(ctx).First(&stage, "idempotency_key = ?", key).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("load projection stage: %w", err)
+	}
+	var run models.ProjectionRun
+	if err := tenantdb.MustScoped(i.db.WithContext(ctx), tenantID).First(&run, "id = ?", stage.ProjectionRunID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("load projection run: %w", err)
+	}
+	return &stage, &run, nil
+}
+
+func (i *TaskInspector) loadOutboxEvents(ctx context.Context, tenantID string, keys []string) ([]models.OutboxEvent, error) {
+	var events []models.OutboxEvent
+	if err := tenantdb.MustScoped(i.db.WithContext(ctx), tenantID).Where("idempotency_key IN ?", keys).Order("id").Find(&events).Error; err != nil {
+		return nil, fmt.Errorf("load task outbox events: %w", err)
+	}
+	return events, nil
+}
+
+func buildMechanisms(inbox *models.TaskInbox, stage *models.StageRun, outbox []models.OutboxEvent, dead *models.TaskDeadLetter, projectionStage *models.ProjectionStageRun, projectionRun *models.ProjectionRun, syncRun *models.SyncRun, answerJob *models.AnswerJob) []MechanismState {
+	result := make([]MechanismState, 0, 8)
+	for _, event := range outbox {
+		state := status.Pending
+		if event.PublishedAt != nil {
+			state = status.Published
+		}
+		result = append(result, MechanismState{Mechanism: status.MechanismOutboxAttempts, Status: state, Attempts: event.Attempts, NextAttemptAt: event.NextAttemptAt, LastError: event.LastError, Detail: event.EventType})
+	}
+	if inbox != nil && inbox.IdempotencyKey != "" {
+		result = append(result, MechanismState{Mechanism: status.MechanismInboxLease, Status: inbox.Status, LeaseUntil: inbox.LeaseUntil, LastError: inbox.LastError})
+	}
+	if stage != nil && stage.IdempotencyKey != "" {
+		result = append(result, MechanismState{Mechanism: status.MechanismStageAttempts, Status: stage.Status, Attempts: stage.Attempts, LastError: stage.ErrorMessage, Detail: stage.Stage})
+	}
+	if dead != nil {
+		result = append(result, MechanismState{Mechanism: status.MechanismAsynqRetry, Status: dead.Status, Attempts: dead.Attempts, LastError: dead.LastError, Detail: "archived task with a dead letter"})
+	}
+	if projectionStage != nil {
+		result = append(result, MechanismState{Mechanism: status.MechanismProjectionRetry, Status: projectionStage.Status, Attempts: projectionStage.Attempts, LastError: projectionStage.ErrorMessage, Detail: projectionStage.Stage})
+	}
+	if projectionRun != nil {
+		result = append(result, MechanismState{Mechanism: status.MechanismProjectionRetry, Status: projectionRun.Status, Detail: projectionRun.ProjectionType + " run"})
+	}
+	if syncRun != nil {
+		result = append(result, MechanismState{Mechanism: status.MechanismSyncRetry, Status: syncRun.Status, Attempts: syncRun.Attempts, LeaseUntil: syncRun.LeaseUntil, LastError: syncRun.ErrorSummary, Detail: syncRun.Mode + " sync"})
+	}
+	if answerJob != nil {
+		result = append(result, MechanismState{Mechanism: status.MechanismAnswerLease, Status: answerJob.Status, Attempts: answerJob.Attempts, LeaseUntil: answerJob.LeaseUntil, LastError: answerJob.ErrorCode})
+	}
+	return result
 }
 
 func (i *TaskInspector) ListDeadLetters(ctx context.Context, principal authz.Principal, status string, limit int) ([]models.TaskDeadLetter, error) {

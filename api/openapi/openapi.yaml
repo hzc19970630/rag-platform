@@ -1199,6 +1199,25 @@ components:
         scope:
           $ref: '#/components/schemas/ScopeView'
       type: object
+    MechanismState:
+      properties:
+        attempts:
+          type: integer
+        detail:
+          type: string
+        lastError:
+          type: string
+        leaseUntil:
+          format: date-time
+          type: string
+        mechanism:
+          type: string
+        nextAttemptAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+      type: object
     Message:
       properties:
         authorizationScopeVersion:
@@ -1893,6 +1912,12 @@ components:
           $ref: '#/components/schemas/TaskDeadLetter'
         inbox:
           $ref: '#/components/schemas/TaskInbox'
+        kind:
+          type: string
+        mechanisms:
+          items:
+            $ref: '#/components/schemas/MechanismState'
+          type: array
         outbox:
           items:
             $ref: '#/components/schemas/OutboxEvent'
@@ -1903,6 +1928,8 @@ components:
           $ref: '#/components/schemas/StageRun'
         task: {}
       required:
+        - kind
+        - mechanisms
         - outbox
         - task
       type: object

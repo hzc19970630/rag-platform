@@ -38,6 +38,8 @@ func TestOperationsRoutesDoNotCrossTenantBoundaries(t *testing.T) {
 		&models.Membership{}, &models.AuthorizationRevision{}, &models.AuditLog{},
 		&models.PipelineRun{}, &models.StageRun{}, &models.TaskInbox{},
 		&models.OutboxEvent{}, &models.TaskDeadLetter{},
+		&models.ProjectionRun{}, &models.ProjectionStageRun{},
+		&models.SyncRun{}, &models.AnswerJob{},
 	); err != nil {
 		t.Fatalf("migrate ops tables: %v", err)
 	}

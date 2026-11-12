@@ -18,21 +18,22 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/secrets"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 
 const (
 	TypeHTTPManifest = "http_manifest"
 
-	StatusPending   = "PENDING"
-	StatusRunning   = "RUNNING"
-	StatusSucceeded = "SUCCEEDED"
-	StatusPartial   = "PARTIAL"
-	StatusFailed    = "FAILED"
-	StatusCancelled = "CANCELLED"
+	StatusPending   = status.Pending
+	StatusRunning   = status.Running
+	StatusSucceeded = status.Succeeded
+	StatusPartial   = status.SyncPartial
+	StatusFailed    = status.Failed
+	StatusCancelled = status.Cancelled
 
-	ItemActive     = "ACTIVE"
-	ItemTombstoned = "TOMBSTONED"
+	ItemActive     = status.Active
+	ItemTombstoned = status.Tombstoned
 
 	ModeManual    = "manual"
 	ModeScheduled = "scheduled"
