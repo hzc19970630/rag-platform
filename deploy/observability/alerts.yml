@@ -1,0 +1,106 @@
+groups:
+  - name: rag-platform-availability
+    rules:
+      - alert: RagTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: page
+          service: rag-platform
+        annotations:
+          summary: "{{ $labels.job }} cannot be scraped"
+          description: "Prometheus cannot reach {{ $labels.instance }} (job {{ $labels.job }}). Check the process, port and METRICS_ADDR."
+      - alert: RagApi5xxRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+          > 0.02
+        for: 5m
+        labels:
+          severity: page
+          service: rag-api
+        annotations:
+          summary: "API 5xx rate is above 2%"
+          description: "5xx ratio has stayed above 2% for 5 minutes; check recent deploy, database and model provider health."
+      - alert: RagApiLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_ms_bucket[5m]))
+          ) > 1500
+        for: 10m
+        labels:
+          severity: ticket
+          service: rag-api
+        annotations:
+          summary: "API P95 latency is above 1.5s"
+          description: "P95 has exceeded 1.5s for 10 minutes. Inspect retrieval, model provider and database latency."
+  - name: rag-platform-pipeline
+    rules:
+      - alert: RagParseFailureRate
+        expr: |
+          sum(rate(ingestion_stage_total{stage="parse",result="failure"}[10m]))
+          /
+          clamp_min(sum(rate(ingestion_stage_total{stage="parse"}[10m])), 0.001)
+          > 0.1
+        for: 10m
+        labels:
+          severity: page
+          service: rag-ingestion
+        annotations:
+          summary: "Document parse failure rate is above 10%"
+          description: "At least 10% of parse attempts failed over 10 minutes. Check docreader, unsupported formats and dead letters."
+      - alert: RagQueueBacklog
+        expr: max by (queue) (queue_depth{state="pending"}) > 100
+        for: 10m
+        labels:
+          severity: page
+          service: rag-worker
+        annotations:
+          summary: "Queue {{ $labels.queue }} has more than 100 pending tasks"
+          description: "Pending depth has stayed above 100 for 10 minutes. Check worker health and pool weights."
+      - alert: RagQueueRetries
+        expr: max by (queue) (queue_depth{state="retry"}) > 0
+        for: 15m
+        labels:
+          severity: ticket
+          service: rag-worker
+        annotations:
+          summary: "Queue {{ $labels.queue }} has retrying tasks"
+          description: "Tasks have been in retry for 15 minutes; inspect dead letters and dependency health."
+      - alert: RagOutboxBacklog
+        expr: max(outbox_backlog) > 100
+        for: 10m
+        labels:
+          severity: page
+          service: rag-worker
+        annotations:
+          summary: "Outbox backlog is above 100 events"
+          description: "Unpublished outbox events are piling up; check Redis and the outbox publisher."
+      - alert: RagInboxExpiredLeases
+        expr: max(inbox_expired_leases) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: rag-worker
+        annotations:
+          summary: "Expired inbox leases are present"
+          description: "A worker lease expired while the task is still PROCESSING; check worker crashes and reconcile."
+      - alert: RagProjectionLag
+        expr: max(projection_lag_seconds) > 900
+        for: 10m
+        labels:
+          severity: ticket
+          service: rag-projection
+        annotations:
+          summary: "Projection has been pending for over 15 minutes"
+          description: "The oldest non-terminal projection run is older than 15 minutes. Check the projection queue and provider health."
+      - alert: RagModelErrors
+        expr: sum(increase(model_errors_total[10m])) > 3
+        for: 5m
+        labels:
+          severity: page
+          service: rag-model
+        annotations:
+          summary: "Model errors exceeded 3 in 10 minutes"
+          description: "Chat or embedding calls are failing; check provider health, quota and network from api/worker."

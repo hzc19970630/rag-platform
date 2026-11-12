@@ -9,6 +9,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	pipelineruntime "github.com/hzc19970630/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
@@ -200,6 +201,7 @@ func (s *Service) restartDeletionCancelledPipeline(ctx context.Context, principa
 			}
 		}
 		task := s.taskFor(principal, document, version, pipeline, targetStage, target)
+		task.TraceParent = observability.InjectTraceParent(ctx)
 		payload, err := json.Marshal(task)
 		if err != nil {
 			return fmt.Errorf("marshal restarted task: %w", err)

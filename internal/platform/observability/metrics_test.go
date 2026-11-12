@@ -84,6 +84,35 @@ func TestWritePrometheusRendersCountersAndTimings(t *testing.T) {
 	}
 }
 
+func TestGaugesRenderLatestValue(t *testing.T) {
+	registry := New()
+	labels := Labels("queue", "ingestion", "state", "pending")
+	registry.SetGauge("queue_depth", labels, 3)
+	registry.SetGauge("queue_depth", labels, 1)
+	registry.SetGauge("projection_lag_seconds", nil, 42.5)
+
+	gauges := registry.Snapshot()["gauges"].(map[string]float64)
+	if gauges["queue_depth{queue=ingestion,state=pending}"] != 1 {
+		t.Fatalf("gauges must keep the latest value: %#v", gauges)
+	}
+
+	var buffer bytes.Buffer
+	if err := registry.WritePrometheus(&buffer); err != nil {
+		t.Fatalf("write prometheus: %v", err)
+	}
+	output := buffer.String()
+	for _, fragment := range []string{
+		"# TYPE queue_depth gauge",
+		`queue_depth{queue="ingestion",state="pending"} 1`,
+		"# TYPE projection_lag_seconds gauge",
+		"projection_lag_seconds 42.5",
+	} {
+		if !strings.Contains(output, fragment) {
+			t.Fatalf("prometheus output is missing %q:\n%s", fragment, output)
+		}
+	}
+}
+
 func TestDefaultRegistryIsProcessWide(t *testing.T) {
 	Default().Inc("m4_test_counter", nil)
 	Default().Inc("m4_test_counter", nil)

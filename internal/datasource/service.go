@@ -14,6 +14,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/secrets"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
@@ -216,6 +217,7 @@ func (s *Service) createRun(ctx context.Context, connector models.Connector, mod
 	task := SyncTask{
 		SchemaVersion: SchemaTask, TenantID: connector.TenantID, ConnectorID: connector.ID, SyncRunID: run.ID,
 		IdempotencyKey: "connector-sync:" + run.ID, Queue: QueueMaintenance, CreatedAt: time.Now().UTC(),
+		TraceParent: observability.InjectTraceParent(ctx),
 	}
 	payload, err := json.Marshal(task)
 	if err != nil {

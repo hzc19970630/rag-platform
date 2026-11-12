@@ -13,6 +13,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
@@ -143,7 +144,7 @@ func (p projectionStage) Succeed(tx *gorm.DB, now time.Time) (*models.OutboxEven
 	} else if err != nil {
 		return nil, err
 	}
-	event, err := stageEvent(p.run, next, nextStageRow.Attempts)
+	event, err := stageEvent(p.run, next, nextStageRow.Attempts, p.task.TraceParent)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ func (p projectionStage) Fail(tx *gorm.DB, code, message string, now time.Time) 
 	}).Error
 }
 
-func stageEvent(run *models.ProjectionRun, stage string, attempt int) (models.OutboxEvent, error) {
+func stageEvent(run *models.ProjectionRun, stage string, attempt int, traceParent string) (models.OutboxEvent, error) {
 	key := run.ID + ":" + stage
 	schema, eventType := SchemaWikiTask, "projection.wiki"
 	if run.ProjectionType == ProjectionTypeRelation {
@@ -174,6 +175,7 @@ func stageEvent(run *models.ProjectionRun, stage string, attempt int) (models.Ou
 		SchemaVersion: schema, TenantID: run.TenantID, KnowledgeBaseID: run.KnowledgeBaseID,
 		EvidencePackageID: run.EvidencePackageID, ProjectionRunID: run.ID,
 		ProjectionType: run.ProjectionType, Stage: stage, IdempotencyKey: key, Attempt: attempt,
+		TraceParent: traceParent,
 	}
 	payload, err := json.Marshal(task)
 	if err != nil {
@@ -188,8 +190,8 @@ func stageEvent(run *models.ProjectionRun, stage string, attempt int) (models.Ou
 // reopenStage is the projection call site of the single outbox reopen
 // implementation. A retry re-opens the same durable event; the task attempt
 // changes the queue id so Asynq's retained completed record cannot suppress it.
-func reopenStage(tx *gorm.DB, run *models.ProjectionRun, stage string, attempt int) error {
-	event, err := stageEvent(run, stage, attempt)
+func reopenStage(ctx context.Context, tx *gorm.DB, run *models.ProjectionRun, stage string, attempt int) error {
+	event, err := stageEvent(run, stage, attempt, observability.InjectTraceParent(ctx))
 	if err != nil {
 		return err
 	}

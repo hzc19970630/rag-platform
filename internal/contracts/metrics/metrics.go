@@ -18,6 +18,12 @@ type Adder interface {
 	Add(name string, value int64, labels map[string]string)
 }
 
+// Gauge is the optional surface for values that go up and down, such as queue
+// depth and outbox backlog. Recorders that only handle counters can omit it.
+type Gauge interface {
+	SetGauge(name string, labels map[string]string, value float64)
+}
+
 // Nop discards every observation. It is the default so a service without an
 // injected recorder keeps working in tests and offline tools.
 type Nop struct{}

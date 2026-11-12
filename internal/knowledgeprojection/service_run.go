@@ -211,7 +211,7 @@ func (s *Service) createRunFor(ctx context.Context, knowledgeBase models.Knowled
 	now := time.Now()
 	activeStatuses := activeStatusesFor(projectionType)
 	err := tenantdb.InTx(ctx, s.db, knowledgeBase.TenantID, func(tx *gorm.DB) error {
-		return s.insertRunFor(tx, knowledgeBase, projectionType, evidencePackageID, sourceHash, now)
+		return s.insertRunFor(ctx, tx, knowledgeBase, projectionType, evidencePackageID, sourceHash, now)
 	})
 	if err != nil {
 		// A concurrent trigger may have won the one-active-run index. That is the
@@ -236,11 +236,11 @@ func activeStatusesFor(projectionType string) []string {
 // insertRun creates one run, its first stage row and the durable outbox event.
 // It takes a transaction so the caller can cancel a superseded run and create
 // its replacement atomically.
-func (s *Service) insertRun(tx *gorm.DB, knowledgeBase models.KnowledgeBase, evidencePackageID, sourceHash string, now time.Time) error {
-	return s.insertRunFor(tx, knowledgeBase, ProjectionTypeWiki, evidencePackageID, sourceHash, now)
+func (s *Service) insertRun(ctx context.Context, tx *gorm.DB, knowledgeBase models.KnowledgeBase, evidencePackageID, sourceHash string, now time.Time) error {
+	return s.insertRunFor(ctx, tx, knowledgeBase, ProjectionTypeWiki, evidencePackageID, sourceHash, now)
 }
 
-func (s *Service) insertRunFor(tx *gorm.DB, knowledgeBase models.KnowledgeBase, projectionType, evidencePackageID, sourceHash string, now time.Time) error {
+func (s *Service) insertRunFor(ctx context.Context, tx *gorm.DB, knowledgeBase models.KnowledgeBase, projectionType, evidencePackageID, sourceHash string, now time.Time) error {
 	runID := stableID("prj", knowledgeBase.ID, projectionType, evidencePackageID, sourceHash, fmt.Sprint(now.UnixNano()))
 	run := models.ProjectionRun{
 		ID: runID, TenantID: knowledgeBase.TenantID, KnowledgeBaseID: knowledgeBase.ID,
@@ -269,7 +269,7 @@ func (s *Service) insertRunFor(tx *gorm.DB, knowledgeBase models.KnowledgeBase, 
 	if err := tx.Create(&stage).Error; err != nil {
 		return err
 	}
-	return reopenStage(tx, &run, StageCollect, 0)
+	return reopenStage(ctx, tx, &run, StageCollect, 0)
 }
 
 func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRun) error {
@@ -306,7 +306,7 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 		if err := pipeline.RequeueInbox(tx, run.ID+":"+retryStage.Stage, now); err != nil {
 			return err
 		}
-		if err := reopenStage(tx, run, retryStage.Stage, retryStage.Attempts+1); err != nil {
+		if err := reopenStage(ctx, tx, run, retryStage.Stage, retryStage.Attempts+1); err != nil {
 			return err
 		}
 		run.Status = retryStatusFor(run.ProjectionType)

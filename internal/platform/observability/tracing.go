@@ -72,3 +72,25 @@ func TraceID(ctx context.Context) string {
 func Propagator() propagation.TextMapPropagator {
 	return otel.GetTextMapPropagator()
 }
+
+// InjectTraceParent serializes the current span context as a W3C traceparent
+// header value. Queue payloads carry it so a worker span can continue the
+// request trace after the HTTP request has finished. An invalid/empty span
+// yields an empty string and the worker starts a new trace.
+func InjectTraceParent(ctx context.Context) string {
+	if !trace.SpanContextFromContext(ctx).IsValid() {
+		return ""
+	}
+	carrier := propagation.MapCarrier{}
+	Propagator().Inject(ctx, carrier)
+	return carrier.Get("traceparent")
+}
+
+// ExtractTraceParent restores a traceparent carried by a queue payload. It is
+// a no-op for an empty value so replaying old payloads remains safe.
+func ExtractTraceParent(ctx context.Context, traceParent string) context.Context {
+	if strings.TrimSpace(traceParent) == "" {
+		return ctx
+	}
+	return Propagator().Extract(ctx, propagation.MapCarrier{"traceparent": traceParent})
+}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
@@ -154,6 +155,7 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 			return err
 		}
 		task := s.taskFor(principal, document, version, pipeline, stage, StageParse)
+		task.TraceParent = observability.InjectTraceParent(ctx)
 		payload, marshalErr := json.Marshal(task)
 		if marshalErr != nil {
 			return marshalErr

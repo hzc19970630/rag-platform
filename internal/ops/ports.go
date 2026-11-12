@@ -10,4 +10,5 @@ import (
 // the service or its HTTP transport.
 type Store interface {
 	Snapshot(ctx context.Context, tenantID string, since time.Time, outboxMaxAttempts int) (Snapshot, error)
+	PlatformSnapshot(ctx context.Context, now time.Time, outboxMaxAttempts int) (PlatformSnapshot, error)
 }

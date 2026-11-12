@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -85,4 +86,40 @@ func (s *PostgresStore) Snapshot(ctx context.Context, tenantID string, since tim
 		DeadLetters:      deadLetters,
 		OutboxBacklog:    backlog,
 	}, nil
+}
+
+// PlatformSnapshot counts deployment-wide backlog. It is intentionally
+// unscoped: the worker exposes these as gauges, and tenant-level lists remain
+// on the authenticated operator routes.
+func (s *PostgresStore) PlatformSnapshot(ctx context.Context, now time.Time, outboxMaxAttempts int) (PlatformSnapshot, error) {
+	// Each query takes a fresh unscoped handle: GORM reuses the statement when a
+	// handle is chained, and mixing models on one handle leaks the first table.
+	unscoped := func() *gorm.DB {
+		return tenantdb.Unscoped(s.db.WithContext(ctx), "platform metrics: cross-tenant backlog")
+	}
+	snapshot := PlatformSnapshot{}
+	if err := unscoped().Model(&models.OutboxEvent{}).
+		Where("published_at IS NULL AND attempts < ?", outboxMaxAttempts).
+		Count(&snapshot.OutboxBacklog).Error; err != nil {
+		return PlatformSnapshot{}, fmt.Errorf("count outbox backlog: %w", err)
+	}
+	if err := unscoped().Model(&models.TaskInbox{}).
+		Where("status = ? AND lease_until IS NOT NULL AND lease_until < ?", "PROCESSING", now).
+		Count(&snapshot.InboxExpiredLeases).Error; err != nil {
+		return PlatformSnapshot{}, fmt.Errorf("count expired inbox leases: %w", err)
+	}
+	terminal := []string{"WIKI_READY", "RELATION_READY", "FAILED_WIKI", "FAILED_RELATION", "CANCELLED"}
+	if err := unscoped().Model(&models.ProjectionRun{}).
+		Where("status NOT IN ?", terminal).
+		Count(&snapshot.ProjectionPendingRuns).Error; err != nil {
+		return PlatformSnapshot{}, fmt.Errorf("count pending projection runs: %w", err)
+	}
+	var oldest models.ProjectionRun
+	if err := unscoped().Where("status NOT IN ?", terminal).Order("created_at").Limit(1).Find(&oldest).Error; err != nil {
+		return PlatformSnapshot{}, fmt.Errorf("load oldest pending projection run: %w", err)
+	}
+	if !oldest.CreatedAt.IsZero() {
+		snapshot.ProjectionOldestPendingSeconds = now.Sub(oldest.CreatedAt).Seconds()
+	}
+	return snapshot, nil
 }

@@ -225,11 +225,31 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | `operations.outboxBacklog` | `published_at IS NULL AND attempts < OUTBOX_MAX_ATTEMPTS` | 持续 > 0 且不下降 |
 
 - `operations` 来自数据库，跨进程重启保留；`counters`/`timings`/`queues` 是进程级或实时 Redis 状态，API 重启后归零。
-- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（开发/测试可用 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`。`APP_ENV=production` 时只允许 `localhost` 或回环/RFC1918/ULA/link-local 的字面 IP，`:9091`、`0.0.0.0`、公网 IP 和普通主机名都会让启动校验失败。进程内 counters 输出为 `_total`，timings 输出为固定毫秒桶的 histogram（`_bucket{le="1|5|10|25|50|100|250|500|1000|2500|5000|10000|+Inf"}`、`_count`、`_sum`），另外保留 `<name>_max` gauge 供既有面板使用。P95 用 `histogram_quantile(0.95, sum by (le) (rate(<name>_bucket[5m])))` 计算。两个容器使用同一容器内端口不会冲突，抓取端分别配置 target `api:9091` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
+- Prometheus 抓取走独立监听器：设置 `METRICS_ADDR`（开发/测试可用 `0.0.0.0:9091`；留空则关闭）后，API 和 worker 各自在该地址只暴露本进程的 `GET /metrics`，返回 `text/plain; version=0.0.4`。`APP_ENV=production` 时只允许 `localhost` 或回环/RFC1918/ULA/link-local 的字面 IP，`:9091`、`0.0.0.0`、公网 IP 和普通主机名都会让启动校验失败。进程内 counters 输出为 `_total`，timings 输出为固定毫秒桶的 histogram（`_bucket{le="1|5|10|25|50|100|250|500|1000|2500|5000|10000|+Inf"}`、`_count`、`_sum`），另外保留 `<name>_max` gauge 供既有面板使用。P95 用 `histogram_quantile(0.95, sum by (le) (rate(<name>_bucket[5m])))` 计算。两个容器使用同一容器内端口不会冲突；可参考 observability overlay 的 `api:9090` 与 `worker:9091`。该监听器**没有租户鉴权**，必须只绑内网或回环地址：Compose 默认不发布该端口；本机抓取再加 `127.0.0.1:9091:9091` 映射，不要暴露到公网。绑定失败只记录 `metrics_listener_stopped`，不会拖垮 API 或 worker。
 - `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
 - 独立监听器只包含本进程的指标，不包含数据库窗口内的 `operations`；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
 - 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 `/metrics` 暴露；`/ops/metrics` 是 API 路由，看不到 worker 进程计数，入库失败仍可看 `operations.stages.embed.failed`。`rerank_degraded_total{reason=resolve|error|breaker_open}` 记录 Rerank 降级次数：`resolve` 为知识库绑定解析失败，`error` 为供应商调用失败，`breaker_open` 为熔断期间跳过调用；降级时检索仍返回关键词/向量融合结果（`rerankApplied=false`），`model_errors_total` 只统计真实的解析/调用错误。
+
+Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge，随 `/metrics` 暴露：
+
+| 指标 | 含义 | 告警阈值（`deploy/observability/alerts.yml`） |
+| --- | --- | --- |
+| `queue_depth{queue,state}` | Asynq 各队列 pending/active/retry/archived | pending > 100 持续 10 分钟；retry > 0 持续 15 分钟 |
+| `outbox_backlog` | 未发布且未达 `OUTBOX_MAX_ATTEMPTS` 的事件数 | > 100 持续 10 分钟 |
+| `inbox_expired_leases` | `PROCESSING` 且租约已过期的 inbox 行数 | > 0 持续 5 分钟 |
+| `projection_pending_runs` | 非终态 projection run 数 | 用于排查，不单独告警 |
+| `projection_lag_seconds` | 最老的非终态 projection run 年龄（投影游标滞后的可观测代理） | > 900 秒持续 10 分钟 |
+
+### 7.1 告警、面板与 SLO 包
+
+`deploy/observability/` 提供可直接部署的 Prometheus、Alertmanager、Grafana 配置：
+
+- `prometheus.yml`：抓取 `api:9090` 与 `worker:9091`；`alerts.yml`：可用性、5xx、P95、解析失败、队列积压、outbox、inbox 过期租约、投影滞后与模型错误共 10 条规则；`alertmanager.yml`：`severity=page` 走值班 webhook、`severity=ticket` 走工单 webhook（URL 由部署方替换）。
+- `grafana/`：数据源、dashboard provider 与 `RAG Platform Overview` 面板（5xx、P95、队列、outbox、inbox、投影滞后、解析失败、模型错误）。
+- 本地或 POC 可叠加 `deploy/docker-compose/observability.compose.yml`：为 api/worker 打开 metrics 监听器，并启动 Prometheus `:9092`、Alertmanager `:9093`、Grafana `:3000`。该 overlay 不是生产清单；生产必须把 `METRICS_ADDR` 绑定到回环/私网地址，并替换 Grafana 默认密码与 webhook。
+- `make observability-check`（CI `observability` job）校验 Prometheus 配置、规则、告警单元测试、Compose overlay 与面板 JSON，不需要运行栈。
+- SLO 建议：API 可用性 99.9%/月、非流式 API P95 < 1s、入库成功率 ≥ 99%、问答终态成功率 ≥ 99%；RTO/RPO 沿用 A1 的 3600s/900s。`severity=page` 立即通知值班，`severity=ticket` 进入下一个工作日工单。
 
 ## 8. 模型网关故障演练
 
@@ -293,7 +313,8 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 - `OTEL_EXPORTER_OTLP_ENDPOINT` 为空时，api/worker 仍生成 trace 并在响应头 `X-Trace-ID` 与 `http_request` 日志的 `trace_id` 中输出，但不导出；设置 OTLP/HTTP 端点（例如 `http://otel-collector:4318`）后按批导出到 collector，重启进程生效。
 - `OTEL_SERVICE_NAME` 默认 `rag-platform`，api 与 worker 共用；需要区分进程时可分别设置。
 - HTTP 请求会继续上游 W3C `traceparent`；检索、远程模型调用是同一 trace 的子 span，模型 span 记录 `gen_ai.request.model` 与 token 用量。
-- 异步 worker 的 span 记录任务 envelope 的 `trace.id`、`pipeline_run.id`、`stage`，但当前尚未把 HTTP span 作为父 span 跨队列串联；排障时用 `trace_id` 关联 API 日志与 worker 日志。
+- 跨队列 trace 已串联：创建入库/同步/投影/答案任务时，服务把当前 span 的 W3C `traceparent` 写入任务的 `trace_parent` 字段；worker 在启动阶段 span 前用 `ExtractTraceParent` 恢复上下文，因此 worker span 是 HTTP span 的子 span，`X-Trace-ID`、`http_request` 日志与 worker span 共享同一个 trace。任务被重试、reopen 或从 outbox 重放时沿用原 payload 的 `trace_parent`，不会开启新 trace。
+- 异步 worker 的 span 同时保留任务 envelope 的 `trace.id`、`pipeline_run.id`、`stage` 属性，便于按业务 ID 检索。
 - 导出器故障只影响 tracing，不阻塞请求；collector 不可用时检查进程日志中的 `tracing_bootstrap_failed`（启动期）与 OTLP 导出错误。
 
 ## 13. 投影生成缓存

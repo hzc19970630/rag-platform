@@ -36,6 +36,9 @@ type Ingestion struct {
 	// Queue selects the worker pool. Empty means the ingestion pool; operator
 	// retries use the interactive pool so they are not stuck behind bulk work.
 	Queue string `json:"queue,omitempty"`
+	// TraceParent is the W3C traceparent of the span that created the stage.
+	// Workers use it to continue the HTTP trace instead of starting a new one.
+	TraceParent string `json:"trace_parent,omitempty"`
 }
 
 // Sync names a connector sync run that already exists in PostgreSQL, so a lost
@@ -48,6 +51,7 @@ type Sync struct {
 	IdempotencyKey string    `json:"idempotencyKey"`
 	Queue          string    `json:"queue"`
 	CreatedAt      time.Time `json:"createdAt"`
+	TraceParent    string    `json:"trace_parent,omitempty"`
 }
 
 // Projection is one Wiki or relation projection stage. It carries ids and a
@@ -63,7 +67,8 @@ type Projection struct {
 	IdempotencyKey    string `json:"idempotency_key"`
 	// Attempt distinguishes queue task ids across independent retries while the
 	// stage row keeps the same idempotency key.
-	Attempt int `json:"attempt"`
+	Attempt     int    `json:"attempt"`
+	TraceParent string `json:"trace_parent,omitempty"`
 }
 
 func (t Projection) QueueID() string {
@@ -85,4 +90,5 @@ type Answer struct {
 	RequestID       string `json:"request_id"`
 	SessionOverride string `json:"session_override,omitempty"`
 	TimeoutSeconds  int    `json:"timeout_seconds,omitempty"`
+	TraceParent     string `json:"trace_parent,omitempty"`
 }

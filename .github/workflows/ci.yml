@@ -266,6 +266,22 @@ jobs:
         if: always() && steps.credentials.outputs.enabled == 'true'
         run: docker compose --env-file .env $COMPOSE_FILES down -v || true
 
+  observability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prometheus config and alert rules
+        run: |
+          set -euo pipefail
+          image=prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+          docker run --rm --entrypoint promtool -v "$PWD/deploy/observability:/etc/prometheus:ro" "$image" check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint promtool -v "$PWD/deploy/observability:/etc/prometheus:ro" "$image" test rules /etc/prometheus/promtool/alerts_test.yml
+      - name: Compose overlay
+        run: docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/observability.compose.yml config --quiet
+      - name: Grafana dashboard JSON
+        run: python -m json.tool deploy/observability/grafana/dashboards/rag-platform-overview.json > /dev/null
+
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 30

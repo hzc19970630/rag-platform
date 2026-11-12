@@ -17,6 +17,7 @@ import (
 type Registry struct {
 	mu       sync.Mutex
 	counters map[string]int64
+	gauges   map[string]float64
 	timings  map[string]*Timing
 	started  time.Time
 }
@@ -36,7 +37,7 @@ var timingBucketBoundsMS = []int64{1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 
 var defaultRegistry = New()
 
 func New() *Registry {
-	return &Registry{counters: map[string]int64{}, timings: map[string]*Timing{}, started: time.Now()}
+	return &Registry{counters: map[string]int64{}, gauges: map[string]float64{}, timings: map[string]*Timing{}, started: time.Now()}
 }
 
 func Default() *Registry { return defaultRegistry }
@@ -70,6 +71,16 @@ func (r *Registry) Add(name string, value int64, labels map[string]string) {
 	r.mu.Unlock()
 }
 
+// SetGauge replaces the current value of a gauge. Gauges describe state that
+// can fall as well as rise, so a scrape reports the latest sample rather than
+// an accumulated total.
+func (r *Registry) SetGauge(name string, labels map[string]string, value float64) {
+	key := metricKey(name, labels)
+	r.mu.Lock()
+	r.gauges[key] = value
+	r.mu.Unlock()
+}
+
 func (r *Registry) Observe(name string, duration time.Duration, labels map[string]string) {
 	key := metricKey(name, labels)
 	milliseconds := float64(duration.Microseconds()) / 1000.0
@@ -98,6 +109,10 @@ func (r *Registry) Snapshot() map[string]any {
 	for key, value := range r.counters {
 		counters[key] = value
 	}
+	gauges := make(map[string]float64, len(r.gauges))
+	for key, value := range r.gauges {
+		gauges[key] = value
+	}
 	timings := make(map[string]any, len(r.timings))
 	for key, value := range r.timings {
 		entry := map[string]any{
@@ -114,6 +129,7 @@ func (r *Registry) Snapshot() map[string]any {
 	return map[string]any{
 		"startedAt": started.UTC().Format(time.RFC3339),
 		"counters":  counters,
+		"gauges":    gauges,
 		"timings":   timings,
 	}
 }
@@ -148,6 +164,10 @@ func (r *Registry) WritePrometheus(writer io.Writer) error {
 	for key, value := range r.counters {
 		counters[key] = value
 	}
+	gauges := make(map[string]float64, len(r.gauges))
+	for key, value := range r.gauges {
+		gauges[key] = value
+	}
 	timings := make(map[string]Timing, len(r.timings))
 	for key, value := range r.timings {
 		copied := *value
@@ -158,7 +178,21 @@ func (r *Registry) WritePrometheus(writer io.Writer) error {
 
 	var lines []string
 	declared := map[string]bool{}
-	keys := make([]string, 0, len(counters))
+	keys := make([]string, 0, len(gauges))
+	for key := range gauges {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		name, labels := splitMetricKey(key)
+		if !declared[name] {
+			lines = append(lines, "# TYPE "+name+" gauge")
+			declared[name] = true
+		}
+		lines = append(lines, fmt.Sprintf("%s%s %v", name, renderLabels(labels), round(gauges[key])))
+	}
+
+	keys = keys[:0]
 	for key := range counters {
 		keys = append(keys, key)
 	}

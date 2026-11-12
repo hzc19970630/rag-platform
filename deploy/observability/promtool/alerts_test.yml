@@ -1,0 +1,90 @@
+rule_files:
+  - ../alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'queue_depth{queue="ingestion",state="pending"}'
+        values: '150x12'
+      - series: 'queue_depth{queue="projection",state="pending"}'
+        values: '5x12'
+      - series: 'outbox_backlog'
+        values: '150x12'
+      - series: 'inbox_expired_leases'
+        values: '1x12'
+      - series: 'projection_lag_seconds'
+        values: '1000x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RagQueueBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: rag-worker
+              queue: ingestion
+            exp_annotations:
+              summary: "Queue ingestion has more than 100 pending tasks"
+              description: "Pending depth has stayed above 100 for 10 minutes. Check worker health and pool weights."
+      - eval_time: 10m
+        alertname: RagOutboxBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: rag-worker
+            exp_annotations:
+              summary: "Outbox backlog is above 100 events"
+              description: "Unpublished outbox events are piling up; check Redis and the outbox publisher."
+      - eval_time: 5m
+        alertname: RagInboxExpiredLeases
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: rag-worker
+            exp_annotations:
+              summary: "Expired inbox leases are present"
+              description: "A worker lease expired while the task is still PROCESSING; check worker crashes and reconcile."
+      - eval_time: 10m
+        alertname: RagProjectionLag
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              service: rag-projection
+            exp_annotations:
+              summary: "Projection has been pending for over 15 minutes"
+              description: "The oldest non-terminal projection run is older than 15 minutes. Check the projection queue and provider health."
+
+  - interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="rag-api",status="500",method="GET",path="/search"}'
+        values: '0+3x12'
+      - series: 'http_requests_total{job="rag-api",status="200",method="GET",path="/search"}'
+        values: '0+97x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RagApi5xxRate
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: rag-api
+            exp_annotations:
+              summary: "API 5xx rate is above 2%"
+              description: "5xx ratio has stayed above 2% for 5 minutes; check recent deploy, database and model provider health."
+
+  - interval: 1m
+    input_series:
+      - series: 'ingestion_stage_total{stage="parse",result="failure"}'
+        values: '0+2x14'
+      - series: 'ingestion_stage_total{stage="parse",result="success"}'
+        values: '0+8x14'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: RagParseFailureRate
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              service: rag-ingestion
+            exp_annotations:
+              summary: "Document parse failure rate is above 10%"
+              description: "At least 10% of parse attempts failed over 10 minutes. Check docreader, unsupported formats and dead letters."

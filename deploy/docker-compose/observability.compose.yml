@@ -1,0 +1,68 @@
+# Local/POC observability overlay. It enables the sidecar metrics listeners and
+# runs Prometheus, Alertmanager and Grafana on the internal backend network.
+#
+# Usage:
+#   docker compose --env-file .env \
+#     -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/docker-compose/observability.compose.yml up -d
+#
+# The overlay is not a production manifest: production must bind METRICS_ADDR to
+# a loopback/private address and provide its own secret management for Grafana.
+services:
+  api:
+    environment:
+      METRICS_ADDR: 0.0.0.0:9090
+  worker:
+    environment:
+      METRICS_ADDR: 0.0.0.0:9091
+  prometheus:
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9092:9090"
+    networks:
+      - backend
+      - tools
+  alertmanager:
+    image: prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ../observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "9093:9093"
+    networks:
+      - backend
+      - tools
+  grafana:
+    image: grafana/grafana:12.0.0@sha256:263cbefd5d9b179893c47c415daab4da5c1f3d6770154741eca4f45c81119884
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-observability}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - backend
+      - tools
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:

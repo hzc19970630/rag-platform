@@ -15,6 +15,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/app"
 	"github.com/hzc19970630/rag-platform/internal/buildinfo"
 	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/datasource"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection"
@@ -93,7 +94,7 @@ func main() {
 	go ingestion.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts, cfg.Limits.OutboxBatchSize).Run(outboxContext)
 	go datasource.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts, cfg.Limits.OutboxBatchSize).Run(outboxContext)
 	go knowledgeprojection.NewOutboxPublisher(application.DB, application.Queue, cfg.Limits.OutboxMaxAttempts, cfg.Limits.OutboxBatchSize).Run(outboxContext)
-	go runMaintenance(rootCtx, application, cfg, logger)
+	go runMaintenance(rootCtx, application, cfg, logger, metricsRegistry)
 
 	server := asynq.NewServer(asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword}, asynq.Config{
 		Concurrency: cfg.Limits.WorkerConcurrency,
@@ -172,7 +173,7 @@ func purgeInBatches(ctx context.Context, before time.Time, batchSize int, purge 
 // for its lifetime and runs every tick; the others skip. If the leader exits,
 // PostgreSQL releases the session lock and the next replica takes over on its
 // next tick.
-func runMaintenance(ctx context.Context, application *app.Application, cfg config.Config, logger *slog.Logger) {
+func runMaintenance(ctx context.Context, application *app.Application, cfg config.Config, logger *slog.Logger, gauges metrics.Gauge) {
 	interval := time.Duration(cfg.Limits.ReconcileIntervalSeconds) * time.Second
 	if interval <= 0 {
 		return
@@ -183,7 +184,7 @@ func runMaintenance(ctx context.Context, application *app.Application, cfg confi
 	if interval > staleAfter/2 {
 		staleAfter = interval
 	}
-	runner := &maintenanceRunner{application: application, cfg: cfg, logger: logger, staleAfter: staleAfter}
+	runner := &maintenanceRunner{application: application, cfg: cfg, logger: logger, staleAfter: staleAfter, gauges: gauges}
 	var lock *persistence.SessionLock
 	defer func() { lock.Release() }()
 	leader := false
@@ -192,6 +193,7 @@ func runMaintenance(ctx context.Context, application *app.Application, cfg confi
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			runner.collectGauges(ctx)
 			if !leader {
 				acquiredLock, acquired, err := persistence.TrySessionLock(ctx, application.DB, maintenanceAdvisoryLockKey)
 				if err != nil {
@@ -229,11 +231,39 @@ type maintenanceRunner struct {
 	cfg         config.Config
 	logger      *slog.Logger
 	staleAfter  time.Duration
+	gauges      metrics.Gauge
 
 	lastAuditPurge       time.Time
 	lastStreamEventPurge time.Time
 	lastTaskHistoryPurge time.Time
 	projectionCursor     string
+}
+
+// collectGauges publishes deployment-wide backlog as gauges. It runs on every
+// replica before leader election because a scrape may target any worker, and
+// these values are identical from every process.
+func (m *maintenanceRunner) collectGauges(ctx context.Context) {
+	if m.gauges == nil {
+		return
+	}
+	if depth, err := m.application.Queue.QueueDepth(ctx); err != nil {
+		m.logger.Warn("metrics_queue_depth_failed", "error", err)
+	} else {
+		for queueName, states := range depth {
+			for state, value := range states {
+				m.gauges.SetGauge("queue_depth", metrics.Labels("queue", queueName, "state", state), float64(value))
+			}
+		}
+	}
+	snapshot, err := m.application.Ops.PlatformSnapshot(ctx, time.Now(), m.cfg.Limits.OutboxMaxAttempts)
+	if err != nil {
+		m.logger.Warn("metrics_platform_snapshot_failed", "error", err)
+		return
+	}
+	m.gauges.SetGauge("outbox_backlog", nil, float64(snapshot.OutboxBacklog))
+	m.gauges.SetGauge("inbox_expired_leases", nil, float64(snapshot.InboxExpiredLeases))
+	m.gauges.SetGauge("projection_pending_runs", nil, float64(snapshot.ProjectionPendingRuns))
+	m.gauges.SetGauge("projection_lag_seconds", nil, snapshot.ProjectionOldestPendingSeconds)
 }
 
 func (m *maintenanceRunner) tick(ctx context.Context) {

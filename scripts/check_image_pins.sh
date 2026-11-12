@@ -30,7 +30,7 @@ for compose_file in deploy/docker-compose/*.yml; do
   done < <(sed -nE 's/^[[:space:]]+image:[[:space:]]*([^[:space:]#]+).*/\1/p' "$compose_file")
 done
 
-for dockerfile in Dockerfile services/*/Dockerfile web/Dockerfile; do
+for dockerfile in Dockerfile Dockerfile.mcp services/*/Dockerfile web/Dockerfile; do
   [[ -f "$dockerfile" ]] || continue
   while IFS= read -r reference; do
     [[ -n "$reference" ]] || continue

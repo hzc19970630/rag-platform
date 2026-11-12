@@ -16,6 +16,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/platform/formats"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
@@ -372,6 +373,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 			return err
 		}
 		task := s.taskFor(principal, document, version, pipeline, stage, StageParse)
+		task.TraceParent = observability.InjectTraceParent(ctx)
 		payload, err := json.Marshal(task)
 		if err != nil {
 			return fmt.Errorf("marshal parse task: %w", err)

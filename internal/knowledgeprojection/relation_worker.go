@@ -341,7 +341,7 @@ func (s *Service) finalizeRelation(ctx context.Context, run *models.ProjectionRu
 				return nil
 			}
 			replacement := packages[len(packages)-1]
-			return s.insertRunFor(tx, knowledgeBase, ProjectionTypeRelation, replacement.ID, sourceHash, now)
+			return s.insertRunFor(ctx, tx, knowledgeBase, ProjectionTypeRelation, replacement.ID, sourceHash, now)
 		})
 	}
 	snapshot, err := s.loadRunSnapshot(ctx, run.ID)

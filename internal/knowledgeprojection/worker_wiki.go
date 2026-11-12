@@ -206,7 +206,7 @@ func (s *Service) finalize(ctx context.Context, run *models.ProjectionRun) error
 			}).Error; err != nil {
 				return err
 			}
-			return s.insertRun(tx, knowledgeBase, replacement.ID, sourceHash, now)
+			return s.insertRun(ctx, tx, knowledgeBase, replacement.ID, sourceHash, now)
 		})
 	}
 	now := time.Now()

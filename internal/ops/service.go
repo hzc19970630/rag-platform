@@ -21,6 +21,19 @@ type Snapshot struct {
 	OutboxBacklog    int64                       `json:"outboxBacklog"`
 }
 
+// PlatformSnapshot is the deployment-wide view used by the worker's Prometheus
+// gauges. It never carries tenant payloads, only counts and an age.
+type PlatformSnapshot struct {
+	OutboxBacklog                  int64   `json:"outboxBacklog"`
+	InboxExpiredLeases             int64   `json:"inboxExpiredLeases"`
+	ProjectionPendingRuns          int64   `json:"projectionPendingRuns"`
+	ProjectionOldestPendingSeconds float64 `json:"projectionOldestPendingSeconds"`
+}
+
 func (s *Service) Snapshot(ctx context.Context, tenantID string, since time.Time, outboxMaxAttempts int) (Snapshot, error) {
 	return s.store.Snapshot(ctx, tenantID, since, outboxMaxAttempts)
+}
+
+func (s *Service) PlatformSnapshot(ctx context.Context, now time.Time, outboxMaxAttempts int) (PlatformSnapshot, error) {
+	return s.store.PlatformSnapshot(ctx, now, outboxMaxAttempts)
 }

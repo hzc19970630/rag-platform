@@ -59,6 +59,21 @@ var GormAllowlist = []GormAllowlistEntry{
 		Table:  "task_inbox",
 		Reason: "lease maintenance resolves the tenant from the inbox row and addresses one idempotency key",
 	},
+	{
+		File:   "internal/ops/postgres.go",
+		Table:  "outbox_events",
+		Reason: "platform metrics gauge counts deployment-wide unpublished backlog",
+	},
+	{
+		File:   "internal/ops/postgres.go",
+		Table:  "task_inbox",
+		Reason: "platform metrics gauge counts expired leases across tenants",
+	},
+	{
+		File:   "internal/ops/postgres.go",
+		Table:  "projection_runs",
+		Reason: "platform metrics gauge reports pending projection runs and oldest lag",
+	},
 }
 
 // GormTenancyViolation is one direct GORM chain that touches a tenant-owned

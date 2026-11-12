@@ -1,9 +1,10 @@
-.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check
+.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
 # not behind the default network.
 GO_IMAGE ?= golang:1.26-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
+OBSERVABILITY_IMAGE ?= prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
 GO_PROXY ?= https://goproxy.cn,direct
 # Compose reads GO_PROXY as the Docker build arg for the Go image.
 export GO_PROXY
@@ -180,6 +181,14 @@ mcp-e2e:
 		-e RAG_API_URL -e RAG_API_KEY \
 		-e RAG_KNOWLEDGE_BASE_ID -e RAG_FORBIDDEN_KB \
 		$(GO_IMAGE) go test -tags e2e ./cmd/mcp -run TestQuickstartE2E -count=1
+
+# Validates Prometheus config/rules/alert unit tests, the observability compose
+# overlay and the Grafana dashboard JSON. No live stack is required.
+observability-check:
+	docker run --rm --entrypoint promtool -v "$$(pwd)/deploy/observability:/etc/prometheus:ro" $(OBSERVABILITY_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm --entrypoint promtool -v "$$(pwd)/deploy/observability:/etc/prometheus:ro" $(OBSERVABILITY_IMAGE) test rules /etc/prometheus/promtool/alerts_test.yml
+	docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/observability.compose.yml config --quiet
+	python -m json.tool deploy/observability/grafana/dashboards/rag-platform-overview.json > /dev/null
 
 # Compares bounded graph queries with pure Evidence RAG on the fixed M7 QA set
 # and records reachability/path metrics. The keep-or-drop decision for complex

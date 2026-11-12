@@ -1,0 +1,28 @@
+# Replace the receiver URLs with the deployment's on-call and ticket webhooks.
+# Alertmanager does not expand environment variables, so keep this file out of
+# public repositories when real URLs contain secrets.
+route:
+  receiver: ticket-webhook
+  group_by: [alertname, severity, service]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    - matchers:
+        - severity="page"
+      receiver: oncall-webhook
+      group_wait: 10s
+      repeat_interval: 1h
+    - matchers:
+        - severity="ticket"
+      receiver: ticket-webhook
+
+receivers:
+  - name: oncall-webhook
+    webhook_configs:
+      - url: http://127.0.0.1:9099/oncall
+        send_resolved: true
+  - name: ticket-webhook
+    webhook_configs:
+      - url: http://127.0.0.1:9099/ticket
+        send_resolved: true

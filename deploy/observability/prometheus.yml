@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    platform: rag-platform
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+scrape_configs:
+  - job_name: rag-api
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api:9090
+  - job_name: rag-worker
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - worker:9091

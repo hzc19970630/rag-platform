@@ -11,6 +11,7 @@ import (
 	"github.com/hzc19970630/rag-platform/contracts/tasks"
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
@@ -103,6 +104,7 @@ func (s *Service) PrepareAnswer(ctx context.Context, principal authz.Principal, 
 		SchemaVersion: tasks.SchemaAnswer, JobID: job.ID, TenantID: job.TenantID, SubjectID: job.UserID,
 		ConversationID: job.ConversationID, RequestID: job.RequestID,
 		SessionOverride: prepared.sessionOverride, TimeoutSeconds: timeout,
+		TraceParent: observability.InjectTraceParent(ctx),
 	}); err != nil {
 		return PreparedAnswer{}, s.abortAnswerJob(ctx, &job, CodeQueueUnavailable, fmt.Errorf("enqueue answer job: %w", err))
 	}

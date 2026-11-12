@@ -57,6 +57,7 @@ func (h *taskHandlers) answer(ctx context.Context, task *asynq.Task) (err error)
 		return fmt.Errorf("decode answer task: %w", err)
 	}
 	ctx = tenantdb.WithTenant(ctx, message.TenantID)
+	ctx = observability.ExtractTraceParent(ctx, message.TraceParent)
 	ctx, span := observability.StartSpan(ctx, "answer.generate",
 		attribute.String("request.id", message.RequestID),
 		attribute.String("conversation.id", message.ConversationID),
@@ -85,6 +86,7 @@ func (h *taskHandlers) ingest(ctx context.Context, task *asynq.Task) (err error)
 		return fmt.Errorf("decode ingestion task: %w", err)
 	}
 	ctx = tenantdb.WithTenant(ctx, message.TenantID)
+	ctx = observability.ExtractTraceParent(ctx, message.TraceParent)
 	ctx, span := observability.StartSpan(ctx, "ingestion.stage",
 		attribute.String("stage", message.Stage),
 		attribute.String("pipeline_run.id", message.PipelineRunID),
@@ -123,6 +125,7 @@ func (h *taskHandlers) sync(ctx context.Context, task *asynq.Task) (err error) {
 		return fmt.Errorf("decode connector sync task: %w", err)
 	}
 	ctx = tenantdb.WithTenant(ctx, message.TenantID)
+	ctx = observability.ExtractTraceParent(ctx, message.TraceParent)
 	ctx, span := observability.StartSpan(ctx, "connector.sync",
 		attribute.String("connector.id", message.ConnectorID),
 		attribute.String("sync_run.id", message.SyncRunID),
@@ -159,6 +162,7 @@ func (h *taskHandlers) projection(ctx context.Context, task *asynq.Task, decodeL
 		return fmt.Errorf("decode %s task: %w", decodeLabel, err)
 	}
 	ctx = tenantdb.WithTenant(ctx, message.TenantID)
+	ctx = observability.ExtractTraceParent(ctx, message.TraceParent)
 	ctx, span := observability.StartSpan(ctx, metricPrefix+".stage",
 		attribute.String("stage", message.Stage),
 		attribute.String("projection_type", message.ProjectionType),

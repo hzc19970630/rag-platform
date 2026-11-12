@@ -42,6 +42,30 @@ func TestIngestionJSONContract(t *testing.T) {
 	}
 }
 
+func TestTaskTraceParentContract(t *testing.T) {
+	const traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	for name, value := range map[string]any{
+		"Ingestion": Ingestion{Envelope: envelope(), TraceParent: traceParent},
+		"Sync":      Sync{SchemaVersion: SchemaSync, TraceParent: traceParent},
+		"Projection": Projection{
+			SchemaVersion: SchemaWiki, TraceParent: traceParent,
+		},
+		"Answer": Answer{SchemaVersion: SchemaAnswer, TraceParent: traceParent},
+	} {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatalf("%s marshal: %v", name, err)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(raw, &decoded); err != nil {
+			t.Fatalf("%s unmarshal: %v", name, err)
+		}
+		if decoded["trace_parent"] != traceParent {
+			t.Fatalf("%s trace_parent = %v, want %q", name, decoded["trace_parent"], traceParent)
+		}
+	}
+}
+
 func TestSyncJSONContract(t *testing.T) {
 	task := Sync{
 		SchemaVersion: SchemaSync, TenantID: "tenant-a", ConnectorID: "conn-a", SyncRunID: "run-a",
