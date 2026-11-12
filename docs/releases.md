@@ -16,13 +16,15 @@
 | --- | --- | --- |
 | API 镜像 | `ghcr.io/hzc19970630/rag-platform/api:<version>` | 多二进制镜像：`api`、`worker`、`migrate`、`seed`、`embedctl` |
 | 解析器镜像 | `ghcr.io/hzc19970630/rag-platform/docreader:<version>` | 数字文档解析 sidecar |
+| MCP 镜像 | `ghcr.io/hzc19970630/rag-platform/mcp:<version>` | stdio MCP Server，非 root，`docker run -i` 使用 |
+| MCP 二进制 | `rag-mcp-<version>-<os>-<arch>[.exe]` | linux/darwin/windows × amd64/arm64，六份产物 |
 | 前端静态包 | `rag-platform-web-<version>.tar.gz` | `web/dist`，构建时固定 `VITE_API_BASE_URL=/api/v1` |
-| SBOM | `rag-platform-api-<version>.cdx.json`、`rag-platform-docreader-<version>.cdx.json` | CycloneDX |
-| 清单 | `release-manifest.txt` | 版本、完整 commit、构建时间、两个镜像的 tag@digest |
-| 校验和 | `SHA256SUMS`、`SHA256SUMS.cosign.bundle` | 覆盖清单、前端包和两个 SBOM；bundle 为 cosign 无密钥签名 |
-| 镜像签名 | OCI registry 中的 cosign 签名 | 对 `api`/`docreader` 的 digest 签名 |
+| SBOM | `rag-platform-api-<version>.cdx.json`、`rag-platform-docreader-<version>.cdx.json`、`rag-platform-mcp-<version>.cdx.json` | CycloneDX |
+| 清单 | `release-manifest.txt` | 版本、完整 commit、构建时间、三个镜像的 tag@digest 与 MCP 二进制 |
+| 校验和 | `SHA256SUMS`、`SHA256SUMS.cosign.bundle` | 覆盖清单、前端包、三个 SBOM 与 MCP 二进制；bundle 为 cosign 无密钥签名 |
+| 镜像签名 | OCI registry 中的 cosign 签名 | 对 `api`/`docreader`/`mcp` 的 digest 签名 |
 
-镜像同时推送 `sha-<12位提交>` 标签，便于按提交追溯。生产环境应固定 digest，不要依赖浮动标签。GHCR 包首次发布后如仓库公开，需在 GitHub Packages 设置里把两个包改为 public，否则匿名 `docker pull` 会失败。
+镜像同时推送 `sha-<12位提交>` 标签，便于按提交追溯。生产环境应固定 digest，不要依赖浮动标签。GHCR 包首次发布后如仓库公开，需在 GitHub Packages 设置里把三个包改为 public，否则匿名 `docker pull` 会失败。
 
 ## 3. 触发发布
 
@@ -38,7 +40,7 @@ git push origin v0.1.0
 
 4. tag 推送触发 [release.yml](https://github.com/hzc19970630/rag-platform/blob/main/.github/workflows/release.yml)：
    - `verify`：tag 语义化格式、gofmt、checkdeps、OpenAPI 漂移、租户静态门禁、`go test`、`go vet`、`go mod verify`、前端测试与构建。
-   - `publish`：构建两个镜像 → Trivy HIGH/CRITICAL 门禁（未修复项忽略）→ 生成 SBOM → 推送 GHCR → cosign keyless 签名 digest → 打包前端 → 校验和签名 → 创建 GitHub Release（预发布 tag 自动标记 prerelease）。
+   - `publish`：构建三个镜像与六份 MCP 二进制 → Trivy HIGH/CRITICAL 门禁（未修复项忽略）→ 生成 SBOM → 推送 GHCR → cosign keyless 签名 digest → 打包前端 → 校验和签名 → 创建 GitHub Release（预发布 tag 自动标记 prerelease）。
    - 镜像先扫描后推送；扫描失败时不会产生签名，也不会创建 Release。
 5. 查看进度并在失败时用同一 tag 重跑工作流：
 

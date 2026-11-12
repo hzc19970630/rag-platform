@@ -203,7 +203,17 @@ export function OpsPage() {
       title: t("document.status"),
       key: "status",
       width: 110,
-      render: (_, row) => row.revokedAt ? <Tag color="red">{t("ops.revoked")}</Tag> : <Tag color="green">{t("ops.active")}</Tag>,
+      render: (_, row) => row.revokedAt
+        ? <Tag color="red">{t("ops.revoked")}</Tag>
+        : row.expiresAt && new Date(row.expiresAt).getTime() <= Date.now()
+          ? <Tag color="orange">{t("ops.expired")}</Tag>
+          : <Tag color="green">{t("ops.active")}</Tag>,
+    },
+    {
+      title: t("ops.expiresAt"),
+      key: "expiresAt",
+      width: 180,
+      render: (_, row) => row.expiresAt ? formatTime(row.expiresAt) : t("ops.neverExpires"),
     },
     { title: t("ops.lastUsed"), dataIndex: "lastUsedAt", key: "lastUsedAt", width: 180, render: (value?: string) => value ? formatTime(value) : "-" },
     { title: t("common.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 180, render: (value: string) => formatTime(value) },

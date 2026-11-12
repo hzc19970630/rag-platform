@@ -6,7 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import i18n from "../i18n";
 import { SessionProvider } from "../session";
 import { meWith } from "../test/fixtures";
-import { buildMcpClientConfig, McpPage, mcpKeyRequest } from "./McpPage";
+import {
+  buildMcpClientConfig,
+  evidenceCount,
+  McpPage,
+  mcpDefaultKeyName,
+  mcpExpiry,
+  mcpKeyRequest,
+} from "./McpPage";
 
 function renderPage(capabilities: string[]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -28,12 +35,36 @@ afterEach(() => {
 });
 
 describe("mcp key request", () => {
-  it("only carries knowledge_base:read, chat and the selected knowledge base", () => {
-    expect(mcpKeyRequest("mcp-demo", "kb-1")).toEqual({
+  it("only carries knowledge_base:read, chat and the selected knowledge bases", () => {
+    expect(mcpKeyRequest("mcp-demo", ["kb-1", "kb-2"])).toEqual({
       name: "mcp-demo",
       capabilities: ["knowledge_base:read", "chat"],
-      knowledgeBaseIds: ["kb-1"],
+      knowledgeBaseIds: ["kb-1", "kb-2"],
     });
+  });
+
+  it("adds the expiry only when one is selected", () => {
+    expect(mcpKeyRequest("mcp-demo", ["kb-1"], "2026-12-12T00:00:00.000Z")).toMatchObject({
+      expiresAt: "2026-12-12T00:00:00.000Z",
+    });
+    expect(mcpKeyRequest("mcp-demo", ["kb-1"])).not.toHaveProperty("expiresAt");
+  });
+});
+
+describe("mcp key expiry", () => {
+  it("turns day presets into an absolute timestamp and keeps never-expire unset", () => {
+    const now = new Date("2026-11-12T00:00:00.000Z");
+    expect(mcpExpiry(30, now)).toBe("2026-12-12T00:00:00.000Z");
+    expect(mcpExpiry(7, now)).toBe("2026-11-19T00:00:00.000Z");
+    expect(mcpExpiry(0, now)).toBeUndefined();
+  });
+});
+
+describe("mcp default key name", () => {
+  it("uses the single knowledge base name and a count for multi-select", () => {
+    expect(mcpDefaultKeyName([])).toBe("");
+    expect(mcpDefaultKeyName([{ name: "Demo handbook" }])).toBe("mcp-Demo handbook");
+    expect(mcpDefaultKeyName([{ name: "A" }, { name: "B" }])).toBe("mcp-2-knowledge-bases");
   });
 });
 
@@ -52,6 +83,13 @@ describe("mcp client configuration", () => {
       },
     });
   });
+
+  it("counts evidence items defensively", () => {
+    expect(evidenceCount({ items: [{ id: 1 }, { id: 2 }] })).toBe(2);
+    expect(evidenceCount({ evidence: { items: [{ id: 1 }] } })).toBe(1);
+    expect(evidenceCount({})).toBe(0);
+    expect(evidenceCount(undefined)).toBe(0);
+  });
 });
 
 describe("mcp page access", () => {
@@ -60,7 +98,7 @@ describe("mcp page access", () => {
     expect(await screen.findByText(i18n.t("mcp.noPermission"))).toBeInTheDocument();
   });
 
-  it("renders the key and configuration steps for tenant operators", async () => {
+  it("renders the key, configuration and self-check steps for tenant operators", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [{ id: "kb-1", name: "Demo handbook" }] }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -71,6 +109,7 @@ describe("mcp page access", () => {
     expect(await screen.findByText(i18n.t("mcp.keyStepTitle"))).toBeInTheDocument();
     expect(await screen.findByPlaceholderText("mcp-Demo handbook")).toBeInTheDocument();
     expect(screen.getByText(i18n.t("mcp.toolsTitle"))).toBeInTheDocument();
-    expect(screen.getByText(i18n.t("mcp.buildTitle"))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t("mcp.selfCheckTitle"))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t("mcp.releaseTitle"))).toBeInTheDocument();
   });
 });

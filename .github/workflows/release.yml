@@ -71,6 +71,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: Release metadata
         run: |
           {
@@ -84,6 +88,22 @@ jobs:
               echo "PRERELEASE=false"
             fi
           } >> "$GITHUB_ENV"
+
+      - name: Build rag-mcp binaries
+        run: |
+          set -euo pipefail
+          LDFLAGS="-buildid= -X github.com/hzc19970630/rag-platform/internal/buildinfo.Version=${VERSION} -X github.com/hzc19970630/rag-platform/internal/buildinfo.Commit=${SHORT_SHA} -X github.com/hzc19970630/rag-platform/internal/buildinfo.Date=${BUILD_DATE}"
+          for os in linux darwin windows; do
+            for arch in amd64 arm64; do
+              suffix=""
+              if [[ "$os" == "windows" ]]; then
+                suffix=".exe"
+              fi
+              CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -buildvcs=false \
+                -ldflags="$LDFLAGS" -o "rag-mcp-${VERSION}-${os}-${arch}${suffix}" ./cmd/mcp
+            done
+          done
+          ls -l rag-mcp-"${VERSION}"-*
 
       - uses: docker/setup-buildx-action@v3
 
@@ -154,10 +174,41 @@ jobs:
           format: cyclonedx
           output: rag-platform-docreader-${{ env.VERSION }}.cdx.json
 
+      - name: Build mcp image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.mcp
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}/mcp:${{ env.VERSION }}
+          build-args: |
+            GOPROXY=${{ env.GO_PROXY }}
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.SHORT_SHA }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+
+      - name: Trivy mcp image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/mcp:${{ env.VERSION }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate mcp SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/mcp:${{ env.VERSION }}
+          format: cyclonedx
+          output: rag-platform-mcp-${{ env.VERSION }}.cdx.json
+
       - name: Publish images
         run: |
           set -euo pipefail
-          for image in api docreader; do
+          for image in api docreader mcp; do
             docker tag "${IMAGE_PREFIX}/${image}:${VERSION}" "${IMAGE_PREFIX}/${image}:sha-${SHORT_SHA}"
             docker push "${IMAGE_PREFIX}/${image}:${VERSION}"
             docker push "${IMAGE_PREFIX}/${image}:sha-${SHORT_SHA}"
@@ -175,6 +226,7 @@ jobs:
           set -euo pipefail
           cosign sign --yes "${IMAGE_PREFIX}/api@${API_DIGEST}"
           cosign sign --yes "${IMAGE_PREFIX}/docreader@${DOCREADER_DIGEST}"
+          cosign sign --yes "${IMAGE_PREFIX}/mcp@${MCP_DIGEST}"
 
       - name: Build web dist
         working-directory: web
@@ -193,9 +245,11 @@ jobs:
           built_at=${BUILD_DATE}
           api=${IMAGE_PREFIX}/api:${VERSION}@${API_DIGEST}
           docreader=${IMAGE_PREFIX}/docreader:${VERSION}@${DOCREADER_DIGEST}
+          mcp=${IMAGE_PREFIX}/mcp:${VERSION}@${MCP_DIGEST}
           web=rag-platform-web-${VERSION}.tar.gz
+          mcp_binaries=rag-mcp-${VERSION}-<os>-<arch> (windows binaries use .exe)
           EOF
-          sha256sum release-manifest.txt rag-platform-web-*.tar.gz rag-platform-*.cdx.json > SHA256SUMS
+          sha256sum release-manifest.txt rag-platform-web-*.tar.gz rag-platform-*.cdx.json rag-mcp-"${VERSION}"-* > SHA256SUMS
           cosign sign-blob --yes --bundle SHA256SUMS.cosign.bundle SHA256SUMS
 
       - name: Publish GitHub release
@@ -210,6 +264,8 @@ jobs:
             rag-platform-web-"${VERSION}".tar.gz
             rag-platform-api-"${VERSION}".cdx.json
             rag-platform-docreader-"${VERSION}".cdx.json
+            rag-platform-mcp-"${VERSION}".cdx.json
+            rag-mcp-"${VERSION}"-*
           )
           if gh release view "${VERSION}" >/dev/null 2>&1; then
             gh release upload "${VERSION}" "${files[@]}" --clobber

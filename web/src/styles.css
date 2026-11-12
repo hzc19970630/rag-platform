@@ -310,6 +310,7 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .mcp-inline-field { flex: 1 1 260px; min-width: 220px; }
 .mcp-inline-field .ant-typography { display: block; margin-bottom: 4px; }
 .mcp-steps { margin: 0; padding-left: 20px; line-height: 1.9; }
+.mcp-check-list { margin: 12px 0 0; padding-left: 18px; line-height: 2; }
 
 /* Administration */
 .admin-stack { display: grid; gap: 16px; }

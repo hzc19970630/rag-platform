@@ -1,0 +1,26 @@
+FROM golang:1.26-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
+ARG GOPROXY=https://goproxy.cn,direct
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN GOPROXY=${GOPROXY} go mod download
+COPY . .
+RUN LDFLAGS="-buildid= -X github.com/hzc19970630/rag-platform/internal/buildinfo.Version=${VERSION} -X github.com/hzc19970630/rag-platform/internal/buildinfo.Commit=${COMMIT} -X github.com/hzc19970630/rag-platform/internal/buildinfo.Date=${BUILD_DATE}" && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/rag-mcp ./cmd/mcp
+
+FROM alpine:3.22@sha256:bfe7ceb9f09ec0566c48fb93356e45a47a00be5a1dd14fa5b909e7709c66b034
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.title="rag-mcp" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://github.com/hzc19970630/rag-platform"
+RUN adduser -D -u 10001 app
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/rag-mcp /usr/local/bin/rag-mcp
+USER app
+ENTRYPOINT ["/usr/local/bin/rag-mcp"]
