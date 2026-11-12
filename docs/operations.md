@@ -47,7 +47,7 @@ compose logs --no-color worker | grep worker_shutting_down
 
 ## 3. 备份与恢复演练
 
-### 3.1 定时逻辑备份
+### 3.1 定时逻辑备份与物理基线备份
 
 `scripts/backup_postgres.sh` 提供可调度的 `pg_dump` 备份：必须显式设置 `BACKUP_DIR`（仓库外的运维目录），`BACKUP_RETENTION_DAYS` 默认 7 天；脚本会校验 dump 非空并清理过期文件。示例 cron：
 
@@ -56,6 +56,14 @@ compose logs --no-color worker | grep worker_shutting_down
 ```
 
 逻辑备份只是基础回退路径；生产 RPO 若要求分钟级，必须启用 WAL/PITR（见 3.2），逻辑备份不能替代 PITR。
+
+`scripts/backup_basebackup.sh` 提供 PITR 所需的物理基线备份：用一次性 ParadeDB 容器执行 `pg_basebackup`（`-Fp -Xs -c fast --manifest-checksums=SHA256`），直接写入 `BACKUP_DIR/rag-base-<时间>/`，随后用 `pg_verifybackup` 校验，保留期由 `BASEBACKUP_RETENTION_DAYS`（默认 7 天）控制。它默认要求 `archive_mode=on`；本地开发可加 `--allow-no-archive`，但该备份不能用于 PITR。示例 cron：
+
+```cron
+25 2 * * * cd /opt/rag-platform && BACKUP_DIR=/var/backups/rag ./scripts/backup_basebackup.sh >>/var/log/rag-basebackup.log 2>&1
+```
+
+WAL 归档覆盖基线备份之后的时间窗口；两者必须同时调度。
 
 ### 3.2 WAL/PITR 与对象存储
 
@@ -71,7 +79,13 @@ make m13-object-storage-check    # 要求 bucket versioning + replication
 ./scripts/m13_object_storage_check.sh --allow-single-node
 ```
 
-`m13-object-storage-check --apply` 会先开启 bucket versioning 再检查；复制目标必须由部署方创建，脚本不会自动猜测远端端点。PITR 模板已在一次性 ParadeDB 容器中验证：`archive_mode=on`、`archive_timeout=60`，`pg_switch_wal` 后 4 个 WAL 成功归档且 `pg_stat_archiver.failed_count=0`；本地开发栈仍保持 `archive_mode=off`，生产需按 3.2 的模板和外部归档存储启用。
+`m13-object-storage-check --apply` 会先开启 bucket versioning 再检查；复制目标必须由部署方创建，脚本不会自动猜测远端端点。该预检只确认复制规则存在，不证明目标可达（目标不可达时 `mc replicate status` 会等待）；实际投放由 `make m13-object-storage-drill` 验证。PITR 模板已在一次性 ParadeDB 容器中验证：`archive_mode=on`、`archive_timeout=60`，`pg_switch_wal` 后 4 个 WAL 成功归档且 `pg_stat_archiver.failed_count=0`；本地开发栈仍保持 `archive_mode=off`，生产需按 3.2 的模板和外部归档存储启用。
+
+端到端 PITR 演练：`make m13-pitr-drill`（仍要求显式 `RTO_TARGET_SECONDS`/`RPO_TARGET_SECONDS`）在一次性 ParadeDB 容器上启用归档、写入并归档标记 A、取基线备份、写入标记 B，再恢复到两条标记之间的时间点。脚本断言归档失败数为 0、A 保留、B 被排除，并把 RTO 与边界结果写入 `tests/eval/m13_pitr_drill_report.json`。归档卷是本地一次性卷；生产必须把 `archive_command` 指向数据库节点之外的复制存储。
+
+对象存储复制演练：`make m13-object-storage-drill` 在 compose 网络上启动一次性第二 MinIO，创建独立的 `m13-replication-drill-*` 桶，验证版本化、复制规则和两端 version ID 一致后清理。它不修改应用桶；生产复制目标仍由部署方提供。
+
+复制目标可达性：`make m13-object-storage-probe`（即 `m13_object_storage_check.sh --probe`）在源桶写入一个 `_m13_probe/*` 探针对象，在目标端校验同一 version ID 后删除；目标不可达时在超时内失败。它需要 `M13_REPLICA_ENDPOINT`、`M13_REPLICA_ACCESS_KEY`、`M13_REPLICA_SECRET_KEY`，可选 `M13_REPLICA_BUCKET`（默认同源桶）、`M13_PROBE_BUCKET`、`M13_CHECK_BUCKET`、`M13_REPLICA_INSECURE=1` 与 `M13_REPLICATION_PROBE_TIMEOUT_SECONDS`（默认 30）。不传 `--probe` 时只证明复制规则存在。
 
 ### 3.3 恢复演练与 RTO 记录
 
@@ -83,7 +97,18 @@ RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 ./scripts/m13_backup_drill.sh
 RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 ./scripts/m13_backup_drill.sh --dry-run
 ```
 
-季度演练仍需运维按计划执行并归档报告；本脚本只保证流程可重复、输入明确、结果可核对。
+季度演练已接入 `.github/workflows/drills.yml`（见 3.4）；本脚本只保证流程可重复、输入明确、结果可核对。
+
+生产归档验证：`scripts/m13_pitr_drill.sh --existing-base ... --existing-archive ...` 用真实基线备份与 WAL 归档跑同一恢复路径，而不是一次性生成本地归档：
+
+```bash
+RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 ./scripts/m13_pitr_drill.sh \
+  --existing-base /backups/rag-base-20261112T... \
+  --existing-archive /wal-archive \
+  [--target-time "2026-11-12 03:00:00+00"]
+```
+
+基线目录必须是 plain-format `pg_basebackup`（含 `PG_VERSION` 与 `backup_manifest`），归档目录须含 24 位 WAL 段且容器 postgres 用户可读；可用 `RESTORE_DB`/`RESTORE_DB_USER` 覆盖校验库与角色。默认恢复到最新归档点，给出 `--target-time` 则验证指定时间点；报告写入 `tests/eval/m13_pitr_restore_report.json`。
 
 `scripts/m4_backup_restore.sh` 会：
 
@@ -106,6 +131,22 @@ RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 ./scripts/m13_backup_drill.sh --d
 4. 恢复对象存储：`pg_dump` 不包含 MinIO/S3 中的原始文件与 `normalized.json`。生产必须同时备份对象存储桶；缺对象时预览/内容接口返回 409 `content_unavailable`（不回显对象键），重新解析失败，但已生成 Chunk 的检索仍可用。
 5. 验证：`readyz`、`/api/v1/ops/metrics`、任选文档的详情/预览/检索，以及 `authorization_revisions` 与备份前一致。
 6. 新环境上线后轮换 `JWT_SIGNING_KEYS`、`API_KEY_PEPPER` 和 OIDC client secret；更换 pepper 会使已签发 API Key 全部失效，需重新签发。
+
+### 3.4 演练节奏
+
+`.github/workflows/drills.yml` 提供季度恢复演练：`workflow_dispatch` 可手动运行，`schedule` 在每年 1/4/7/10 月 1 日 03:00 UTC 自动触发。任务依次执行 PITR 演练、对象存储复制演练和逻辑恢复演练，把三份报告作为 `recovery-drill-reports` artifact 保留 90 天：
+
+- `tests/eval/m13_pitr_drill_report.json`
+- `tests/eval/m13_object_storage_drill_report.json`
+- `tests/eval/m13_backup_drill_report.json`
+
+私有部署没有 GitHub Actions 时，用等价 cron 在季度窗口执行同一入口：
+
+```cron
+0 3 1 1,4,7,10 * cd /opt/rag-platform && RTO_TARGET_SECONDS=3600 RPO_TARGET_SECONDS=900 make m13-recovery-drills >>/var/log/rag-drill.log 2>&1
+```
+
+每次演练后核对报告中的 `passed`/`rtoPassed`，并把实测 RTO 记入运维记录。本地演练通过不等于生产达标：生产 PITR 的归档介质、对象存储复制目标与告警仍由部署方提供，未提供前 A1 不能标记完成。
 
 ## 4. Redis/Worker 故障
 

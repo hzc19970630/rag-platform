@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "M13ObjectStorageDrillReportV1",
+  "startedAt": "2026-11-12T02:34:40Z",
+  "finishedAt": "2026-11-12T02:34:46Z",
+  "sourceContainer": "docker-compose-minio-1",
+  "replicaImage": "pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372",
+  "bucket": "m13-replication-drill-29833-52333",
+  "objectKey": "probe-29833-52333",
+  "replicationLatencySeconds": 0,
+  "sourceVersionId": "be7d3786-ec86-41be-b7e1-1361df642285",
+  "destinationVersionId": "be7d3786-ec86-41be-b7e1-1361df642285",
+  "versionIdMatched": true,
+  "passed": true,
+  "scope": "two disposable MinIO nodes on the local compose network; production replication must use an independent failure domain and is verified separately by m13_object_storage_check.sh"
+}

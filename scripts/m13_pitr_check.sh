@@ -32,17 +32,17 @@ archiver="$(psql "SELECT archived_count || '|' || failed_count || '|' || COALESC
 printf 'wal_level=%s\narchive_mode=%s\narchive_command=%s\narchive_timeout=%s\npg_stat_archiver=%s\n' \
   "$wal_level" "$archive_mode" "$archive_command" "$archive_timeout" "$archiver"
 
-if [[ "$allow_disabled" == "1" && ( "$archive_mode" != "on" || -z "$archive_command" || "$archive_command" == "(disabled)" ) ]]; then
+if [[ "$allow_disabled" == "1" && ( ( "$archive_mode" != "on" && "$archive_mode" != "always" ) || -z "$archive_command" || "$archive_command" == "(disabled)" ) ]]; then
   printf 'M13 PITR check: archiving is disabled; allowed because --allow-disabled was passed (development only)\n'
   exit 0
 fi
 
 [[ "$wal_level" == "replica" || "$wal_level" == "logical" ]] || fail "wal_level must be replica or logical, got $wal_level"
-[[ "$archive_mode" == "on" ]] || fail "archive_mode is off; enable WAL archiving for the approved RPO"
+[[ "$archive_mode" == "on" || "$archive_mode" == "always" ]] || fail "archive_mode is off; enable WAL archiving for the approved RPO"
 [[ -n "$archive_command" && "$archive_command" != "(disabled)" ]] || fail "archive_command is empty/disabled"
 [[ "$archive_timeout" =~ ^[0-9]+$ && "$archive_timeout" -gt 0 && "$archive_timeout" -le "$max_archive_timeout" ]] || \
   fail "archive_timeout must be 1..${max_archive_timeout}s for RPO 900s, got $archive_timeout"
 
 failed_count="${archiver#*|}"; failed_count="${failed_count%%|*}"
 [[ "$failed_count" == "0" ]] || fail "pg_stat_archiver reports ${failed_count} failed WAL archive attempts"
-printf 'M13 PITR check passed: wal_level=%s archive_mode=on archive_timeout=%ss failed_archives=0\n' "$wal_level" "$archive_timeout"
+printf 'M13 PITR check passed: wal_level=%s archive_mode=%s archive_timeout=%ss failed_archives=0\n' "$wal_level" "$archive_mode" "$archive_timeout"

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "M13PitrDrillReportV1",
+  "mode": "disposable",
+  "startedAt": "2026-11-12T02:34:24Z",
+  "finishedAt": "2026-11-12T02:34:39Z",
+  "rtoTargetSeconds": 3600,
+  "rtoObservedSeconds": 1,
+  "rpoTargetSeconds": 900,
+  "rpoDesignSeconds": 60,
+  "image": "paradedb/paradedb:v0.22.6-pg17@sha256:58bf87d2a6f1e72f56590b0f0ae1467e82c3f99ca203dde646672c8ac13148b2",
+  "recoveryTargetTime": "2026-11-12 02:34:35.172152+00",
+  "baseBackupBytes": 93282304,
+  "walArchivedBeforeRestore": 8,
+  "failedArchives": 0,
+  "rowBeforeTargetRecovered": true,
+  "rowAfterTargetExcluded": true,
+  "rtoPassed": true,
+  "passed": true,
+  "scope": "single-node PITR drill on a disposable ParadeDB container; production must place the WAL archive on replicated storage outside the database node"
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "M13PitrRestoreReportV1",
+  "mode": "existing",
+  "startedAt": "2026-11-12T02:31:41Z",
+  "finishedAt": "2026-11-12T02:31:44Z",
+  "rtoTargetSeconds": 3600,
+  "rtoObservedSeconds": 2,
+  "rpoTargetSeconds": 900,
+  "archiveLagSeconds": 1,
+  "image": "paradedb/paradedb:v0.22.6-pg17@sha256:58bf87d2a6f1e72f56590b0f0ae1467e82c3f99ca203dde646672c8ac13148b2",
+  "baseBackup": "rag-base-20261112T023136Z",
+  "archiveDirectory": "wal",
+  "archiveSegments": 1,
+  "recoveryTargetTime": "latest",
+  "schemaMigrations": 27,
+  "rtoPassed": true,
+  "passed": true,
+  "scope": "existing production-style base backup and WAL archive restored into a disposable container; the archive path must be readable by the container postgres user"
+}

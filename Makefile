@@ -1,4 +1,4 @@
-.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill backup-postgres m13-pitr-check m13-object-storage-check openapi openapi-check
+.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe openapi openapi-check
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -128,14 +128,37 @@ m13-async-acceptance:
 m13-backup-drill:
 	./scripts/m13_backup_drill.sh
 
+# End-to-end PITR drill on a disposable ParadeDB container: archives WAL,
+# takes a base backup between two markers, restores to a timestamp between them
+# and records RTO in tests/eval/m13_pitr_drill_report.json.
+m13-pitr-drill:
+	./scripts/m13_pitr_drill.sh
+
+# Two-node MinIO replication drill. Creates a disposable drill bucket only and
+# removes it afterwards; the application bucket is not modified.
+m13-object-storage-drill:
+	./scripts/m13_object_storage_drill.sh
+
+# Quarterly cadence; RTO/RPO remain explicit deployment inputs.
+m13-recovery-drills: m13-backup-drill m13-pitr-drill m13-object-storage-drill
+
 backup-postgres:
 	./scripts/backup_postgres.sh
+
+# Physical base backup for PITR (requires archive_mode=on in production).
+backup-basebackup:
+	./scripts/backup_basebackup.sh
 
 m13-pitr-check:
 	./scripts/m13_pitr_check.sh
 
 m13-object-storage-check:
 	./scripts/m13_object_storage_check.sh
+
+# Requires M13_REPLICA_ENDPOINT/ACCESS_KEY/SECRET_KEY; writes and removes one
+# probe object to prove delivery, not just rule existence.
+m13-object-storage-probe:
+	./scripts/m13_object_storage_check.sh --probe
 
 # Compares bounded graph queries with pure Evidence RAG on the fixed M7 QA set
 # and records reachability/path metrics. The keep-or-drop decision for complex
