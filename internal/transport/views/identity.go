@@ -41,10 +41,11 @@ func Scope(scope authz.AuthorizationScope) httpapi.ScopeView {
 	}
 }
 
-func AuthConfig(oidcEnabled bool, oidcIssuer string, devAuthEnabled bool, cookieName string, sessionTTLSeconds int) httpapi.AuthConfig {
+func AuthConfig(oidcEnabled bool, oidcIssuer string, ldapEnabled bool, devAuthEnabled bool, cookieName string, sessionTTLSeconds int) httpapi.AuthConfig {
 	return httpapi.AuthConfig{
 		OIDCEnabled:     oidcEnabled,
 		OIDCIssuer:      oidcIssuer,
+		LDAPEnabled:     ldapEnabled,
 		DevAuthEnabled:  devAuthEnabled,
 		SessionCookie:   cookieName,
 		SessionTTLHours: sessionTTLSeconds / 3600,

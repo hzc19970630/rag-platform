@@ -43,9 +43,15 @@ type MeResponse struct {
 type AuthConfig struct {
 	OIDCEnabled     bool   `json:"oidcEnabled" oa:"required"`
 	OIDCIssuer      string `json:"oidcIssuer"`
+	LDAPEnabled     bool   `json:"ldapEnabled" oa:"required"`
 	DevAuthEnabled  bool   `json:"devAuthEnabled" oa:"required"`
 	SessionCookie   string `json:"sessionCookie" oa:"required"`
 	SessionTTLHours int    `json:"sessionTTLHours" oa:"required"`
+}
+
+type LDAPLoginRequest struct {
+	Username string `json:"username" oa:"required"`
+	Password string `json:"password" oa:"required"`
 }
 
 type DevLoginRequest struct {

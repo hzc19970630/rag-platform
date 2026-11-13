@@ -12,6 +12,30 @@ type AuthOptions struct {
 	DevAuthEnabled    bool
 	APIKeyPepper      string
 	OIDC              OIDCOptions
+	LDAP              LDAPOptions
+}
+
+type LDAPOptions struct {
+	Enabled             bool
+	URL                 string
+	StartTLS            bool
+	TLSSkipVerify       bool
+	BindDN              string
+	BindPassword        string
+	BaseDN              string
+	UserFilter          string
+	UserIDAttribute     string
+	EmailAttribute      string
+	NameAttribute       string
+	GroupAttribute      string
+	GroupFilter         string
+	TenantID            string
+	AutoProvision       bool
+	DefaultRole         string
+	GroupRoleMap        string
+	SyncUserFilter      string
+	SyncIntervalSeconds int
+	TimeoutSeconds      int
 }
 
 type OIDCOptions struct {

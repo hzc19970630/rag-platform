@@ -236,6 +236,7 @@ type maintenanceRunner struct {
 	lastAuditPurge       time.Time
 	lastStreamEventPurge time.Time
 	lastTaskHistoryPurge time.Time
+	lastLDAPSync         time.Time
 	projectionCursor     string
 }
 
@@ -337,6 +338,15 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 		m.projectionCursor = nextCursor
 		if scheduled > 0 {
 			logger.Info("projection_scheduled", "runs", scheduled)
+		}
+	}
+	if cfg.Auth.LDAP.Enabled && cfg.Auth.LDAP.SyncIntervalSeconds > 0 &&
+		time.Since(m.lastLDAPSync) >= time.Duration(cfg.Auth.LDAP.SyncIntervalSeconds)*time.Second {
+		m.lastLDAPSync = time.Now()
+		if result, err := application.Identity.SyncLDAP(ctx); err != nil {
+			logger.Error("ldap_sync_failed", "error", err)
+		} else {
+			logger.Info("ldap_sync_complete", "users", result.Users, "created", result.Created, "updated", result.Updated, "removed", result.Removed)
 		}
 	}
 	if reconciled, err := application.Projection.Reconcile(ctx); err != nil {

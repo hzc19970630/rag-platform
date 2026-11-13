@@ -133,6 +133,8 @@ components:
       properties:
         devAuthEnabled:
           type: boolean
+        ldapEnabled:
+          type: boolean
         oidcEnabled:
           type: boolean
         oidcIssuer:
@@ -143,6 +145,7 @@ components:
           type: integer
       required:
         - devAuthEnabled
+        - ldapEnabled
         - oidcEnabled
         - sessionCookie
         - sessionTTLHours
@@ -1189,6 +1192,16 @@ components:
           type: boolean
         query:
           type: string
+      type: object
+    LDAPLoginRequest:
+      properties:
+        password:
+          type: string
+        username:
+          type: string
+      required:
+        - password
+        - username
       type: object
     MeResponse:
       properties:
@@ -2436,6 +2449,34 @@ paths:
           $ref: '#/components/responses/InternalError'
       security: []
       summary: POST /api/v1/auth/dev-login
+      tags:
+        - auth
+  /api/v1/auth/ldap/login:
+    post:
+      operationId: post_auth_ldap_login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LDAPLoginRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevLoginResponse'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      security: []
+      summary: POST /api/v1/auth/ldap/login
       tags:
         - auth
   /api/v1/auth/logout:

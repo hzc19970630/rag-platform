@@ -94,6 +94,8 @@ var Routes = []Route{
 		Success: redirect(), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/auth/callback", OperationID: "get_auth_callback", Tag: "auth", Public: true,
 		Success: redirect(), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/auth/ldap/login", OperationID: "post_auth_ldap_login", Tag: "auth", Public: true,
+		Request: jsonBody((*LDAPLoginRequest)(nil)), Success: ok((*DevLoginResponse)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/auth/dev-login", OperationID: "post_auth_dev_login", Tag: "auth", Public: true,
 		Request: jsonBody((*DevLoginRequest)(nil)), Success: ok((*DevLoginResponse)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/auth/refresh", OperationID: "post_auth_refresh", Tag: "auth", Public: true,

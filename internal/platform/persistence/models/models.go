@@ -8,6 +8,7 @@ type User struct {
 	DisplayName string    `gorm:"size:255;not null" json:"displayName"`
 	OIDCIssuer  string    `gorm:"column:oidc_issuer;size:512;not null;default:''" json:"-"`
 	OIDCSubject string    `gorm:"column:oidc_subject;size:255;not null;default:''" json:"-"`
+	LDAPDN      string    `gorm:"column:ldap_dn;size:512;not null;default:''" json:"-"`
 	CreatedAt   time.Time `gorm:"not null" json:"createdAt"`
 	UpdatedAt   time.Time `gorm:"not null" json:"updatedAt"`
 }

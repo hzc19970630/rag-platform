@@ -146,9 +146,9 @@ func TestStreamEventKeepsSSEContract(t *testing.T) {
 }
 
 func TestAuthConfigConvertsSecondsToHours(t *testing.T) {
-	view := AuthConfig(true, "https://issuer", true, "rag_session", 7200)
+	view := AuthConfig(true, "https://issuer", true, true, "rag_session", 7200)
 	want := httpapi.AuthConfig{
-		OIDCEnabled: true, OIDCIssuer: "https://issuer", DevAuthEnabled: true,
+		OIDCEnabled: true, OIDCIssuer: "https://issuer", LDAPEnabled: true, DevAuthEnabled: true,
 		SessionCookie: "rag_session", SessionTTLHours: 2,
 	}
 	if view != want {

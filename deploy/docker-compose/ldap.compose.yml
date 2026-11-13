@@ -1,0 +1,65 @@
+# Local LDAP acceptance overlay. It starts a disposable OpenLDAP directory with
+# test users/groups and points api/worker at it. Never use these credentials in
+# a shared environment.
+#
+# Usage:
+#   docker compose --env-file .env \
+#     -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/docker-compose/quickstart.compose.yml \
+#     -f deploy/docker-compose/ldap.compose.yml up -d --build api worker ldap
+services:
+  ldap:
+    image: osixia/openldap:1.5.0@sha256:18742e9c449c9c1afe129d3f2f3ee15fb34cc43e5f940a20f3399728f41d7c28
+    environment:
+      LDAP_ORGANISATION: Example
+      LDAP_DOMAIN: example.com
+      LDAP_ADMIN_PASSWORD: admin-secret
+      LDAP_CONFIG_PASSWORD: config-secret
+      LDAP_READONLY_USER: "true"
+      LDAP_READONLY_USER_USERNAME: readonly
+      LDAP_READONLY_USER_PASSWORD: reader-secret
+    command:
+      - --copy-service
+    volumes:
+      - ../ldap/bootstrap.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/50-bootstrap.ldif:ro
+    ports:
+      - "3890:389"
+    networks:
+      - backend
+      - tools
+  api:
+    environment:
+      LDAP_ENABLED: "true"
+      LDAP_URL: ldap://ldap:389
+      LDAP_BIND_DN: cn=readonly,dc=example,dc=com
+      LDAP_BIND_PASSWORD: reader-secret
+      LDAP_BASE_DN: dc=example,dc=com
+      LDAP_USER_FILTER: (uid=%s)
+      LDAP_GROUP_ATTRIBUTE: memberOf
+      LDAP_GROUP_FILTER: "(&(objectClass=groupOfNames)(member=%s))"
+      LDAP_TENANT_ID: dev-tenant
+      LDAP_AUTO_PROVISION: "true"
+      LDAP_DEFAULT_ROLE: ""
+      LDAP_GROUP_ROLE_MAP: cn=rag-admins,ou=groups,dc=example,dc=com=admin;cn=rag-viewers,ou=groups,dc=example,dc=com=viewer
+      LDAP_SYNC_USER_FILTER: (objectClass=inetOrgPerson)
+      LDAP_SYNC_INTERVAL_SECONDS: "10"
+      RECONCILE_INTERVAL_SECONDS: "10"
+      LDAP_TIMEOUT_SECONDS: "10"
+  worker:
+    environment:
+      LDAP_ENABLED: "true"
+      LDAP_URL: ldap://ldap:389
+      LDAP_BIND_DN: cn=readonly,dc=example,dc=com
+      LDAP_BIND_PASSWORD: reader-secret
+      LDAP_BASE_DN: dc=example,dc=com
+      LDAP_USER_FILTER: (uid=%s)
+      LDAP_GROUP_ATTRIBUTE: memberOf
+      LDAP_GROUP_FILTER: "(&(objectClass=groupOfNames)(member=%s))"
+      LDAP_TENANT_ID: dev-tenant
+      LDAP_AUTO_PROVISION: "true"
+      LDAP_DEFAULT_ROLE: ""
+      LDAP_GROUP_ROLE_MAP: cn=rag-admins,ou=groups,dc=example,dc=com=admin;cn=rag-viewers,ou=groups,dc=example,dc=com=viewer
+      LDAP_SYNC_USER_FILTER: (objectClass=inetOrgPerson)
+      LDAP_SYNC_INTERVAL_SECONDS: "10"
+      RECONCILE_INTERVAL_SECONDS: "10"
+      LDAP_TIMEOUT_SECONDS: "10"

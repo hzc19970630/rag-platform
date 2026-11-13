@@ -26,6 +26,34 @@ type AuthConfig struct {
 	DevAuthEnabled      bool
 	APIKeyPepper        string
 	OIDC                OIDCConfig
+	LDAP                LDAPConfig
+}
+
+// LDAPConfig describes one directory-backed identity source. The deployment
+// binds with a read-only service account for searches and rebinds as the user
+// to verify the password; user passwords are never persisted.
+type LDAPConfig struct {
+	Enabled             bool
+	URL                 string
+	StartTLS            bool
+	TLSSkipVerify       bool
+	AllowInsecure       bool
+	BindDN              string
+	BindPassword        string
+	BaseDN              string
+	UserFilter          string
+	UserIDAttribute     string
+	EmailAttribute      string
+	NameAttribute       string
+	GroupAttribute      string
+	GroupFilter         string
+	TenantID            string
+	AutoProvision       bool
+	DefaultRole         string
+	GroupRoleMap        string
+	SyncUserFilter      string
+	SyncIntervalSeconds int
+	TimeoutSeconds      int
 }
 
 type OIDCConfig struct {
@@ -74,6 +102,44 @@ func (a AuthConfig) Validate(appEnv string) error {
 			return fmt.Errorf("OIDC_ISSUER must be a valid URL")
 		}
 	}
+	if a.LDAP.Enabled {
+		parsed, err := url.Parse(a.LDAP.URL)
+		if err != nil || (parsed.Scheme != "ldap" && parsed.Scheme != "ldaps") || parsed.Host == "" {
+			return fmt.Errorf("LDAP_URL must be ldap:// or ldaps://host:port")
+		}
+		if strings.TrimSpace(a.LDAP.BindDN) == "" || strings.TrimSpace(a.LDAP.BindPassword) == "" || strings.TrimSpace(a.LDAP.BaseDN) == "" {
+			return fmt.Errorf("LDAP_BIND_DN, LDAP_BIND_PASSWORD and LDAP_BASE_DN are required when LDAP_ENABLED=true")
+		}
+		if strings.TrimSpace(a.LDAP.TenantID) == "" {
+			return fmt.Errorf("LDAP_TENANT_ID is required when LDAP_ENABLED=true")
+		}
+		if !strings.Contains(a.LDAP.UserFilter, "%s") {
+			return fmt.Errorf("LDAP_USER_FILTER must contain %%s for the escaped username")
+		}
+		if strings.TrimSpace(a.LDAP.GroupFilter) != "" && !strings.Contains(a.LDAP.GroupFilter, "%s") {
+			return fmt.Errorf("LDAP_GROUP_FILTER must contain %%s for the escaped user DN")
+		}
+		if a.LDAP.DefaultRole != "" && !validTenantRoleName(a.LDAP.DefaultRole) {
+			return fmt.Errorf("LDAP_DEFAULT_ROLE must be one of owner, admin, member, viewer")
+		}
+		if strings.TrimSpace(a.LDAP.SyncUserFilter) == "" {
+			return fmt.Errorf("LDAP_SYNC_USER_FILTER is required when LDAP_ENABLED=true")
+		}
+		for _, pair := range strings.Split(a.LDAP.GroupRoleMap, ";") {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			separator := strings.LastIndex(pair, "=")
+			if separator <= 0 || separator == len(pair)-1 ||
+				strings.TrimSpace(pair[:separator]) == "" || !validTenantRoleName(strings.TrimSpace(pair[separator+1:])) {
+				return fmt.Errorf("LDAP_GROUP_ROLE_MAP entries must be group=role with role in owner/admin/member/viewer")
+			}
+		}
+		if appEnv == "production" && parsed.Scheme == "ldap" && !a.LDAP.StartTLS && !a.LDAP.AllowInsecure {
+			return fmt.Errorf("production LDAP must use ldaps://, LDAP_START_TLS=true, or an explicit LDAP_ALLOW_INSECURE=true acknowledgement")
+		}
+	}
 	if appEnv == "production" {
 		if !a.SigningKeysExplicit {
 			return fmt.Errorf("JWT_SIGNING_KEYS must be set explicitly in production")
@@ -87,8 +153,8 @@ func (a AuthConfig) Validate(appEnv string) error {
 		if isRepositoryDefaultSecret(a.APIKeyPepper) {
 			return fmt.Errorf("API_KEY_PEPPER must not use a repository default value in production")
 		}
-		if !a.OIDC.Enabled {
-			return fmt.Errorf("OIDC_ENABLED must be true in production")
+		if !a.OIDC.Enabled && !a.LDAP.Enabled {
+			return fmt.Errorf("OIDC_ENABLED or LDAP_ENABLED must be true in production")
 		}
 		if a.DevAuthEnabled {
 			return fmt.Errorf("DEV_AUTH_ENABLED must be false in production")
@@ -96,7 +162,7 @@ func (a AuthConfig) Validate(appEnv string) error {
 		if !a.CookieSecure {
 			return fmt.Errorf("AUTH_COOKIE_SECURE must be true in production")
 		}
-		if a.OIDC.ClientSecret == "" {
+		if a.OIDC.Enabled && a.OIDC.ClientSecret == "" {
 			return fmt.Errorf("OIDC_CLIENT_SECRET is required in production")
 		}
 		for _, entry := range a.SigningKeys {
@@ -129,4 +195,13 @@ func validateTrustedProxies(entries []string) error {
 		}
 	}
 	return nil
+}
+
+func validTenantRoleName(role string) bool {
+	switch role {
+	case "owner", "admin", "member", "viewer":
+		return true
+	default:
+		return false
+	}
 }

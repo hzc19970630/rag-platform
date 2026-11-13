@@ -46,6 +46,7 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 		c.JSON(http.StatusOK, views.AuthConfig(
 			deps.Identity.OIDCEnabled(),
 			deps.Identity.OIDCIssuer(),
+			deps.Identity.LDAPEnabled(),
 			cfg.Auth.DevAuthEnabled && (cfg.AppEnv == "development" || cfg.AppEnv == "test"),
 			cfg.Auth.CookieName,
 			cfg.Auth.SessionTTLSeconds,
@@ -89,6 +90,25 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 		}
 		setSessionCookie(c, cfg, result.Token, result.ExpiresAt)
 		c.Redirect(http.StatusFound, strings.TrimRight(cfg.WebPublicURL, "/")+"/")
+	})
+	auth.POST("/ldap/login", func(c *gin.Context) {
+		if !deps.Identity.LDAPEnabled() {
+			writeError(c, apperror.ErrNotFound)
+			return
+		}
+		var input httpapi.LDAPLoginRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		result, err := deps.Identity.LoginLDAP(c.Request.Context(), input.Username, input.Password, c.Request.UserAgent(), clientIP(c))
+		if err != nil {
+			logger.Warn("ldap_login_failed", "error", err)
+			writeError(c, err)
+			return
+		}
+		setSessionCookie(c, cfg, result.Token, result.ExpiresAt)
+		c.JSON(http.StatusOK, views.DevLogin(result))
 	})
 	auth.POST("/dev-login", func(c *gin.Context) {
 		if !cfg.Auth.DevAuthEnabled || (cfg.AppEnv != "development" && cfg.AppEnv != "test") {

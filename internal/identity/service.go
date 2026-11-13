@@ -29,6 +29,7 @@ type Service struct {
 	cfg    AuthOptions
 	signer *tokenSigner
 	oidc   *OIDCClient
+	ldap   LDAPDirectory
 }
 
 type SessionResult struct {
@@ -66,10 +67,15 @@ func NewService(db *gorm.DB, cfg AuthOptions) (*Service, error) {
 	if cfg.OIDC.Enabled {
 		service.oidc = NewOIDCClient(cfg.OIDC)
 	}
+	if cfg.LDAP.Enabled {
+		service.ldap = NewLDAPClient(cfg.LDAP)
+	}
 	return service, nil
 }
 
 func (s *Service) OIDCEnabled() bool { return s.oidc != nil && s.oidc.Enabled() }
+
+func (s *Service) LDAPEnabled() bool { return s.ldap != nil && s.cfg.LDAP.Enabled }
 
 func (s *Service) OIDCIssuer() string { return s.cfg.OIDC.Issuer }
 

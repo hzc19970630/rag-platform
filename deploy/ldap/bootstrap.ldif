@@ -1,0 +1,57 @@
+dn: ou=people,dc=example,dc=com
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=example,dc=com
+objectClass: organizationalUnit
+ou: groups
+
+dn: cn=reader,dc=example,dc=com
+objectClass: organizationalRole
+objectClass: simpleSecurityObject
+cn: reader
+description: Read-only service account for RAG searches
+userPassword: reader-secret
+
+dn: uid=alice,ou=people,dc=example,dc=com
+objectClass: inetOrgPerson
+uid: alice
+cn: Alice
+sn: Alice
+mail: alice@example.com
+userPassword: alice-secret
+
+dn: uid=bob,ou=people,dc=example,dc=com
+objectClass: inetOrgPerson
+uid: bob
+cn: Bob
+sn: Bob
+mail: bob@example.com
+userPassword: bob-secret
+
+dn: uid=carol,ou=people,dc=example,dc=com
+objectClass: inetOrgPerson
+uid: carol
+cn: Carol
+sn: Carol
+mail: carol@example.com
+userPassword: carol-secret
+
+dn: uid=dave,ou=people,dc=example,dc=com
+objectClass: inetOrgPerson
+uid: dave
+cn: Dave
+sn: Dave
+mail: dave@example.com
+userPassword: dave-secret
+
+dn: cn=rag-admins,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: rag-admins
+member: uid=alice,ou=people,dc=example,dc=com
+
+dn: cn=rag-viewers,ou=groups,dc=example,dc=com
+objectClass: groupOfNames
+cn: rag-viewers
+member: uid=bob,ou=people,dc=example,dc=com
+member: uid=carol,ou=people,dc=example,dc=com
