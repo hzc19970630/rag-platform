@@ -393,16 +393,15 @@ M3 完成后形成可供内部试点的核心 RAG MVP。对外企业生产上线
 
 **依赖**：M12 已完成；原 M13 A1–A3/B1 与原 M14 A1–A4 已交付。M8 保持独立的条件扩展里程碑：D8 先于 M8 的存储迁移，D1/D6 分别以原 M13 B1 数据面报告和图规模为触发证据。
 
-**执行顺序**：
+**执行顺序（2026-11-13 产品视角重排，取代此前按段罗列的启动顺序）**：
 
-1. 先完成 A 段（P0，4 项）；A 段全部完成前不得对外承诺企业 GA。POC 入场线可在 owner 批准后先行，GA 交付线仍以 A 段完成为门禁。
-2. C 段已完成（C1–C11）。B 段分两条线推进：
-   - POC 入场线：B7a OCR/扫描件 → B9 发布工程 → B3 企业身份 → B4 管理台；B7b 连接器按目标客户并行；
-   - GA 交付线：B1 高可用 → B2 Kubernetes/Helm → B5 可观测性 → B8 合规加固 → B10 前端 E2E。
-   - 两条线可并行；首个外部客户 GA 以 A1/A2 与 B 段开头的 GA 门槛全部通过为准。
-3. C5 已完成；B 段不再等待 C5，B7a/B3/B4 在 owner 批准后可立即按客户优先级启动。
-4. D 段在 B 段完成（企业 GA）后或触发条件命中时启动；D8 必须先于 M8 的存储迁移。
-5. B16–B20 为 2026-11-08 竞品对标新增项：B16（MCP/SDK）优先；B17（对外评测）与 B18（证据链审计）按商业化/合规需求启动；B19（轻量语义层）与 B20（外部能力集成评估）仅在设计伙伴或客户需求触发后启动。B21（MCP 配置页）为 2026-11-12 新增的 B16 后续体验项，不改变 A 段与企业 GA 门禁；HTTP/SSE 传输与写操作仅作为后续选项，未立项。 B22（MCP 连接可运营化）的 PRD 草稿见 `docs/internal/b22-mcp-prd.md`，B22-A 已完成（多库、自检、模板、过期与发布工作流），B22-B/B22-C 未启动。 B3-B（OIDC 组映射 + SCIM）为 2026-11-13 新增的身份体系深化项，按目标客户触发，优先级高于 SAML/企微/钉钉。
+1. 门禁不变：A 段 P0 已完成（A1 单机口径、A2 自用豁免、A3/A4 完成），但对外商业 GA 仍需 A2 法务书面结论，且本节“GA 门槛”逐项通过。C 段 C1–C11 已完成，不再排期。
+2. **第 0 批（并行启动，不写业务代码）**：B17 收尾（外部独立复现 + CI live 实跑 + 基线入库发布）→ A2 法务书面结论（长周期，立即送审）→ B11 设计伙伴。三者互不阻塞，与后续批次并行；B11 的结果决定第 1、3 批的实际范围。
+3. **第 1 批 POC 入场线**：B6 部门树/文件夹/单文档 ACL → B3-B（OIDC 组映射 + SCIM）→ B7a OCR → B7b 连接器（只做一个，验收后再做第二个）。本批首项按目标客户二选一：AD/LDAP 客户先做 B6；Okta/Azure AD 且要求自动开通回收的客户先做 B3-B。**此处取代 2026-11-13 早先“B3-B → B6”的建议**，理由：B3 已覆盖 AD/LDAP 登录，B6 是更通用的隔离能力且是 D4 ACL 映射的数据前提。B7a 仅在客户确有扫描件/混合 PDF 语料时启动；B7b 只做客户实际在用的那一个数据源。
+4. **第 2 批企业 GA 基础设施**：触发为首个签约客户 + 部署形态确定（单机私有化 vs 多节点 HA）。顺序 B1 高可用 → B2 Helm/K8s → B8 合规加固；B8 以客户安全评审清单为输入，不预先建设。B5/B9/B10 已完成，GA 门槛剩余项为 B1/B2/B7a/B7b/B8 与 A2 法务结论。
+5. **第 3 批平台自服务**：触发为 2 个以上客户或运维成本显性化。B13 供应商目录 + D3 多 embedding 路由（一份设计、两刀交付：先目录/绑定/审计，再逐 KB 路由与灰度重建）→ B15 配置中心 → B14（与 D5 合并为一项，开启 rerank 前完成；当前 rerank 关闭）→ B22-B MCP 增强（以实际使用数据为触发）。
+6. **D 段其余项**：D1 以数据面证据为触发；D4 跟随 B6/B7b；D6/D7/D9 以性能触发（单快照 >10k 实体/关系、并发 tail >100、SSE 轮询占比过高）；D8 在 M8 存储迁移前插入；D2 已完成。B18（监管客户）、B19/B20（设计伙伴）、B22-C（单独立项）保持登记不排期。M8 七项为评估观察项，不是待办。
+7. 已完成项保持登记：B3/B4/B5/B9/B10/B12/B16/B21/B22-A 已完成，B22 PRD 见 `docs/internal/b22-mcp-prd.md`；SAML/企微/钉钉按客户明确需求单独立项，B3-B 优先级高于它们。
 
 **A. P0 生产安全与运行时韧性（原 M14 A5–A8；A1 已完成（单机口径），A2 已完成（自用豁免），A3/A4 已完成）**
 
@@ -422,7 +421,7 @@ B 段分两条线：
 - **POC 入场线**：B7a 文档解析广度、B7b 连接器广度、B3 企业身份、B4 管理台、B9 发布工程。决定能否进入客户真实语料和 IT 评审；其中 B7a/B7b 按目标客户优先级启动，B3/B4 至少完成一个目标 IdP 与租户治理闭环。
 - **GA 交付线**：A1 备份与恢复、B1 高可用、B2 Kubernetes/Helm、B5 可观测性与告警、B8 合规加固、B10 前端 E2E。决定能否对外承诺企业 GA。
 
-两条线可并行，但 **HA、备份、身份、审计四项必须先于首个外部客户 GA**；其余按客户需求分批。POC 入场线优先 B7a/B7b/B9/B3/B4；GA 交付线优先 B1/B2，B5 与可观测性同批。
+两条线可并行，但 **HA、备份、身份、审计四项必须先于首个外部客户 GA**；其余按客户需求分批。已完成项：B3/B4/B5/B9/B10；剩余优先级以本节“执行顺序”第 3、4 条为准（POC 线 B6 → B3-B → B7a → B7b，GA 线 B1 → B2 → B8）。
 
 **GA 门槛（首个外部客户）**：A1 恢复演练达标 + A2 许可证书面结论 + B1 单节点故障演练 + B2 K8s 一键部署 + B3 至少一个企业 IdP 联调 + B4 租户/用户/角色/配额/审计管理台 + B7a 至少 OCR 与 B7b 至少一个目标连接器 + B8 客户安全评审 + B9 可重复发布/回滚 + B10 主链路 E2E。缺一项不得对外称“企业 GA”。
 
@@ -432,7 +431,7 @@ B 段分两条线：
 
 - [ ] B3-B 身份体系深化（P1，按目标客户触发）：在 B3 基础上补 OIDC 组/角色 claim 映射（`groups`/`roles` → 租户角色）与 SCIM 2.0 用户/组供给端点（token 鉴权、增量/全量、停用、离职撤权、审计），覆盖 Okta/Azure AD/Keycloak 等标准 IdP；SAML 与企微/钉钉仍按客户需求单独立项。验收：OIDC 登录按 claim 映射角色；SCIM 创建/更新/停用用户与组映射生效，停用后会话撤销；跨租户与越权负向通过；OpenAPI/生成类型无漂移；不改变现有 OIDC/LDAP 登录路径。
 
-**后续建议（2026-11-13）**：按商业价值与依赖排序为 **B3-B（OIDC 组映射 + SCIM）→ B6（部门树/文件夹/单文档 ACL）→ B7b/D4（连接器 ACL 继承）**。若目标客户是 AD/LDAP 用户，现有 B3 已足够；若客户使用 Okta/Azure AD 并要求自动开通回收，先做 B3-B，SAML/企微/钉钉按客户明确需求再立项。
+**后续建议（2026-11-13，顺序已被本节“执行顺序”第 3 条取代）**：客户画像决定 B3-B 与 B6 的先后——若目标客户是 AD/LDAP 用户，现有 B3 已足够，先做 B6；若客户使用 Okta/Azure AD 并要求自动开通回收，先做 B3-B。连接器 ACL 继承跟随 B7b/D4，SAML/企微/钉钉按客户明确需求再立项。
 - [x] B4 管理台：租户/用户/角色/配额/审计页面与审计导出。验收：管理员不碰数据库即可完成日常治理。实现完成（2026-11-07）：后端 `GET /api/v1/tenant`、`GET/PATCH /api/v1/tenant/quota` 已落地——概览含成员角色计数、知识库/文档/存储与当日问答量；配额支持部署默认继承、租户覆盖（0=不限）、负数校验，配额保存与审计 `update_tenant_quota` 同事务；租户覆盖已接入 ingestion 与 conversation 动态生效；OpenAPI 与 `web/src/api/generated.ts` 已同步。前端新增 `/admin` 管理台与导航：概览/配额编辑、租户成员角色增删改、审计筛选查询与前端 CSV 导出（最多最近 500 条，已做 CSV 公式注入转义）；新增 `tenant:admin` 能力区分租户 Owner/Admin 与知识库级管理者，`/admin` 与 `/ops` 均按该能力显隐。验证：Go 全量门禁与测试、前端 33 项测试及 `tsc -b && vite build` 通过；已完成浏览器人工验收（Owner/Admin 管理台概览、配额保存/恢复、成员角色修改、审计筛选与 CSV 导出正常；Viewer 无「租户管理」「运维」入口，直接访问 `/admin` 显示无权限，`/api/v1/tenant` 返回 403）。
 - [x] B5 可观测性与告警包：Grafana 面板、Prometheus 告警规则、SLO 与值班路由；吸收原 M13 B5：把 HTTP span 作为父 span 传入 outbox envelope 与 Asynq task，worker span 关联同一 `trace_id`，并补充 queue lag、inbox 过期租约、outbox backlog、projection 游标滞后指标与告警阈值。验收：解析失败、队列积压、5xx 自动告警；父子 trace 断言通过。 已实现（2026-11-12）：跨队列 trace——`Ingestion`/`Sync`/`Projection`/`Answer` 任务新增 `trace_parent`，入库/同步/投影/答案创建时注入当前 span，worker 启动 span 前恢复父上下文；quickstart 实测同一 trace 贯穿 `document.parse → normalize → chunk → embed → index`。指标——Registry 支持 gauge，worker 每个维护周期写入 `queue_depth`、`outbox_backlog`、`inbox_expired_leases`、`projection_pending_runs`、`projection_lag_seconds`。告警包——`deploy/observability/` 提供 Prometheus 抓取、10 条告警规则、Alertmanager page/ticket 路由、Grafana 面板与 provisioning；`observability.compose.yml` 启动 Prometheus `:9092`、Alertmanager `:9093`、Grafana `:3000`。验证：`go vet ./...`、`go test ./...` 通过；`promtool check config`/`test rules`、`amtool check-config`、Compose overlay、dashboard JSON 通过；本机 overlay 实测 api/worker targets up、`queue_depth` 可查询、10 条规则加载、Grafana 面板已 provision；`make observability-check` 与 CI `observability` job 已接入。
 - [ ] B6 权限粒度：部门树、文件夹继承、单文档 ACL。验收：中大型组织可按部门/项目隔离。
@@ -447,7 +446,7 @@ B 段分两条线：
 - [ ] B11 商业化验证与设计伙伴：3 家设计伙伴、付费 POC、成功标准、定价/套餐决策、OEM/白标可行性评估。验收：至少 3 家签署设计伙伴或付费试点，形成 1 个垂直方案包和书面定价决策。B11 完成前不投入计费/套餐研发。
 - [x] B12 文档、社区与开源治理：对外 quickstart、架构图、Demo、竞品对比、贡献指南、公开路线图、安全披露流程、SBOM 可查。验收：新用户 30 分钟内完成部署和首个问答；文档不再以内部研发日志为主。已实现（2026-11-07）：新增 `SECURITY.md`、`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SUPPORT.md`、`GOVERNANCE.md`、`ROADMAP.md`、`THIRD_PARTY_NOTICES.md`、`.github/CODEOWNERS` 与 Issue/PR 模板；`README.md` 重写为公开产品文档，`DESIGN.md`、`docs/*.md`、`docs/adr/*.md` 已移除内部里程碑编号、本地路径与内部研发日志式叙述（`test.md` 归档为 `docs/internal/architecture-review.md`，不进入文档站导航）。Quickstart：`deploy/docker-compose/quickstart.compose.yml` + `scripts/quickstart.sh` + `scripts/quickstart_check.sh` + `examples/demo/`，使用开发身份与本地确定性模型完成部署、入库、混合检索、SSE 问答与引用自检；`docs/quickstart.md`、`docs/troubleshooting.md` 覆盖首个问答、停止/重置、真实模型与生产边界。文档站：`mkdocs.yml`（Material + Mermaid）、`docs/index.md`、`docs/architecture.md`、`docs/comparison.md`、`docs/demo.md`、`docs/api.md`、`docs/security.md`、`docs/contributing.md` 与 `.github/workflows/docs.yml`；README 增加在线文档站与 Release/SBOM 校验入口。验证：`bash -n` 两个脚本通过；base + quickstart overlay 用 `.env.example` 执行 `docker compose config --quiet` 通过；`mkdocs build --strict` 无警告通过；公开文档相对链接检查全部可解析。未执行项：按“服务端口保持关闭”约束未在本机启动 quickstart 栈，30 分钟部署/首个问答与浏览器体验待用户执行 `./scripts/quickstart.sh && ./scripts/quickstart_check.sh` 确认；GitHub Pages 源需在仓库设置中选 `gh-pages`，仓库 description/topics/homepage 与 Discussions 需在 GitHub 侧启用。
 - [ ] B13 模型与供应商管理：供应商目录（OpenAI 兼容、Azure、DashScope、Ollama/vLLM 等）、按知识库绑定 chat/embedding/rerank、健康/降级/配额、模型版本审计。验收：管理员不写代码即可新增供应商并按 KB 绑定；维度不匹配仍拒绝。D3 继续负责多 embedding 路由。
-- [ ] B14 检索质量运营（GA 后可选，开启 rerank 前必须完成）：把 m3 eval、向量召回探针、线上点赞/引用点击接入同一回归视图，支持 rerank on/off 和参数变更对比。验收：每次检索配置变更可回放评估集，rerank 开启有数据依据，质量回退可告警。
+- [ ] B14 检索质量运营（GA 后可选，开启 rerank 前必须完成；与 D5 合并为同一交付项，见执行顺序第 5 条）：把 m3 eval、向量召回探针、线上点赞/引用点击接入同一回归视图，支持 rerank on/off 和参数变更对比。验收：每次检索配置变更可回放评估集，rerank 开启有数据依据，质量回退可告警。
 
 **配置治理线（不阻塞企业 GA，但决定管理台可用性与运维安全）**
 
@@ -512,7 +511,7 @@ D1–D5 仅在原 M13 B1 数据面报告证据或已确认客户需求时立项�
 - [x] D2 任务状态单一视图（原 M13 B4）：Asynq retry、inbox lease、outbox attempts、stage attempts、reconcile、`ExpireStaleRuns`、projection 重试与 datasource 同步重试共 8 套机制，补充一张跨机制状态转移表与统一运维查询；不删除既有机制。同步把 `internal/status`（当前只收敛 `EVIDENCE_READY`/`PARENT`/`STALE`）扩为全量生命周期值的单一来源，清理各域散落的状态字符串与 SQL 直写。 已实现（2026-11-12）：`internal/status` 扩为全量生命周期与机制单一来源（文档/版本/Stage/Inbox/Outbox/死信/投影/审核/页面/索引/Graph/Sync/Answer），各域旧常量改为别名，清除 reconcile/Knowledge Index SQL 中的状态字面量，并新增跨机制 `Transitions` 表；`GET /ops/tasks/:key` 增加 `kind` 与 `mechanisms[]`，可解析 ingestion、projection（`run:stage`）、sync（`connector-sync:<run>`）与 answer（job id），跨租户仍返回 404；`docs/operations.md` 增补机制表与转移表。验证：`go test ./...`、`go vet ./...`、checkdeps/checktenancy、`openapi -check`、前端 41/41 与生产构建通过，新增投影/同步/答案解析及跨租户负向测试。
 - [ ] D3 多 embedding 路由与 re-embed 编排（原 M13 C1）：当前一 KB 绑定一个模型+维度、部署只注册一个 embedder；需要 per-KB 路由、批量重建与灰度切换，沿用 `embedctl` 的 create-index → reembed → verify 三段式，维度不匹配仍拒绝。
 - [ ] D4 连接器插件化与 ACL 映射（原 M13 C2）：`ConnectorFactory` 已有注册点（`internal/datasource/connector.go:118`），扩展为独立加载；`ACLMode` 从仅 `knowledge_base` 扩展到逐条/外部组映射。
-- [ ] D5 检索质量闭环（原 M13 C5）：在线反馈（点赞、引用点击）接入现有 m3 eval 与向量召回探针，形成离线回放，避免调参依赖猜测。
+- [ ] D5 检索质量闭环（原 M13 C5；与 B14 合并交付，不单独排期）：在线反馈（点赞、引用点击）接入现有 m3 eval 与向量召回探针，形成离线回放，避免调参依赖猜测。
 - [ ] D6 图查询分页与可见性过滤 SQL（原 M15 P2-1）：当前 `RelationStore.Graph` 全量加载 snapshot 后在内存 BFS；改为分页/可见性过滤 SQL + 有界 BFS。触发：单快照 > 10k 实体/关系，或图查询 P95 超 SLA；先于 Neo4j 评估。验收：内存占用有界，m7 评估不回归，隐藏节点/边无侧信道。
 - [ ] D7 SSE 推送模型（原 M15 P2-2）：把 250ms 事件表轮询改为 LISTEN/NOTIFY 或 Redis Streams。触发：并发 tail > 100，或事件轮询占 DB QPS 明显。验收：重连续传契约不变，tail 连接不再轮询，负载测试通过。
 - [ ] D8 向量/格式能力端口（原 M15 P2-3）：`platform/vector` 的索引生命周期与 `platform/formats` 静态切片端口化。触发/前置：M8 启动前必须完成，不依赖容量证据。验收：适配器契约测试通过，pgvector 行为不变，M8 迁移清单可执行。
