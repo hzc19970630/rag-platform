@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hzc19970630/rag-platform/internal/configschema"
 	"github.com/hzc19970630/rag-platform/internal/platform/formats"
 )
 
@@ -80,6 +81,26 @@ type Config struct {
 	// RetrievalConfigFile is the YAML file holding the global retrieval
 	// parameter defaults (the first tier of the override chain).
 	RetrievalConfigFile string
+	// RetrievalFileKeys records which retrieval keys the YAML file stated
+	// explicitly. A key that is absent is reported as the schema default instead
+	// of a deployment value that merely happens to equal it.
+	RetrievalFileKeys map[string]bool
+	// ChunkEnvKeys records which CHUNK_* variables were set explicitly, so the
+	// workbench can tell an operator default from the safe schema default.
+	ChunkEnvKeys map[string]bool
+	// RetrievalFileHash is the SHA-256 of the retrieval YAML read at startup.
+	// The configuration health check compares it with the file on disk to report
+	// a deployment drift that needs a restart.
+	RetrievalFileHash string
+	// BackupDir points at the directory the backup scripts write to. The
+	// configuration health check reports the age of the newest backup; empty
+	// means the check is unknown rather than failing.
+	BackupDir string
+	// BackupMaxAgeHours is the staleness threshold for the newest backup.
+	BackupMaxAgeHours int
+	// LicenseExpiresAt is an optional RFC3339 date or date-only value. No license
+	// issuer exists yet; when unset the health check reports "not configured".
+	LicenseExpiresAt string
 	// PromptTemplateDir holds the externalized prompt templates. Template wording
 	// is configuration, so Go code must not carry prompt literals.
 	PromptTemplateDir string
@@ -232,6 +253,9 @@ func LoadFrom(lookup Lookup) Config {
 		ParserVersion:                  value(lookup, "PARSER_VERSION", DefaultParserVersion),
 		SupportedFormats:               formats.Names(),
 		RetrievalConfigFile:            value(lookup, "RETRIEVAL_CONFIG_FILE", "config/config.yaml"),
+		BackupDir:                      value(lookup, "BACKUP_DIR", ""),
+		BackupMaxAgeHours:              int(reader.positive("BACKUP_MAX_AGE_HOURS", 24)),
+		LicenseExpiresAt:               strings.TrimSpace(value(lookup, "LICENSE_EXPIRES_AT", "")),
 		PromptTemplateDir:              value(lookup, "PROMPT_TEMPLATE_DIR", "config/prompt_templates"),
 		Retrieval:                      defaultRetrievalConfig(),
 		Chat: ChatConfig{
@@ -277,11 +301,24 @@ func LoadFrom(lookup Lookup) Config {
 			IndexStatementTimeoutSec: int(reader.nonNegative("EMBED_INDEX_STATEMENT_TIMEOUT_SECONDS", 0)),
 		},
 		Chunk: ChunkConfig{
-			Size:    int(reader.nonNegative("CHUNK_SIZE", 900)),
-			Overlap: int(reader.nonNegative("CHUNK_OVERLAP", 120)),
-			Markers: listValue(lookup, "CHUNK_SPLIT_MARKERS", []string{"\n\n", "\n", "。", ".", "！", "!", "？", "?"}),
-			MinSize: int(reader.nonNegative("CHUNK_MIN_SIZE", 0)),
+			Size:    int(reader.nonNegative("CHUNK_SIZE", int64(configschema.IntDefault("size")))),
+			Overlap: int(reader.nonNegative("CHUNK_OVERLAP", int64(configschema.IntDefault("overlap")))),
+			Markers: listValue(lookup, "CHUNK_SPLIT_MARKERS", configschema.StringsDefault("split_markers")),
+			MinSize: int(reader.nonNegative("CHUNK_MIN_SIZE", int64(configschema.IntDefault("min_size")))),
 		},
+	}
+	for env, key := range map[string]string{
+		"CHUNK_SIZE":          "size",
+		"CHUNK_OVERLAP":       "overlap",
+		"CHUNK_SPLIT_MARKERS": "split_markers",
+		"CHUNK_MIN_SIZE":      "min_size",
+	} {
+		if _, ok := lookup(env); ok {
+			if cfg.ChunkEnvKeys == nil {
+				cfg.ChunkEnvKeys = map[string]bool{}
+			}
+			cfg.ChunkEnvKeys[key] = true
+		}
 	}
 	cfg.ConfigError = reader.err
 	return cfg

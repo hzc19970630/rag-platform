@@ -130,6 +130,14 @@ var Routes = []Route{
 		Success: ok((*TenantQuota)(nil)), Errors: commonErrors},
 	{Method: http.MethodPatch, Path: "/api/v1/tenant/quota", OperationID: "patch_tenant_quota", Tag: "tenant",
 		Request: jsonBody((*TenantQuotaUpdateRequest)(nil)), Success: ok((*TenantQuota)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/tenant/config", OperationID: "get_tenant_config", Tag: "configuration",
+		Success: ok((*TenantConfiguration)(nil)), Errors: commonErrors},
+	{Method: http.MethodPut, Path: "/api/v1/tenant/config", OperationID: "put_tenant_config", Tag: "configuration",
+		Request: jsonBody((*TenantConfigurationUpdateRequest)(nil)), Success: ok((*TenantConfiguration)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/tenant/config/health", OperationID: "get_tenant_config_health", Tag: "configuration",
+		Success: ok((*ConfigHealth)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/tenant/config/test-connection", OperationID: "post_tenant_config_test_connection", Tag: "configuration",
+		Request: jsonBody((*ConfigConnectionTestRequest)(nil)), Success: ok((*ConfigConnectionTestResult)(nil)), Errors: commonErrors},
 
 	// knowledge bases
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases", OperationID: "get_knowledge_bases", Tag: "knowledge-bases",
@@ -145,7 +153,7 @@ var Routes = []Route{
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/configuration", OperationID: "get_knowledge_bases_id_configuration", Tag: "knowledge-bases",
 		Success: ok((*KnowledgeBaseConfiguration)(nil)), Errors: commonErrors},
 	{Method: http.MethodPut, Path: "/api/v1/knowledge-bases/{id}/retrieval-config", OperationID: "put_knowledge_bases_id_retrieval_config", Tag: "knowledge-bases",
-		Request: jsonBody((*RetrievalConfigOverride)(nil)), Success: ok((*KnowledgeBaseConfiguration)(nil)), Errors: commonErrors},
+		Request: jsonBody((*RetrievalConfigUpdateRequest)(nil)), Success: ok((*KnowledgeBaseConfiguration)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/members", OperationID: "get_knowledge_bases_id_members", Tag: "knowledge-bases",
 		Success: ok((*KnowledgeBaseMemberList)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/members", OperationID: "post_knowledge_bases_id_members", Tag: "knowledge-bases",

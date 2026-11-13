@@ -1208,6 +1208,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenant/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/tenant/config */
+        get: operations["get_tenant_config"];
+        /** PUT /api/v1/tenant/config */
+        put: operations["put_tenant_config"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenant/config/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/tenant/config/health */
+        get: operations["get_tenant_config_health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenant/config/test-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/tenant/config/test-connection */
+        post: operations["post_tenant_config_test_connection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenant/members": {
         parameters: {
             query?: never;
@@ -1481,6 +1533,71 @@ export interface components {
             rank?: number;
             score?: number;
             sourcePath?: string;
+        };
+        ConfigConnectionTestRequest: {
+            capability: string;
+            providerId?: string;
+        };
+        ConfigConnectionTestResult: {
+            /** Format: date-time */
+            checkedAt?: string;
+            dimension?: number;
+            error?: string;
+            healthy?: boolean;
+        };
+        ConfigDomain: {
+            deploymentDefaults?: {
+                [key: string]: unknown;
+            };
+            effective?: {
+                [key: string]: unknown;
+            };
+            fields?: {
+                [key: string]: components["schemas"]["ConfigFieldState"];
+            };
+            schema: components["schemas"]["ConfigFieldDefinition"][];
+            tenantOverride?: {
+                [key: string]: unknown;
+            };
+        };
+        ConfigFieldDefinition: {
+            applyMode: string;
+            default?: unknown;
+            descriptionKey?: string;
+            domain: string;
+            group?: string;
+            key: string;
+            kind: string;
+            labelKey?: string;
+            max?: number;
+            min?: number;
+            sensitivity?: string;
+            step?: number;
+            unitKey?: string;
+        };
+        ConfigFieldState: {
+            applyMode: string;
+            default?: unknown;
+            deployment?: unknown;
+            source: string;
+            value?: unknown;
+        };
+        ConfigHealth: {
+            checks: components["schemas"]["ConfigHealthCheck"][];
+            /** Format: date-time */
+            generatedAt?: string;
+            highRisk?: number;
+            status?: string;
+        };
+        ConfigHealthCheck: {
+            /** Format: date-time */
+            checkedAt?: string;
+            detail?: string;
+            id?: string;
+            remediation?: string;
+            severity?: string;
+            status?: string;
+            summary?: string;
         };
         Connector: {
             config?: components["schemas"]["ConnectorConfig"];
@@ -2310,13 +2427,21 @@ export interface components {
             vector_oversample?: number;
             vector_threshold?: number;
         };
+        RetrievalConfigUpdateRequest: {
+            [key: string]: unknown;
+        };
         RetrievalConfiguration: {
             effective?: components["schemas"]["RetrievalParams"];
+            fields?: {
+                [key: string]: components["schemas"]["ConfigFieldState"];
+            };
             globalDefaults?: components["schemas"]["RetrievalParams"];
             knowledgeBaseOverride?: components["schemas"]["RetrievalConfigOverride"];
+            schema?: components["schemas"]["ConfigFieldDefinition"][];
             sources?: {
                 [key: string]: string;
             };
+            tenantOverride?: components["schemas"]["RetrievalConfigOverride"];
         };
         RetrievalParams: {
             adjacent_expansion?: number;
@@ -2427,6 +2552,19 @@ export interface components {
             pipeline?: components["schemas"]["PipelineRun"];
             stage?: components["schemas"]["StageRun"];
             task: unknown;
+        };
+        TenantConfiguration: {
+            chunking?: components["schemas"]["ConfigDomain"];
+            retrieval?: components["schemas"]["ConfigDomain"];
+            schemaVersion?: string;
+        };
+        TenantConfigurationUpdateRequest: {
+            chunking?: {
+                [key: string]: unknown;
+            };
+            retrieval?: {
+                [key: string]: unknown;
+            };
         };
         TenantMember: {
             displayName?: string;
@@ -4118,7 +4256,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RetrievalConfigOverride"];
+                "application/json": components["schemas"]["RetrievalConfigUpdateRequest"];
             };
         };
         responses: {
@@ -4791,6 +4929,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantOverview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_tenant_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantConfiguration"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    put_tenant_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantConfigurationUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantConfiguration"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_tenant_config_health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigHealth"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_tenant_config_test_connection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigConnectionTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigConnectionTestResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

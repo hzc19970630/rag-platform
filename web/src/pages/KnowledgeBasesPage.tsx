@@ -10,6 +10,7 @@ import type { KnowledgeBase } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
+import { SetupWizard } from "../features/onboarding/SetupWizard";
 import { usePermissions } from "../session";
 import { formatTime, parseIndexingStrategy } from "../utils/format";
 
@@ -26,6 +27,7 @@ export function KnowledgeBasesPage() {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("updated");
   const [createOpen, setCreateOpen] = useState(params.get("new") === "1");
+  const [wizardOpen, setWizardOpen] = useState(params.get("setup") === "1");
   const [creating, setCreating] = useState(false);
   const [form] = Form.useForm<{ name: string; description?: string }>();
 
@@ -99,6 +101,9 @@ export function KnowledgeBasesPage() {
         ]}
         style={{ width: 140 }}
       />
+      {canWrite && (
+        <Button onClick={() => setWizardOpen(true)}>{t("setup.open")}</Button>
+      )}
       {canWrite && (
         <Button data-testid="kb-create-open" type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
           {t("knowledgeBase.new")}
@@ -200,6 +205,7 @@ export function KnowledgeBasesPage() {
           </Form.Item>
         </Form>
       </Modal>
+      <SetupWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }

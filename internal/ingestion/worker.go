@@ -31,16 +31,30 @@ const (
 var DefaultChunking = NewRuneChunker(RuneChunkerOptions{Size: 900, Overlap: 120})
 
 type PipelineWorker struct {
-	db          *gorm.DB
-	objects     ObjectStore
-	reader      DocumentReader
-	embedder    Embedder
-	indexWriter EvidenceIndexWriter
-	chunker     Chunker
-	timeout     time.Duration
-	projection  ProjectionTrigger
-	leaseOwner  inboxlease.Owner
-	leaseTTL    time.Duration
+	db               *gorm.DB
+	objects          ObjectStore
+	reader           DocumentReader
+	embedder         Embedder
+	indexWriter      EvidenceIndexWriter
+	chunker          Chunker
+	chunkingResolver ChunkingResolver
+	timeout          time.Duration
+	projection       ProjectionTrigger
+	leaseOwner       inboxlease.Owner
+	leaseTTL         time.Duration
+}
+
+// ChunkingResolver resolves the chunking policy for one tenant. The worker
+// calls it per document, so a policy change applies to the next ingestion
+// without rewriting existing chunks.
+type ChunkingResolver interface {
+	ChunkerForTenant(ctx context.Context, tenantID string) (Chunker, error)
+}
+
+// SetChunkingResolver wires the tenant-aware chunking policy. A nil resolver
+// keeps the single policy passed to NewPipelineWorker.
+func (w *PipelineWorker) SetChunkingResolver(resolver ChunkingResolver) {
+	w.chunkingResolver = resolver
 }
 
 func (w *PipelineWorker) runtime() *pipeline.Runtime {
@@ -291,12 +305,22 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	if err != nil {
 		return err
 	}
+	chunker := w.chunker
+	if w.chunkingResolver != nil {
+		resolved, err := w.chunkingResolver.ChunkerForTenant(ctx, version.TenantID)
+		if err != nil {
+			return fmt.Errorf("resolve chunking policy: %w", err)
+		}
+		if resolved != nil {
+			chunker = resolved
+		}
+	}
 	rows := make([]chunkRow, 0, len(normalized.Blocks)*2)
 	childOrdinal := 0
 	for blockIndex, block := range normalized.Blocks {
 		parentID := stableID("parent", version.ID, fmt.Sprint(blockIndex), block.Text)
 		rows = append(rows, chunkRow{ID: parentID, Content: block.Text, ContentHash: hashString(block.Text), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: blockIndex})
-		for _, content := range w.chunker.Split(block.Text) {
+		for _, content := range chunker.Split(block.Text) {
 			content = cleanText(content)
 			if content == "" {
 				continue

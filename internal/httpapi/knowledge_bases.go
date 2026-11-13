@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/hzc19970630/rag-platform/contracts/httpapi"
 	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/configschema"
 	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
 
@@ -48,8 +50,29 @@ func RegisterKnowledgeBaseRoutes(protected *gin.RouterGroup, cfg config.Config, 
 		c.JSON(http.StatusOK, views.KnowledgeBase(row))
 	})
 	byID.PATCH("", func(c *gin.Context) {
+		raw, err := c.GetRawData()
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		// The PATCH body may carry a retrieval_config object. Validate its keys
+		// against the schema before binding, so an unknown parameter is rejected
+		// instead of silently dropped by encoding/json.
+		var probe struct {
+			RetrievalConfig map[string]json.RawMessage `json:"retrieval_config"`
+		}
+		if err := json.Unmarshal(raw, &probe); err != nil {
+			writeError(c, err)
+			return
+		}
+		if probe.RetrievalConfig != nil {
+			if err := configschema.Validate(configschema.DomainRetrieval, probe.RetrievalConfig); err != nil {
+				writeError(c, err)
+				return
+			}
+		}
 		var input httpapi.KnowledgeBaseUpdateRequest
-		if err := c.ShouldBindJSON(&input); err != nil {
+		if err := json.Unmarshal(raw, &input); err != nil {
 			writeError(c, err)
 			return
 		}

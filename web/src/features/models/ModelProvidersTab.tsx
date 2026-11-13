@@ -1,11 +1,11 @@
 import { DeleteOutlined, EditOutlined, ExperimentOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Drawer, Flex, Input, InputNumber, Select, Switch, Table, Tag, Typography, type TableColumnsType } from "antd";
+import { Alert, App, Button, Card, Drawer, Flex, Input, InputNumber, Select, Space, Switch, Table, Tag, Typography, type TableColumnsType } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, jsonInit } from "../../api/client";
-import { queryKeys, useModelProviders } from "../../api/hooks";
-import type { ModelProvider, ModelProviderTestResult, ModelProviderUpsertRequest } from "../../api/types";
+import { queryKeys, useModelCatalog, useModelProviders } from "../../api/hooks";
+import type { ModelCatalogEntry, ModelProvider, ModelProviderTestResult, ModelProviderUpsertRequest } from "../../api/types";
 
 export type DraftModel = {
   model: string;
@@ -67,11 +67,19 @@ export function buildProviderRequest(draft: Draft): ModelProviderUpsertRequest {
   };
 }
 
+// deploymentCatalog exposes only the models registered from env/YAML. They are
+// merged into the catalog so knowledge bases can inherit them, but they are not
+// tenant provider rows and must not be editable from the provider page.
+export function deploymentCatalog(items: ModelCatalogEntry[]): ModelCatalogEntry[] {
+  return items.filter((entry) => entry.source === "deployment");
+}
+
 export function ModelProvidersTab() {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const providers = useModelProviders();
+  const catalog = useModelCatalog();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -160,9 +168,42 @@ export function ModelProvidersTab() {
     });
   }
 
-  const columns: TableColumnsType<ModelProvider> = [
-    { title: t("admin.modelProviders.name"), dataIndex: "name", key: "name" },
+  const deploymentModels = deploymentCatalog(catalog.data ?? []);
+  const deploymentColumns: TableColumnsType<ModelCatalogEntry> = [
     {
+      title: t("admin.modelProviders.capability"), dataIndex: "capability", key: "capability", width: 130,
+      render: (value: string) => (
+        <Tag>
+          {value === "embedding"
+            ? t("admin.modelProviders.capabilityEmbedding")
+            : value === "rerank"
+              ? t("admin.modelProviders.capabilityRerank")
+              : t("admin.modelProviders.capabilityChat")}
+        </Tag>
+      ),
+    },
+    {
+      title: t("admin.modelProviders.model"), key: "model",
+      render: (_, entry) => (
+        <Flex vertical gap={0}>
+          <Typography.Text strong>{entry.model}</Typography.Text>
+          <Typography.Text type="secondary">{entry.provider}</Typography.Text>
+        </Flex>
+      ),
+    },
+    { title: t("admin.modelProviders.version"), dataIndex: "version", key: "version", width: 130, render: (value: string) => value || "deployment" },
+    {
+      title: t("admin.modelProviders.dimension"), dataIndex: "dimension", key: "dimension", width: 110,
+      render: (value: number, entry) => (entry.capability === "embedding" && value > 0 ? value : "—"),
+    },
+    {
+      title: t("admin.modelProviders.status"), key: "status", width: 120,
+      render: () => <Tag color="blue">{t("admin.modelProviders.deploymentSource")}</Tag>,
+    },
+  ];
+
+  const columns: TableColumnsType<ModelProvider> = [
+    { title: t("admin.modelProviders.name"), dataIndex: "name", key: "name" },    {
       title: t("admin.modelProviders.kind"), dataIndex: "kind", key: "kind", width: 150,
       render: (value: string) => <Tag>{value === "ollama" ? t("admin.modelProviders.kindOllama") : t("admin.modelProviders.kindOpenAI")}</Tag>,
     },
@@ -199,6 +240,24 @@ export function ModelProvidersTab() {
           <Button type="primary" icon={<PlusOutlined />} onClick={startCreate}>{t("admin.modelProviders.add")}</Button>
         </Flex>
       </Flex>
+      <Card
+        size="small"
+        className="deployment-models-card"
+        title={<Space size={8}><Typography.Text strong>{t("admin.modelProviders.deploymentTitle")}</Typography.Text><Tag color="blue">{t("admin.modelProviders.deploymentReadOnly")}</Tag></Space>}
+        extra={<Typography.Text type="secondary">{t("admin.modelProviders.deploymentHint")}</Typography.Text>}
+        style={{ marginBottom: 16 }}
+      >
+        {catalog.error && <Alert type="error" showIcon message={t("admin.modelProviders.deploymentLoadFailed")} description={catalog.error.message} style={{ marginBottom: 12 }} />}
+        <Table
+          rowKey={(entry) => `${entry.model}:${entry.capability}`}
+          size="small"
+          columns={deploymentColumns}
+          dataSource={deploymentModels}
+          loading={catalog.isLoading}
+          pagination={false}
+          locale={{ emptyText: t("admin.modelProviders.deploymentEmpty") }}
+        />
+      </Card>
       <Table rowKey="id" size="small" columns={columns} dataSource={providers.data ?? []} loading={providers.isLoading} pagination={false} />
 
       <Drawer

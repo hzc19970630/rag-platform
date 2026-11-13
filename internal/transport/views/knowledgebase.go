@@ -107,9 +107,12 @@ func ModelBinding(view knowledgebase.ModelBindingV1) httpapi.ModelBinding {
 func RetrievalConfiguration(view knowledgebase.RetrievalConfigurationV1) httpapi.RetrievalConfiguration {
 	return httpapi.RetrievalConfiguration{
 		GlobalDefaults:        RetrievalParams(view.GlobalDefaults),
+		TenantOverride:        RetrievalOverride(view.TenantOverride),
 		KnowledgeBaseOverride: RetrievalOverride(view.KnowledgeBaseOverride),
 		Effective:             RetrievalParams(view.Effective),
 		Sources:               cloneMap(view.Sources),
+		Schema:                ConfigFieldDefinitions(view.Schema),
+		Fields:                ConfigFieldStates(view.Fields),
 	}
 }
 

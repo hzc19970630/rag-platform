@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 97
+const businessRouteCount = 101
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -175,13 +175,15 @@ func TestOpenAPIDocumentsMigratedRequestBodies(t *testing.T) {
 		"PATCH /api/v1/knowledge-bases/{id}":                           "KnowledgeBaseUpdateRequest",
 		"POST /api/v1/knowledge-bases/{id}/connectors":                 "ConnectorCreateRequest",
 		"POST /api/v1/knowledge-bases/{id}/members":                    "KnowledgeBaseMemberCreateRequest",
-		"PUT /api/v1/knowledge-bases/{id}/retrieval-config":            "RetrievalConfigOverride",
+		"PUT /api/v1/knowledge-bases/{id}/retrieval-config":            "RetrievalConfigUpdateRequest",
 		"POST /api/v1/search":                                          "SearchRequest",
 		"POST /api/v1/sessions":                                        "ConversationCreateRequest",
 		"POST /api/v1/sessions/{id}/messages":                          "MessageCreateRequest",
 		"POST /api/v1/tenant/members":                                  "TenantMemberCreateRequest",
 		"PATCH /api/v1/tenant/members/{userID}":                        "TenantMemberUpdateRequest",
 		"PATCH /api/v1/tenant/quota":                                   "TenantQuotaUpdateRequest",
+		"PUT /api/v1/tenant/config":                                    "TenantConfigurationUpdateRequest",
+		"POST /api/v1/tenant/config/test-connection":                   "ConfigConnectionTestRequest",
 		"POST /api/v1/wiki/pages/{pageId}/rollback":                    "WikiRollbackRequest",
 		"POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review": "WikiReviewRequest",
 	}

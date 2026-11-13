@@ -16,11 +16,16 @@ type User struct {
 func (User) TableName() string { return "users" }
 
 type Tenant struct {
-	ID        string    `gorm:"primaryKey;size:64" json:"id"`
-	Name      string    `gorm:"size:255;not null" json:"name"`
-	Quota     string    `gorm:"type:jsonb;not null;default:'{}'" json:"quota"`
-	CreatedAt time.Time `gorm:"not null" json:"createdAt"`
-	UpdatedAt time.Time `gorm:"not null" json:"updatedAt"`
+	ID    string `gorm:"primaryKey;size:64" json:"id"`
+	Name  string `gorm:"size:255;not null" json:"name"`
+	Quota string `gorm:"type:jsonb;not null;default:'{}'" json:"quota"`
+	// RetrievalConfig and ChunkingConfig are the tenant tier of the business
+	// configuration chain. They are business policy, so they live in the
+	// database rather than env; deployment connection settings stay in config.
+	RetrievalConfig string    `gorm:"type:jsonb;not null;default:'{}'" json:"-"`
+	ChunkingConfig  string    `gorm:"type:jsonb;not null;default:'{}'" json:"-"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"not null" json:"updatedAt"`
 }
 
 func (Tenant) TableName() string { return "tenants" }

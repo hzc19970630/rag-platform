@@ -1,59 +1,73 @@
 import { describe, expect, it } from "vitest";
-import {
-  booleanFields,
-  buildOverride,
-  fieldError,
-  normalizedStrategy,
-  numericFields,
-} from "./retrievalFields";
-import { strategyFixture } from "../../test/fixtures";
+import { normalizedStrategy } from "./retrievalFields";
+import { buildOverride, fieldError, initialValues, isDirty } from "./schemaForm";
+import { configDomainFixture, strategyFixture } from "../../test/fixtures";
 
-function field(key: string) {
-  const found = numericFields.find((item) => item.key === key);
-  if (!found) throw new Error(`missing numeric field ${key}`);
+function schemaField(key: string) {
+  const found = configDomainFixture().schema.find((item) => item.key === key);
+  if (!found) throw new Error(`missing schema field ${key}`);
   return found;
 }
 
-describe("retrieval field validation", () => {
+describe("schema field validation", () => {
   it("treats an empty value as inherited rather than invalid", () => {
-    expect(fieldError(field("top_k"), null)).toBeUndefined();
+    expect(fieldError(schemaField("top_k"), null)).toBeUndefined();
   });
 
   it("rejects fractional integers, non-positive values and out-of-range values", () => {
-    expect(fieldError(field("top_k"), 1.5)).toBe("integer");
-    expect(fieldError(field("context_token_limit"), 0)).toBe("positive");
-    expect(fieldError(field("vector_threshold"), 1.2)).toBe("range");
-    expect(fieldError(field("rerank_threshold"), -11)).toBe("range");
-    expect(fieldError(field("top_k"), 10)).toBeUndefined();
+    expect(fieldError(schemaField("top_k"), 1.5)).toBe("integer");
+    expect(fieldError(schemaField("context_token_limit"), 0)).toBe("positive");
+    expect(fieldError(schemaField("vector_threshold"), 1.2)).toBe("range");
+    expect(fieldError(schemaField("rerank_threshold"), -11)).toBe("range");
+    expect(fieldError(schemaField("top_k"), 10)).toBeUndefined();
   });
 
   it("keeps ef_search at zero valid and rejects an out-of-range oversample", () => {
-    expect(fieldError(field("vector_ef_search"), 0)).toBeUndefined();
-    expect(fieldError(field("vector_ef_search"), 1001)).toBe("range");
-    expect(fieldError(field("vector_oversample"), 0)).toBe("range");
-    expect(fieldError(field("vector_oversample"), 21)).toBe("range");
-    expect(fieldError(field("vector_oversample"), 4)).toBeUndefined();
+    expect(fieldError(schemaField("vector_ef_search"), 0)).toBeUndefined();
+    expect(fieldError(schemaField("vector_ef_search"), 1001)).toBe("range");
+    expect(fieldError(schemaField("vector_oversample"), 0)).toBe("range");
+    expect(fieldError(schemaField("vector_oversample"), 21)).toBe("range");
+    expect(fieldError(schemaField("vector_oversample"), 4)).toBeUndefined();
   });
 });
 
-describe("retrieval override serialization", () => {
+describe("schema-driven override serialization", () => {
   it("omits inherited values but keeps an explicit zero", () => {
-    const numbers = Object.fromEntries(numericFields.map((item) => [item.key, null])) as Record<string, number | null>;
-    numbers.top_k = 0;
-    const booleans = Object.fromEntries(booleanFields.map((item) => [item.key, ""])) as Record<string, "" | "true" | "false">;
-    expect(buildOverride(numbers, booleans)).toEqual({ top_k: 0 });
+    const domain = configDomainFixture();
+    const values = initialValues(domain, {});
+    values.top_k = 0;
+    expect(buildOverride(domain, values)).toEqual({ top_k: 0 });
   });
 
   it("returns an empty object when every field is inherited so PUT clears overrides", () => {
-    const numbers = Object.fromEntries(numericFields.map((item) => [item.key, null])) as Record<string, number | null>;
-    const booleans = Object.fromEntries(booleanFields.map((item) => [item.key, ""])) as Record<string, "" | "true" | "false">;
-    expect(buildOverride(numbers, booleans)).toEqual({});
+    const domain = configDomainFixture();
+    expect(buildOverride(domain, initialValues(domain, {}))).toEqual({});
   });
 
-  it("includes a boolean only when it is explicitly overridden", () => {
-    const numbers = Object.fromEntries(numericFields.map((item) => [item.key, null])) as Record<string, number | null>;
-    expect(buildOverride(numbers, { rerank_enabled: "false" })).toEqual({ rerank_enabled: false });
-    expect(buildOverride(numbers, { rerank_enabled: "true" })).toEqual({ rerank_enabled: true });
+  it("includes a boolean and a string list only when explicitly overridden", () => {
+    const domain = configDomainFixture();
+    domain.schema = [...domain.schema, {
+      key: "split_markers",
+      domain: "chunking",
+      group: "chunking",
+      kind: "string_list",
+      default: ["\n\n"],
+      applyMode: "next_ingest",
+      sensitivity: "normal",
+      labelKey: "chunking.splitMarkers",
+    }];
+    const values = initialValues(domain, {});
+    values.rerank_enabled = false;
+    values.split_markers = ["\n\n"];
+    expect(buildOverride(domain, values)).toEqual({ rerank_enabled: false, split_markers: ["\n\n"] });
+  });
+
+  it("detects dirty state against the stored override", () => {
+    const domain = configDomainFixture();
+    const values = initialValues(domain, { top_k: 5 });
+    expect(isDirty(domain, { top_k: 5 }, values)).toBe(false);
+    values.top_k = 6;
+    expect(isDirty(domain, { top_k: 5 }, values)).toBe(true);
   });
 });
 

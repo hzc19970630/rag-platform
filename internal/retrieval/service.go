@@ -51,10 +51,17 @@ type Service struct {
 	authz         Authorizer
 	join          KnowledgeJoin
 	defaults      Params
+	tenantParams  TenantParamsResolver
 	planner       Planner
 	rewriter      Rewriter
 	executor      *PlanExecutor
 	metrics       metrics.Recorder
+}
+
+// TenantParamsResolver loads the tenant tier of the retrieval override chain.
+// It is optional: tests and single-tenant fixtures keep the deployment tier.
+type TenantParamsResolver interface {
+	TenantRetrievalOverride(ctx context.Context, tenantID string) (string, error)
 }
 
 type Options struct {
@@ -73,9 +80,12 @@ type Options struct {
 	Authz         Authorizer
 	Join          KnowledgeJoin
 	Defaults      Params
-	Planner       Planner
-	Rewriter      Rewriter
-	Metrics       metrics.Recorder
+	// TenantParams resolves the tenant tier. Nil leaves the deployment plus
+	// knowledge-base tiers, which is what unit tests and fixtures use.
+	TenantParams TenantParamsResolver
+	Planner      Planner
+	Rewriter     Rewriter
+	Metrics      metrics.Recorder
 	// Channels and Fusions extend the default keyword/vector + RRF setup. The
 	// retrieval service only registers them; the plan chooses what runs.
 	Channels []RecallChannel
@@ -115,6 +125,7 @@ func NewService(options Options) *Service {
 		authz:         options.Authz,
 		join:          options.Join,
 		defaults:      options.Defaults,
+		tenantParams:  options.TenantParams,
 		planner:       planner,
 		rewriter:      rewriter,
 		metrics:       recorder,
@@ -471,7 +482,15 @@ func (s *Service) resolveConfig(ctx context.Context, scope authz.AuthorizationSc
 		}
 		strategy = parsed
 	}
-	params, err := ResolveParams(s.defaults, knowledgeBaseRaw, input.SessionOverride)
+	tenantRaw := ""
+	if s.tenantParams != nil {
+		raw, err := s.tenantParams.TenantRetrievalOverride(ctx, scope.TenantID)
+		if err != nil {
+			return IndexingStrategy{}, Params{}, err
+		}
+		tenantRaw = raw
+	}
+	params, err := ResolveParamsWithTenant(s.defaults, tenantRaw, knowledgeBaseRaw, input.SessionOverride)
 	if err != nil {
 		return IndexingStrategy{}, Params{}, err
 	}

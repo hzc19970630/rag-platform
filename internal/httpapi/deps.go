@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/confighealth"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
 	"github.com/hzc19970630/rag-platform/internal/datasource"
 	"github.com/hzc19970630/rag-platform/internal/identity"
@@ -15,6 +16,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/ratelimit"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/tenant"
+	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
 	"gorm.io/gorm"
 )
 
@@ -50,6 +52,13 @@ type ProjectionDeps struct {
 
 type TenantDeps struct {
 	Tenant *tenant.Service
+}
+
+// ConfigurationDeps owns the tenant business configuration surface (the
+// deployment tier lives in env/YAML and is read-only to the API).
+type ConfigurationDeps struct {
+	TenantConfig *tenantconfig.Service
+	Health       *confighealth.Service
 }
 
 // ModelDeps owns the tenant model catalog: provider CRUD and the merged
@@ -93,6 +102,8 @@ type RouteDeps struct {
 	Projection    *knowledgeprojection.Service
 	Ops           *ops.Service
 	Tenant        *tenant.Service
+	TenantConfig  *tenantconfig.Service
+	ConfigHealth  *confighealth.Service
 	Queue         *queue.Publisher
 	Tasks         *ingestion.TaskInspector
 	Metrics       *observability.Registry

@@ -154,7 +154,7 @@ func (r *Registry) ListCatalog(ctx context.Context, tenantID string) ([]CatalogM
 		for _, capability := range entry.Capabilities {
 			result = append(result, CatalogModel{
 				Provider: entry.Provider, Model: entry.Name, DisplayName: entry.Name,
-				Capability: capability, Version: entry.Version, Source: "deployment", Enabled: true,
+				Capability: capability, Version: entry.Version, Dimension: entry.Dimension, Source: "deployment", Enabled: true,
 			})
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/configschema"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
@@ -69,10 +70,13 @@ type RetrievalParamsV1 struct {
 }
 
 type RetrievalConfigurationV1 struct {
-	GlobalDefaults        RetrievalParamsV1        `json:"globalDefaults"`
-	KnowledgeBaseOverride retrieval.ParamsOverride `json:"knowledgeBaseOverride"`
-	Effective             RetrievalParamsV1        `json:"effective"`
-	Sources               map[string]string        `json:"sources"`
+	GlobalDefaults        RetrievalParamsV1             `json:"globalDefaults"`
+	TenantOverride        retrieval.ParamsOverride      `json:"tenantOverride"`
+	KnowledgeBaseOverride retrieval.ParamsOverride      `json:"knowledgeBaseOverride"`
+	Effective             RetrievalParamsV1             `json:"effective"`
+	Sources               map[string]string             `json:"sources"`
+	Schema                []configschema.Field          `json:"schema"`
+	Fields                map[string]configschema.State `json:"fields"`
 }
 
 type ReadOnlyEmbeddingV1 struct {
@@ -138,6 +142,14 @@ func ReadOnlySystemConfiguration(cfg config.Config) ReadOnlySystemConfigurationV
 }
 
 func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, defaults config.RetrievalConfig, readOnly ReadOnlySystemConfigurationV1) (KnowledgeBaseConfigurationV1, error) {
+	tier := configschema.NewTier(config.RetrievalValues(defaults), map[string]bool{})
+	return BuildKnowledgeBaseConfigurationWithTenant(knowledgeBase, defaults, "", tier, readOnly)
+}
+
+// BuildKnowledgeBaseConfigurationWithTenant resolves the full chain: schema
+// defaults, deployment YAML, tenant override, knowledge-base override. The
+// per-field state reports where each effective value came from.
+func BuildKnowledgeBaseConfigurationWithTenant(knowledgeBase models.KnowledgeBase, defaults config.RetrievalConfig, tenantRaw string, deployment configschema.Tier, readOnly ReadOnlySystemConfigurationV1) (KnowledgeBaseConfigurationV1, error) {
 	strategy, err := retrieval.ParseIndexingStrategy(knowledgeBase.IndexingStrategy)
 	if err != nil {
 		return KnowledgeBaseConfigurationV1{}, err
@@ -146,10 +158,36 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 	if err != nil {
 		return KnowledgeBaseConfigurationV1{}, err
 	}
-	resolvedDefaults := retrievalParamsFromConfig(defaults)
-	effective, err := retrieval.ResolveParams(resolvedDefaults, knowledgeBase.RetrievalConfig, "")
+	tenantOverride, err := retrieval.ParseOverride(tenantRaw)
 	if err != nil {
 		return KnowledgeBaseConfigurationV1{}, err
+	}
+	resolvedDefaults := retrievalParamsFromConfig(defaults)
+	effective, err := retrieval.ResolveParamsWithTenant(resolvedDefaults, tenantRaw, knowledgeBase.RetrievalConfig, "")
+	if err != nil {
+		return KnowledgeBaseConfigurationV1{}, err
+	}
+	tenantValues, err := rawObject(tenantRaw)
+	if err != nil {
+		return KnowledgeBaseConfigurationV1{}, err
+	}
+	knowledgeBaseValues, err := rawObject(knowledgeBase.RetrievalConfig)
+	if err != nil {
+		return KnowledgeBaseConfigurationV1{}, err
+	}
+	fields := configschema.Resolve(configschema.DomainRetrieval, deployment, tenantValues, knowledgeBaseValues, nil)
+	sources := make(map[string]string, len(fields))
+	for key, state := range fields {
+		// The legacy map keeps its two-way meaning (inherited vs overridden) for
+		// older clients; the per-field Fields map carries the precise tier.
+		switch state.Source {
+		case configschema.SourceKnowledgeBase:
+			sources[key] = retrievalSourceKnowledgeBase
+		case configschema.SourceTenant:
+			sources[key] = "tenant"
+		default:
+			sources[key] = retrievalSourceGlobal
+		}
 	}
 	// The read-only surface reports the knowledge-base binding when one exists;
 	// empty means the deployment default already in readOnly.
@@ -176,13 +214,27 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 		IndexingStrategy: strategy,
 		Retrieval: RetrievalConfigurationV1{
 			GlobalDefaults:        retrievalParamsView(resolvedDefaults),
+			TenantOverride:        tenantOverride,
 			KnowledgeBaseOverride: override,
 			Effective:             retrievalParamsView(effective),
-			Sources:               retrievalSources(override),
+			Sources:               sources,
+			Schema:                configschema.FieldsFor(configschema.DomainRetrieval),
+			Fields:                fields,
 		},
 		ModelBinding: binding,
 		ReadOnly:     readOnly,
 	}, nil
+}
+
+func rawObject(raw string) (map[string]json.RawMessage, error) {
+	if strings.TrimSpace(raw) == "" || strings.TrimSpace(raw) == "{}" {
+		return map[string]json.RawMessage{}, nil
+	}
+	var values map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return nil, fmt.Errorf("decode retrieval override: %w", err)
+	}
+	return values, nil
 }
 
 func modelBindingEntry(boundModel, boundVersion, deploymentModel string) ModelBindingEntryV1 {
@@ -227,35 +279,14 @@ func retrievalParamsView(params retrieval.Params) RetrievalParamsV1 {
 	}
 }
 
-func retrievalSources(override retrieval.ParamsOverride) map[string]string {
-	sources := map[string]string{}
-	set := func(name string, overridden bool) {
-		if overridden {
-			sources[name] = retrievalSourceKnowledgeBase
-			return
-		}
-		sources[name] = retrievalSourceGlobal
-	}
-	set("top_k", override.TopK != nil)
-	set("embedding_top_k", override.EmbeddingTopK != nil)
-	set("keyword_top_k", override.KeywordTopK != nil)
-	set("vector_threshold", override.VectorThreshold != nil)
-	set("keyword_threshold", override.KeywordThreshold != nil)
-	set("rerank_enabled", override.RerankEnabled != nil)
-	set("rerank_top_k", override.RerankTopK != nil)
-	set("rerank_threshold", override.RerankThreshold != nil)
-	set("vector_ef_search", override.VectorEFSearch != nil)
-	set("vector_oversample", override.VectorOversample != nil)
-	set("vector_iterative_scan", override.VectorIterativeScan != nil)
-	set("context_token_limit", override.ContextTokenLimit != nil)
-	set("adjacent_expansion", override.AdjacentExpansion != nil)
-	set("max_adjacent_chunks", override.MaxAdjacentChunks != nil)
-	set("rrf_k", override.RRFK != nil)
-	set("expansion_score_factor", override.ExpansionScoreFactor != nil)
-	return sources
+func (s *Service) Configuration(ctx context.Context, principal authz.Principal, id string, defaults config.RetrievalConfig, readOnly ReadOnlySystemConfigurationV1) (KnowledgeBaseConfigurationV1, error) {
+	tier := configschema.NewTier(config.RetrievalValues(defaults), map[string]bool{})
+	return s.ConfigurationWithTenant(ctx, principal, id, defaults, tier, readOnly)
 }
 
-func (s *Service) Configuration(ctx context.Context, principal authz.Principal, id string, defaults config.RetrievalConfig, readOnly ReadOnlySystemConfigurationV1) (KnowledgeBaseConfigurationV1, error) {
+// ConfigurationWithTenant includes the tenant tier and the deployment tier's
+// explicit keys in the per-field source report.
+func (s *Service) ConfigurationWithTenant(ctx context.Context, principal authz.Principal, id string, defaults config.RetrievalConfig, deployment configschema.Tier, readOnly ReadOnlySystemConfigurationV1) (KnowledgeBaseConfigurationV1, error) {
 	if _, err := s.authorizedScope(ctx, principal, id, "read"); err != nil {
 		return KnowledgeBaseConfigurationV1{}, err
 	}
@@ -266,7 +297,15 @@ func (s *Service) Configuration(ctx context.Context, principal authz.Principal, 
 		}
 		return KnowledgeBaseConfigurationV1{}, fmt.Errorf("load knowledge base configuration: %w", err)
 	}
-	return BuildKnowledgeBaseConfiguration(row, defaults, readOnly)
+	tenantRaw := ""
+	if s.tenantParams != nil {
+		raw, err := s.tenantParams.TenantRetrievalOverride(ctx, principal.TenantID)
+		if err != nil {
+			return KnowledgeBaseConfigurationV1{}, err
+		}
+		tenantRaw = raw
+	}
+	return BuildKnowledgeBaseConfigurationWithTenant(row, defaults, tenantRaw, deployment, readOnly)
 }
 
 // ReplaceRetrievalConfig applies whole-replacement semantics for the

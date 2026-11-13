@@ -5,6 +5,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
+  SettingOutlined,
   TeamOutlined,
   UserDeleteOutlined,
 } from "@ant-design/icons";
@@ -49,6 +50,7 @@ import type {
 } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { ModelProvidersTab } from "../features/models/ModelProvidersTab";
+import { TenantConfigurationTab } from "../features/settings/TenantConfigurationTab";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { usePermissions } from "../session";
 import { formatSize, formatTime } from "../utils/format";
@@ -619,6 +621,7 @@ export function AdminPage() {
           { key: "members", label: t("admin.tabs.members"), icon: <TeamOutlined />, children: membersContent },
           { key: "audit", label: t("admin.tabs.audit"), icon: <FileSearchOutlined />, children: auditContent },
           { key: "models", label: t("admin.tabs.models"), icon: <CloudServerOutlined />, children: <ModelProvidersTab /> },
+          { key: "configuration", label: t("admin.tabs.configuration"), icon: <SettingOutlined />, children: <TenantConfigurationTab /> },
         ]}
       />
 

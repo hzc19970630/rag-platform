@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/hzc19970630/rag-platform/internal/configschema"
 )
 
 // ChunkConfig describes how normalized document blocks are split. Documents
@@ -24,16 +26,12 @@ type ChunkConfig struct {
 }
 
 func (c ChunkConfig) Validate() error {
-	if c.Size <= 0 {
-		return fmt.Errorf("CHUNK_SIZE must be a positive integer")
-	}
-	if c.Overlap < 0 || c.Overlap >= c.Size {
-		return fmt.Errorf("CHUNK_OVERLAP must be at least 0 and smaller than CHUNK_SIZE")
-	}
-	if c.MinSize < 0 || c.MinSize >= c.Size {
-		return fmt.Errorf("CHUNK_MIN_SIZE must be at least 0 and smaller than CHUNK_SIZE")
-	}
-	return nil
+	return configschema.ValidateNative(configschema.DomainChunking, map[string]any{
+		"size":          c.Size,
+		"overlap":       c.Overlap,
+		"min_size":      c.MinSize,
+		"split_markers": c.Markers,
+	})
 }
 
 // EmbeddingConfig describes the embedding model used by the ingest pipeline.

@@ -1,5 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { buildProviderRequest, type Draft } from "./ModelProvidersTab";
+import { buildProviderRequest, deploymentCatalog, type Draft } from "./ModelProvidersTab";
+import type { ModelCatalogEntry } from "../../api/types";
+
+function catalogEntry(overrides: Partial<ModelCatalogEntry> = {}): ModelCatalogEntry {
+  return {
+    id: "",
+    providerId: "",
+    provider: "remote",
+    model: "chat-a",
+    displayName: "chat-a",
+    capability: "chat",
+    version: "deployment",
+    dimension: 0,
+    source: "deployment",
+    enabled: true,
+    ...overrides,
+  };
+}
 
 function draft(overrides: Partial<Draft> = {}): Draft {
   return {
@@ -14,6 +31,17 @@ function draft(overrides: Partial<Draft> = {}): Draft {
     ...overrides,
   };
 }
+
+describe("deploymentCatalog", () => {
+  it("keeps only env/YAML models and hides tenant provider entries", () => {
+    const items = [
+      catalogEntry({ model: "chat-env", capability: "chat", source: "deployment", dimension: 0 }),
+      catalogEntry({ model: "embed-env", capability: "embedding", source: "deployment", dimension: 1024 }),
+      catalogEntry({ id: "m1", providerId: "p1", model: "chat-tenant", provider: "tenant-a", source: "provider" }),
+    ];
+    expect(deploymentCatalog(items).map((entry) => entry.model)).toEqual(["chat-env", "embed-env"]);
+  });
+});
 
 describe("buildProviderRequest", () => {
   it("keeps the stored key when the field is blank and trims the endpoint", () => {

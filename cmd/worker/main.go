@@ -84,6 +84,7 @@ func main() {
 	chunker := ingestion.NewRuneChunker(ingestion.RuneChunkerOptions{Size: cfg.Chunk.Size, Overlap: cfg.Chunk.Overlap, Markers: cfg.Chunk.Markers, MinSize: cfg.Chunk.MinSize})
 	logger.Info("chunking_policy_ready", "strategy", chunker.Strategy(), "size", cfg.Chunk.Size, "overlap", cfg.Chunk.Overlap, "min_size", cfg.Chunk.MinSize, "markers", len(cfg.Chunk.Markers))
 	pipeline := ingestion.NewPipelineWorker(application.DB, application.Objects, application.Docreader, embedder, application.Index, chunker, time.Duration(cfg.TaskTimeoutSeconds)*time.Second)
+	pipeline.SetChunkingResolver(app.TenantChunkingResolver(application.TenantConfig))
 	pipeline.SetProjectionTrigger(application.Projection)
 
 	rootCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

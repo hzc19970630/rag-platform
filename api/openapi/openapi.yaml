@@ -232,6 +232,129 @@ components:
         sourcePath:
           type: string
       type: object
+    ConfigConnectionTestRequest:
+      properties:
+        capability:
+          type: string
+        providerId:
+          type: string
+      required:
+        - capability
+      type: object
+    ConfigConnectionTestResult:
+      properties:
+        checkedAt:
+          format: date-time
+          type: string
+        dimension:
+          type: integer
+        error:
+          type: string
+        healthy:
+          type: boolean
+      type: object
+    ConfigDomain:
+      properties:
+        deploymentDefaults:
+          additionalProperties: true
+          type: object
+        effective:
+          additionalProperties: true
+          type: object
+        fields:
+          additionalProperties:
+            $ref: '#/components/schemas/ConfigFieldState'
+          type: object
+        schema:
+          items:
+            $ref: '#/components/schemas/ConfigFieldDefinition'
+          type: array
+        tenantOverride:
+          additionalProperties: true
+          type: object
+      required:
+        - schema
+      type: object
+    ConfigFieldDefinition:
+      properties:
+        applyMode:
+          type: string
+        default: {}
+        descriptionKey:
+          type: string
+        domain:
+          type: string
+        group:
+          type: string
+        key:
+          type: string
+        kind:
+          type: string
+        labelKey:
+          type: string
+        max:
+          type: number
+        min:
+          type: number
+        sensitivity:
+          type: string
+        step:
+          type: number
+        unitKey:
+          type: string
+      required:
+        - applyMode
+        - domain
+        - key
+        - kind
+      type: object
+    ConfigFieldState:
+      properties:
+        applyMode:
+          type: string
+        default: {}
+        deployment: {}
+        source:
+          type: string
+        value: {}
+      required:
+        - applyMode
+        - source
+      type: object
+    ConfigHealth:
+      properties:
+        checks:
+          items:
+            $ref: '#/components/schemas/ConfigHealthCheck'
+          type: array
+        generatedAt:
+          format: date-time
+          type: string
+        highRisk:
+          type: integer
+        status:
+          type: string
+      required:
+        - checks
+      type: object
+    ConfigHealthCheck:
+      properties:
+        checkedAt:
+          format: date-time
+          type: string
+        detail:
+          type: string
+        id:
+          type: string
+        remediation:
+          type: string
+        severity:
+          type: string
+        status:
+          type: string
+        summary:
+          type: string
+      type: object
     Connector:
       properties:
         config:
@@ -1860,18 +1983,31 @@ components:
         vector_threshold:
           type: number
       type: object
+    RetrievalConfigUpdateRequest:
+      additionalProperties: true
+      type: object
     RetrievalConfiguration:
       properties:
         effective:
           $ref: '#/components/schemas/RetrievalParams'
+        fields:
+          additionalProperties:
+            $ref: '#/components/schemas/ConfigFieldState'
+          type: object
         globalDefaults:
           $ref: '#/components/schemas/RetrievalParams'
         knowledgeBaseOverride:
           $ref: '#/components/schemas/RetrievalConfigOverride'
+        schema:
+          items:
+            $ref: '#/components/schemas/ConfigFieldDefinition'
+          type: array
         sources:
           additionalProperties:
             type: string
           type: object
+        tenantOverride:
+          $ref: '#/components/schemas/RetrievalConfigOverride'
       type: object
     RetrievalParams:
       properties:
@@ -2086,6 +2222,24 @@ components:
         - mechanisms
         - outbox
         - task
+      type: object
+    TenantConfiguration:
+      properties:
+        chunking:
+          $ref: '#/components/schemas/ConfigDomain'
+        retrieval:
+          $ref: '#/components/schemas/ConfigDomain'
+        schemaVersion:
+          type: string
+      type: object
+    TenantConfigurationUpdateRequest:
+      properties:
+        chunking:
+          additionalProperties: true
+          type: object
+        retrieval:
+          additionalProperties: true
+          type: object
       type: object
     TenantMember:
       properties:
@@ -3917,7 +4071,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RetrievalConfigOverride'
+              $ref: '#/components/schemas/RetrievalConfigUpdateRequest'
         required: true
       responses:
         "200":
@@ -4573,6 +4727,101 @@ paths:
       summary: GET /api/v1/tenant
       tags:
         - tenant
+  /api/v1/tenant/config:
+    get:
+      operationId: get_tenant_config
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantConfiguration'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/tenant/config
+      tags:
+        - configuration
+    put:
+      operationId: put_tenant_config
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantConfigurationUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantConfiguration'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PUT /api/v1/tenant/config
+      tags:
+        - configuration
+  /api/v1/tenant/config/health:
+    get:
+      operationId: get_tenant_config_health
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigHealth'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/tenant/config/health
+      tags:
+        - configuration
+  /api/v1/tenant/config/test-connection:
+    post:
+      operationId: post_tenant_config_test_connection
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigConnectionTestRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigConnectionTestResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/tenant/config/test-connection
+      tags:
+        - configuration
   /api/v1/tenant/members:
     get:
       operationId: get_tenant_members
@@ -4934,6 +5183,7 @@ tags:
   - name: auth
   - name: identity
   - name: tenant
+  - name: configuration
   - name: knowledge-bases
   - name: documents
   - name: conversations

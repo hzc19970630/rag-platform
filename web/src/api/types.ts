@@ -223,11 +223,78 @@ export type RetrievalParamsV1 = {
 
 export type RetrievalOverride = Partial<RetrievalParamsV1>;
 
+export type ConfigFieldKind = "int" | "float" | "bool" | "string_list";
+
+export type ConfigFieldDefinition = {
+  key: string;
+  domain: string;
+  group: string;
+  kind: ConfigFieldKind;
+  default: unknown;
+  min?: number;
+  max?: number;
+  step?: number;
+  unitKey?: string;
+  applyMode: "next_retrieval" | "next_ingest" | string;
+  sensitivity: "normal" | "high" | string;
+  labelKey: string;
+  descriptionKey?: string;
+};
+
+export type ConfigFieldState = {
+  value: unknown;
+  default: unknown;
+  deployment?: unknown;
+  source: "default" | "deployment" | "tenant" | "knowledge_base" | "session" | string;
+  applyMode: string;
+};
+
+export type ConfigDomain = {
+  schema: ConfigFieldDefinition[];
+  deploymentDefaults: Record<string, unknown>;
+  tenantOverride: Record<string, unknown>;
+  effective: Record<string, unknown>;
+  fields: Record<string, ConfigFieldState>;
+};
+
+export type TenantConfiguration = {
+  schemaVersion: string;
+  retrieval: ConfigDomain;
+  chunking: ConfigDomain;
+};
+
+export type ConfigHealthCheck = {
+  id: string;
+  status: "ok" | "warning" | "error" | "unknown" | "skipped";
+  severity: "info" | "warning" | "high";
+  summary: string;
+  detail?: string;
+  remediation?: string;
+  checkedAt: string;
+};
+
+export type ConfigHealth = {
+  status: "ok" | "warning" | "error" | string;
+  highRisk: number;
+  checks: ConfigHealthCheck[];
+  generatedAt: string;
+};
+
+export type ConfigConnectionTestResult = {
+  healthy: boolean;
+  error?: string;
+  dimension?: number;
+  checkedAt: string;
+};
+
 type RetrievalConfigurationV1 = {
   globalDefaults: RetrievalParamsV1;
+  tenantOverride: RetrievalOverride;
   knowledgeBaseOverride: RetrievalOverride;
   effective: RetrievalParamsV1;
-  sources: Record<keyof RetrievalParamsV1, "global" | "knowledge_base">;
+  sources: Record<string, string>;
+  schema: ConfigFieldDefinition[];
+  fields: Record<string, ConfigFieldState>;
 };
 
 type ModelBindingEntryV1 = {

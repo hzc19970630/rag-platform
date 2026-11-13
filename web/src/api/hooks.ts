@@ -26,6 +26,8 @@ import type {
   TenantMember,
   TenantOverview,
   TenantQuota,
+  TenantConfiguration,
+  ConfigHealth,
 } from "./types";
 
 export const queryKeys = {
@@ -52,6 +54,8 @@ export const queryKeys = {
   tenantOverview: ["tenant", "overview"] as const,
   tenantQuota: ["tenant", "quota"] as const,
   tenantMembers: ["tenant", "members"] as const,
+  tenantConfig: ["tenant", "config"] as const,
+  configHealth: ["tenant", "config", "health"] as const,
   modelCatalog: ["models", "catalog"] as const,
   modelProviders: ["models", "providers"] as const,
   audit: (filters: AuditFilters) => ["audit", filters] as const,
@@ -251,6 +255,25 @@ export function useTenantQuota(enabled = true) {
     queryKey: queryKeys.tenantQuota,
     queryFn: () => api<TenantQuota>("/tenant/quota"),
     enabled,
+  });
+}
+
+export function useTenantConfiguration(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tenantConfig,
+    queryFn: () => api<TenantConfiguration>("/tenant/config"),
+    enabled,
+  });
+}
+
+// The health endpoint probes model endpoints, so it is fetched on demand and
+// refreshed explicitly rather than on a short polling interval.
+export function useConfigHealth(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.configHealth,
+    queryFn: () => api<ConfigHealth>("/tenant/config/health"),
+    enabled,
+    staleTime: 0,
   });
 }
 

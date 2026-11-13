@@ -7,6 +7,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/confighealth"
 	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/contracts/projectioncache"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
@@ -34,6 +35,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/prompts"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/tenant"
+	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
 	"gorm.io/gorm"
 )
 
@@ -58,6 +60,8 @@ type Application struct {
 	Prompts       *prompts.Registry
 	Ops           *ops.Service
 	Tenant        *tenant.Service
+	TenantConfig  *tenantconfig.Service
+	ConfigHealth  *confighealth.Service
 	Objects       *storage.S3Store
 	Queue         *queue.Publisher
 	Docreader     *docreader.Client
@@ -183,6 +187,14 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		return nil, err
 	}
 	knowledgeBaseService := knowledgebase.NewService(database, authorization, binding)
+	tenantConfigService := tenantconfig.NewService(database, authorization, tenantconfig.Deployment{
+		Retrieval: cfg.RetrievalTier(),
+		Chunking:  cfg.ChunkingTier(),
+		Chunk: tenantconfig.ChunkPolicy{
+			Size: cfg.Chunk.Size, Overlap: cfg.Chunk.Overlap, MinSize: cfg.Chunk.MinSize, Markers: cfg.Chunk.Markers,
+		},
+	})
+	knowledgeBaseService.SetTenantParamsResolver(tenantConfigService)
 	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle, cfg.MaxFileBytes)
 	if err != nil {
 		closeAll()
@@ -253,6 +265,29 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		closeAll()
 		return nil, err
 	}
+	configHealthService := confighealth.NewService(confighealth.Options{
+		DB: database, AppEnv: cfg.AppEnv, EmbeddingDimension: cfg.Embedding.Dimension,
+		RerankSource: cfg.Rerank.Source, BackupDir: cfg.BackupDir, BackupMaxAgeHours: cfg.BackupMaxAgeHours,
+		LicenseExpiresAt: cfg.LicenseExpiresAt, RetrievalConfigFile: cfg.RetrievalConfigFile, RetrievalFileHash: cfg.RetrievalFileHash,
+		Models: modelCatalog, Embedder: embedder,
+		CheckIndexes: func(ctx context.Context) (confighealth.IndexReport, error) {
+			report, err := vector.CheckChunksIndexes(ctx, database)
+			if err != nil {
+				return confighealth.IndexReport{}, err
+			}
+			result := confighealth.IndexReport{Indexes: make([]confighealth.IndexStatus, 0, len(report.Indexes))}
+			for _, status := range report.Indexes {
+				result.Indexes = append(result.Indexes, confighealth.IndexStatus{Name: status.Name, Dimension: status.Dimension, Valid: status.Valid})
+			}
+			for _, bucket := range report.DimensionHistogram {
+				result.DimensionHistogram = append(result.DimensionHistogram, confighealth.DimensionCount{Dimension: bucket.Dimension, Count: bucket.Count})
+			}
+			return result, nil
+		},
+		IndexDimension: func(ctx context.Context) (int, bool, error) {
+			return vector.ChunksIndexDimension(ctx, database)
+		},
+	})
 	// A knowledge-base binding selects a tenant provider; every other caller
 	// (projections, titles, the worker) keeps the deployment adapter.
 	routedChatter := newRoutingChatter(chatter, modelCatalog)
@@ -293,7 +328,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcherWithMetrics(database, recorder),
 		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: routedReranker,
 		Authz: authorization, Defaults: retrievalDefaults(cfg.Retrieval), Join: projectionService, Rewriter: queryRewriter, Metrics: recorder,
-		RerankModels: modelCatalog,
+		RerankModels: modelCatalog, TenantParams: tenantConfigService,
 	})
 	conversationService := conversation.NewService(conversation.Options{
 		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: routedChatter, Models: modelCatalog,
@@ -307,7 +342,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

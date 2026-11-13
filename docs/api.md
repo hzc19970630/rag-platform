@@ -48,6 +48,7 @@ API Key 的能力是闭集，不能签发/撤销 Key，也不能访问运维接�
 | 文档 | `POST /api/v1/knowledge-bases/:id/documents`、`GET /api/v1/documents/:id` |
 | 预览与 Chunk | `GET /api/v1/documents/:id/content`、`GET /api/v1/documents/:id/chunks` |
 | 检索 | `POST /api/v1/search` |
+| 业务配置 | `GET/PUT /api/v1/tenant/config`、`GET /api/v1/tenant/config/health`、`POST /api/v1/tenant/config/test-connection` |
 | 会话与问答 | `POST /api/v1/sessions`、`POST /api/v1/sessions/:id/messages`（SSE） |
 | 续传 | `GET /api/v1/requests/:request_id/events?after=N` |
 | 运维 | `GET /ops/metrics`、`GET /ops/dead-letters`、`POST /ops/reconcile` |

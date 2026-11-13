@@ -28,10 +28,13 @@ const defaultHealthTTL = 30 * time.Second
 // health; nil means the adapter has no remote dependency and is always healthy.
 // ProviderID is empty for the deployment catalog and set for tenant providers.
 type Model struct {
-	Name         string
-	Provider     string
-	ProviderID   string
-	Version      string
+	Name       string
+	Provider   string
+	ProviderID string
+	Version    string
+	// Dimension is the embedding vector length. It is zero for chat and rerank
+	// models and for adapters whose dimension is not fixed.
+	Dimension    int
 	Capabilities []model.Capability
 	Probe        func(context.Context) error
 }
@@ -48,12 +51,14 @@ type Resolution struct {
 
 // HealthStatus is one provider probe result.
 type HealthStatus struct {
-	Model     string
-	Provider  string
-	Version   string
-	Healthy   bool
-	Error     string
-	CheckedAt time.Time
+	Model      string
+	Provider   string
+	Capability string
+	Source     string
+	Version    string
+	Healthy    bool
+	Error      string
+	CheckedAt  time.Time
 }
 
 // Options configures the deployment catalog.
@@ -463,6 +468,45 @@ func probeTimedOut(err error) bool {
 	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
+func capabilityOf(capabilities []model.Capability) string {
+	if len(capabilities) == 0 {
+		return ""
+	}
+	return string(capabilities[0])
+}
+
+// TestDeploymentCapability probes every deployment adapter serving one
+// capability. It backs the configuration "test connection" button without
+// exposing adapter credentials to the transport layer.
+func (r *Registry) TestDeploymentCapability(ctx context.Context, capability model.Capability) (ProviderTestResult, error) {
+	r.mu.Lock()
+	entries := make([]Model, 0, len(r.models))
+	for _, entry := range r.models {
+		entries = append(entries, entry)
+	}
+	r.mu.Unlock()
+	result := ProviderTestResult{Healthy: true, CheckedAt: r.now().UTC()}
+	found := false
+	for _, entry := range entries {
+		if !entry.supports(capability) {
+			continue
+		}
+		found = true
+		if entry.Probe == nil {
+			continue
+		}
+		if err := entry.Probe(ctx); err != nil {
+			result.Healthy = false
+			result.Error = err.Error()
+			return result, nil
+		}
+	}
+	if !found {
+		return ProviderTestResult{}, apperror.Invalidf("no deployment model serves capability %q", capability)
+	}
+	return result, nil
+}
+
 func (r *Registry) consumeQuota(tenantID string, capability model.Capability) error {
 	if r.requestsPerMinute <= 0 {
 		return nil
@@ -497,7 +541,7 @@ func (r *Registry) Health(ctx context.Context) []HealthStatus {
 	statuses := make([]HealthStatus, 0, len(entries))
 	for _, entry := range entries {
 		healthy, _ := r.probeHealth(ctx, entry)
-		status := HealthStatus{Model: entry.Name, Provider: entry.Provider, Version: entry.Version, Healthy: healthy, CheckedAt: r.now()}
+		status := HealthStatus{Model: entry.Name, Provider: entry.Provider, Capability: capabilityOf(entry.Capabilities), Source: "deployment", Version: entry.Version, Healthy: healthy, CheckedAt: r.now()}
 		r.mu.Lock()
 		if cached, ok := r.health[entry.Name]; ok {
 			status.Error = cached.err
@@ -528,7 +572,7 @@ func (r *Registry) Health(ctx context.Context) []HealthStatus {
 	for _, group := range providerCache {
 		healthy, _ := r.probeProviderHealth(ctx, group.row, group.entries)
 		for _, entry := range group.entries {
-			status := HealthStatus{Model: entry.Model, Provider: group.row.Name, Version: entry.Version, Healthy: healthy && entry.Enabled && group.row.Enabled, CheckedAt: r.now()}
+			status := HealthStatus{Model: entry.Model, Provider: group.row.Name, Capability: entry.Capability, Source: "tenant", Version: entry.Version, Healthy: healthy && entry.Enabled && group.row.Enabled, CheckedAt: r.now()}
 			if !entry.Enabled || !group.row.Enabled {
 				status.Error = "disabled"
 			}

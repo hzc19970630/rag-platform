@@ -1,4 +1,4 @@
-.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
+.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance b15a-acceptance m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -125,6 +125,9 @@ m13-rls-acceptance:
 # question, restarts the worker and requires a terminal SSE event.
 m13-async-acceptance:
 	./scripts/m13_async_acceptance.sh
+
+b15a-acceptance:
+	./scripts/b15a_acceptance.sh
 
 m13-backup-drill:
 	./scripts/m13_backup_drill.sh

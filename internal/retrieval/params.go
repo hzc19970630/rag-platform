@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
-	"github.com/hzc19970630/rag-platform/internal/platform/param"
+	"github.com/hzc19970630/rag-platform/internal/configschema"
 )
 
 // ParamsOverride is one tier of the retrieval parameter override chain. Every
@@ -144,22 +144,38 @@ func (o ParamsOverride) Overlay(other ParamsOverride) ParamsOverride {
 // ValidateOverride range-checks only the fields a tier actually sets, so a
 // partial update is validated without needing the global defaults.
 func ValidateOverride(override ParamsOverride) error {
-	return param.ValidateRetrieval(param.RetrievalValues{
-		TopK:                 override.TopK,
-		EmbeddingTopK:        override.EmbeddingTopK,
-		KeywordTopK:          override.KeywordTopK,
-		VectorThreshold:      override.VectorThreshold,
-		KeywordThreshold:     override.KeywordThreshold,
-		RerankTopK:           override.RerankTopK,
-		RerankThreshold:      override.RerankThreshold,
-		VectorEFSearch:       override.VectorEFSearch,
-		VectorOversample:     override.VectorOversample,
-		ContextTokenLimit:    override.ContextTokenLimit,
-		AdjacentExpansion:    override.AdjacentExpansion,
-		MaxAdjacentChunks:    override.MaxAdjacentChunks,
-		RRFK:                 override.RRFK,
-		ExpansionScoreFactor: override.ExpansionScoreFactor,
-	})
+	values := map[string]any{}
+	putInt := func(key string, value *int) {
+		if value != nil {
+			values[key] = *value
+		}
+	}
+	putFloat := func(key string, value *float64) {
+		if value != nil {
+			values[key] = *value
+		}
+	}
+	putInt("top_k", override.TopK)
+	putInt("embedding_top_k", override.EmbeddingTopK)
+	putInt("keyword_top_k", override.KeywordTopK)
+	putFloat("vector_threshold", override.VectorThreshold)
+	putFloat("keyword_threshold", override.KeywordThreshold)
+	if override.RerankEnabled != nil {
+		values["rerank_enabled"] = *override.RerankEnabled
+	}
+	putInt("rerank_top_k", override.RerankTopK)
+	putFloat("rerank_threshold", override.RerankThreshold)
+	putInt("vector_ef_search", override.VectorEFSearch)
+	putInt("vector_oversample", override.VectorOversample)
+	if override.VectorIterativeScan != nil {
+		values["vector_iterative_scan"] = *override.VectorIterativeScan
+	}
+	putInt("context_token_limit", override.ContextTokenLimit)
+	putInt("adjacent_expansion", override.AdjacentExpansion)
+	putInt("max_adjacent_chunks", override.MaxAdjacentChunks)
+	putInt("rrf_k", override.RRFK)
+	putFloat("expansion_score_factor", override.ExpansionScoreFactor)
+	return configschema.ValidateNative(configschema.DomainRetrieval, values)
 }
 
 // Validate range-checks a fully resolved parameter set. It delegates to the
@@ -167,25 +183,27 @@ func ValidateOverride(override ParamsOverride) error {
 // VectorOversample is the Go zero value ("unset"); the vector adapter treats it
 // as 1, so it is not rejected here. Override and YAML tiers still require 1..20.
 func (p Params) Validate() error {
-	values := param.RetrievalValues{
-		TopK:                 &p.TopK,
-		EmbeddingTopK:        &p.EmbeddingTopK,
-		KeywordTopK:          &p.KeywordTopK,
-		VectorThreshold:      &p.VectorThreshold,
-		KeywordThreshold:     &p.KeywordThreshold,
-		RerankTopK:           &p.RerankTopK,
-		RerankThreshold:      &p.RerankThreshold,
-		VectorEFSearch:       &p.VectorEFSearch,
-		ContextTokenLimit:    &p.ContextTokenLimit,
-		AdjacentExpansion:    &p.AdjacentExpansion,
-		MaxAdjacentChunks:    &p.MaxAdjacentChunks,
-		RRFK:                 &p.RRFK,
-		ExpansionScoreFactor: &p.ExpansionScoreFactor,
+	values := map[string]any{
+		"top_k":                  p.TopK,
+		"embedding_top_k":        p.EmbeddingTopK,
+		"keyword_top_k":          p.KeywordTopK,
+		"vector_threshold":       p.VectorThreshold,
+		"keyword_threshold":      p.KeywordThreshold,
+		"rerank_enabled":         p.RerankEnabled,
+		"rerank_top_k":           p.RerankTopK,
+		"rerank_threshold":       p.RerankThreshold,
+		"vector_ef_search":       p.VectorEFSearch,
+		"vector_iterative_scan":  p.VectorIterativeScan,
+		"context_token_limit":    p.ContextTokenLimit,
+		"adjacent_expansion":     p.AdjacentExpansion,
+		"max_adjacent_chunks":    p.MaxAdjacentChunks,
+		"rrf_k":                  p.RRFK,
+		"expansion_score_factor": p.ExpansionScoreFactor,
 	}
 	if p.VectorOversample > 0 {
-		values.VectorOversample = &p.VectorOversample
+		values["vector_oversample"] = p.VectorOversample
 	}
-	return param.ValidateRetrieval(values)
+	return configschema.ValidateNative(configschema.DomainRetrieval, values)
 }
 
 // ParseOverride decodes a stored or request-supplied override. An empty value
@@ -201,11 +219,24 @@ func ParseOverride(raw string) (ParamsOverride, error) {
 	return override, nil
 }
 
-// ResolveParams applies the database tier and then the session tier on top of
+// ResolveParams applies the database tiers and then the session tier on top of
 // the global defaults, and validates the result. Validation runs last so a
 // session override cannot smuggle a value outside the documented ranges.
 func ResolveParams(global Params, knowledgeBaseRaw, sessionRaw string) (Params, error) {
+	return ResolveParamsWithTenant(global, "", knowledgeBaseRaw, sessionRaw)
+}
+
+// ResolveParamsWithTenant applies the tenant, knowledge-base and session tiers
+// in order. The tenant tier is the middle policy layer: it can set a default
+// for every knowledge base, while a knowledge base can still override it.
+func ResolveParamsWithTenant(global Params, tenantRaw, knowledgeBaseRaw, sessionRaw string) (Params, error) {
 	resolved := global
+	tenantOverride, err := ParseOverride(tenantRaw)
+	if err != nil {
+		return Params{}, fmt.Errorf("tenant retrieval config: %w", err)
+	}
+	resolved = tenantOverride.Apply(resolved)
+
 	knowledgeBaseOverride, err := ParseOverride(knowledgeBaseRaw)
 	if err != nil {
 		return Params{}, fmt.Errorf("knowledge base retrieval config: %w", err)

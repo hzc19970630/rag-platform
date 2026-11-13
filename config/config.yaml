@@ -1,8 +1,9 @@
 # Retrieval parameter defaults (global tier).
 #
-# The override chain is: this file -> knowledge_bases.retrieval_config (database,
-# audited) -> session-level override in the query request. Values here ship with
-# the image; they are defaults, not hardcoded constants.
+# The override chain is: schema default -> this file -> tenants.retrieval_config
+# (database, audited) -> knowledge_bases.retrieval_config (database, audited) ->
+# session-level override in the query request. Values here ship with the image;
+# they are defaults, not hardcoded constants.
 #
 # Server-side range validation always applies regardless of tier:
 #   vector_threshold        0 .. 1

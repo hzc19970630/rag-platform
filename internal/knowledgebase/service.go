@@ -20,11 +20,18 @@ import (
 )
 
 type Service struct {
-	db         *gorm.DB
-	authz      *authz.Service
-	projection ProjectionLifecycle
-	embedding  EmbeddingBinding
-	catalog    ModelCatalog
+	db           *gorm.DB
+	authz        *authz.Service
+	projection   ProjectionLifecycle
+	embedding    EmbeddingBinding
+	catalog      ModelCatalog
+	tenantParams TenantParamsResolver
+}
+
+// TenantParamsResolver loads the tenant tier of the retrieval override chain.
+// Nil keeps the deployment-plus-knowledge-base view used by tests.
+type TenantParamsResolver interface {
+	TenantRetrievalOverride(ctx context.Context, tenantID string) (string, error)
 }
 
 // ModelCatalog is the deployment and tenant model catalog. The knowledge-base
@@ -99,6 +106,12 @@ func (s *Service) SetProjectionLifecycle(lifecycle ProjectionLifecycle) {
 // to the registry implementation.
 func (s *Service) SetModelCatalog(catalog ModelCatalog) {
 	s.catalog = catalog
+}
+
+// SetTenantParamsResolver wires the tenant tier read without coupling the
+// service to the configuration store.
+func (s *Service) SetTenantParamsResolver(resolver TenantParamsResolver) {
+	s.tenantParams = resolver
 }
 
 func (s *Service) Create(ctx context.Context, principal authz.Principal, input CreateInput) (models.KnowledgeBase, error) {

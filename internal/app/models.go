@@ -39,6 +39,7 @@ func newModelRegistry(db *gorm.DB, cfg config.Config, chatModel, rerankModel, em
 		},
 		{
 			Name: embeddingModel, Provider: cfg.Embedding.Source, Version: "deployment",
+			Dimension:    cfg.Embedding.Dimension,
 			Capabilities: []model.Capability{model.CapabilityEmbedding}, Probe: embeddingProbe,
 		},
 	}

@@ -172,6 +172,89 @@ type TenantQuotaUpdateRequest struct {
 	ChatRequestsPerDay *int64 `json:"chatRequestsPerDay" oa:"min=0"`
 }
 
+// ConfigFieldDefinition is one business configuration parameter. Values are raw
+// JSON so the same contract covers int, float, bool and string-list fields
+// without redeclaring them for every new parameter.
+type ConfigFieldDefinition struct {
+	Key            string          `json:"key" oa:"required"`
+	Domain         string          `json:"domain" oa:"required"`
+	Group          string          `json:"group"`
+	Kind           string          `json:"kind" oa:"required"`
+	Default        json.RawMessage `json:"default"`
+	Min            *float64        `json:"min,omitempty"`
+	Max            *float64        `json:"max,omitempty"`
+	Step           *float64        `json:"step,omitempty"`
+	UnitKey        string          `json:"unitKey,omitempty"`
+	ApplyMode      string          `json:"applyMode" oa:"required"`
+	Sensitivity    string          `json:"sensitivity"`
+	LabelKey       string          `json:"labelKey"`
+	DescriptionKey string          `json:"descriptionKey,omitempty"`
+}
+
+// ConfigFieldState is one effective value plus the tier it came from.
+type ConfigFieldState struct {
+	Value      json.RawMessage `json:"value"`
+	Default    json.RawMessage `json:"default"`
+	Deployment json.RawMessage `json:"deployment,omitempty"`
+	Source     string          `json:"source" oa:"required"`
+	ApplyMode  string          `json:"applyMode" oa:"required"`
+}
+
+// ConfigDomain carries the schema plus every visible tier for one domain.
+type ConfigDomain struct {
+	Schema             []ConfigFieldDefinition     `json:"schema" oa:"required"`
+	DeploymentDefaults map[string]json.RawMessage  `json:"deploymentDefaults"`
+	TenantOverride     map[string]json.RawMessage  `json:"tenantOverride"`
+	Effective          map[string]json.RawMessage  `json:"effective"`
+	Fields             map[string]ConfigFieldState `json:"fields"`
+}
+
+type TenantConfiguration struct {
+	SchemaVersion string       `json:"schemaVersion"`
+	Retrieval     ConfigDomain `json:"retrieval"`
+	Chunking      ConfigDomain `json:"chunking"`
+}
+
+// TenantConfigurationUpdateRequest replaces both tenant override objects.
+// Omitted domains clear their tenant tier.
+type TenantConfigurationUpdateRequest struct {
+	Retrieval map[string]json.RawMessage `json:"retrieval"`
+	Chunking  map[string]json.RawMessage `json:"chunking"`
+}
+
+// ConfigConnectionTestRequest names the capability to probe with the stored
+// deployment or tenant provider, not with credentials from the request body.
+type ConfigConnectionTestRequest struct {
+	Capability string `json:"capability" binding:"required"`
+	ProviderID string `json:"providerId,omitempty"`
+}
+
+type ConfigConnectionTestResult struct {
+	Healthy   bool      `json:"healthy"`
+	Error     string    `json:"error,omitempty"`
+	Dimension int       `json:"dimension,omitempty"`
+	CheckedAt time.Time `json:"checkedAt"`
+}
+
+// ConfigHealthCheck is one configuration verification. Status is
+// ok|warning|error|unknown|skipped; Severity is info|warning|high.
+type ConfigHealthCheck struct {
+	ID          string    `json:"id"`
+	Status      string    `json:"status"`
+	Severity    string    `json:"severity"`
+	Summary     string    `json:"summary"`
+	Detail      string    `json:"detail,omitempty"`
+	Remediation string    `json:"remediation,omitempty"`
+	CheckedAt   time.Time `json:"checkedAt"`
+}
+
+type ConfigHealth struct {
+	Status      string              `json:"status"`
+	HighRisk    int                 `json:"highRisk"`
+	Checks      []ConfigHealthCheck `json:"checks" oa:"required"`
+	GeneratedAt time.Time           `json:"generatedAt"`
+}
+
 type AuditEvent struct {
 	ID           uint64    `json:"id"`
 	TenantID     string    `json:"tenantId"`
@@ -295,10 +378,20 @@ type RetrievalParams struct {
 
 type RetrievalConfiguration struct {
 	GlobalDefaults        RetrievalParams         `json:"globalDefaults"`
+	TenantOverride        RetrievalConfigOverride `json:"tenantOverride"`
 	KnowledgeBaseOverride RetrievalConfigOverride `json:"knowledgeBaseOverride"`
 	Effective             RetrievalParams         `json:"effective"`
 	Sources               map[string]string       `json:"sources"`
+	// Schema and Fields drive the workbench form: a new parameter only changes
+	// the server schema, not this contract.
+	Schema []ConfigFieldDefinition     `json:"schema"`
+	Fields map[string]ConfigFieldState `json:"fields"`
 }
+
+// RetrievalConfigUpdateRequest is a schema-keyed override document. Unknown keys
+// are rejected by the server against configschema before decoding, so adding a
+// parameter does not require a contract change.
+type RetrievalConfigUpdateRequest map[string]json.RawMessage
 
 type ReadOnlyEmbedding struct {
 	Source    string `json:"source"`
@@ -1226,13 +1319,13 @@ type ModelCatalogEntryRequest struct {
 // ModelProviderUpsertRequest is a whole-provider write: Models replaces the
 // entry list, and an absent api_key keeps the stored credential.
 type ModelProviderUpsertRequest struct {
-	Name      string                      `json:"name" binding:"required"`
-	Kind      string                      `json:"kind" binding:"required"`
-	BaseURL   string                      `json:"base_url" binding:"required"`
-	APIKey    *string                     `json:"api_key"`
-	HealthURL string                      `json:"health_url"`
-	Enabled   *bool                       `json:"enabled"`
-	Models    []ModelCatalogEntryRequest  `json:"models"`
+	Name      string                     `json:"name" binding:"required"`
+	Kind      string                     `json:"kind" binding:"required"`
+	BaseURL   string                     `json:"base_url" binding:"required"`
+	APIKey    *string                    `json:"api_key"`
+	HealthURL string                     `json:"health_url"`
+	Enabled   *bool                      `json:"enabled"`
+	Models    []ModelCatalogEntryRequest `json:"models"`
 }
 
 type ModelProviderTestResult struct {
