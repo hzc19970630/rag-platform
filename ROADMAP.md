@@ -24,48 +24,61 @@ pass rate, and delivery-artifact completeness.
 
 Verticals are sequenced: **finance first, healthcare second**.
 
-## Now — H1: zero-configuration and vertical packs
+Delivery sequencing is demand-led: self-verifiable product gaps come first;
+commercial packaging, licensing, pricing, and hosted operations start only after
+a paid POC or design partner is signed.
 
-- Zero-configuration substrate: one configuration schema that drives server
-  validation, OpenAPI types, and the web forms; test-connection and a
-  configuration doctor (model reachability, embedding dimension/index
-  validity, RLS mode, backup age, license expiry).
-- Finance preset pack first: document types and parsing policy, chunking and
-  retrieval defaults, terminology, permission template, masking rules,
-  compliance checklist, and an evaluation set. A common-enterprise pack is the
-  baseline; the healthcare pack follows.
-- First-run experience: setup wizard, sample knowledge base, and a system
-  doctor, so a finance POC reaches a cited answer without editing environment
-  files.
+## Now — retrieval depth, quality, and a zero-configuration baseline
+
+- Retrieval depth: per-knowledge-base embedding routing with staged
+  re-embedding, verification, and rollback; storage and format capabilities
+  move behind adapter contracts without changing current behavior.
+- Retrieval-quality loop: a replayable evaluation path for retrieval
+  configuration changes, rerank on/off comparison, and online feedback
+  (ratings, citation clicks) in one regression view.
+- Preset-pack tooling: a common-enterprise baseline pack plus
+  `validate/import/export/diff` commands. Vertical packs are data, added when a
+  named customer needs one; no industry-specific engine branches.
 - Documentation correction: the public comparison and capability pages must
   reflect delivered observability, browser E2E, MCP, and SDK work.
 
-## Next — H2/H3: evidence pack and entry capabilities
+The configuration substrate—one schema driving server validation, OpenAPI
+types, and web forms, plus test-connection, a configuration doctor, change
+preview, and the first-run wizard—is already delivered and is the base the
+preset packs build on.
+
+## Next — POC entry capabilities (customer-triggered)
 
 - Evidence pack for security review: department/folder/document ACL;
   finance compliance minimum (KMS, tamper-evident audit with export, PII
   masking, model-egress allowlist); answer-to-evidence export; finance
   evaluation set including permission-negative and refusal cases.
+- First vertical pack (finance first, healthcare second) once a named customer
+  provides documents and acceptance criteria: document types and parsing
+  policy, terminology, permission template, masking rules, compliance
+  checklist, and an evaluation set.
 - Entry capabilities: OCR for scanned and mixed PDFs (finance corpus first);
   one real finance connector (ECM/document management, OA, mail archive, or a
   private-cloud disk) before broadening to SharePoint/Confluence/Feishu/WeCom.
-- Retrieval operations: per-knowledge-base embedding routing and re-embedding,
-  plus a replayable retrieval-quality loop with rerank on/off comparison.
 - Identity: OIDC group/role claim mapping for the customer's IdP; SCIM only
   when the customer requires automated provisioning and deprovisioning.
 
-## Later — H4: OEM delivery
+## Later — GA and OEM delivery (signed customer required)
 
 - OEM delivery: high availability, Helm/Kubernetes, an offline image bundle,
   backup in an independent failure domain, and white-label/license/metering
-  boundaries. Billing remains out of scope before design-partner validation.
+  boundaries—started when a signed customer's deployment form requires them.
+  Billing remains out of scope before design-partner validation.
+- Commercial redistribution review: resolve or license the AGPL/SSPL
+  dependencies (ParadeDB, MinIO, Redis) before any commercial distribution or
+  hosted service.
 - Remote MCP transport (HTTP/SSE) for partner backends, alongside the existing
   stdio server and SDKs.
 - Healthcare pack: PHI handling, clinical-document OCR, and HIS/EMR integration
   once a healthcare design partner is confirmed.
-- A second vertical connector, SCIM, and the full configuration-center
-  governance surface (inheritance, diff, rollback, write-only secrets) after
-  customer demand is demonstrated.
+- A second vertical connector and the full configuration-center governance
+  surface (inheritance, diff, rollback, write-only secrets) after customer
+  demand is demonstrated.
 
 ## Verticals
 
