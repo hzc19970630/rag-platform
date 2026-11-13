@@ -77,9 +77,11 @@ cp .env.example .env
 | 外部数据源 | 可用（单类型） | `http_manifest` 增量同步、tombstone、SSRF 防护、凭据加密 |
 | Wiki / 关系投影 | 可用（可选） | 按知识库开关；投影失败不阻断 Evidence RAG |
 | 异步问答 | 可用 | Worker 生成、SSE 续传、租约与终态收敛 |
-| 浏览器 E2E | 规划中 | 主链路自动回归与可访问性检查 |
-| OCR / 图片 | 未支持 | 扫描 PDF、混合扫描页返回明确错误 |
-| 更多连接器 | 未支持 | SharePoint/Confluence/飞书/企微/S3 等在路线图中 |
+| 浏览器 E2E | 可用 | Playwright 覆盖上传→解析→检索→问答→删除与可访问性检查 |
+| 可观测性 | 可用 | Prometheus 指标、OTLP 追踪、告警规则与 Grafana 面板 |
+| MCP / SDK | 可用 | stdio MCP（8 个受权工具）与 TypeScript/Python SDK |
+| OCR / 图片 | 未支持 | 扫描 PDF、混合扫描页返回明确错误；金融扫描件优先排期 |
+| 更多连接器 | 未支持 | 金融来源（ECM/文档管理、OA、邮件归档、信创网盘）与 S3 优先；SharePoint/Confluence/飞书/企微后移 |
 | Kubernetes/Helm | 未提供 | 当前交付方式为 Docker Compose |
 
 ## 发布与校验
