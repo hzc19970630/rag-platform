@@ -6,6 +6,7 @@ import { queryKeys, useConnectorRuns, useConnectors } from "../../api/hooks";
 import type { Connector, ConnectorRun } from "../../api/types";
 import { LoadingBlock, QueryFallback } from "../../components/QueryFallback";
 import { StatusBadge } from "../../components/StatusBadge";
+import { connectorTypeLabel } from "../../utils/enums";
 import { formatTime } from "../../utils/format";
 
 type Props = {
@@ -77,7 +78,7 @@ function ConnectorCard({ connector, canOperate, onSync }: { connector: Connector
         <div>
           <Space size={8} wrap>
             <Typography.Text strong>{connector.name}</Typography.Text>
-            <Tag>{connector.type}</Tag>
+            <Tag>{connectorTypeLabel(t, connector.type)}</Tag>
             <Tag color={connector.enabled ? "green" : "default"}>{connector.enabled ? t("common.enabled") : t("common.disabled")}</Tag>
             {connector.hasCredential && <Tag color="blue">{t("dataSource.credential")}</Tag>}
           </Space>

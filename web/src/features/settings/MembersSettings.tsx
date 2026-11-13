@@ -6,6 +6,7 @@ import { api, jsonInit } from "../../api/client";
 import { queryKeys, useMembers } from "../../api/hooks";
 import type { Member } from "../../api/types";
 import { LoadingBlock, QueryFallback } from "../../components/QueryFallback";
+import { roleLabel } from "../../utils/enums";
 
 type Props = {
   knowledgeBaseId: string;
@@ -110,9 +111,9 @@ export function MembersSettings({ knowledgeBaseId, ownerId, canManage, onChanged
             >
               <List.Item.Meta
                 title={member.userId}
-                description={member.userId === ownerId ? "owner" : undefined}
+                description={member.userId === ownerId ? roleLabel(t, "owner") : undefined}
               />
-              <Tag color={member.role === "admin" ? "green" : member.role === "editor" ? "blue" : "default"}>{member.role}</Tag>
+              <Tag color={member.role === "admin" ? "green" : member.role === "editor" ? "blue" : "default"}>{roleLabel(t, member.role)}</Tag>
             </List.Item>
           )}
         />
@@ -136,7 +137,7 @@ export function MembersSettings({ knowledgeBaseId, ownerId, canManage, onChanged
               value={role}
               onChange={setRole}
               style={{ width: 140 }}
-              options={roles.map((value) => ({ value, label: value }))}
+              options={roles.map((value) => ({ value, label: roleLabel(t, value) }))}
             />
           </label>
           <Button type="primary" onClick={() => void grant()} loading={busy} disabled={!userId.trim()}>{t("members.add")}</Button>

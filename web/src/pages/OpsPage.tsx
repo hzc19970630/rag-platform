@@ -34,6 +34,7 @@ import type { APIKeyView, DeadLetter } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { StatusBadge } from "../components/StatusBadge";
+import { apiKeyStatusLabel, capabilityLabel, queueLabel } from "../utils/enums";
 import { usePermissions } from "../session";
 import { formatTime } from "../utils/format";
 
@@ -195,7 +196,7 @@ export function OpsPage() {
       key: "capabilities",
       render: (_, row) => (
         <Space size={4} wrap>
-          {row.capabilities.map((capability) => <Tag key={capability}>{capability}</Tag>)}
+          {row.capabilities.map((capability) => <Tag key={capability}>{capabilityLabel(t, capability)}</Tag>)}
         </Space>
       ),
     },
@@ -204,10 +205,10 @@ export function OpsPage() {
       key: "status",
       width: 110,
       render: (_, row) => row.revokedAt
-        ? <Tag color="red">{t("ops.revoked")}</Tag>
+        ? <Tag color="red">{apiKeyStatusLabel(t, "revoked")}</Tag>
         : row.expiresAt && new Date(row.expiresAt).getTime() <= Date.now()
-          ? <Tag color="orange">{t("ops.expired")}</Tag>
-          : <Tag color="green">{t("ops.active")}</Tag>,
+          ? <Tag color="orange">{apiKeyStatusLabel(t, "expired")}</Tag>
+          : <Tag color="green">{apiKeyStatusLabel(t, "active")}</Tag>,
     },
     {
       title: t("ops.expiresAt"),
@@ -255,7 +256,7 @@ export function OpsPage() {
               <Row gutter={[12, 12]}>
                 {Object.entries(metrics.data.queues).map(([name, depth]) => (
                   <Col xs={24} md={12} xl={8} key={name}>
-                    <Card size="small" title={name}>
+                    <Card size="small" title={queueLabel(t, name)}>
                       <Space size={4} wrap>
                         <Tag>{t("ops.pending")} {depth.pending ?? 0}</Tag>
                         <Tag color="processing">{t("ops.queueActive")} {depth.active ?? 0}</Tag>
@@ -379,7 +380,7 @@ export function OpsPage() {
               className="capability-grid"
               value={selectedCapabilities}
               onChange={(values) => setSelectedCapabilities(values as string[])}
-              options={capabilityOptions.map((capability) => ({ value: capability, label: t(`ops.capability.${capability}`) }))}
+              options={capabilityOptions.map((capability) => ({ value: capability, label: capabilityLabel(t, capability) }))}
             />
           </div>
         </Flex>

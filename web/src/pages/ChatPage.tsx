@@ -36,6 +36,7 @@ import { VirtualMessageList } from "../components/VirtualMessageList";
 import { VirtualSessionList } from "../components/VirtualSessionList";
 import { usePermissions } from "../session";
 import { formatTime } from "../utils/format";
+import { statusLabel } from "../utils/enums";
 
 // StrictMode mounts effects twice in development; sharing the in-flight
 // creation keeps a knowledge-base entry point from opening two sessions.
@@ -480,7 +481,7 @@ function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Ci
           <Tag color={isUser ? "default" : "green"}>{isUser ? t("chat.me") : t("chat.answer")}</Tag>
           <Space size={8}>
             <Typography.Text type="secondary" className="chat-message-status">
-              {item.message.status}
+              {statusLabel(t, item.message.status)}
               {item.message.errorCode ? ` · ${item.message.errorCode}` : ""}
             </Typography.Text>
             <Typography.Text type="secondary" className="chat-message-status">{formatTime(item.message.createdAt)}</Typography.Text>

@@ -7,6 +7,7 @@ import { previewConfigChange } from "../../api/configPreview";
 import { queryKeys } from "../../api/hooks";
 import type { IndexingStrategy, KnowledgeBaseConfigurationV1 } from "../../api/types";
 import { confirmConfigPreview } from "./ConfigPreviewContent";
+import { capabilityLabel } from "../../utils/enums";
 import { normalizedStrategy } from "./retrievalFields";
 import { SchemaConfigForm } from "./SchemaConfigForm";
 
@@ -139,7 +140,7 @@ export function RetrievalSettings({ knowledgeBaseId, configuration, canWrite, on
         <div className="capability-row">
           <Typography.Text type="secondary">{t("retrieval.requiredCapabilities")}</Typography.Text>
           <Space wrap>
-            {switches.required_capabilities.map((capability) => <Tag key={capability}>{capability}</Tag>)}
+            {switches.required_capabilities.map((capability) => <Tag key={capability}>{capabilityLabel(t, capability)}</Tag>)}
           </Space>
         </div>
         {formError && <Alert type="error" showIcon message={formError} className="settings-alert" />}

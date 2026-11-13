@@ -6,6 +6,7 @@ import { api, jsonInit } from "../../api/client";
 import { previewConfigChange } from "../../api/configPreview";
 import { queryKeys, useConfigHealth, useTenantConfiguration } from "../../api/hooks";
 import type { ConfigConnectionTestResult, ConfigHealthCheck, TenantConfiguration } from "../../api/types";
+import { capabilityLabel, statusLabel, statusTone, toneColor } from "../../utils/enums";
 import { confirmConfigPreview } from "./ConfigPreviewContent";
 import { SchemaConfigForm } from "./SchemaConfigForm";
 
@@ -35,21 +36,6 @@ function checkLabelKey(id: string): string {
       return "configuration.checkStoredDrift";
     default:
       return id;
-  }
-}
-
-function statusColor(status: string): string {
-  switch (status) {
-    case "ok":
-      return "green";
-    case "warning":
-      return "orange";
-    case "error":
-      return "red";
-    case "skipped":
-      return "default";
-    default:
-      return "blue";
   }
 }
 
@@ -164,7 +150,7 @@ function ConfigHealthPanel() {
           <Flex gap={8} wrap="wrap">
             {(["chat", "embedding", "rerank"] as const).map((capability) => (
               <Button key={capability} onClick={() => void test(capability)} loading={testing === capability}>
-                {t("configuration.testCapability", { capability })}
+                {t("configuration.testCapability", { capability: capabilityLabel(t, capability) })}
               </Button>
             ))}
           </Flex>
@@ -188,7 +174,7 @@ function HealthRow({ check }: { check: ConfigHealthCheck }) {
     <div className="setting-row">
       <div className="setting-label">
         <Space size={8} wrap>
-          <Tag color={statusColor(check.status)}>{check.status}</Tag>
+          <Tag color={toneColor(statusTone(check.status))}>{statusLabel(t, check.status)}</Tag>
           <Typography.Text strong>{t(checkLabelKey(check.id))}</Typography.Text>
           {check.severity === "high" && check.status !== "ok" && check.status !== "skipped" && <Tag color="red">{t("configuration.highRisk")}</Tag>}
         </Space>

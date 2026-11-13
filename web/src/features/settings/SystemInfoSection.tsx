@@ -1,6 +1,7 @@
 import { Descriptions, Tag, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import type { KnowledgeBaseConfigurationV1 } from "../../api/types";
+import { sourceLabel } from "../../utils/enums";
 
 export function SystemInfoSection({ configuration }: { configuration: KnowledgeBaseConfigurationV1 }) {
   const { t } = useTranslation();
@@ -17,17 +18,17 @@ export function SystemInfoSection({ configuration }: { configuration: KnowledgeB
         </header>
         <Descriptions bordered column={1} size="small" className="system-descriptions">
           <Descriptions.Item label={t("system.embedding")}>
-            {readOnly.embedding.source} · {readOnly.embedding.model || "-"} · {readOnly.embedding.dimension}
+            {sourceLabel(t, readOnly.embedding.source)} · {readOnly.embedding.model || "-"} · {readOnly.embedding.dimension}
           </Descriptions.Item>
           <Descriptions.Item label={t("system.chunking")}>
             {readOnly.chunking.size} / {readOnly.chunking.overlap} / {readOnly.chunking.splitMarkers || "-"}
             <Typography.Text type="secondary"> · min {readOnly.chunking.minSize}</Typography.Text>
           </Descriptions.Item>
           <Descriptions.Item label={t("system.chat")}>
-            {readOnly.chat.source} · {readOnly.chat.model || "-"}
+            {sourceLabel(t, readOnly.chat.source)} · {readOnly.chat.model || "-"}
           </Descriptions.Item>
           <Descriptions.Item label={t("system.rerank")}>
-            {readOnly.rerank.source} · {readOnly.rerank.model || "-"}
+            {sourceLabel(t, readOnly.rerank.source)} · {readOnly.rerank.model || "-"}
           </Descriptions.Item>
           <Descriptions.Item label={t("system.parser")}>
             {readOnly.parser.version} · {readOnly.parser.supportedFormats.join(", ")}

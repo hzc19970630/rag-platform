@@ -7,6 +7,7 @@ import { api, jsonInit } from "../../api/client";
 import { queryKeys, useModelCatalog } from "../../api/hooks";
 import type { KnowledgeBase } from "../../api/types";
 import { usePermissions } from "../../session";
+import { capabilityLabel } from "../../utils/enums";
 
 type Props = {
   open: boolean;
@@ -93,8 +94,8 @@ export function SetupWizard({ open, onClose }: Props) {
                 message={modelReady ? t("setup.modelReady") : t("setup.modelMissing")}
                 description={
                   <Space direction="vertical" size={4}>
-                    <span>chat: {chatModels.map((item) => item.model).join(", ") || "—"}</span>
-                    <span>embedding: {embeddingModels.map((item) => item.model).join(", ") || "—"}</span>
+                    <span>{capabilityLabel(t, "chat")}: {chatModels.map((item) => item.model).join(", ") || "—"}</span>
+                    <span>{capabilityLabel(t, "embedding")}: {embeddingModels.map((item) => item.model).join(", ") || "—"}</span>
                   </Space>
                 }
               />

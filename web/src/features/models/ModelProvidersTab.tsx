@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { api, jsonInit } from "../../api/client";
 import { queryKeys, useModelCatalog, useModelProviders } from "../../api/hooks";
 import type { ModelCatalogEntry, ModelProvider, ModelProviderTestResult, ModelProviderUpsertRequest } from "../../api/types";
+import { capabilityLabel, providerKindLabel } from "../../utils/enums";
 
 export type DraftModel = {
   model: string;
@@ -172,15 +173,7 @@ export function ModelProvidersTab() {
   const deploymentColumns: TableColumnsType<ModelCatalogEntry> = [
     {
       title: t("admin.modelProviders.capability"), dataIndex: "capability", key: "capability", width: 130,
-      render: (value: string) => (
-        <Tag>
-          {value === "embedding"
-            ? t("admin.modelProviders.capabilityEmbedding")
-            : value === "rerank"
-              ? t("admin.modelProviders.capabilityRerank")
-              : t("admin.modelProviders.capabilityChat")}
-        </Tag>
-      ),
+      render: (value: string) => <Tag>{capabilityLabel(t, value)}</Tag>,
     },
     {
       title: t("admin.modelProviders.model"), key: "model",
@@ -205,7 +198,7 @@ export function ModelProvidersTab() {
   const columns: TableColumnsType<ModelProvider> = [
     { title: t("admin.modelProviders.name"), dataIndex: "name", key: "name" },    {
       title: t("admin.modelProviders.kind"), dataIndex: "kind", key: "kind", width: 150,
-      render: (value: string) => <Tag>{value === "ollama" ? t("admin.modelProviders.kindOllama") : t("admin.modelProviders.kindOpenAI")}</Tag>,
+      render: (value: string) => <Tag>{providerKindLabel(t, value)}</Tag>,
     },
     { title: t("admin.modelProviders.baseUrl"), dataIndex: "baseUrl", key: "baseUrl", render: (value: string) => <span className="mono-small">{value}</span> },
     {
@@ -278,8 +271,8 @@ export function ModelProvidersTab() {
               value={draft.kind}
               onChange={(value) => patchDraft({ kind: value })}
               options={[
-                { value: "openai_compatible", label: t("admin.modelProviders.kindOpenAI") },
-                { value: "ollama", label: t("admin.modelProviders.kindOllama") },
+                { value: "openai_compatible", label: providerKindLabel(t, "openai_compatible") },
+                { value: "ollama", label: providerKindLabel(t, "ollama") },
               ]}
             />
           </label>
@@ -318,9 +311,9 @@ export function ModelProvidersTab() {
                   value={entry.capability}
                   onChange={(value) => patchModel(index, { capability: value })}
                   options={[
-                    { value: "chat", label: t("admin.modelProviders.capabilityChat") },
-                    { value: "embedding", label: t("admin.modelProviders.capabilityEmbedding") },
-                    { value: "rerank", label: t("admin.modelProviders.capabilityRerank") },
+                    { value: "chat", label: capabilityLabel(t, "chat") },
+                    { value: "embedding", label: capabilityLabel(t, "embedding") },
+                    { value: "rerank", label: capabilityLabel(t, "rerank") },
                   ]}
                 />
               </label>

@@ -53,6 +53,7 @@ import { ModelProvidersTab } from "../features/models/ModelProvidersTab";
 import { TenantConfigurationTab } from "../features/settings/TenantConfigurationTab";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { usePermissions } from "../session";
+import { auditActionLabel, auditResourceLabel, roleLabel } from "../utils/enums";
 import { formatSize, formatTime } from "../utils/format";
 
 const tenantRoles = ["owner", "admin", "member", "viewer"] as const;
@@ -308,7 +309,7 @@ export function AdminPage() {
     setAuditFilters({});
   }
 
-  const roleOptions = tenantRoles.map((role) => ({ value: role, label: t(`admin.members.roles.${role}`) }));
+  const roleOptions = tenantRoles.map((role) => ({ value: role, label: roleLabel(t, role) }));
 
   const memberColumns: TableColumnsType<TenantMember> = [
     {
@@ -375,14 +376,14 @@ export function AdminPage() {
         </Flex>
       ),
     },
-    { title: t("admin.audit.action"), dataIndex: "action", key: "action", width: 190 },
+    { title: t("admin.audit.action"), dataIndex: "action", key: "action", width: 190, render: (value: string) => auditActionLabel(t, value) },
     {
       title: t("admin.audit.resource"),
       key: "resource",
       width: 220,
       render: (_, row) => (
         <Flex vertical gap={2}>
-          <Typography.Text>{row.resourceType || "-"}</Typography.Text>
+          <Typography.Text>{row.resourceType ? auditResourceLabel(t, row.resourceType) : "-"}</Typography.Text>
           <Typography.Text type="secondary" className="mono-small">{row.resourceId || "-"}</Typography.Text>
         </Flex>
       ),
@@ -481,10 +482,10 @@ export function AdminPage() {
               <Descriptions.Item label={t("admin.overview.createdAt")}>{formatTime(overview.data.createdAt)}</Descriptions.Item>
               <Descriptions.Item label={t("admin.overview.members")}>
                 <Space size={4} wrap>
-                  <Tag>{t("admin.members.roles.owner")} {overview.data.members.owners}</Tag>
-                  <Tag>{t("admin.members.roles.admin")} {overview.data.members.admins}</Tag>
-                  <Tag>{t("admin.members.roles.member")} {overview.data.members.members}</Tag>
-                  <Tag>{t("admin.members.roles.viewer")} {overview.data.members.viewers}</Tag>
+                  <Tag>{roleLabel(t, "owner")} {overview.data.members.owners}</Tag>
+                  <Tag>{roleLabel(t, "admin")} {overview.data.members.admins}</Tag>
+                  <Tag>{roleLabel(t, "member")} {overview.data.members.members}</Tag>
+                  <Tag>{roleLabel(t, "viewer")} {overview.data.members.viewers}</Tag>
                 </Space>
               </Descriptions.Item>
             </Descriptions>

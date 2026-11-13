@@ -1,21 +1,14 @@
 import { Tag } from "antd";
-
-const success = new Set(["EVIDENCE_READY", "SUCCEEDED", "COMPLETED", "PUBLISHED", "ACTIVE", "RELATION_READY", "KNOWLEDGE_READY", "RESOLVED"]);
-const warning = new Set(["PENDING", "PENDING_REVIEW", "REVIEW_REQUIRED", "KNOWLEDGE_PARTIAL", "BUILDING", "RUNNING", "QUEUED"]);
-const danger = new Set(["FAILED", "CANCELLED", "DEAD", "DISCARDED", "STALE", "SUPERSEDED", "REJECTED"]);
-
-function statusColor(status: string): string {
-  if (success.has(status)) return "success";
-  if (warning.has(status)) return "warning";
-  if (danger.has(status)) return "error";
-  return "default";
-}
+import { useTranslation } from "react-i18next";
+import { statusLabel, statusTone, toneColor } from "../utils/enums";
 
 export function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
+  const tone = statusTone(status);
   return (
-    <Tag color={statusColor(status)} className="status-badge">
-      <span className={`status-dot status-${statusColor(status)}`} aria-hidden="true" />
-      {status}
+    <Tag color={toneColor(tone)} className="status-badge">
+      <span className={`status-dot status-${tone}`} aria-hidden="true" />
+      {statusLabel(t, status)}
     </Tag>
   );
 }
