@@ -1501,6 +1501,10 @@ export interface components {
         };
         AuditEventList: {
             items: components["schemas"]["AuditEvent"][];
+            limit?: number;
+            offset?: number;
+            /** Format: int64 */
+            total?: number;
         };
         AuthConfig: {
             devAuthEnabled: boolean;

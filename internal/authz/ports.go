@@ -42,6 +42,7 @@ type AuditFilter struct {
 	ResourceID   string
 	Allowed      *bool
 	Limit        int
+	Offset       int
 }
 
 // AuditStore owns the audit trail: membership role lookup for visibility,
@@ -49,6 +50,7 @@ type AuditFilter struct {
 type AuditStore interface {
 	MemberRole(ctx context.Context, tenantID, userID string) (string, bool, error)
 	List(ctx context.Context, tenantID string, filter AuditFilter) ([]models.AuditLog, error)
+	Count(ctx context.Context, tenantID string, filter AuditFilter) (int64, error)
 	Purge(ctx context.Context, before time.Time, limit int) (int64, error)
 	Create(ctx context.Context, entry models.AuditLog) error
 }

@@ -16,6 +16,15 @@ type AuditQuery struct {
 	ResourceID   string
 	Allowed      *bool
 	Limit        int
+	Offset       int
+}
+
+// AuditPage is one server-paginated page of the audit trail.
+type AuditPage struct {
+	Items  []models.AuditLog
+	Total  int64
+	Limit  int
+	Offset int
 }
 
 // auditRequired keeps the audit trail focused on security-relevant events:
@@ -37,16 +46,41 @@ func (s *Service) ListAudit(ctx context.Context, principal Principal, limit int)
 // role sees only its own actions. Permission denials are included, so a denied
 // retrieval leaves a trace.
 func (s *Service) QueryAudit(ctx context.Context, principal Principal, query AuditQuery) ([]models.AuditLog, error) {
-	role, ok, err := s.auditStore.MemberRole(ctx, principal.TenantID, principal.SubjectID)
+	filter, err := s.auditFilter(ctx, principal, query)
 	if err != nil {
 		return nil, err
 	}
+	return s.auditStore.List(ctx, principal.TenantID, filter)
+}
+
+// QueryAuditPage returns one page plus the filtered total for the workbench.
+func (s *Service) QueryAuditPage(ctx context.Context, principal Principal, query AuditQuery) (AuditPage, error) {
+	filter, err := s.auditFilter(ctx, principal, query)
+	if err != nil {
+		return AuditPage{}, err
+	}
+	rows, err := s.auditStore.List(ctx, principal.TenantID, filter)
+	if err != nil {
+		return AuditPage{}, err
+	}
+	total, err := s.auditStore.Count(ctx, principal.TenantID, filter)
+	if err != nil {
+		return AuditPage{}, err
+	}
+	return AuditPage{Items: rows, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+func (s *Service) auditFilter(ctx context.Context, principal Principal, query AuditQuery) (AuditFilter, error) {
+	role, ok, err := s.auditStore.MemberRole(ctx, principal.TenantID, principal.SubjectID)
+	if err != nil {
+		return AuditFilter{}, err
+	}
 	if !ok {
-		return nil, apperror.ErrForbidden
+		return AuditFilter{}, apperror.ErrForbidden
 	}
 	filter := AuditFilter{
 		Action: query.Action, ResourceType: query.ResourceType, ResourceID: query.ResourceID,
-		Allowed: query.Allowed, Limit: query.Limit,
+		Allowed: query.Allowed, Limit: query.Limit, Offset: query.Offset,
 	}
 	if role != "owner" && role != "admin" {
 		filter.ActorID = principal.SubjectID
@@ -56,7 +90,10 @@ func (s *Service) QueryAudit(ctx context.Context, principal Principal, query Aud
 	if filter.Limit <= 0 || filter.Limit > 500 {
 		filter.Limit = 100
 	}
-	return s.auditStore.List(ctx, principal.TenantID, filter)
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+	return filter, nil
 }
 
 // PurgeAuditLogs deletes at most one batch of audit rows older than the cutoff.

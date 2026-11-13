@@ -136,7 +136,6 @@ export function MembersSettings({ knowledgeBaseId, ownerId, canManage, onChanged
             <Select
               value={role}
               onChange={setRole}
-              style={{ width: 140 }}
               options={roles.map((value) => ({ value, label: roleLabel(t, value) }))}
             />
           </label>

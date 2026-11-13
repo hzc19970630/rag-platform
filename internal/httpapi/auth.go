@@ -247,16 +247,19 @@ func registerAuthRoutes(api, protected *gin.RouterGroup, cfg config.Config, deps
 			ResourceType: c.Query("resourceType"),
 			ResourceID:   c.Query("resourceId"),
 			Limit:        intQuery(c, "limit"),
+			Offset:       intQuery(c, "offset"),
 		}
 		if raw := strings.TrimSpace(c.Query("allowed")); raw != "" {
 			allowed := raw == "true" || raw == "1"
 			query.Allowed = &allowed
 		}
-		rows, err := deps.Authorization.QueryAudit(c.Request.Context(), accessContext(c).Principal, query)
+		page, err := deps.Authorization.QueryAuditPage(c.Request.Context(), accessContext(c).Principal, query)
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, httpapi.AuditEventList{Items: views.AuditEvents(rows)})
+		c.JSON(http.StatusOK, httpapi.AuditEventList{
+			Items: views.AuditEvents(page.Items), Total: page.Total, Limit: page.Limit, Offset: page.Offset,
+		})
 	})
 }

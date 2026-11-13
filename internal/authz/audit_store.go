@@ -32,7 +32,23 @@ func (s *PostgresAuditStore) MemberRole(ctx context.Context, tenantID, userID st
 }
 
 func (s *PostgresAuditStore) List(ctx context.Context, tenantID string, filter AuditFilter) ([]models.AuditLog, error) {
-	dbQuery := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID)
+	var rows []models.AuditLog
+	if err := s.filtered(ctx, tenantID, filter).Order("id DESC").Limit(filter.Limit).Offset(filter.Offset).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("query audit: %w", err)
+	}
+	return rows, nil
+}
+
+func (s *PostgresAuditStore) Count(ctx context.Context, tenantID string, filter AuditFilter) (int64, error) {
+	var total int64
+	if err := s.filtered(ctx, tenantID, filter).Count(&total).Error; err != nil {
+		return 0, fmt.Errorf("count audit: %w", err)
+	}
+	return total, nil
+}
+
+func (s *PostgresAuditStore) filtered(ctx context.Context, tenantID string, filter AuditFilter) *gorm.DB {
+	dbQuery := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.AuditLog{})
 	if filter.ActorID != "" {
 		dbQuery = dbQuery.Where("actor_id = ?", filter.ActorID)
 	}
@@ -48,11 +64,7 @@ func (s *PostgresAuditStore) List(ctx context.Context, tenantID string, filter A
 	if filter.Allowed != nil {
 		dbQuery = dbQuery.Where("allowed = ?", *filter.Allowed)
 	}
-	var rows []models.AuditLog
-	if err := dbQuery.Order("id DESC").Limit(filter.Limit).Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("query audit: %w", err)
-	}
-	return rows, nil
+	return dbQuery
 }
 
 func (s *PostgresAuditStore) Purge(ctx context.Context, before time.Time, limit int) (int64, error) {

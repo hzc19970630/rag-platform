@@ -32,7 +32,7 @@ test("upload, parse, search, answer and delete document", async ({ page, api }) 
     await page.getByRole("button", { name: /刷\s*新/ }).click();
     const documentRow = page.getByTestId("document-name").filter({ hasText: filename }).locator("xpath=ancestor::tr");
     await expect(documentRow).toBeVisible();
-    await expect(documentRow).toContainText("EVIDENCE_READY");
+    await expect(documentRow).toContainText(/证据就绪|EVIDENCE_READY/);
 
     const evidence = await searchEvidence(api, knowledgeBaseId, "how are keyword and vector results combined");
     expect(evidence.schemaVersion).toBe("EvidenceSetV1");

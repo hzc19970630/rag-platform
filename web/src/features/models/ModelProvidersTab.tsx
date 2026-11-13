@@ -1,5 +1,5 @@
 import { DeleteOutlined, EditOutlined, ExperimentOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Drawer, Flex, Input, InputNumber, Select, Space, Switch, Table, Tag, Typography, type TableColumnsType } from "antd";
+import { Alert, App, Button, Card, Drawer, Flex, Grid, Input, InputNumber, Select, Space, Switch, Table, Tag, Typography, type TableColumnsType } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -81,6 +81,7 @@ export function ModelProvidersTab() {
   const queryClient = useQueryClient();
   const providers = useModelProviders();
   const catalog = useModelCatalog();
+  const screens = Grid.useBreakpoint();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -172,35 +173,36 @@ export function ModelProvidersTab() {
   const deploymentModels = deploymentCatalog(catalog.data ?? []);
   const deploymentColumns: TableColumnsType<ModelCatalogEntry> = [
     {
-      title: t("admin.modelProviders.capability"), dataIndex: "capability", key: "capability", width: 130,
+      title: t("admin.modelProviders.capability"), dataIndex: "capability", key: "capability", width: 110,
       render: (value: string) => <Tag>{capabilityLabel(t, value)}</Tag>,
     },
     {
-      title: t("admin.modelProviders.model"), key: "model",
+      title: t("admin.modelProviders.model"), key: "model", width: 220,
       render: (_, entry) => (
         <Flex vertical gap={0}>
-          <Typography.Text strong>{entry.model}</Typography.Text>
+          <Typography.Text strong className="deployment-model-name">{entry.model}</Typography.Text>
           <Typography.Text type="secondary">{entry.provider}</Typography.Text>
         </Flex>
       ),
     },
-    { title: t("admin.modelProviders.version"), dataIndex: "version", key: "version", width: 130, render: (value: string) => value || "deployment" },
+    { title: t("admin.modelProviders.version"), dataIndex: "version", key: "version", width: 120, render: (value: string) => value || "deployment" },
     {
-      title: t("admin.modelProviders.dimension"), dataIndex: "dimension", key: "dimension", width: 110,
+      title: t("admin.modelProviders.dimension"), dataIndex: "dimension", key: "dimension", width: 90,
       render: (value: number, entry) => (entry.capability === "embedding" && value > 0 ? value : "—"),
     },
     {
-      title: t("admin.modelProviders.status"), key: "status", width: 120,
+      title: t("admin.modelProviders.status"), key: "status", width: 110,
       render: () => <Tag color="blue">{t("admin.modelProviders.deploymentSource")}</Tag>,
     },
   ];
 
   const columns: TableColumnsType<ModelProvider> = [
-    { title: t("admin.modelProviders.name"), dataIndex: "name", key: "name" },    {
+    { title: t("admin.modelProviders.name"), dataIndex: "name", key: "name", ellipsis: true },
+    {
       title: t("admin.modelProviders.kind"), dataIndex: "kind", key: "kind", width: 150,
       render: (value: string) => <Tag>{providerKindLabel(t, value)}</Tag>,
     },
-    { title: t("admin.modelProviders.baseUrl"), dataIndex: "baseUrl", key: "baseUrl", render: (value: string) => <span className="mono-small">{value}</span> },
+    { title: t("admin.modelProviders.baseUrl"), dataIndex: "baseUrl", key: "baseUrl", ellipsis: true, render: (value: string) => <span className="mono-small">{value}</span> },
     {
       title: t("admin.modelProviders.models"), key: "models", width: 120,
       render: (_, provider) => provider.models.map((entry) => <Tag key={entry.id || entry.model}>{entry.model}</Tag>),
@@ -223,12 +225,12 @@ export function ModelProvidersTab() {
 
   return (
     <div className="admin-section">
-      <Flex justify="space-between" align="center" className="admin-section-heading">
-        <div>
+      <Flex justify="space-between" align="center" gap={12} wrap className="admin-section-heading">
+        <div className="admin-section-title">
           <Typography.Title level={4}>{t("admin.modelProviders.title")}</Typography.Title>
           <Typography.Text type="secondary">{t("admin.modelProviders.hint")}</Typography.Text>
         </div>
-        <Flex gap={8}>
+        <Flex gap={8} wrap>
           <Button icon={<ReloadOutlined />} onClick={refresh}>{t("admin.modelProviders.refresh")}</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={startCreate}>{t("admin.modelProviders.add")}</Button>
         </Flex>
@@ -236,10 +238,10 @@ export function ModelProvidersTab() {
       <Card
         size="small"
         className="deployment-models-card"
-        title={<Space size={8}><Typography.Text strong>{t("admin.modelProviders.deploymentTitle")}</Typography.Text><Tag color="blue">{t("admin.modelProviders.deploymentReadOnly")}</Tag></Space>}
-        extra={<Typography.Text type="secondary">{t("admin.modelProviders.deploymentHint")}</Typography.Text>}
+        title={<Space size={8} wrap><Typography.Text strong>{t("admin.modelProviders.deploymentTitle")}</Typography.Text><Tag color="blue">{t("admin.modelProviders.deploymentReadOnly")}</Tag></Space>}
         style={{ marginBottom: 16 }}
       >
+        <Typography.Paragraph type="secondary">{t("admin.modelProviders.deploymentHint")}</Typography.Paragraph>
         {catalog.error && <Alert type="error" showIcon message={t("admin.modelProviders.deploymentLoadFailed")} description={catalog.error.message} style={{ marginBottom: 12 }} />}
         <Table
           rowKey={(entry) => `${entry.model}:${entry.capability}`}
@@ -248,19 +250,20 @@ export function ModelProvidersTab() {
           dataSource={deploymentModels}
           loading={catalog.isLoading}
           pagination={false}
+          scroll={{ x: 700 }}
           locale={{ emptyText: t("admin.modelProviders.deploymentEmpty") }}
         />
       </Card>
-      <Table rowKey="id" size="small" columns={columns} dataSource={providers.data ?? []} loading={providers.isLoading} pagination={false} />
+      <Table rowKey="id" size="small" columns={columns} dataSource={providers.data ?? []} loading={providers.isLoading} pagination={false} scroll={{ x: 900 }} />
 
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
-        size={720}
+        size={screens.md ? 720 : "100%"}
         title={editingId ? t("admin.modelProviders.editTitle") : t("admin.modelProviders.addTitle")}
         extra={<Button type="primary" loading={saving} onClick={() => void save()}>{t("admin.modelProviders.save")}</Button>}
       >
-        <Flex vertical gap={12}>
+        <Flex vertical gap={12} className="model-provider-form">
           <label>
             <Typography.Text strong>{t("admin.modelProviders.name")}</Typography.Text>
             <Input value={draft.name} onChange={(event) => patchDraft({ name: event.target.value })} />
@@ -269,6 +272,7 @@ export function ModelProvidersTab() {
             <Typography.Text strong>{t("admin.modelProviders.kind")}</Typography.Text>
             <Select
               value={draft.kind}
+              style={{ width: "100%" }}
               onChange={(value) => patchDraft({ kind: value })}
               options={[
                 { value: "openai_compatible", label: providerKindLabel(t, "openai_compatible") },
@@ -300,12 +304,12 @@ export function ModelProvidersTab() {
 
           <Typography.Title level={5}>{t("admin.modelProviders.models")}</Typography.Title>
           {draft.models.map((entry: DraftModel, index: number) => (
-            <Flex key={index} gap={8} align="end" wrap>
-              <label>
+            <Flex key={index} gap={8} align="end" wrap className="model-row">
+              <label className="model-field model-field-model">
                 <Typography.Text type="secondary">{t("admin.modelProviders.model")}</Typography.Text>
                 <Input value={entry.model} onChange={(event) => patchModel(index, { model: event.target.value })} />
               </label>
-              <label>
+              <label className="model-field model-field-capability">
                 <Typography.Text type="secondary">{t("admin.modelProviders.capability")}</Typography.Text>
                 <Select
                   value={entry.capability}
@@ -317,16 +321,20 @@ export function ModelProvidersTab() {
                   ]}
                 />
               </label>
-              <label>
+              <label className="model-field model-field-version">
                 <Typography.Text type="secondary">{t("admin.modelProviders.version")}</Typography.Text>
                 <Input value={entry.version} onChange={(event) => patchModel(index, { version: event.target.value })} />
               </label>
-              {entry.capability === "embedding" ? (
-                <label>
-                  <Typography.Text type="secondary">{t("admin.modelProviders.dimension")}</Typography.Text>
-                  <InputNumber min={1} value={entry.dimension || null} onChange={(value) => patchModel(index, { dimension: value ?? 0 })} />
-                </label>
-              ) : null}
+              <label className="model-field model-field-dimension">
+                <Typography.Text type="secondary">{t("admin.modelProviders.dimension")}</Typography.Text>
+                <InputNumber
+                  min={1}
+                  value={entry.capability === "embedding" ? entry.dimension || null : null}
+                  placeholder="—"
+                  disabled={entry.capability !== "embedding"}
+                  onChange={(value) => patchModel(index, { dimension: value ?? 0 })}
+                />
+              </label>
               <Button
                 danger
                 disabled={draft.models.length <= 1}

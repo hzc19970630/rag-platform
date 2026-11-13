@@ -126,6 +126,13 @@ components:
           items:
             $ref: '#/components/schemas/AuditEvent'
           type: array
+        limit:
+          type: integer
+        offset:
+          type: integer
+        total:
+          format: int64
+          type: integer
       required:
         - items
       type: object

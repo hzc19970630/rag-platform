@@ -113,3 +113,57 @@ func TestPurgeAuditLogsDeletesOnlyExpiredRowsInBatches(t *testing.T) {
 		t.Fatalf("only the non-expired row must remain, got %+v", remaining)
 	}
 }
+
+func TestQueryAuditPageReturnsTotalAndOffset(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:audit-page?mode=memory&cache=shared"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("open test db: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("test db handle: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	if err := db.AutoMigrate(&models.AuditLog{}, &models.Membership{}); err != nil {
+		t.Fatalf("migrate audit tables: %v", err)
+	}
+	if err := db.Create(&models.Membership{TenantID: "tenant-1", UserID: "user-1", Role: "owner"}).Error; err != nil {
+		t.Fatalf("seed membership: %v", err)
+	}
+	now := time.Now().UTC()
+	seed := []models.AuditLog{
+		auditRow("a", now.Add(-4*time.Minute)),
+		auditRow("b", now.Add(-3*time.Minute)),
+		auditRow("c", now.Add(-2*time.Minute)),
+		auditRow("d", now.Add(-time.Minute)),
+		auditRow("e", now),
+	}
+	for index := range seed {
+		seed[index].Action = "write"
+	}
+	seed[0].Action = "read"
+	if err := db.Create(&seed).Error; err != nil {
+		t.Fatalf("seed audit rows: %v", err)
+	}
+
+	service := &Service{auditStore: NewPostgresAuditStore(db)}
+	principal := Principal{TenantID: "tenant-1", SubjectID: "user-1"}
+	page, err := service.QueryAuditPage(context.Background(), principal, AuditQuery{Limit: 2, Offset: 1})
+	if err != nil {
+		t.Fatalf("query audit page: %v", err)
+	}
+	if page.Total != 5 || page.Limit != 2 || page.Offset != 1 {
+		t.Fatalf("page metadata = %+v", page)
+	}
+	if len(page.Items) != 2 || page.Items[0].ResourceID != "d" || page.Items[1].ResourceID != "c" {
+		t.Fatalf("page rows = %+v", page.Items)
+	}
+
+	filtered, err := service.QueryAuditPage(context.Background(), principal, AuditQuery{Action: "read", Limit: 20})
+	if err != nil {
+		t.Fatalf("query filtered audit page: %v", err)
+	}
+	if filtered.Total != 1 || len(filtered.Items) != 1 || filtered.Items[0].ResourceID != "a" {
+		t.Fatalf("filtered page = %+v", filtered)
+	}
+}

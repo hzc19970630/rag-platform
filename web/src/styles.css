@@ -231,12 +231,32 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .settings-help, .setting-help { color: var(--text-secondary); font-size: 0.78rem; line-height: 1.5; }
 .setting-group { display: grid; gap: 2px; }
 .setting-group h5 { margin: 8px 0 4px !important; }
-.setting-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, auto); gap: 20px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--border-secondary); }
+.setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--border-secondary); }
 .setting-row:last-child { border-bottom: 0; }
 .setting-row-error { border-left: 2px solid var(--error); padding-left: 10px; margin-left: -12px; }
 .setting-label { display: grid; gap: 4px; min-width: 0; }
-.setting-control { display: grid; justify-items: end; gap: 4px; }
-.setting-control .ant-input-number { width: 148px; }
+.setting-control { display: grid; justify-items: stretch; align-content: start; gap: 4px; width: 100%; }
+.config-control { display: grid; gap: 2px; width: 100%; }
+.config-control-row { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; gap: 8px; }
+.config-unit { min-width: 48px; color: var(--text-secondary); font-size: 0.82rem; }
+.config-control-row .ant-input-number,
+.config-control-row .ant-select { width: 100%; }
+.config-control .config-clear { justify-self: end; height: auto; padding: 0; }
+.settings-select { width: 100%; }
+.model-provider-form label { display: grid; gap: 4px; }
+.model-row { align-items: flex-end; }
+.model-row .model-field { display: grid; gap: 2px; min-width: 0; }
+.model-row .model-field-model { flex: 1 1 220px; }
+.model-row .model-field-capability { flex: 0 1 140px; }
+.model-row .model-field-version { flex: 0 1 120px; }
+.model-row .model-field-dimension { flex: 0 1 100px; }
+.model-row .ant-input,
+.model-row .ant-select,
+.model-row .ant-input-number { width: 100%; }
+.inline-form .field-label { width: 200px; }
+.inline-form .ant-input,
+.inline-form .ant-select { width: 100%; }
+.admin-filter-field .ant-select { width: 100%; }
 .field-error { color: var(--error); font-size: 0.76rem; }
 .field-label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 0.8rem; font-weight: 650; }
 .inline-form { padding-top: 4px; }
@@ -303,17 +323,25 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .chat-composer .ant-btn { height: 40px; }
 
 /* Operations */
-.ops-stack { display: grid; gap: 16px; }
+.ops-stack { display: grid; gap: 16px; min-width: 0; }
+.ops-stack > * { min-width: 0; }
+.ops-stack .ant-card { min-width: 0; }
 .ops-report { max-height: 240px; overflow: auto; margin: 0; padding: 12px; border: 1px solid var(--border-secondary); border-radius: var(--radius); background: var(--bg-subtle); font-size: 0.78rem; }
 .token-box { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); overflow-wrap: anywhere; }
 .mcp-field { width: 100%; margin-top: 6px; }
-.mcp-inline-field { flex: 1 1 260px; min-width: 220px; }
+.mcp-inline-field { flex: 1 1 220px; min-width: 0; }
 .mcp-inline-field .ant-typography { display: block; margin-bottom: 4px; }
 .mcp-steps { margin: 0; padding-left: 20px; line-height: 1.9; }
 .mcp-check-list { margin: 12px 0 0; padding-left: 18px; line-height: 2; }
 
+.deployment-model-name { white-space: nowrap; }
+
 /* Administration */
-.admin-stack { display: grid; gap: 16px; }
+.admin-stack { display: grid; gap: 16px; min-width: 0; }
+.admin-stack > * { min-width: 0; }
+.admin-section-heading { flex-wrap: wrap; }
+.admin-section-title { min-width: 0; }
+.admin-overview-descriptions .ant-descriptions-item-label { white-space: nowrap; }
 .admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .admin-stat { border-color: var(--border-secondary) !important; box-shadow: var(--shadow-card); }
 .admin-quota-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
@@ -323,6 +351,11 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .admin-filters { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .admin-filter-field { display: grid; gap: 4px; flex: 1 1 170px; min-width: 150px; }
 .admin-filter-actions { padding-bottom: 1px; }
+.admin-quota-hint { margin-top: 16px !important; }
+.admin-audit-description { margin-bottom: 16px !important; }
+.admin-audit-hint { margin: 16px 0 !important; }
+.deployment-models-card .ant-card-body { display: grid; gap: 12px; }
+.deployment-models-card .ant-typography { margin-bottom: 0 !important; }
 
 /* Login */
 .login-shell { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr); align-items: center; gap: 48px; padding: 48px max(6vw, 24px); background:
@@ -354,7 +387,8 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
   .switch-grid { grid-template-columns: 1fr; }
   .chat-workspace { grid-template-columns: 232px minmax(0, 1fr); }
   .setting-row { grid-template-columns: 1fr; gap: 8px; }
-  .setting-control { justify-items: start; }
+  .setting-control { justify-items: stretch; }
+  .inline-form .field-label { width: 100%; }
   .login-shell { grid-template-columns: 1fr; gap: 28px; justify-items: center; text-align: center; }
   .login-brand { justify-items: center; max-width: 640px; }
   .login-points { text-align: left; }
@@ -379,6 +413,10 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
   .settings-block { padding: 16px; }
   .capability-grid { grid-template-columns: 1fr; }
   .projection-grid { gap: 14px; }
+  .admin-section-title { flex: 1 1 100%; }
+  .admin-tabs .ant-tabs-tab-icon { display: none; }
+  .admin-tabs .ant-tabs-tab { padding: 8px 8px; }
+  .admin-tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 0; }
   .login-shell { padding: 32px 18px; }
 }
 

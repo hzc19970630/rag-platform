@@ -1,5 +1,6 @@
 import {
   CloudServerOutlined,
+  DashboardOutlined,
   DownloadOutlined,
   FileSearchOutlined,
   PlusOutlined,
@@ -12,6 +13,7 @@ import {
 import {
   Alert,
   App,
+  Grid,
   Button,
   Card,
   Col,
@@ -53,7 +55,7 @@ import { ModelProvidersTab } from "../features/models/ModelProvidersTab";
 import { TenantConfigurationTab } from "../features/settings/TenantConfigurationTab";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { usePermissions } from "../session";
-import { auditActionLabel, auditResourceLabel, roleLabel } from "../utils/enums";
+import { AUDIT_ACTION_VALUES, AUDIT_RESOURCE_VALUES, auditActionLabel, auditResourceLabel, roleLabel } from "../utils/enums";
 import { formatSize, formatTime } from "../utils/format";
 
 const tenantRoles = ["owner", "admin", "member", "viewer"] as const;
@@ -149,6 +151,7 @@ export function AdminPage() {
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const { me, canAdmin } = usePermissions();
+  const screens = Grid.useBreakpoint();
   const overview = useTenantOverview(canAdmin);
   const quota = useTenantQuota(canAdmin);
   const members = useTenantMembers(canAdmin);
@@ -168,7 +171,14 @@ export function AdminPage() {
     allowed: "" | "true" | "false";
   }>({ actorId: "", action: "", resourceType: "", allowed: "" });
   const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
-  const appliedAuditFilters = useMemo<AuditFilters>(() => ({ ...auditFilters, limit: auditExportLimit }), [auditFilters]);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditPageSize, setAuditPageSize] = useState(20);
+  const [auditExporting, setAuditExporting] = useState(false);
+  const appliedAuditFilters = useMemo<AuditFilters>(() => ({
+    ...auditFilters,
+    limit: auditPageSize,
+    offset: (auditPage - 1) * auditPageSize,
+  }), [auditFilters, auditPage, auditPageSize]);
   const audit = useAuditEvents(appliedAuditFilters, canAdmin);
 
   useEffect(() => {
@@ -183,7 +193,8 @@ export function AdminPage() {
     );
   }
 
-  const auditRows = audit.data ?? [];
+  const auditRows = audit.data?.items ?? [];
+  const auditTotal = audit.data?.total ?? 0;
 
   async function refreshOverview() {
     await Promise.all([
@@ -296,6 +307,7 @@ export function AdminPage() {
   }
 
   function applyAuditFilters() {
+    setAuditPage(1);
     setAuditFilters({
       actorId: auditDraft.actorId.trim() || undefined,
       action: auditDraft.action.trim() || undefined,
@@ -307,6 +319,25 @@ export function AdminPage() {
   function resetAuditFilters() {
     setAuditDraft({ actorId: "", action: "", resourceType: "", allowed: "" });
     setAuditFilters({});
+    setAuditPage(1);
+  }
+
+  async function exportAudit() {
+    setAuditExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (auditFilters.actorId) params.set("actorId", auditFilters.actorId);
+      if (auditFilters.action) params.set("action", auditFilters.action);
+      if (auditFilters.resourceType) params.set("resourceType", auditFilters.resourceType);
+      if (auditFilters.allowed) params.set("allowed", auditFilters.allowed);
+      params.set("limit", String(auditExportLimit));
+      const data = await api<{ items: AuditEvent[] }>(`/audit?${params.toString()}`);
+      downloadAuditCsv(data.items, overview.data?.id ?? me.principal.tenantId);
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : t("admin.audit.exportFailed"));
+    } finally {
+      setAuditExporting(false);
+    }
   }
 
   const roleOptions = tenantRoles.map((role) => ({ value: role, label: roleLabel(t, role) }));
@@ -336,6 +367,7 @@ export function AdminPage() {
           size="small"
           value={row.role}
           options={roleOptions}
+          style={{ width: 120 }}
           disabled={busyMember === row.userId}
           onChange={(role) => void updateRole(row, role)}
           aria-label={t("admin.members.role")}
@@ -376,7 +408,7 @@ export function AdminPage() {
         </Flex>
       ),
     },
-    { title: t("admin.audit.action"), dataIndex: "action", key: "action", width: 190, render: (value: string) => auditActionLabel(t, value) },
+    { title: t("admin.audit.action"), dataIndex: "action", key: "action", width: 190, ellipsis: true, render: (value: string) => auditActionLabel(t, value) },
     {
       title: t("admin.audit.resource"),
       key: "resource",
@@ -398,6 +430,8 @@ export function AdminPage() {
       title: t("admin.audit.reason"),
       dataIndex: "reason",
       key: "reason",
+      width: 300,
+      ellipsis: true,
       render: (value: string) => <Typography.Text ellipsis={{ tooltip: value }}>{value || "-"}</Typography.Text>,
     },
     { title: t("admin.audit.requestId"), dataIndex: "requestId", key: "requestId", width: 190, render: (value: string) => <span className="mono-small">{value || "-"}</span> },
@@ -476,7 +510,7 @@ export function AdminPage() {
             <Card size="small" className="admin-stat"><Statistic title={t("admin.overview.members")} value={overview.data.members.total} /></Card>
           </div>
           <Card size="small" title={t("admin.overview.title")}>
-            <Descriptions size="small" column={{ xs: 1, md: 2 }} bordered>
+            <Descriptions size="small" column={{ xs: 1, md: 2 }} bordered className="admin-overview-descriptions">
               <Descriptions.Item label={t("admin.overview.name")}>{overview.data.name || "-"}</Descriptions.Item>
               <Descriptions.Item label={t("admin.overview.id")}><span className="mono-small">{overview.data.id}</span></Descriptions.Item>
               <Descriptions.Item label={t("admin.overview.createdAt")}>{formatTime(overview.data.createdAt)}</Descriptions.Item>
@@ -524,7 +558,7 @@ export function AdminPage() {
             ))}
           </div>
         )}
-        <Alert className="settings-alert" type="info" showIcon title={t("admin.quota.hint")} />
+        <Alert className="settings-alert admin-quota-hint" type="info" showIcon title={t("admin.quota.hint")} />
       </Card>
     </div>
   );
@@ -554,15 +588,16 @@ export function AdminPage() {
             size="small"
             type="primary"
             icon={<DownloadOutlined />}
-            disabled={auditRows.length === 0}
-            onClick={() => downloadAuditCsv(auditRows, overview.data?.id ?? me.principal.tenantId)}
+            disabled={auditTotal === 0}
+            loading={auditExporting}
+            onClick={() => void exportAudit()}
           >
             {t("admin.audit.export")}
           </Button>
         </Space>
       )}
     >
-      <Typography.Paragraph type="secondary">{t("admin.audit.description")}</Typography.Paragraph>
+      <Typography.Paragraph type="secondary" className="admin-audit-description">{t("admin.audit.description")}</Typography.Paragraph>
       <div className="admin-filters">
         <label className="admin-filter-field">
           <Typography.Text type="secondary">{t("admin.audit.actor")}</Typography.Text>
@@ -570,11 +605,27 @@ export function AdminPage() {
         </label>
         <label className="admin-filter-field">
           <Typography.Text type="secondary">{t("admin.audit.action")}</Typography.Text>
-          <Input value={auditDraft.action} onChange={(event) => setAuditDraft((current) => ({ ...current, action: event.target.value }))} placeholder={t("admin.audit.actionPlaceholder")} />
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={auditDraft.action || undefined}
+            placeholder={t("admin.audit.allActions")}
+            options={AUDIT_ACTION_VALUES.map((value) => ({ value, label: auditActionLabel(t, value) }))}
+            onChange={(value) => setAuditDraft((current) => ({ ...current, action: value ?? "" }))}
+          />
         </label>
         <label className="admin-filter-field">
           <Typography.Text type="secondary">{t("admin.audit.resource")}</Typography.Text>
-          <Input value={auditDraft.resourceType} onChange={(event) => setAuditDraft((current) => ({ ...current, resourceType: event.target.value }))} placeholder={t("admin.audit.resourcePlaceholder")} />
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            value={auditDraft.resourceType || undefined}
+            placeholder={t("admin.audit.allResources")}
+            options={AUDIT_RESOURCE_VALUES.map((value) => ({ value, label: auditResourceLabel(t, value) }))}
+            onChange={(value) => setAuditDraft((current) => ({ ...current, resourceType: value ?? "" }))}
+          />
         </label>
         <label className="admin-filter-field">
           <Typography.Text type="secondary">{t("admin.audit.allowed")}</Typography.Text>
@@ -594,18 +645,29 @@ export function AdminPage() {
           <Button onClick={resetAuditFilters}>{t("admin.audit.reset")}</Button>
         </Space>
       </div>
-      <Alert className="settings-alert" type="info" showIcon title={t("admin.audit.exportHint", { count: auditExportLimit })} />
+      <Alert className="settings-alert admin-audit-hint" type="info" showIcon title={t("admin.audit.exportHint", { count: auditExportLimit })} />
       {audit.isLoading && <LoadingBlock />}
       {audit.error && <QueryFallback error={audit.error} retry={() => void audit.refetch()} />}
-      {audit.data && audit.data.length === 0 && <Alert type="info" showIcon title={t("admin.audit.empty")} />}
-      {audit.data && audit.data.length > 0 && (
+      {audit.data && auditTotal === 0 && <Alert type="info" showIcon title={t("admin.audit.empty")} />}
+      {auditTotal > 0 && (
         <Table<AuditEvent>
           size="middle"
           rowKey="id"
           columns={auditColumns}
-          dataSource={audit.data}
-          pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: [20, 50, 100] }}
-          scroll={{ x: 1240 }}
+          dataSource={auditRows}
+          pagination={{
+            current: auditPage,
+            pageSize: auditPageSize,
+            total: auditTotal,
+            showTotal: (total) => t("admin.audit.total", { total }),
+            showSizeChanger: true,
+            pageSizeOptions: [20, 50, 100],
+            onChange: (page, size) => {
+              setAuditPage(size === auditPageSize ? page : 1);
+              setAuditPageSize(size);
+            },
+          }}
+          scroll={{ x: 1340 }}
         />
       )}
     </Card>
@@ -615,10 +677,12 @@ export function AdminPage() {
     <div className="page">
       <PageHeader title={t("admin.title")} description={t("admin.description")} />
       <Tabs
+        className="admin-tabs"
         activeKey={tab}
         onChange={setTab}
+        tabBarGutter={screens.md ? 16 : 0}
         items={[
-          { key: "overview", label: t("admin.tabs.overview"), icon: <SafetyCertificateOutlined />, children: overviewContent },
+          { key: "overview", label: t("admin.tabs.overview"), icon: <DashboardOutlined />, children: overviewContent },
           { key: "members", label: t("admin.tabs.members"), icon: <TeamOutlined />, children: membersContent },
           { key: "audit", label: t("admin.tabs.audit"), icon: <FileSearchOutlined />, children: auditContent },
           { key: "models", label: t("admin.tabs.models"), icon: <CloudServerOutlined />, children: <ModelProvidersTab /> },
@@ -643,7 +707,7 @@ export function AdminPage() {
           </label>
           <label className="field-label">
             {t("admin.members.role")}
-            <Select value={memberRole} options={roleOptions} onChange={(role) => setMemberRole(role)} />
+            <Select value={memberRole} options={roleOptions} style={{ width: "100%" }} onChange={(role) => setMemberRole(role)} />
           </label>
         </Flex>
       </Modal>

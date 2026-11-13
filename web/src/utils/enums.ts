@@ -32,7 +32,7 @@ export const STATUS_VALUES = [
 export const ROLE_VALUES = ["owner", "admin", "editor", "member", "viewer"] as const;
 
 export const CAPABILITY_VALUES = [
-  "evidence", "wiki", "graph", "relation", "chat",
+  "evidence", "wiki", "graph", "relation", "chat", "embedding", "rerank",
   "knowledge_base:read", "knowledge_base:write", "knowledge_base:delete",
   "knowledge_base:manage_members", "tenant:admin",
 ] as const;

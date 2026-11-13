@@ -67,6 +67,7 @@ export type AuditFilters = {
   resourceType?: string;
   allowed?: "true" | "false";
   limit?: number;
+  offset?: number;
 };
 
 export const terminalVersionStatuses = new Set(["EVIDENCE_READY", "FAILED", "CANCELLED"]);
@@ -295,10 +296,10 @@ export function useAuditEvents(filters: AuditFilters, enabled = true) {
       if (filters.action) params.set("action", filters.action);
       if (filters.resourceType) params.set("resourceType", filters.resourceType);
       if (filters.allowed) params.set("allowed", filters.allowed);
-      params.set("limit", String(filters.limit ?? 100));
-      return api<{ items: AuditEvent[] }>(`/audit?${params.toString()}`);
+      params.set("limit", String(filters.limit ?? 20));
+      params.set("offset", String(filters.offset ?? 0));
+      return api<{ items: AuditEvent[]; total: number; limit: number; offset: number }>(`/audit?${params.toString()}`);
     },
-    select: (data) => data.items,
     enabled,
   });
 }

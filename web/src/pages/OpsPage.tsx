@@ -184,6 +184,7 @@ export function OpsPage() {
     {
       title: t("ops.keyName"),
       key: "name",
+      width: 220,
       render: (_, row) => (
         <Flex vertical gap={2}>
           <Typography.Text strong>{row.name}</Typography.Text>
@@ -194,6 +195,7 @@ export function OpsPage() {
     {
       title: t("ops.capabilities"),
       key: "capabilities",
+      width: 220,
       render: (_, row) => (
         <Space size={4} wrap>
           {row.capabilities.map((capability) => <Tag key={capability}>{capabilityLabel(t, capability)}</Tag>)}
@@ -277,8 +279,9 @@ export function OpsPage() {
                   rowKey="name"
                   pagination={false}
                   dataSource={Object.entries(metrics.data.counters).map(([name, value]) => ({ name, value }))}
+                  scroll={{ x: 360 }}
                   columns={[
-                    { title: t("ops.metricName"), dataIndex: "name", key: "name" },
+                    { title: t("ops.metricName"), dataIndex: "name", key: "name", ellipsis: true },
                     { title: t("ops.value"), dataIndex: "value", key: "value", width: 120, align: "right" },
                   ]}
                 />
@@ -290,11 +293,12 @@ export function OpsPage() {
                   rowKey="name"
                   pagination={false}
                   dataSource={Object.entries(metrics.data.timings).map(([name, timing]) => ({ name, ...timing }))}
+                  scroll={{ x: 400 }}
                   columns={[
-                    { title: t("ops.metricName"), dataIndex: "name", key: "name" },
-                    { title: t("ops.count"), dataIndex: "count", key: "count", width: 80, align: "right" },
-                    { title: t("ops.avg"), key: "avg", width: 90, align: "right", render: (_, row) => `${(row.avgMs ?? 0).toFixed(1)}ms` },
-                    { title: t("ops.max"), dataIndex: "maxMs", key: "maxMs", width: 90, align: "right", render: (value: number) => `${value}ms` },
+                    { title: t("ops.metricName"), dataIndex: "name", key: "name", ellipsis: true },
+                    { title: t("ops.count"), dataIndex: "count", key: "count", width: 70, align: "right" },
+                    { title: t("ops.avg"), key: "avg", width: 75, align: "right", render: (_, row) => `${(row.avgMs ?? 0).toFixed(1)}ms` },
+                    { title: t("ops.max"), dataIndex: "maxMs", key: "maxMs", width: 75, align: "right", render: (value: number) => `${value}ms` },
                   ]}
                 />
               </Col>
@@ -341,7 +345,7 @@ export function OpsPage() {
       {apiKeys.error && <QueryFallback error={apiKeys.error} retry={() => void apiKeys.refetch()} />}
       {apiKeys.data && apiKeys.data.length === 0 && <Alert type="info" showIcon message={t("ops.noKeys")} />}
       {apiKeys.data && apiKeys.data.length > 0 && (
-        <Table<APIKeyView> size="middle" rowKey="id" columns={keyColumns} dataSource={apiKeys.data} pagination={false} scroll={{ x: true }} />
+        <Table<APIKeyView> size="middle" rowKey="id" columns={keyColumns} dataSource={apiKeys.data} pagination={false} scroll={{ x: 1180 }} />
       )}
     </Card>
   );

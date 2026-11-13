@@ -167,50 +167,50 @@ function ConfigFieldRow(props: {
         {props.overridden && <div className="setting-help">{t("retrieval.overrideHint")}</div>}
       </div>
       <div className="setting-control">
-        <Space size={4} wrap>
-          {field.kind === "bool" ? (
-            <Select
-              value={value === null ? "" : String(value)}
-              disabled={!props.canWrite}
-              aria-label={t(field.labelKey)}
-              style={{ minWidth: 160 }}
-              onChange={(next) => props.onChange(next === "" ? null : next === "true")}
-              options={[
-                { value: "", label: `${t("common.inherit")} (${displayValue(inherited)})` },
-                { value: "true", label: "true" },
-                { value: "false", label: "false" },
-              ]}
-            />
-          ) : field.kind === "string_list" ? (
-            <Select
-              mode="tags"
-              value={Array.isArray(value) ? value : []}
-              disabled={!props.canWrite}
-              aria-label={t(field.labelKey)}
-              style={{ minWidth: 320 }}
-              placeholder={t("common.inherit")}
-              onChange={(next: string[]) => props.onChange(next)}
-              options={[]}
-            />
-          ) : (
-            <InputNumber
-              value={typeof value === "number" ? value : null}
-              min={field.min}
-              max={field.max}
-              step={field.step ?? 1}
-              precision={field.kind === "int" ? 0 : undefined}
-              placeholder={displayValue(inherited)}
-              disabled={!props.canWrite}
-              status={props.error ? "error" : undefined}
-              aria-label={t(field.labelKey)}
-              onChange={(next) => props.onChange(typeof next === "number" ? next : null)}
-            />
-          )}
-          {field.unitKey && <Typography.Text type="secondary">{t(field.unitKey)}</Typography.Text>}
+        <div className="config-control">
+          <div className="config-control-row">
+            {field.kind === "bool" ? (
+              <Select
+                value={value === null ? "" : String(value)}
+                disabled={!props.canWrite}
+                aria-label={t(field.labelKey)}
+                onChange={(next) => props.onChange(next === "" ? null : next === "true")}
+                options={[
+                  { value: "", label: `${t("common.inherit")} (${displayValue(inherited)})` },
+                  { value: "true", label: "true" },
+                  { value: "false", label: "false" },
+                ]}
+              />
+            ) : field.kind === "string_list" ? (
+              <Select
+                mode="tags"
+                value={Array.isArray(value) ? value : []}
+                disabled={!props.canWrite}
+                aria-label={t(field.labelKey)}
+                placeholder={t("common.inherit")}
+                onChange={(next: string[]) => props.onChange(next)}
+                options={[]}
+              />
+            ) : (
+              <InputNumber
+                value={typeof value === "number" ? value : null}
+                min={field.min}
+                max={field.max}
+                step={field.step ?? 1}
+                precision={field.kind === "int" ? 0 : undefined}
+                placeholder={displayValue(inherited)}
+                disabled={!props.canWrite}
+                status={props.error ? "error" : undefined}
+                aria-label={t(field.labelKey)}
+                onChange={(next) => props.onChange(typeof next === "number" ? next : null)}
+              />
+            )}
+            <span className="config-unit">{field.unitKey ? t(field.unitKey) : ""}</span>
+          </div>
           {props.canWrite && props.overridden && (
-            <Button type="link" size="small" onClick={props.onClear}>{t("retrieval.clearOverride")}</Button>
+            <Button type="link" size="small" className="config-clear" onClick={props.onClear}>{t("retrieval.clearOverride")}</Button>
           )}
-        </Space>
+        </div>
         {props.error && <div className="field-error" role="alert">{props.error}</div>}
       </div>
     </div>

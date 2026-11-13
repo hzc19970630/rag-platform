@@ -221,6 +221,7 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
     {
       title: t("document.name"),
       key: "name",
+      width: 280,
       render: (_, item) => (
         <div className="doc-name">
           <span data-testid="document-name" data-document-id={item.document.id}>
@@ -287,7 +288,8 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
           columns={columns}
           dataSource={items}
           pagination={false}
-          scroll={{ x: true }}
+          scroll={{ x: 980 }}
+          tableLayout="fixed"
           expandable={{
             expandedRowRender: (item) => (
               <div className="doc-expanded">

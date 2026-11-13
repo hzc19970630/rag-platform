@@ -96,6 +96,7 @@ export function DocumentPage() {
     {
       title: t("document.version"),
       key: "version",
+      width: 280,
       render: (_, version) => (
         <Space size={8} wrap>
           <Typography.Text strong>v{version.version}</Typography.Text>
@@ -180,7 +181,7 @@ export function DocumentPage() {
             pagination={false}
             columns={versionColumns}
             dataSource={versions.data.items}
-            scroll={{ x: true }}
+            scroll={{ x: 760 }}
           />
         )}
       </Card>
