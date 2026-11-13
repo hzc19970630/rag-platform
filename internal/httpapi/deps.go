@@ -52,6 +52,12 @@ type TenantDeps struct {
 	Tenant *tenant.Service
 }
 
+// ModelDeps owns the tenant model catalog: provider CRUD and the merged
+// read-only view used by knowledge-base settings.
+type ModelDeps struct {
+	Models *modelregistry.Registry
+}
+
 type OperationsDeps struct {
 	Ingestion *ingestion.Service
 	Ops       *ops.Service

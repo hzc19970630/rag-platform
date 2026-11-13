@@ -1084,6 +1084,8 @@ components:
           $ref: '#/components/schemas/IndexingStrategy'
         knowledgeBaseId:
           type: string
+        modelBinding:
+          $ref: '#/components/schemas/ModelBinding'
         readOnly:
           $ref: '#/components/schemas/ReadOnlySystemConfiguration'
         retrieval:
@@ -1295,6 +1297,145 @@ components:
           type: array
         message:
           $ref: '#/components/schemas/Message'
+      type: object
+    ModelBinding:
+      properties:
+        chat:
+          $ref: '#/components/schemas/ModelBindingEntry'
+        embedding:
+          $ref: '#/components/schemas/ModelBindingEntry'
+        embeddingDimension:
+          type: integer
+        embeddingLockReason:
+          type: string
+        embeddingLocked:
+          type: boolean
+        rerank:
+          $ref: '#/components/schemas/ModelBindingEntry'
+      type: object
+    ModelBindingEntry:
+      properties:
+        model:
+          type: string
+        source:
+          type: string
+        version:
+          type: string
+      type: object
+    ModelCatalog:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ModelCatalogEntry'
+          type: array
+      type: object
+    ModelCatalogEntry:
+      properties:
+        capability:
+          type: string
+        dimension:
+          type: integer
+        displayName:
+          type: string
+        enabled:
+          type: boolean
+        id:
+          type: string
+        model:
+          type: string
+        provider:
+          type: string
+        providerId:
+          type: string
+        source:
+          type: string
+        version:
+          type: string
+      type: object
+    ModelCatalogEntryRequest:
+      properties:
+        capability:
+          type: string
+        dimension:
+          type: integer
+        display_name:
+          type: string
+        enabled:
+          type: boolean
+        model:
+          type: string
+        version:
+          type: string
+      required:
+        - capability
+        - model
+      type: object
+    ModelProvider:
+      properties:
+        apiKeySet:
+          type: boolean
+        baseUrl:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        enabled:
+          type: boolean
+        healthUrl:
+          type: string
+        id:
+          type: string
+        kind:
+          type: string
+        models:
+          items:
+            $ref: '#/components/schemas/ModelCatalogEntry'
+          type: array
+        name:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    ModelProviderList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ModelProvider'
+          type: array
+      type: object
+    ModelProviderTestResult:
+      properties:
+        checkedAt:
+          format: date-time
+          type: string
+        error:
+          type: string
+        healthy:
+          type: boolean
+      type: object
+    ModelProviderUpsertRequest:
+      properties:
+        api_key:
+          type: string
+        base_url:
+          type: string
+        enabled:
+          type: boolean
+        health_url:
+          type: string
+        kind:
+          type: string
+        models:
+          items:
+            $ref: '#/components/schemas/ModelCatalogEntryRequest'
+          type: array
+        name:
+          type: string
+      required:
+        - base_url
+        - kind
+        - name
       type: object
     OpsMetrics:
       additionalProperties: true
@@ -3925,6 +4066,152 @@ paths:
       summary: GET /api/v1/me
       tags:
         - identity
+  /api/v1/models/catalog:
+    get:
+      operationId: get_models_catalog
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCatalog'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/models/catalog
+      tags:
+        - models
+  /api/v1/models/providers:
+    get:
+      operationId: get_models_providers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelProviderList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/models/providers
+      tags:
+        - models
+    post:
+      operationId: post_models_providers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelProviderUpsertRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelProvider'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/models/providers
+      tags:
+        - models
+  /api/v1/models/providers/{id}:
+    delete:
+      operationId: delete_models_providers_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/models/providers/{id}
+      tags:
+        - models
+    patch:
+      operationId: patch_models_providers_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelProviderUpsertRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelProvider'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/models/providers/{id}
+      tags:
+        - models
+  /api/v1/models/providers/{id}/test:
+    post:
+      operationId: post_models_providers_id_test
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelProviderTestResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/models/providers/{id}/test
+      tags:
+        - models
   /api/v1/ops/dead-letters:
     get:
       operationId: get_ops_dead_letters
@@ -4653,3 +4940,4 @@ tags:
   - name: connectors
   - name: projections
   - name: operations
+  - name: models

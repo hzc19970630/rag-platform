@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   ApiOutlined,
+  DashboardOutlined,
   DatabaseOutlined,
   InfoCircleOutlined,
   SettingOutlined,
@@ -15,11 +16,12 @@ import { BasicSettings } from "./BasicSettings";
 import { DangerZone } from "./DangerZone";
 import { DataSourceSettings } from "./DataSourceSettings";
 import { MembersSettings } from "./MembersSettings";
+import { ModelSettings } from "./ModelSettings";
 import { ProjectionPanel } from "./ProjectionPanel";
 import { RetrievalSettings } from "./RetrievalSettings";
 import { SystemInfoSection } from "./SystemInfoSection";
 
-type SectionKey = "basic" | "retrieval" | "members" | "projection" | "dataSource" | "system" | "danger";
+type SectionKey = "basic" | "retrieval" | "models" | "members" | "projection" | "dataSource" | "system" | "danger";
 
 type Props = {
   open: boolean;
@@ -45,6 +47,7 @@ export function SettingsDrawer(props: Props) {
     const entries: Array<{ key: SectionKey; icon: ReactNode; label: string }> = [
       { key: "basic", icon: <SettingOutlined />, label: t("settings.basic") },
       { key: "retrieval", icon: <DatabaseOutlined />, label: t("settings.retrieval") },
+      { key: "models", icon: <DashboardOutlined />, label: t("settings.models") },
     ];
     if (canManage) entries.push({ key: "members", icon: <TeamOutlined />, label: t("settings.members") });
     if (projectionEnabled) entries.push({ key: "projection", icon: <ApartmentOutlined />, label: t("settings.projection") });
@@ -64,6 +67,8 @@ export function SettingsDrawer(props: Props) {
     switch (section) {
       case "retrieval":
         return <RetrievalSettings knowledgeBaseId={knowledgeBase.id} configuration={configuration} canWrite={canWrite} onSaved={onChanged} />;
+      case "models":
+        return <ModelSettings knowledgeBaseId={knowledgeBase.id} configuration={configuration} canWrite={canWrite} onSaved={onChanged} />;
       case "members":
         return canManage
           ? <MembersSettings knowledgeBaseId={knowledgeBase.id} ownerId={knowledgeBase.ownerId} canManage onChanged={onChanged} />

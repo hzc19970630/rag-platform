@@ -27,7 +27,7 @@ func probeOf(adapter any) func(context.Context) error {
 // newModelRegistry describes the adapters this process actually built. Only a
 // remote provider can serve extra model names; offline adapters ignore the
 // requested model, so registering aliases for them would be misleading.
-func newModelRegistry(db *gorm.DB, cfg config.Config, chatModel, rerankModel, embeddingModel string, chatProbe, rerankProbe, embeddingProbe func(context.Context) error) (*modelregistry.Registry, error) {
+func newModelRegistry(db *gorm.DB, cfg config.Config, chatModel, rerankModel, embeddingModel string, chatProbe, rerankProbe, embeddingProbe func(context.Context) error, cipher modelregistry.SecretCipher) (*modelregistry.Registry, error) {
 	entries := []modelregistry.Model{
 		{
 			Name: chatModel, Provider: cfg.Chat.Source, Version: "deployment",
@@ -65,6 +65,8 @@ func newModelRegistry(db *gorm.DB, cfg config.Config, chatModel, rerankModel, em
 			model.CapabilityEmbedding: embeddingModel,
 		},
 		RequestsPerMinute: cfg.Limits.TenantModelRequestsPerMinute,
+		Cipher:            cipher,
+		ProbeProvider:     probeProviderRoute,
 	})
 }
 

@@ -246,13 +246,17 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		closeAll()
 		return nil, err
 	}
-	modelCatalog, err := newModelRegistry(database, cfg, chatter.Name(), reranker.Name(), embedder.Name(), probeOf(chatter), probeOf(reranker), probeOf(embedder))
+	modelCatalog, err := newModelRegistry(database, cfg, chatter.Name(), reranker.Name(), embedder.Name(), probeOf(chatter), probeOf(reranker), probeOf(embedder), credentialCipher)
 	if err != nil {
 		_ = reader.Close()
 		_ = publisher.Close()
 		closeAll()
 		return nil, err
 	}
+	// A knowledge-base binding selects a tenant provider; every other caller
+	// (projections, titles, the worker) keeps the deployment adapter.
+	routedChatter := newRoutingChatter(chatter, modelCatalog)
+	routedReranker := newRoutingReranker(reranker, modelCatalog)
 	knowledgeBaseService.SetModelCatalog(modelCatalog)
 	wikiGenerator, err := knowledgeprojection.NewGenerator(chatter, registry)
 	if err != nil {
@@ -287,12 +291,12 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	}
 	retrievalService := retrieval.NewService(retrieval.Options{
 		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcherWithMetrics(database, recorder),
-		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: reranker,
+		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: routedReranker,
 		Authz: authorization, Defaults: retrievalDefaults(cfg.Retrieval), Join: projectionService, Rewriter: queryRewriter, Metrics: recorder,
 		RerankModels: modelCatalog,
 	})
 	conversationService := conversation.NewService(conversation.Options{
-		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: chatter, Models: modelCatalog,
+		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: routedChatter, Models: modelCatalog,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
 		ChatRequestsPerDay: cfg.Limits.TenantChatRequestsPerDay,
 		QuotaResolver:      quotaResolver,

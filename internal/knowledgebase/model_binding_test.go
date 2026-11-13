@@ -18,7 +18,7 @@ type fakeModelCatalog struct {
 	refs       map[string]model.ModelRef
 }
 
-func (f fakeModelCatalog) ResolveBinding(capability model.Capability, requested string) (model.ModelRef, error) {
+func (f fakeModelCatalog) ResolveBinding(_ context.Context, _ string, capability model.Capability, requested string) (model.ModelRef, error) {
 	ref, ok := f.refs[requested]
 	if !ok || f.capability[requested] != capability {
 		return model.ModelRef{}, apperror.Invalidf("unsupported %s model %q", capability, requested)

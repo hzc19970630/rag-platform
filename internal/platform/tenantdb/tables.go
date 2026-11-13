@@ -30,6 +30,8 @@ var tenantTables = []string{
 	"memberships",
 	"message_citations",
 	"messages",
+	"model_catalog_entries",
+	"model_providers",
 	"outbox_events",
 	"pipeline_runs",
 	"projection_generation_cache",

@@ -1,7 +1,8 @@
-// Package modelregistry owns the deployment model catalog and the
-// tenant/knowledge-base bindings that route chat, embedding and rerank calls.
-// It is deliberately in-process: the catalog describes the adapters this
-// deployment actually built, so a binding can never name a model nobody serves.
+// Package modelregistry owns the deployment model catalog, the tenant provider
+// catalog and the knowledge-base bindings that route chat, embedding and rerank
+// calls. The deployment half is in-process: it describes the adapters this
+// process built. The tenant half is persisted, so an administrator can add a
+// provider without a redeploy; both are validated against what can be served.
 package modelregistry
 
 import (
@@ -17,6 +18,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/contracts/model"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 )
 
@@ -24,9 +26,11 @@ const defaultHealthTTL = 30 * time.Second
 
 // Model is one adapter this deployment can route to. Probe reports provider
 // health; nil means the adapter has no remote dependency and is always healthy.
+// ProviderID is empty for the deployment catalog and set for tenant providers.
 type Model struct {
 	Name         string
 	Provider     string
+	ProviderID   string
 	Version      string
 	Capabilities []model.Capability
 	Probe        func(context.Context) error
@@ -35,10 +39,11 @@ type Model struct {
 // Resolution is the effective model for one knowledge base after applying the
 // configured binding, provider health and the fallback default.
 type Resolution struct {
-	Requested model.ModelRef
-	Effective model.ModelRef
-	Degraded  bool
-	Reason    string
+	Requested  model.ModelRef
+	Effective  model.ModelRef
+	ProviderID string
+	Degraded   bool
+	Reason     string
 }
 
 // HealthStatus is one provider probe result.
@@ -62,6 +67,12 @@ type Options struct {
 	RequestsPerMinute int
 	HealthTTL         time.Duration
 	Now               func() time.Time
+	// Cipher protects tenant provider credentials. A registry without one can
+	// still resolve the deployment catalog, but provider writes are rejected.
+	Cipher SecretCipher
+	// ProbeProvider checks a tenant provider's endpoint. The composition root
+	// supplies it because probing an HTTP endpoint belongs there.
+	ProbeProvider func(context.Context, ProviderRoute) error
 }
 
 // Registry is safe for concurrent use by the API and worker processes.
@@ -70,12 +81,15 @@ type Registry struct {
 	requestsPerMinute int
 	healthTTL         time.Duration
 	now               func() time.Time
+	cipher            SecretCipher
+	probeProvider     func(context.Context, ProviderRoute) error
 
-	mu       sync.Mutex
-	models   map[string]Model
-	defaults map[model.Capability]string
-	health   map[string]healthEntry
-	usage    map[string]usageWindow
+	mu             sync.Mutex
+	models         map[string]Model
+	defaults       map[model.Capability]string
+	health         map[string]healthEntry
+	providerHealth map[string]healthEntry
+	usage          map[string]usageWindow
 }
 
 type healthEntry struct {
@@ -103,9 +117,12 @@ func New(db *gorm.DB, options Options) (*Registry, error) {
 		requestsPerMinute: options.RequestsPerMinute,
 		healthTTL:         options.HealthTTL,
 		now:               options.Now,
+		cipher:            options.Cipher,
+		probeProvider:     options.ProbeProvider,
 		models:            make(map[string]Model, len(options.Models)),
 		defaults:          make(map[model.Capability]string, len(options.Defaults)),
 		health:            make(map[string]healthEntry),
+		providerHealth:    make(map[string]healthEntry),
 		usage:             make(map[string]usageWindow),
 	}
 	for _, entry := range options.Models {
@@ -148,17 +165,33 @@ func (m Model) ref() model.ModelRef {
 }
 
 // ResolveBinding validates a binding write. An empty request resolves to the
-// deployment default, which is how a knowledge base inherits routing.
-func (r *Registry) ResolveBinding(capability model.Capability, requested string) (model.ModelRef, error) {
+// deployment default, which is how a knowledge base inherits routing. Tenant
+// catalog entries are validated against the provider that serves them.
+func (r *Registry) ResolveBinding(ctx context.Context, tenantID string, capability model.Capability, requested string) (model.ModelRef, error) {
 	name := strings.TrimSpace(requested)
 	if name == "" {
 		name = r.defaults[capability]
 	}
-	entry, ok := r.models[name]
-	if !ok || !entry.supports(capability) {
-		return model.ModelRef{}, apperror.Invalidf("unsupported %s model %q", capability, name)
+	if entry, ok := r.models[name]; ok {
+		if !entry.supports(capability) {
+			return model.ModelRef{}, apperror.Invalidf("unsupported %s model %q", capability, name)
+		}
+		return entry.ref(), nil
 	}
-	return entry.ref(), nil
+	entry, provider, err := r.loadTenantEntry(ctx, tenantID, name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.ModelRef{}, apperror.Invalidf("unsupported %s model %q", capability, name)
+		}
+		return model.ModelRef{}, err
+	}
+	if model.Capability(entry.Capability) != capability {
+		return model.ModelRef{}, apperror.Invalidf("model %q does not support %s", name, capability)
+	}
+	if !entry.Enabled || !provider.Enabled {
+		return model.ModelRef{}, apperror.Invalidf("%s model %q is disabled", capability, name)
+	}
+	return model.ModelRef{Model: entry.Model, Provider: provider.Name, Version: entry.Version}, nil
 }
 
 // ResolveForKnowledgeBase reads the knowledge base binding, verifies provider
@@ -176,7 +209,7 @@ func (r *Registry) ResolveForKnowledgeBase(ctx context.Context, tenantID, knowle
 		return Resolution{}, fmt.Errorf("load model binding: %w", err)
 	}
 	requested := bindingName(row, capability)
-	resolution, err := r.resolve(ctx, capability, requested)
+	resolution, err := r.resolveFor(ctx, tenantID, capability, requested)
 	if err != nil {
 		return Resolution{}, err
 	}
@@ -197,6 +230,62 @@ func bindingName(row models.KnowledgeBase, capability model.Capability) string {
 	default:
 		return ""
 	}
+}
+
+// resolveFor routes one binding. Deployment models keep the historical health
+// and fallback semantics; tenant entries degrade the same way when their
+// provider is missing, disabled or unhealthy.
+func (r *Registry) resolveFor(ctx context.Context, tenantID string, capability model.Capability, requested string) (Resolution, error) {
+	name := strings.TrimSpace(requested)
+	if name == "" {
+		return r.resolve(ctx, capability, "")
+	}
+	if _, ok := r.models[name]; ok {
+		return r.resolve(ctx, capability, name)
+	}
+	entry, provider, err := r.loadTenantEntry(ctx, tenantID, name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return r.fallback(ctx, capability, requested, "bound model is not registered")
+		}
+		return Resolution{}, err
+	}
+	if model.Capability(entry.Capability) != capability {
+		return r.fallback(ctx, capability, requested, "bound model does not support "+string(capability))
+	}
+	if !entry.Enabled || !provider.Enabled {
+		return r.fallback(ctx, capability, requested, "bound model is disabled")
+	}
+	healthy, timedOut := r.probeProviderHealth(ctx, provider, []models.ModelCatalogEntry{entry})
+	if healthy {
+		return Resolution{
+			Requested:  model.ModelRef{Model: entry.Model, Provider: provider.Name, Version: entry.Version},
+			Effective:  model.ModelRef{Model: entry.Model, Provider: provider.Name, Version: entry.Version},
+			ProviderID: provider.ID,
+		}, nil
+	}
+	if timedOut {
+		return Resolution{
+			Requested:  model.ModelRef{Model: entry.Model, Provider: provider.Name, Version: entry.Version},
+			Effective:  model.ModelRef{Model: entry.Model, Provider: provider.Name, Version: entry.Version},
+			ProviderID: provider.ID,
+			Degraded:   true,
+			Reason:     "provider health probe timed out; attempting the bound model",
+		}, nil
+	}
+	return r.fallback(ctx, capability, requested, "bound provider is unhealthy")
+}
+
+func (r *Registry) fallback(ctx context.Context, capability model.Capability, requested, reason string) (Resolution, error) {
+	fallbackName := r.defaults[capability]
+	fallback, ok := r.models[fallbackName]
+	if !ok || !fallback.supports(capability) {
+		return Resolution{}, fmt.Errorf("model registry: no %s model is registered", capability)
+	}
+	if healthy, _ := r.probeHealth(ctx, fallback); !healthy {
+		return Resolution{}, fmt.Errorf("model registry: no healthy %s provider is available", capability)
+	}
+	return r.degraded(model.ModelRef{Model: requested}, fallback, reason)
 }
 
 func (r *Registry) resolve(ctx context.Context, capability model.Capability, requested string) (Resolution, error) {
@@ -240,6 +329,84 @@ func (r *Registry) resolve(ctx context.Context, capability model.Capability, req
 		return Resolution{}, fmt.Errorf("model registry: no healthy %s provider is available", capability)
 	}
 	return r.degraded(bound.ref(), fallback, "bound provider is unhealthy")
+}
+
+func (r *Registry) loadTenantEntry(ctx context.Context, tenantID, name string) (models.ModelCatalogEntry, models.ModelProvider, error) {
+	var entry models.ModelCatalogEntry
+	if err := tenantdb.MustScoped(r.db.WithContext(ctx), tenantID).Where("model = ?", name).Take(&entry).Error; err != nil {
+		return models.ModelCatalogEntry{}, models.ModelProvider{}, err
+	}
+	var provider models.ModelProvider
+	if err := tenantdb.MustScoped(r.db.WithContext(ctx), tenantID).Where("id = ?", entry.ProviderID).Take(&provider).Error; err != nil {
+		return models.ModelCatalogEntry{}, models.ModelProvider{}, err
+	}
+	return entry, provider, nil
+}
+
+// probeProviderHealth caches per provider revision: a catalog edit bumps
+// updated_at, which invalidates the cached verdict. The first enabled entry
+// supplies the endpoint identity; probing is provider-level.
+func (r *Registry) probeProviderHealth(ctx context.Context, provider models.ModelProvider, entries []models.ModelCatalogEntry) (healthy, timedOut bool) {
+	if r.probeProvider == nil {
+		return true, false
+	}
+	key := provider.ID + "@" + provider.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	r.mu.Lock()
+	cached, ok := r.providerHealth[key]
+	r.mu.Unlock()
+	now := r.now()
+	if ok && now.Sub(cached.checked) < r.healthTTL {
+		return cached.healthy, cached.timedOut
+	}
+	err := r.probeProviderRow(ctx, provider, entries)
+	next := healthEntry{healthy: err == nil, timedOut: probeTimedOut(err), checked: now}
+	if err != nil {
+		next.err = err.Error()
+	}
+	r.mu.Lock()
+	r.providerHealth[key] = next
+	r.mu.Unlock()
+	return next.healthy, next.timedOut
+}
+
+// probeProviderRow performs one fresh probe for the provider's first enabled
+// entry. A provider with no entries has nothing to serve, so it counts healthy.
+func (r *Registry) probeProviderRow(ctx context.Context, provider models.ModelProvider, entries []models.ModelCatalogEntry) error {
+	if r.probeProvider == nil {
+		return nil
+	}
+	for _, entry := range entries {
+		if !entry.Enabled {
+			continue
+		}
+		route, err := r.routeFor(provider, entry)
+		if err != nil {
+			return err
+		}
+		return r.probeProvider(ctx, route)
+	}
+	return nil
+}
+
+// routeFor decrypts one entry's provider into the connection the composition
+// root uses for both probing and request routing.
+func (r *Registry) routeFor(provider models.ModelProvider, entry models.ModelCatalogEntry) (ProviderRoute, error) {
+	apiKey := ""
+	if strings.TrimSpace(provider.APIKeyCipher) != "" {
+		if r.cipher == nil {
+			return ProviderRoute{}, fmt.Errorf("credential encryption is not configured")
+		}
+		plaintext, err := r.cipher.Decrypt(provider.APIKeyCipher)
+		if err != nil {
+			return ProviderRoute{}, fmt.Errorf("decrypt provider credential: %w", err)
+		}
+		apiKey = string(plaintext)
+	}
+	return ProviderRoute{
+		ProviderID: provider.ID, Kind: provider.Kind, BaseURL: provider.BaseURL, APIKey: apiKey,
+		HealthURL: provider.HealthURL, Model: entry.Model, Version: entry.Version,
+		Dimension: entry.Dimension, Capability: model.Capability(entry.Capability), UpdatedAt: provider.UpdatedAt,
+	}, nil
 }
 
 func (r *Registry) degraded(requested model.ModelRef, effective Model, reason string) (Resolution, error) {
@@ -317,6 +484,8 @@ func (r *Registry) consumeQuota(tenantID string, capability model.Capability) er
 }
 
 // Health probes every provider and returns the snapshot used for degradation.
+// It covers the deployment catalog always and the tenant catalog when the
+// request carries a tenant, which is how /ops reports both.
 func (r *Registry) Health(ctx context.Context) []HealthStatus {
 	r.mu.Lock()
 	entries := make([]Model, 0, len(r.models))
@@ -336,5 +505,43 @@ func (r *Registry) Health(ctx context.Context) []HealthStatus {
 		r.mu.Unlock()
 		statuses = append(statuses, status)
 	}
+	tenantID, ok := tenantdb.TenantFrom(ctx)
+	if !ok || r.db == nil {
+		return statuses
+	}
+	var tenantEntries []models.ModelCatalogEntry
+	if err := tenantdb.MustScoped(r.db.WithContext(ctx), tenantID).Order("model ASC").Find(&tenantEntries).Error; err != nil {
+		return statuses
+	}
+	providerCache := make(map[string]providerEntries)
+	for _, entry := range tenantEntries {
+		group, cached := providerCache[entry.ProviderID]
+		if !cached {
+			if err := tenantdb.MustScoped(r.db.WithContext(ctx), tenantID).Where("id = ?", entry.ProviderID).Take(&group.row).Error; err != nil {
+				continue
+			}
+			providerCache[entry.ProviderID] = group
+		}
+		group.entries = append(group.entries, entry)
+		providerCache[entry.ProviderID] = group
+	}
+	for _, group := range providerCache {
+		healthy, _ := r.probeProviderHealth(ctx, group.row, group.entries)
+		for _, entry := range group.entries {
+			status := HealthStatus{Model: entry.Model, Provider: group.row.Name, Version: entry.Version, Healthy: healthy && entry.Enabled && group.row.Enabled, CheckedAt: r.now()}
+			if !entry.Enabled || !group.row.Enabled {
+				status.Error = "disabled"
+			}
+			statuses = append(statuses, status)
+		}
+	}
+	sort.Slice(statuses, func(i, j int) bool { return statuses[i].Model < statuses[j].Model })
 	return statuses
+}
+
+// providerEntries keeps the probe input grouped per provider: one endpoint
+// check covers every model it serves.
+type providerEntries struct {
+	row     models.ModelProvider
+	entries []models.ModelCatalogEntry
 }

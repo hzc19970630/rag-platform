@@ -72,6 +72,14 @@ export function configurationFixture(): KnowledgeBaseConfigurationV1 {
       effective: params,
       sources,
     },
+    modelBinding: {
+      chat: { model: "qwen-plus", version: "", source: "deployment" },
+      rerank: { model: "bge-reranker-v2", version: "", source: "deployment" },
+      embedding: { model: "bge-m3", version: "", source: "knowledge_base" },
+      embeddingDimension: 1024,
+      embeddingLocked: true,
+      embeddingLockReason: "vector contract is pinned",
+    },
     readOnly: {
       embedding: { source: "env", model: "bge-m3", dimension: 1024 },
       chunking: { size: 800, overlap: 80, splitMarkers: "\\n## ", minSize: 100 },

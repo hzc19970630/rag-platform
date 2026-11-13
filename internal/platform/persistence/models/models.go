@@ -484,3 +484,40 @@ type AnswerJob struct {
 }
 
 func (AnswerJob) TableName() string { return "answer_jobs" }
+
+// ModelProvider is one tenant-managed inference endpoint. APIKeyCipher holds
+// the encrypted credential; the service layer never returns it and never logs
+// it. Kind selects the wire dialect (OpenAI-compatible or Ollama).
+type ModelProvider struct {
+	ID           string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID     string    `gorm:"size:64;not null;index" json:"tenantId"`
+	Name         string    `gorm:"size:128;not null" json:"name"`
+	Kind         string    `gorm:"size:32;not null" json:"kind"`
+	BaseURL      string    `gorm:"column:base_url;size:512;not null" json:"baseUrl"`
+	APIKeyCipher string    `gorm:"column:api_key_cipher;type:text;not null;default:''" json:"-"`
+	HealthURL    string    `gorm:"column:health_url;size:512;not null;default:''" json:"healthUrl"`
+	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`
+	CreatedAt    time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt    time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (ModelProvider) TableName() string { return "model_providers" }
+
+// ModelCatalogEntry is one routable model served by a provider. A knowledge
+// base binding stores only Model, so names are unique per tenant. Dimension is
+// meaningful only for embedding entries.
+type ModelCatalogEntry struct {
+	ID          string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID    string    `gorm:"size:64;not null;index" json:"tenantId"`
+	ProviderID  string    `gorm:"column:provider_id;size:64;not null;index" json:"providerId"`
+	Model       string    `gorm:"size:128;not null" json:"model"`
+	DisplayName string    `gorm:"column:display_name;size:128;not null;default:''" json:"displayName"`
+	Capability  string    `gorm:"size:16;not null" json:"capability"`
+	Version     string    `gorm:"size:64;not null;default:'deployment'" json:"version"`
+	Dimension   int       `gorm:"not null;default:0" json:"dimension"`
+	Enabled     bool      `gorm:"not null;default:true" json:"enabled"`
+	CreatedAt   time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt   time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (ModelCatalogEntry) TableName() string { return "model_catalog_entries" }

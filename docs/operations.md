@@ -305,16 +305,20 @@ Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge
 
 ### 8.1 Chat / Rerank 模型绑定
 
-- 可路由模型来自部署配置：`LLM_CHAT_MODEL`、`CHAT_MODELS`、`LLM_RERANK_MODEL`、`RERANK_MODELS`。每项可写成 `name` 或 `name@version`；版本只用于审计，不参与供应商请求。`CHAT_MODELS`/`RERANK_MODELS` 只在对应 `*_SOURCE=remote` 时额外登记，离线适配器固定一个模型。改配置后需重启 api（目录在启动时构建）。
-- 知识库绑定通过 `PATCH /api/v1/knowledge-bases/{id}` 的 `chat_model`、`rerank_model` 字段设置；空串清除覆盖，回到部署默认。绑定写入前会校验模型已登记且能力匹配，未登记返回 400；每次实际变化都写 `audit_logs`（`resource_type=model_binding`，`reason` 含新/旧模型与版本），可用 `GET /api/v1/audit` 按资源排查。
-- 运行路径会做两次保护：绑定模型已不在目录中（例如回滚部署）时自动降级到部署默认；绑定供应商健康探测失败时也降级到默认，探测结果缓存 30 秒。默认模型同样不可用时请求失败（问答记录 `model_error`），不会静默切换。
+- 可路由模型来自两处：部署配置（`LLM_CHAT_MODEL`、`CHAT_MODELS`、`LLM_RERANK_MODEL`、`RERANK_MODELS`，每项可写成 `name` 或 `name@version`，版本只用于审计）与租户供应商目录（数据库）。部署目录在启动时构建，改 env 需重启 api；租户目录通过管理面或 API 写入，**下一次请求即生效，无需重启**。`CHAT_MODELS`/`RERANK_MODELS` 只在对应 `*_SOURCE=remote` 时额外登记，离线适配器固定一个模型。
+- **租户供应商**：`GET/POST /api/v1/models/providers`、`PATCH/DELETE /api/v1/models/providers/{id}`、`POST /api/v1/models/providers/{id}/test`，仅租户 Owner/Admin 且仅 session 凭据；`GET /api/v1/models/catalog` 对所有已认证成员开放（只返回模型名、能力、维度、来源与启用状态，不含端点或密钥）。管理台「模型供应商」页签与知识库设置的「模型路由」分区调用同一组接口。当前支持 `openai_compatible` 与 `ollama` 两类端点；Azure 专用协议（deployment 路径 + `api-key` + `api-version`）未实现，保存时直接拒绝，避免出现无法执行的配置。
+- **密钥**：供应商 API Key 用与连接器凭据相同的 keyring 加密（`CONNECTOR_ENCRYPTION_KEYS`/`ACTIVE_KID`，见 §9），列名 `api_key_cipher`；接口与日志都不回显，列表只返回 `apiKeySet`。更新时 `api_key` 缺省表示保持原值，空串表示清除。
+- **目录约束**：模型名在租户内唯一且不能与部署目录重名；Embedding 条目必须给出正维度；被知识库绑定的模型不能删除、不能改能力/维度（只能改版本），供应商有被绑定模型时不能删除，均返回 409。Embedding 条目本轮只登记（维度与健康），知识库的 Embedding 绑定在有文档后仍锁定，逐知识库路由与重新嵌入属于 D3。
+- 知识库绑定通过 `PATCH /api/v1/knowledge-bases/{id}` 的 `chat_model`、`rerank_model` 字段设置；空串清除覆盖，回到部署默认。绑定写入前会校验模型已登记、能力匹配且供应商已启用，未登记或已停用返回 400；每次实际变化都写 `audit_logs`（`resource_type=model_binding`）。供应商创建/更新/删除/测试写 `model_provider_created|updated|deleted|tested`（`resource_type=model_provider`），不记录密钥。
+- 运行路径会做两次保护：绑定模型已不在目录中（例如回滚部署）时自动降级到部署默认；绑定供应商健康探测失败时也降级到默认。供应商健康结果按 `provider.id + updated_at` 缓存 30 秒，目录一旦被编辑（`updated_at` 变化）即重新探测并重建适配器；多副本各自缓存，最长 30 秒最终一致。默认模型同样不可用时请求失败（问答记录 `model_error`），不会静默切换。
+- 路由按请求命名：只有问答/检索携带知识库上解析出的模型名时才选择租户供应商；会话标题、查询改写、Wiki/图谱投影与 Worker 任务没有绑定上下文，继续使用部署默认适配器。
 - Chat 与 Embedding 适配器同样受熔断、租户并发舱壁与有界重试保护：连续 5 次失败熔断 30 秒，期间不调用供应商；每租户每能力最多 4 个并发调用；只对 transport/429/5xx 重试，Chat 最多 2 次尝试，Embedding 每批保持 3 次尝试。租户来自请求或任务上下文（`tenantdb.WithTenant`），缺失时使用进程级兜底舱壁。
 - Rerank 是唯一允许降级的模型调用：绑定解析失败、供应商调用失败或熔断打开时，检索退回 rerank 前的关键词/向量融合顺序继续问答（`rerankApplied=false`），只损失重排序，不会让整次问答失败。降级原因通过 `rerank_degraded_total{reason=resolve|error|breaker_open}` 与 `rerank_degraded` 日志观察；`model_errors_total` 仍只统计真实的解析/调用错误。适配器连续失败 5 次后熔断 30 秒，期间直接使用融合顺序；冷却后只放行一个探针，成功即恢复。Chat 生成仍按上一条硬失败，不会静默降级。
 - 探测地址默认从各适配器的 base URL 推导：chat 与 embedding 用 `<base>/models`，rerank 用 `<base>/health`；可用 `CHAT_HEALTH_URL`、`EMBEDDING_HEALTH_URL`、`RERANK_HEALTH_URL` 覆盖（留空即用默认）。探测是带 Bearer 凭据的 `GET`，单次超时 3 秒；401/403（凭据被拒）和 5xx 判为不健康，其余状态（含 404）只要求网关可达，避免因供应商没有标准健康路径而误降级。
 - 当前健康快照可通过租户 owner/admin 的 `GET /api/v1/ops/metrics` 查看（`modelHealth` 数组，含 `model`、`provider`、`version`、`healthy`、`checkedAt`），也可从同一鉴权路由 `GET /api/v1/ops/metrics/prometheus` 抓取 `model_health{model,provider,version}` gauge（1 健康、0 不健康）。`model_health` 目前只在 API 进程的这条路由上暴露，不在 `METRICS_ADDR` 的无鉴权监听器里；需要自动告警时，让抓取端带 owner/admin 会话访问该路由，或对 `modelHealth` 做巡检。
 - `TENANT_MODEL_REQUESTS_PER_MINUTE` 限制每租户、每能力（chat/rerank/embedding）每分钟的模型解析次数，超限返回 `quota_exceeded`。它按进程内固定 1 分钟窗口计数，多副本部署时每个副本各自计数；需要全局硬预算时应在上游网关限流。
 - Embedding 绑定不受这套运行时切换影响：知识库有文档后仍不能改模型或维度，需走受管重建。
-- 迁移 `migrations/postgres/0020_model_registry.sql` 只新增 `chat_model`、`chat_model_version`、`rerank_model`、`rerank_model_version` 四列，使用 `ADD COLUMN IF NOT EXISTS`，可重复执行；回滚时删除这四列即可（不触碰 Embedding 列）。
+- 迁移 `0020_model_registry.sql` 只新增 `chat_model`、`chat_model_version`、`rerank_model`、`rerank_model_version` 四列（`ADD COLUMN IF NOT EXISTS`，可重复执行；回滚删列即可，不触碰 Embedding 列）；`0029_model_provider_catalog.sql` 新增 `model_providers`、`model_catalog_entries` 两张租户表，带 RLS 与 shadow 触发器，`.down.sql` 反序删表。回滚 0029 前先清空知识库上的租户模型绑定，否则绑定会降级到部署默认（不影响问答可用性）。
 
 ## 9. 身份与密钥轮换
 
@@ -380,7 +384,7 @@ Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge
 
 - `TENANT_RLS_MODE=off|shadow|enforce`，默认 `shadow`。`off` 不设置 `app.tenant_id`，可用 `./scripts/m13_rls_mode.sh off` 关闭 RLS；`shadow` 使用允许策略并在租户作用域查询中设置该 GUC，写路径触发器据此审计；`enforce` 使用迁移 0024 的严格策略。代码只提供开关与验收，是否切换是部署决策。
 - API 在 enforce 下把每个已认证请求放进一个数据库事务：`tenantdb.BeginRequestTx` 开启事务并执行 `SELECT set_config('app.tenant_id', <tenant>, true)`，普通查询与 `tenantdb.InTx` 服务事务都加入该事务（GORM 的显式 `Transaction` 不经过重定向回调，因此服务层必须用 `InTx`）。handler 返回 5xx、panic 或任一嵌套事务失败时整体回滚；事务级 GUC 随连接归还自动清空。worker 在 enforce 下整体使用 `MAINTENANCE_DATABASE_URL`，跨租户任务不依赖 GUC；API 只对认证前的身份查询使用维护连接。
-- 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`（因此它按父表口径统计）；0026 新增 `answer_jobs` 后总数为 37 张（34 张租户表 + 3 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
+- 迁移 0023 安装 36 张表的 `ENABLE/FORCE ROW LEVEL SECURITY`、允许策略 `tenant_shadow_allow` 与写审计触发器 `rls_shadow_write`，并为 `task_inbox` 回填 `tenant_id`（因此它按父表口径统计）；0026 新增 `answer_jobs`、0029 新增 `model_providers`/`model_catalog_entries` 后总数为 39 张（36 张租户表 + 3 张子表）。无法按 `<runID>:<stage>` 归属的 inbox 行会写入 `rls_shadow_violations`，enforce 前必须清零（`m13-rls-acceptance` 会检查）。
 - 角色：`rag_app`（`NOSUPERUSER NOBYPASSRLS`，API 租户流量）与 `rag_maintenance`（`BYPASSRLS`，worker 与跨租户维护）。enforce 下 API/worker 的 `DATABASE_URL` 必须是 `rag_app`，且 `MAINTENANCE_DATABASE_URL` 必填并必须使用不同角色；migrate/seed/embedctl 使用 `ADMIN_DATABASE_URL`（所有者角色，缺省回退 `DATABASE_URL`）。启动时查询 `pg_roles` 校验：API 运行时角色不得是超级用户或 `BYPASSRLS`，worker 维护角色必须具备 `BYPASSRLS`，否则拒绝启动。密码与授权由 `make m13-rls-setup` 设置，需先导出 `RAG_APP_DB_PASSWORD`、`RAG_MAINTENANCE_DB_PASSWORD`；脚本幂等，可对已有库重复执行。全新数据卷由 `deploy/docker-compose/initdb/01-roles.sh` 自动创建角色。
 - `APP_ENV=production` 时 `TENANT_RLS_MODE` 必须是 `enforce`；`shadow`/`off` 或未设置都会让启动校验失败。CI 使用 `APP_ENV=development` + dev auth，但以 `rag_app`/`rag_maintenance` 整栈运行 enforce；`ENFORCE_LAYOUT=1 make m13-rls-acceptance` 会额外断言容器内 `TENANT_RLS_MODE=enforce`、`DATABASE_URL` 角色为 `rag_app`、维护角色不同，以及 `pg_stat_activity` 中同时存在两种连接。production 的 OIDC 登录不在 CI 中模拟，由配置单测覆盖启动拒绝。
 - 影子审计范围：触发器只记录写操作。仅当 `current_user = 'rag_app'` 或 GUC 已设置时写入 `rls_shadow_violations`；迁移、种子和工具以所有者身份运行，不会被记录。读路径的租户验证由 `tenantdb` 的应用 guard、GORM 注入回调、静态门禁 `cmd/checktenancy`（raw SQL + 直接 GORM 链）与 `tests/postgres/tenantrls_test.go` 承担，**不承诺对生产读流量做数据库级拦截采样**。GORM 回调在存在租户上下文时自动为租户表补 `tenant_id`；`tenantdb.Unscoped` 是唯一显式绕过，自动注入会以 `tenant_scope_injected` 告警记录。
@@ -404,7 +408,7 @@ Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge
   4. 启动后确认没有角色校验错误，运行 `make m13-rls-acceptance` 与 m1–m4；跨租户负向、直连 SQL 绕过探测、向量/BM25 执行计划与 P95 都通过后才保留 enforce。
   5. 回滚：`./scripts/m13_rls_mode.sh shadow` 恢复允许策略，把 `TENANT_RLS_MODE` 改回 `shadow` 并重建 api/worker；`./scripts/m13_rls_mode.sh off` 会同时关闭 RLS。迁移历史仍记录 0024 已应用，如需再次 enforce，手动重放 `migrations/postgres/0024_tenant_rls_strict.sql`（幂等）。
 - Enforce 前置检查（缺一不可）：`SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user` 中 `current_user = rag_app` 且两项均为 false；`task_inbox` 无 `tenant_id IS NULL` 行；`rls_shadow_violations` 无跨租户（`row_tenant_id` 与 `session_tenant_id` 不一致）记录；m1–m4 以 `rag_app` 通过。任何一项不满足都保持 shadow。
-- 验收：`make m13-rls-acceptance` 校验 37 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 `tenant_shadow_allow`（shadow）或 `tenant_isolation`（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。`ENFORCE_LAYOUT=1` 时只接受严格布局，并增加迁移 0024、容器环境、运行角色与 `pg_stat_activity` 断言。`tests/postgres/rls_runtime_test.go`（需 `TEST_POSTGRES_URL` 与 `make m13-rls-setup`）以 `SET LOCAL ROLE rag_app` 在真实 `audit_logs` 表上验证跨租户读写被拒与无 GUC 时 fail-closed。
+- 验收：`make m13-rls-acceptance` 校验 39 张表的 RLS 状态、触发器、角色属性、inbox 归属与影子审计表，接受 `tenant_shadow_allow`（shadow）或 `tenant_isolation`（enforce）两种策略布局，并在临时表上演练严格策略（跨租户插入被拒、GUC 未设置时 fail-closed）。`ENFORCE_LAYOUT=1` 时只接受严格布局，并增加迁移 0024、容器环境、运行角色与 `pg_stat_activity` 断言。`tests/postgres/rls_runtime_test.go`（需 `TEST_POSTGRES_URL` 与 `make m13-rls-setup`）以 `SET LOCAL ROLE rag_app` 在真实 `audit_logs` 表上验证跨租户读写被拒与无 GUC 时 fail-closed。
 
 ## 16. 在线 HNSW 索引变更
 

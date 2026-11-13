@@ -27,11 +27,12 @@ type Service struct {
 	catalog    ModelCatalog
 }
 
-// ModelCatalog is the deployment model catalog. The knowledge-base service
-// validates bindings against it but does not know which adapters implement the
-// models, so a binding can never name a model this deployment cannot serve.
+// ModelCatalog is the deployment and tenant model catalog. The knowledge-base
+// service validates bindings against it but does not know which adapters
+// implement the models, so a binding can never name a model this deployment
+// cannot serve.
 type ModelCatalog interface {
-	ResolveBinding(capability model.Capability, requested string) (model.ModelRef, error)
+	ResolveBinding(ctx context.Context, tenantID string, capability model.Capability, requested string) (model.ModelRef, error)
 }
 
 // EmbeddingBinding is the model and dimension this deployment writes and
@@ -234,7 +235,7 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 	}
 	bindingAudits := make([]modelBindingAudit, 0, 2)
 	if input.ChatModel != nil {
-		audit, next, err := s.nextModelBinding(model.CapabilityChat, *input.ChatModel, row.ChatModel, row.ChatModelVersion)
+		audit, next, err := s.nextModelBinding(ctx, principal.TenantID, model.CapabilityChat, *input.ChatModel, row.ChatModel, row.ChatModelVersion)
 		if err != nil {
 			return models.KnowledgeBase{}, err
 		}
@@ -244,7 +245,7 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 		}
 	}
 	if input.RerankModel != nil {
-		audit, next, err := s.nextModelBinding(model.CapabilityRerank, *input.RerankModel, row.RerankModel, row.RerankModelVersion)
+		audit, next, err := s.nextModelBinding(ctx, principal.TenantID, model.CapabilityRerank, *input.RerankModel, row.RerankModel, row.RerankModelVersion)
 		if err != nil {
 			return models.KnowledgeBase{}, err
 		}
@@ -362,14 +363,14 @@ type modelBindingAudit struct {
 // nextModelBinding validates the requested model and reports whether the
 // binding changed. An empty request clears the knowledge-base override so the
 // row follows the deployment default again.
-func (s *Service) nextModelBinding(capability model.Capability, requested, currentModel, currentVersion string) (*modelBindingAudit, model.ModelRef, error) {
+func (s *Service) nextModelBinding(ctx context.Context, tenantID string, capability model.Capability, requested, currentModel, currentVersion string) (*modelBindingAudit, model.ModelRef, error) {
 	requested = strings.TrimSpace(requested)
 	next := model.ModelRef{}
 	if requested != "" {
 		if s.catalog == nil {
 			return nil, model.ModelRef{}, apperror.Invalidf("model registry is not configured")
 		}
-		resolved, err := s.catalog.ResolveBinding(capability, requested)
+		resolved, err := s.catalog.ResolveBinding(ctx, tenantID, capability, requested)
 		if err != nil {
 			return nil, model.ModelRef{}, err
 		}

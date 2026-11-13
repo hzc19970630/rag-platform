@@ -19,6 +19,8 @@ import type {
   MeResponse,
   Member,
   MessageView,
+  ModelCatalog,
+  ModelProviderList,
   OpsMetrics,
   ProjectionStatus,
   TenantMember,
@@ -50,6 +52,8 @@ export const queryKeys = {
   tenantOverview: ["tenant", "overview"] as const,
   tenantQuota: ["tenant", "quota"] as const,
   tenantMembers: ["tenant", "members"] as const,
+  modelCatalog: ["models", "catalog"] as const,
+  modelProviders: ["models", "providers"] as const,
   audit: (filters: AuditFilters) => ["audit", filters] as const,
 };
 
@@ -271,6 +275,26 @@ export function useAuditEvents(filters: AuditFilters, enabled = true) {
       params.set("limit", String(filters.limit ?? 100));
       return api<{ items: AuditEvent[] }>(`/audit?${params.toString()}`);
     },
+    select: (data) => data.items,
+    enabled,
+  });
+}
+
+// B13 model catalog: the merged view feeds knowledge-base settings, the
+// provider list feeds the tenant admin surface.
+export function useModelCatalog(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.modelCatalog,
+    queryFn: () => api<ModelCatalog>("/models/catalog"),
+    select: (data) => data.items,
+    enabled,
+  });
+}
+
+export function useModelProviders(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.modelProviders,
+    queryFn: () => api<ModelProviderList>("/models/providers"),
     select: (data) => data.items,
     enabled,
   });

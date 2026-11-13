@@ -915,6 +915,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/models/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/models/catalog */
+        get: operations["get_models_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/models/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/models/providers */
+        get: operations["get_models_providers"];
+        put?: never;
+        /** POST /api/v1/models/providers */
+        post: operations["post_models_providers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/models/providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** DELETE /api/v1/models/providers/{id} */
+        delete: operations["delete_models_providers_id"];
+        options?: never;
+        head?: never;
+        /** PATCH /api/v1/models/providers/{id} */
+        patch: operations["patch_models_providers_id"];
+        trace?: never;
+    };
+    "/api/v1/models/providers/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/models/providers/{id}/test */
+        post: operations["post_models_providers_id_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/dead-letters": {
         parameters: {
             query?: never;
@@ -1841,6 +1911,7 @@ export interface components {
             aclVersion?: number;
             indexingStrategy?: components["schemas"]["IndexingStrategy"];
             knowledgeBaseId?: string;
+            modelBinding?: components["schemas"]["ModelBinding"];
             readOnly?: components["schemas"]["ReadOnlySystemConfiguration"];
             retrieval?: components["schemas"]["RetrievalConfiguration"];
             schemaVersion?: string;
@@ -1945,6 +2016,74 @@ export interface components {
         MessageView: {
             citations?: components["schemas"]["Citation"][];
             message?: components["schemas"]["Message"];
+        };
+        ModelBinding: {
+            chat?: components["schemas"]["ModelBindingEntry"];
+            embedding?: components["schemas"]["ModelBindingEntry"];
+            embeddingDimension?: number;
+            embeddingLockReason?: string;
+            embeddingLocked?: boolean;
+            rerank?: components["schemas"]["ModelBindingEntry"];
+        };
+        ModelBindingEntry: {
+            model?: string;
+            source?: string;
+            version?: string;
+        };
+        ModelCatalog: {
+            items?: components["schemas"]["ModelCatalogEntry"][];
+        };
+        ModelCatalogEntry: {
+            capability?: string;
+            dimension?: number;
+            displayName?: string;
+            enabled?: boolean;
+            id?: string;
+            model?: string;
+            provider?: string;
+            providerId?: string;
+            source?: string;
+            version?: string;
+        };
+        ModelCatalogEntryRequest: {
+            capability: string;
+            dimension?: number;
+            display_name?: string;
+            enabled?: boolean;
+            model: string;
+            version?: string;
+        };
+        ModelProvider: {
+            apiKeySet?: boolean;
+            baseUrl?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            enabled?: boolean;
+            healthUrl?: string;
+            id?: string;
+            kind?: string;
+            models?: components["schemas"]["ModelCatalogEntry"][];
+            name?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ModelProviderList: {
+            items?: components["schemas"]["ModelProvider"][];
+        };
+        ModelProviderTestResult: {
+            /** Format: date-time */
+            checkedAt?: string;
+            error?: string;
+            healthy?: boolean;
+        };
+        ModelProviderUpsertRequest: {
+            api_key?: string;
+            base_url: string;
+            enabled?: boolean;
+            health_url?: string;
+            kind: string;
+            models?: components["schemas"]["ModelCatalogEntryRequest"][];
+            name: string;
         };
         OpsMetrics: {
             [key: string]: unknown;
@@ -4118,6 +4257,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_models_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelCatalog"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_models_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProviderList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_models_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelProviderUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProvider"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    delete_models_providers_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    patch_models_providers_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelProviderUpsertRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProvider"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_models_providers_id_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProviderTestResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

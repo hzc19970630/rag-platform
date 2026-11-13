@@ -342,7 +342,27 @@ type KnowledgeBaseConfiguration struct {
 	ACLVersion       int64                       `json:"aclVersion"`
 	IndexingStrategy IndexingStrategy            `json:"indexingStrategy"`
 	Retrieval        RetrievalConfiguration      `json:"retrieval"`
+	ModelBinding     ModelBinding                `json:"modelBinding"`
 	ReadOnly         ReadOnlySystemConfiguration `json:"readOnly"`
+}
+
+// ModelBinding reports the effective chat/rerank/embedding model of a
+// knowledge base and whether it comes from a KB override or the deployment
+// default. Embedding is reported as pinned; the vector contract only moves
+// through the managed rebuild.
+type ModelBinding struct {
+	Chat                ModelBindingEntry `json:"chat"`
+	Rerank              ModelBindingEntry `json:"rerank"`
+	Embedding           ModelBindingEntry `json:"embedding"`
+	EmbeddingDimension  int               `json:"embeddingDimension"`
+	EmbeddingLocked     bool              `json:"embeddingLocked"`
+	EmbeddingLockReason string            `json:"embeddingLockReason,omitempty"`
+}
+
+type ModelBindingEntry struct {
+	Model   string `json:"model"`
+	Version string `json:"version"`
+	Source  string `json:"source"`
 }
 
 type Document struct {
@@ -1157,3 +1177,66 @@ type ReconcileReport struct {
 }
 
 type OpsMetrics map[string]any
+
+// B13 tenant model catalog. The admin surface manages providers; the catalog
+// endpoint is the read-only merged view used by knowledge-base settings.
+type ModelCatalogEntry struct {
+	ID          string `json:"id"`
+	ProviderID  string `json:"providerId"`
+	Provider    string `json:"provider"`
+	Model       string `json:"model"`
+	DisplayName string `json:"displayName"`
+	Capability  string `json:"capability"`
+	Version     string `json:"version"`
+	Dimension   int    `json:"dimension"`
+	Source      string `json:"source"`
+	Enabled     bool   `json:"enabled"`
+}
+
+type ModelCatalog struct {
+	Items []ModelCatalogEntry `json:"items"`
+}
+
+type ModelProvider struct {
+	ID        string              `json:"id"`
+	Name      string              `json:"name"`
+	Kind      string              `json:"kind"`
+	BaseURL   string              `json:"baseUrl"`
+	APIKeySet bool                `json:"apiKeySet"`
+	HealthURL string              `json:"healthUrl"`
+	Enabled   bool                `json:"enabled"`
+	CreatedAt time.Time           `json:"createdAt"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+	Models    []ModelCatalogEntry `json:"models"`
+}
+
+type ModelProviderList struct {
+	Items []ModelProvider `json:"items"`
+}
+
+type ModelCatalogEntryRequest struct {
+	Model       string `json:"model" binding:"required"`
+	DisplayName string `json:"display_name"`
+	Capability  string `json:"capability" binding:"required"`
+	Version     string `json:"version"`
+	Dimension   int    `json:"dimension"`
+	Enabled     *bool  `json:"enabled"`
+}
+
+// ModelProviderUpsertRequest is a whole-provider write: Models replaces the
+// entry list, and an absent api_key keeps the stored credential.
+type ModelProviderUpsertRequest struct {
+	Name      string                      `json:"name" binding:"required"`
+	Kind      string                      `json:"kind" binding:"required"`
+	BaseURL   string                      `json:"base_url" binding:"required"`
+	APIKey    *string                     `json:"api_key"`
+	HealthURL string                      `json:"health_url"`
+	Enabled   *bool                       `json:"enabled"`
+	Models    []ModelCatalogEntryRequest  `json:"models"`
+}
+
+type ModelProviderTestResult struct {
+	Healthy   bool      `json:"healthy"`
+	Error     string    `json:"error,omitempty"`
+	CheckedAt time.Time `json:"checkedAt"`
+}

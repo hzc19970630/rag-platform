@@ -285,4 +285,18 @@ var Routes = []Route{
 		Success: ok(OpsMetrics{}), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/ops/metrics/prometheus", OperationID: "get_ops_metrics_prometheus", Tag: "operations",
 		Success: plainText(""), Errors: commonErrors},
+
+	// model providers
+	{Method: http.MethodGet, Path: "/api/v1/models/catalog", OperationID: "get_models_catalog", Tag: "models",
+		Success: ok((*ModelCatalog)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/models/providers", OperationID: "get_models_providers", Tag: "models",
+		Success: ok((*ModelProviderList)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/models/providers", OperationID: "post_models_providers", Tag: "models",
+		Request: jsonBody((*ModelProviderUpsertRequest)(nil)), Success: created((*ModelProvider)(nil)), Errors: commonErrors},
+	{Method: http.MethodPatch, Path: "/api/v1/models/providers/{id}", OperationID: "patch_models_providers_id", Tag: "models",
+		Request: jsonBody((*ModelProviderUpsertRequest)(nil)), Success: ok((*ModelProvider)(nil)), Errors: commonErrors},
+	{Method: http.MethodDelete, Path: "/api/v1/models/providers/{id}", OperationID: "delete_models_providers_id", Tag: "models",
+		Success: noContent(), Errors: deleteErrors},
+	{Method: http.MethodPost, Path: "/api/v1/models/providers/{id}/test", OperationID: "post_models_providers_id_test", Tag: "models",
+		Success: ok((*ModelProviderTestResult)(nil)), Errors: commonErrors},
 }

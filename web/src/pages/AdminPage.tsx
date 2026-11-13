@@ -1,4 +1,5 @@
 import {
+  CloudServerOutlined,
   DownloadOutlined,
   FileSearchOutlined,
   PlusOutlined,
@@ -47,6 +48,7 @@ import type {
   TenantQuotaUpdateRequest,
 } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
+import { ModelProvidersTab } from "../features/models/ModelProvidersTab";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { usePermissions } from "../session";
 import { formatSize, formatTime } from "../utils/format";
@@ -616,6 +618,7 @@ export function AdminPage() {
           { key: "overview", label: t("admin.tabs.overview"), icon: <SafetyCertificateOutlined />, children: overviewContent },
           { key: "members", label: t("admin.tabs.members"), icon: <TeamOutlined />, children: membersContent },
           { key: "audit", label: t("admin.tabs.audit"), icon: <FileSearchOutlined />, children: auditContent },
+          { key: "models", label: t("admin.tabs.models"), icon: <CloudServerOutlined />, children: <ModelProvidersTab /> },
         ]}
       />
 

@@ -22,6 +22,30 @@ const (
 	retrievalSourceKnowledgeBase = "knowledge_base"
 )
 
+const (
+	modelSourceDeployment    = "deployment"
+	modelSourceKnowledgeBase = "knowledge_base"
+)
+
+// ModelBindingEntryV1 reports the effective model and where it came from: a
+// knowledge-base override or the deployment default.
+type ModelBindingEntryV1 struct {
+	Model   string `json:"model"`
+	Version string `json:"version"`
+	Source  string `json:"source"`
+}
+
+// ModelBindingV1 is the settings-page view of routing. Embedding is reported
+// as pinned: the vector contract moves only through the managed rebuild (D3).
+type ModelBindingV1 struct {
+	Chat                ModelBindingEntryV1 `json:"chat"`
+	Rerank              ModelBindingEntryV1 `json:"rerank"`
+	Embedding           ModelBindingEntryV1 `json:"embedding"`
+	EmbeddingDimension  int                 `json:"embeddingDimension"`
+	EmbeddingLocked     bool                `json:"embeddingLocked"`
+	EmbeddingLockReason string              `json:"embeddingLockReason,omitempty"`
+}
+
 // RetrievalParamsV1 is the wire shape for resolved retrieval parameters. The
 // domain config type intentionally has YAML tags only, so reports and stored
 // documents keep their existing field names; this view is the API contract.
@@ -93,6 +117,7 @@ type KnowledgeBaseConfigurationV1 struct {
 	ACLVersion       int64                         `json:"aclVersion"`
 	IndexingStrategy retrieval.IndexingStrategy    `json:"indexingStrategy"`
 	Retrieval        RetrievalConfigurationV1      `json:"retrieval"`
+	ModelBinding     ModelBindingV1                `json:"modelBinding"`
 	ReadOnly         ReadOnlySystemConfigurationV1 `json:"readOnly"`
 }
 
@@ -134,6 +159,16 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 	if knowledgeBase.RerankModel != "" {
 		readOnly.Rerank.Model = knowledgeBase.RerankModel
 	}
+	binding := ModelBindingV1{
+		Chat:               modelBindingEntry(knowledgeBase.ChatModel, knowledgeBase.ChatModelVersion, readOnly.Chat.Model),
+		Rerank:             modelBindingEntry(knowledgeBase.RerankModel, knowledgeBase.RerankModelVersion, readOnly.Rerank.Model),
+		Embedding:          modelBindingEntry(knowledgeBase.EmbeddingModel, "", readOnly.Embedding.Model),
+		EmbeddingDimension: knowledgeBase.EmbeddingDimension,
+	}
+	if knowledgeBase.EmbeddingModel != "" {
+		binding.EmbeddingLocked = true
+		binding.EmbeddingLockReason = "vector contract is pinned to this knowledge base; changing it requires the managed rebuild (D3)"
+	}
 	return KnowledgeBaseConfigurationV1{
 		SchemaVersion:    SchemaKnowledgeBaseConfigurationV1,
 		KnowledgeBaseID:  knowledgeBase.ID,
@@ -145,8 +180,16 @@ func BuildKnowledgeBaseConfiguration(knowledgeBase models.KnowledgeBase, default
 			Effective:             retrievalParamsView(effective),
 			Sources:               retrievalSources(override),
 		},
-		ReadOnly: readOnly,
+		ModelBinding: binding,
+		ReadOnly:     readOnly,
 	}, nil
+}
+
+func modelBindingEntry(boundModel, boundVersion, deploymentModel string) ModelBindingEntryV1 {
+	if boundModel != "" {
+		return ModelBindingEntryV1{Model: boundModel, Version: boundVersion, Source: modelSourceKnowledgeBase}
+	}
+	return ModelBindingEntryV1{Model: deploymentModel, Version: "", Source: modelSourceDeployment}
 }
 
 // retrievalParamsFromConfig keeps the config conversion in the knowledge-base

@@ -230,12 +230,28 @@ type RetrievalConfigurationV1 = {
   sources: Record<keyof RetrievalParamsV1, "global" | "knowledge_base">;
 };
 
+type ModelBindingEntryV1 = {
+  model: string;
+  version: string;
+  source: "deployment" | "knowledge_base";
+};
+
+type ModelBindingV1 = {
+  chat: ModelBindingEntryV1;
+  rerank: ModelBindingEntryV1;
+  embedding: ModelBindingEntryV1;
+  embeddingDimension: number;
+  embeddingLocked: boolean;
+  embeddingLockReason?: string;
+};
+
 export type KnowledgeBaseConfigurationV1 = {
   schemaVersion: string;
   knowledgeBaseId: string;
   aclVersion: number;
   indexingStrategy: IndexingStrategy;
   retrieval: RetrievalConfigurationV1;
+  modelBinding: ModelBindingV1;
   readOnly: {
     embedding: { source: string; model: string; dimension: number };
     chunking: { size: number; overlap: number; splitMarkers: string; minSize: number };
@@ -244,6 +260,58 @@ export type KnowledgeBaseConfigurationV1 = {
     parser: { version: string; supportedFormats: string[] };
   };
 };
+
+// B13 model catalog DTOs, mirroring the OpenAPI schemas. These are hand-written
+// like the other response types here; `npm run codegen:check` only guards
+// generated.ts, so update both when a contract changes.
+export type ModelCatalogEntry = {
+  id: string;
+  providerId: string;
+  provider: string;
+  model: string;
+  displayName: string;
+  capability: string;
+  version: string;
+  dimension: number;
+  source: string;
+  enabled: boolean;
+};
+
+export type ModelCatalog = { items: ModelCatalogEntry[] };
+
+export type ModelProvider = {
+  id: string;
+  name: string;
+  kind: string;
+  baseUrl: string;
+  apiKeySet: boolean;
+  healthUrl: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  models: ModelCatalogEntry[];
+};
+
+export type ModelProviderList = { items: ModelProvider[] };
+
+export type ModelProviderUpsertRequest = {
+  name: string;
+  kind: "openai_compatible" | "ollama";
+  base_url: string;
+  api_key?: string;
+  health_url?: string;
+  enabled?: boolean;
+  models: Array<{
+    model: string;
+    display_name?: string;
+    capability: "chat" | "embedding" | "rerank";
+    version?: string;
+    dimension?: number;
+    enabled?: boolean;
+  }>;
+};
+
+export type ModelProviderTestResult = { healthy: boolean; error?: string; checkedAt: string };
 
 type PageCounts = {
   total: number;

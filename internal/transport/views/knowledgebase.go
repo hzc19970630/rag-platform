@@ -85,7 +85,22 @@ func KnowledgeBaseConfiguration(view knowledgebase.KnowledgeBaseConfigurationV1)
 		ACLVersion:       view.ACLVersion,
 		IndexingStrategy: IndexingStrategy(view.IndexingStrategy),
 		Retrieval:        RetrievalConfiguration(view.Retrieval),
+		ModelBinding:     ModelBinding(view.ModelBinding),
 		ReadOnly:         ReadOnlySystemConfiguration(view.ReadOnly),
+	}
+}
+
+func ModelBinding(view knowledgebase.ModelBindingV1) httpapi.ModelBinding {
+	entry := func(item knowledgebase.ModelBindingEntryV1) httpapi.ModelBindingEntry {
+		return httpapi.ModelBindingEntry{Model: item.Model, Version: item.Version, Source: item.Source}
+	}
+	return httpapi.ModelBinding{
+		Chat:                entry(view.Chat),
+		Rerank:              entry(view.Rerank),
+		Embedding:           entry(view.Embedding),
+		EmbeddingDimension:  view.EmbeddingDimension,
+		EmbeddingLocked:     view.EmbeddingLocked,
+		EmbeddingLockReason: view.EmbeddingLockReason,
 	}
 }
 

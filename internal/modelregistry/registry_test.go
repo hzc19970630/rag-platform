@@ -28,7 +28,7 @@ func openRegistryTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.KnowledgeBase{}); err != nil {
+	if err := db.AutoMigrate(&models.KnowledgeBase{}, &models.ModelProvider{}, &models.ModelCatalogEntry{}, &models.AuditLog{}); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}
 	return db
@@ -126,7 +126,7 @@ func TestResolveBindingValidatesCapabilityAndDefaults(t *testing.T) {
 		Defaults: map[model.Capability]string{model.CapabilityChat: "chat-default"},
 	})
 
-	defaultRef, err := registry.ResolveBinding(model.CapabilityChat, "")
+	defaultRef, err := registry.ResolveBinding(context.Background(), "tenant-1", model.CapabilityChat, "")
 	if err != nil {
 		t.Fatalf("resolve default: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestResolveBindingValidatesCapabilityAndDefaults(t *testing.T) {
 		t.Fatalf("unexpected default ref: %+v", defaultRef)
 	}
 
-	bound, err := registry.ResolveBinding(model.CapabilityChat, " chat-a ")
+	bound, err := registry.ResolveBinding(context.Background(), "tenant-1", model.CapabilityChat, " chat-a ")
 	if err != nil {
 		t.Fatalf("resolve bound: %v", err)
 	}
@@ -142,10 +142,10 @@ func TestResolveBindingValidatesCapabilityAndDefaults(t *testing.T) {
 		t.Fatalf("unexpected bound ref: %+v", bound)
 	}
 
-	if _, err := registry.ResolveBinding(model.CapabilityChat, "embed-1024"); !isValidation(err) {
+	if _, err := registry.ResolveBinding(context.Background(), "tenant-1", model.CapabilityChat, "embed-1024"); !isValidation(err) {
 		t.Fatalf("expected validation error for wrong capability, got %v", err)
 	}
-	if _, err := registry.ResolveBinding(model.CapabilityRerank, "chat-a"); !isValidation(err) {
+	if _, err := registry.ResolveBinding(context.Background(), "tenant-1", model.CapabilityRerank, "chat-a"); !isValidation(err) {
 		t.Fatalf("expected validation error for unregistered capability, got %v", err)
 	}
 }

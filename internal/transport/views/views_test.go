@@ -12,6 +12,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/datasource"
 	"github.com/hzc19970630/rag-platform/internal/identity"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
+	"github.com/hzc19970630/rag-platform/internal/knowledgebase"
 	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
@@ -31,6 +32,7 @@ func TestResponseViewsPreserveWireShape(t *testing.T) {
 		{"pipeline run", models.PipelineRun{}, PipelineRun(models.PipelineRun{})},
 		{"stage run", models.StageRun{}, StageRun(models.StageRun{})},
 		{"knowledge base", models.KnowledgeBase{}, KnowledgeBase(models.KnowledgeBase{})},
+		{"knowledge base configuration", knowledgebase.KnowledgeBaseConfigurationV1{}, KnowledgeBaseConfiguration(knowledgebase.KnowledgeBaseConfigurationV1{})},
 		{"knowledge base member", models.KnowledgeBaseMember{}, KnowledgeBaseMember(models.KnowledgeBaseMember{})},
 		{"conversation", models.Conversation{}, Conversation(models.Conversation{})},
 		{"message", models.Message{}, Message(models.Message{})},
