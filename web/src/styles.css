@@ -354,8 +354,14 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .admin-quota-hint { margin-top: 16px !important; }
 .admin-audit-description { margin-bottom: 16px !important; }
 .admin-audit-hint { margin: 16px 0 !important; }
-.deployment-models-card .ant-card-body { display: grid; gap: 12px; }
+.admin-section { min-width: 0; }
+.admin-section > * { min-width: 0; }
+.deployment-models-card .ant-card-body { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.deployment-models-card .ant-table-wrapper { min-width: 0; max-width: 100%; }
+.deployment-models-card .ant-list-item { padding: 10px 0; }
 .deployment-models-card .ant-typography { margin-bottom: 0 !important; }
+.admin-section .ant-table-thead > tr > th { background: var(--border-secondary); border-bottom: 1px solid var(--border); }
+.admin-section .deployment-models-card + .ant-table-wrapper { margin-top: 4px; }
 
 /* Login */
 .login-shell { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr); align-items: center; gap: 48px; padding: 48px max(6vw, 24px); background:

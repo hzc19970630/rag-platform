@@ -1,5 +1,5 @@
 import { DeleteOutlined, EditOutlined, ExperimentOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Drawer, Flex, Grid, Input, InputNumber, Select, Space, Switch, Table, Tag, Typography, type TableColumnsType } from "antd";
+import { Alert, App, Button, Card, Drawer, Flex, Grid, Input, InputNumber, List, Select, Space, Switch, Table, Tag, Typography, type TableColumnsType } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -243,16 +243,42 @@ export function ModelProvidersTab() {
       >
         <Typography.Paragraph type="secondary">{t("admin.modelProviders.deploymentHint")}</Typography.Paragraph>
         {catalog.error && <Alert type="error" showIcon message={t("admin.modelProviders.deploymentLoadFailed")} description={catalog.error.message} style={{ marginBottom: 12 }} />}
-        <Table
-          rowKey={(entry) => `${entry.model}:${entry.capability}`}
-          size="small"
-          columns={deploymentColumns}
-          dataSource={deploymentModels}
-          loading={catalog.isLoading}
-          pagination={false}
-          scroll={{ x: 700 }}
-          locale={{ emptyText: t("admin.modelProviders.deploymentEmpty") }}
-        />
+        {screens.md ? (
+          <Table
+            rowKey={(entry) => `${entry.model}:${entry.capability}`}
+            size="small"
+            columns={deploymentColumns}
+            dataSource={deploymentModels}
+            loading={catalog.isLoading}
+            pagination={false}
+            scroll={{ x: 700 }}
+            locale={{ emptyText: t("admin.modelProviders.deploymentEmpty") }}
+          />
+        ) : (
+          <List
+            size="small"
+            dataSource={deploymentModels}
+            loading={catalog.isLoading}
+            locale={{ emptyText: t("admin.modelProviders.deploymentEmpty") }}
+            renderItem={(entry) => (
+              <List.Item>
+                <Flex vertical gap={4} style={{ width: "100%" }}>
+                  <Flex justify="space-between" align="center" gap={8} wrap>
+                    <Typography.Text strong className="deployment-model-name">{entry.model}</Typography.Text>
+                    <Tag color="blue">{t("admin.modelProviders.deploymentSource")}</Tag>
+                  </Flex>
+                  <Space size={4} wrap>
+                    <Tag>{capabilityLabel(t, entry.capability)}</Tag>
+                    <Typography.Text type="secondary">
+                      {entry.provider} · {entry.version || "deployment"}
+                      {entry.capability === "embedding" && entry.dimension > 0 ? ` · ${entry.dimension}` : ""}
+                    </Typography.Text>
+                  </Space>
+                </Flex>
+              </List.Item>
+            )}
+          />
+        )}
       </Card>
       <Table rowKey="id" size="small" columns={columns} dataSource={providers.data ?? []} loading={providers.isLoading} pagination={false} scroll={{ x: 900 }} />
 
