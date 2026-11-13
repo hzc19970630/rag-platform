@@ -59,7 +59,7 @@ func main() {
 		DB:            application.DB,
 		KnowledgeBase: application.KnowledgeBase, Ingestion: application.Ingestion, Conversation: application.Conversation,
 		Retrieval: application.Retrieval, DataSources: application.DataSources, Projection: application.Projection,
-		Ops: application.Ops, Tenant: application.Tenant, TenantConfig: application.TenantConfig, ConfigHealth: application.ConfigHealth, Queue: application.Queue, Tasks: application.Tasks,
+		Ops: application.Ops, Tenant: application.Tenant, TenantConfig: application.TenantConfig, ConfigHealth: application.ConfigHealth, ConfigPreview: application.ConfigPreview, Queue: application.Queue, Tasks: application.Tasks,
 		Metrics: metricsRegistry, Models: application.Models,
 	}, logger)
 

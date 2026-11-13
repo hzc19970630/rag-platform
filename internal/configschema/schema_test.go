@@ -38,6 +38,14 @@ func TestDefaultsComeFromSchema(t *testing.T) {
 	if got := len(FieldsFor(DomainChunking)); got != 4 {
 		t.Fatalf("chunking field count = %d", got)
 	}
+	topK, _ := FieldByKey(DomainRetrieval, "top_k")
+	if topK.Impact != ImpactHot || topK.RebuildScope != RebuildNone || topK.Risk != RiskNormal {
+		t.Fatalf("top_k impact metadata = %+v", topK)
+	}
+	size, _ := FieldByKey(DomainChunking, "size")
+	if size.Impact != ImpactNextIngest || size.RebuildScope != RebuildRechunk || size.Risk != RiskNormal {
+		t.Fatalf("size impact metadata = %+v", size)
+	}
 }
 
 func TestValidateRetrievalAcceptsPartialTier(t *testing.T) {

@@ -138,6 +138,8 @@ var Routes = []Route{
 		Success: ok((*ConfigHealth)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/tenant/config/test-connection", OperationID: "post_tenant_config_test_connection", Tag: "configuration",
 		Request: jsonBody((*ConfigConnectionTestRequest)(nil)), Success: ok((*ConfigConnectionTestResult)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/config/preview", OperationID: "post_config_preview", Tag: "configuration",
+		Request: jsonBody((*ConfigChangePreviewRequest)(nil)), Success: ok((*ConfigChangePreview)(nil)), Errors: commonErrors},
 
 	// knowledge bases
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases", OperationID: "get_knowledge_bases", Tag: "knowledge-bases",

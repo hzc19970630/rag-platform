@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 101
+const businessRouteCount = 102
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -184,6 +184,7 @@ func TestOpenAPIDocumentsMigratedRequestBodies(t *testing.T) {
 		"PATCH /api/v1/tenant/quota":                                   "TenantQuotaUpdateRequest",
 		"PUT /api/v1/tenant/config":                                    "TenantConfigurationUpdateRequest",
 		"POST /api/v1/tenant/config/test-connection":                   "ConfigConnectionTestRequest",
+		"POST /api/v1/config/preview":                                  "ConfigChangePreviewRequest",
 		"POST /api/v1/wiki/pages/{pageId}/rollback":                    "WikiRollbackRequest",
 		"POST /api/v1/wiki/pages/{pageId}/versions/{versionId}/review": "WikiReviewRequest",
 	}

@@ -232,6 +232,103 @@ components:
         sourcePath:
           type: string
       type: object
+    ConfigChange:
+      properties:
+        applyMode:
+          type: string
+        domain:
+          type: string
+        impact:
+          type: string
+        key:
+          type: string
+        newValue: {}
+        oldValue: {}
+        rebuildScope:
+          type: string
+        risk:
+          type: string
+        source:
+          type: string
+      type: object
+    ConfigChangeAffected:
+      properties:
+        chunks:
+          format: int64
+          type: integer
+        documents:
+          format: int64
+          type: integer
+        knowledgeBases:
+          format: int64
+          type: integer
+      type: object
+    ConfigChangeBlocker:
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        remediation:
+          type: string
+      type: object
+    ConfigChangePreview:
+      properties:
+        actions:
+          items:
+            type: string
+          type: array
+        affected:
+          $ref: '#/components/schemas/ConfigChangeAffected'
+        blockers:
+          items:
+            $ref: '#/components/schemas/ConfigChangeBlocker'
+          type: array
+        changes:
+          items:
+            $ref: '#/components/schemas/ConfigChange'
+          type: array
+        estimatedCostTier:
+          type: string
+        estimatedDurationTier:
+          type: string
+        impact:
+          type: string
+        knowledgeBaseId:
+          type: string
+        rebuildOptional:
+          type: boolean
+        rebuildRequired:
+          type: boolean
+        restartRequired:
+          type: boolean
+        scope:
+          type: string
+      required:
+        - changes
+      type: object
+    ConfigChangePreviewRequest:
+      properties:
+        chunking:
+          additionalProperties: true
+          type: object
+        embeddingDimension:
+          type: integer
+        embeddingModel:
+          type: string
+        knowledgeBaseId:
+          type: string
+        retrieval:
+          additionalProperties: true
+          type: object
+        scope:
+          enum:
+            - tenant
+            - knowledge_base
+          type: string
+      required:
+        - scope
+      type: object
     ConfigConnectionTestRequest:
       properties:
         capability:
@@ -286,6 +383,8 @@ components:
           type: string
         group:
           type: string
+        impact:
+          type: string
         key:
           type: string
         kind:
@@ -296,6 +395,10 @@ components:
           type: number
         min:
           type: number
+        rebuildScope:
+          type: string
+        risk:
+          type: string
         sensitivity:
           type: string
         step:
@@ -305,8 +408,10 @@ components:
       required:
         - applyMode
         - domain
+        - impact
         - key
         - kind
+        - rebuildScope
       type: object
     ConfigFieldState:
       properties:
@@ -2859,6 +2964,33 @@ paths:
       summary: GET /api/v1/chunks/{chunkID}
       tags:
         - documents
+  /api/v1/config/preview:
+    post:
+      operationId: post_config_preview
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigChangePreviewRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigChangePreview'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/config/preview
+      tags:
+        - configuration
   /api/v1/connectors/{id}:
     delete:
       operationId: delete_connectors_id

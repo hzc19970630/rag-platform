@@ -35,6 +35,28 @@ const (
 	SensitivityHigh   = "high"
 )
 
+// Impact describes when a change takes effect and whether data must be rebuilt.
+const (
+	ImpactHot        = "hot"
+	ImpactNextIngest = "next_ingest"
+	ImpactRebuild    = "rebuild"
+	ImpactRestart    = "restart"
+)
+
+// RebuildScope names the data that must be rebuilt for an impact=rebuild field.
+const (
+	RebuildNone    = "none"
+	RebuildIndex   = "index"
+	RebuildRechunk = "rechunk"
+	RebuildReembed = "reembed"
+	RebuildFull    = "full"
+)
+
+const (
+	RiskNormal = "normal"
+	RiskHigh   = "high"
+)
+
 // Kind is the JSON value type of one field.
 type Kind string
 
@@ -58,6 +80,9 @@ type Field struct {
 	Step           *float64        `json:"step,omitempty"`
 	UnitKey        string          `json:"unitKey,omitempty"`
 	ApplyMode      string          `json:"applyMode"`
+	Impact         string          `json:"impact"`
+	RebuildScope   string          `json:"rebuildScope"`
+	Risk           string          `json:"risk"`
 	Sensitivity    string          `json:"sensitivity"`
 	LabelKey       string          `json:"labelKey"`
 	DescriptionKey string          `json:"descriptionKey,omitempty"`
@@ -138,6 +163,29 @@ var fields = []Field{
 	{Key: "overlap", Domain: DomainChunking, Group: "chunking", Kind: KindInt, Default: raw(120), Min: ptr(0), Step: ptr(1), UnitKey: "chunking.unitChars", ApplyMode: ApplyNextIngest, Sensitivity: SensitivityNormal, LabelKey: "chunking.overlap"},
 	{Key: "min_size", Domain: DomainChunking, Group: "chunking", Kind: KindInt, Default: raw(0), Min: ptr(0), Step: ptr(1), UnitKey: "chunking.unitChars", ApplyMode: ApplyNextIngest, Sensitivity: SensitivityNormal, LabelKey: "chunking.minSize"},
 	{Key: "split_markers", Domain: DomainChunking, Group: "chunking", Kind: KindStringList, Default: raw([]string{"\n\n", "\n", "。", ".", "！", "!", "？", "?"}), ApplyMode: ApplyNextIngest, Sensitivity: SensitivityNormal, LabelKey: "chunking.splitMarkers"},
+}
+
+// fillImpact keeps the declaration terse: retrieval parameters are query-time
+// and chunking parameters apply to the next ingestion. A future data-contract
+// field states Impact/RebuildScope explicitly.
+func init() {
+	for index := range fields {
+		if fields[index].Impact == "" {
+			if fields[index].Domain == DomainChunking {
+				fields[index].Impact = ImpactNextIngest
+				fields[index].RebuildScope = RebuildRechunk
+			} else {
+				fields[index].Impact = ImpactHot
+				fields[index].RebuildScope = RebuildNone
+			}
+		}
+		if fields[index].RebuildScope == "" {
+			fields[index].RebuildScope = RebuildNone
+		}
+		if fields[index].Risk == "" {
+			fields[index].Risk = RiskNormal
+		}
+	}
 }
 
 // FieldsFor returns the fields of one domain in declaration order.

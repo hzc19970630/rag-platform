@@ -236,6 +236,9 @@ export type ConfigFieldDefinition = {
   step?: number;
   unitKey?: string;
   applyMode: "next_retrieval" | "next_ingest" | string;
+  impact: "hot" | "next_ingest" | "rebuild" | "restart" | string;
+  rebuildScope: "none" | "index" | "rechunk" | "reembed" | "full" | string;
+  risk: "normal" | "high" | string;
   sensitivity: "normal" | "high" | string;
   labelKey: string;
   descriptionKey?: string;
@@ -285,6 +288,48 @@ export type ConfigConnectionTestResult = {
   error?: string;
   dimension?: number;
   checkedAt: string;
+};
+
+export type ConfigChange = {
+  domain: string;
+  key: string;
+  oldValue: unknown;
+  newValue: unknown;
+  source: string;
+  applyMode: string;
+  impact: "hot" | "next_ingest" | "rebuild" | "restart" | string;
+  rebuildScope: string;
+  risk: string;
+};
+
+export type ConfigChangeBlocker = {
+  code: string;
+  message: string;
+  remediation: string;
+};
+
+export type ConfigChangePreview = {
+  scope: "tenant" | "knowledge_base" | string;
+  knowledgeBaseId?: string;
+  changes: ConfigChange[];
+  impact: "none" | "hot" | "next_ingest" | "rebuild" | "restart" | string;
+  rebuildRequired: boolean;
+  rebuildOptional: boolean;
+  restartRequired: boolean;
+  blockers: ConfigChangeBlocker[];
+  affected: { knowledgeBases: number; documents: number; chunks: number };
+  estimatedDurationTier: string;
+  estimatedCostTier: string;
+  actions: string[];
+};
+
+export type ConfigChangePreviewRequest = {
+  scope: "tenant" | "knowledge_base";
+  knowledgeBaseId?: string;
+  retrieval?: Record<string, unknown>;
+  chunking?: Record<string, unknown>;
+  embeddingModel?: string;
+  embeddingDimension?: number;
 };
 
 type RetrievalConfigurationV1 = {

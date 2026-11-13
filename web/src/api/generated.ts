@@ -209,6 +209,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/config/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/config/preview */
+        post: operations["post_config_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/{id}": {
         parameters: {
             query?: never;
@@ -1534,6 +1551,57 @@ export interface components {
             score?: number;
             sourcePath?: string;
         };
+        ConfigChange: {
+            applyMode?: string;
+            domain?: string;
+            impact?: string;
+            key?: string;
+            newValue?: unknown;
+            oldValue?: unknown;
+            rebuildScope?: string;
+            risk?: string;
+            source?: string;
+        };
+        ConfigChangeAffected: {
+            /** Format: int64 */
+            chunks?: number;
+            /** Format: int64 */
+            documents?: number;
+            /** Format: int64 */
+            knowledgeBases?: number;
+        };
+        ConfigChangeBlocker: {
+            code?: string;
+            message?: string;
+            remediation?: string;
+        };
+        ConfigChangePreview: {
+            actions?: string[];
+            affected?: components["schemas"]["ConfigChangeAffected"];
+            blockers?: components["schemas"]["ConfigChangeBlocker"][];
+            changes: components["schemas"]["ConfigChange"][];
+            estimatedCostTier?: string;
+            estimatedDurationTier?: string;
+            impact?: string;
+            knowledgeBaseId?: string;
+            rebuildOptional?: boolean;
+            rebuildRequired?: boolean;
+            restartRequired?: boolean;
+            scope?: string;
+        };
+        ConfigChangePreviewRequest: {
+            chunking?: {
+                [key: string]: unknown;
+            };
+            embeddingDimension?: number;
+            embeddingModel?: string;
+            knowledgeBaseId?: string;
+            retrieval?: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            scope: "tenant" | "knowledge_base";
+        };
         ConfigConnectionTestRequest: {
             capability: string;
             providerId?: string;
@@ -1566,11 +1634,14 @@ export interface components {
             descriptionKey?: string;
             domain: string;
             group?: string;
+            impact: string;
             key: string;
             kind: string;
             labelKey?: string;
             max?: number;
             min?: number;
+            rebuildScope: string;
+            risk?: string;
             sensitivity?: string;
             step?: number;
             unitKey?: string;
@@ -3082,6 +3153,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Chunk"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_config_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigChangePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigChangePreview"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -8,6 +8,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/confighealth"
+	"github.com/hzc19970630/rag-platform/internal/configpreview"
 	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/contracts/projectioncache"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
@@ -62,6 +63,7 @@ type Application struct {
 	Tenant        *tenant.Service
 	TenantConfig  *tenantconfig.Service
 	ConfigHealth  *confighealth.Service
+	ConfigPreview *configpreview.Service
 	Objects       *storage.S3Store
 	Queue         *queue.Publisher
 	Docreader     *docreader.Client
@@ -187,12 +189,17 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		return nil, err
 	}
 	knowledgeBaseService := knowledgebase.NewService(database, authorization, binding)
-	tenantConfigService := tenantconfig.NewService(database, authorization, tenantconfig.Deployment{
+	deployment := tenantconfig.Deployment{
 		Retrieval: cfg.RetrievalTier(),
 		Chunking:  cfg.ChunkingTier(),
 		Chunk: tenantconfig.ChunkPolicy{
 			Size: cfg.Chunk.Size, Overlap: cfg.Chunk.Overlap, MinSize: cfg.Chunk.MinSize, Markers: cfg.Chunk.Markers,
 		},
+	}
+	tenantConfigService := tenantconfig.NewService(database, authorization, deployment)
+	configPreviewService := configpreview.NewService(configpreview.Options{
+		DB: database, Authz: authorization, Deployment: deployment,
+		EmbeddingModel: embedder.Name(), EmbeddingDimension: embedder.Dimension(),
 	})
 	knowledgeBaseService.SetTenantParamsResolver(tenantConfigService)
 	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle, cfg.MaxFileBytes)
@@ -342,7 +349,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

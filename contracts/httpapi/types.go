@@ -186,6 +186,9 @@ type ConfigFieldDefinition struct {
 	Step           *float64        `json:"step,omitempty"`
 	UnitKey        string          `json:"unitKey,omitempty"`
 	ApplyMode      string          `json:"applyMode" oa:"required"`
+	Impact         string          `json:"impact" oa:"required"`
+	RebuildScope   string          `json:"rebuildScope" oa:"required"`
+	Risk           string          `json:"risk"`
 	Sensitivity    string          `json:"sensitivity"`
 	LabelKey       string          `json:"labelKey"`
 	DescriptionKey string          `json:"descriptionKey,omitempty"`
@@ -253,6 +256,57 @@ type ConfigHealth struct {
 	HighRisk    int                 `json:"highRisk"`
 	Checks      []ConfigHealthCheck `json:"checks" oa:"required"`
 	GeneratedAt time.Time           `json:"generatedAt"`
+}
+
+// ConfigChangePreviewRequest asks what a proposed configuration would change.
+// Scope is tenant or knowledge_base; the server enforces the matching
+// permission. Retrieval and chunking replace the current override documents.
+type ConfigChangePreviewRequest struct {
+	Scope              string                     `json:"scope" binding:"required" oa:"enum=tenant|knowledge_base"`
+	KnowledgeBaseID    string                     `json:"knowledgeBaseId,omitempty"`
+	Retrieval          map[string]json.RawMessage `json:"retrieval"`
+	Chunking           map[string]json.RawMessage `json:"chunking"`
+	EmbeddingModel     string                     `json:"embeddingModel,omitempty"`
+	EmbeddingDimension *int                       `json:"embeddingDimension,omitempty"`
+}
+
+type ConfigChange struct {
+	Domain       string          `json:"domain"`
+	Key          string          `json:"key"`
+	OldValue     json.RawMessage `json:"oldValue"`
+	NewValue     json.RawMessage `json:"newValue"`
+	Source       string          `json:"source"`
+	ApplyMode    string          `json:"applyMode"`
+	Impact       string          `json:"impact"`
+	RebuildScope string          `json:"rebuildScope"`
+	Risk         string          `json:"risk"`
+}
+
+type ConfigChangeBlocker struct {
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Remediation string `json:"remediation"`
+}
+
+type ConfigChangeAffected struct {
+	KnowledgeBases int64 `json:"knowledgeBases"`
+	Documents      int64 `json:"documents"`
+	Chunks         int64 `json:"chunks"`
+}
+
+type ConfigChangePreview struct {
+	Scope                 string                `json:"scope"`
+	KnowledgeBaseID       string                `json:"knowledgeBaseId,omitempty"`
+	Changes               []ConfigChange        `json:"changes" oa:"required"`
+	Impact                string                `json:"impact"`
+	RebuildRequired       bool                  `json:"rebuildRequired"`
+	RebuildOptional       bool                  `json:"rebuildOptional"`
+	RestartRequired       bool                  `json:"restartRequired"`
+	Blockers              []ConfigChangeBlocker `json:"blockers"`
+	Affected              ConfigChangeAffected  `json:"affected"`
+	EstimatedDurationTier string                `json:"estimatedDurationTier"`
+	EstimatedCostTier     string                `json:"estimatedCostTier"`
+	Actions               []string              `json:"actions"`
 }
 
 type AuditEvent struct {

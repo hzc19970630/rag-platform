@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/configpreview"
 	"github.com/hzc19970630/rag-platform/internal/modelregistry"
 	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
 	"github.com/hzc19970630/rag-platform/internal/transport/views"
@@ -14,6 +15,24 @@ import (
 // tenant is always the authenticated principal's tenant; there is no tenant id
 // in the path or body, so one tenant cannot read or write another's policy.
 func RegisterConfigurationRoutes(protected *gin.RouterGroup, deps ConfigurationDeps, mw MiddlewareDeps) {
+	protected.POST("/config/preview", func(c *gin.Context) {
+		var input httpapi.ConfigChangePreviewRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		preview, err := deps.Preview.Preview(c.Request.Context(), accessContext(c).Principal, configpreview.Input{
+			Scope: input.Scope, KnowledgeBaseID: input.KnowledgeBaseID,
+			Retrieval: input.Retrieval, Chunking: input.Chunking,
+			EmbeddingModel: input.EmbeddingModel, EmbeddingDimension: input.EmbeddingDimension,
+		})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.ConfigChangePreview(preview))
+	})
+
 	group := protected.Group("/tenant/config")
 	group.Use(requireOperator(mw))
 

@@ -51,6 +51,31 @@ chunks are not rewritten; reprocess a version to apply the new policy. The
 worker resolves the policy per document, so two tenants can run different
 chunk sizes on the same deployment.
 
+## Change impact preflight
+
+`POST /api/v1/config/preview` is a read-only check before saving a tenant or
+knowledge-base change. It never writes configuration, rebuilds an index or
+enqueues ingestion work. The request states `scope` (`tenant` or
+`knowledge_base`), the proposed retrieval/chunking documents, and optionally a
+proposed embedding model/dimension.
+
+Every field declares `impact`:
+
+| impact | Meaning | Save behaviour |
+| --- | --- | --- |
+| `hot` | effective on the next retrieval | saved directly |
+| `next_ingest` | applies to documents ingested/reprocessed later | saved after confirmation; history rebuild is optional |
+| `rebuild` | old data is incompatible until a migration completes | blocked; the report points at the migration |
+| `restart` | the process must restart | blocked; restart is required |
+
+The response includes the effective old→new diff, `rebuildRequired`,
+`rebuildOptional`, `restartRequired`, blockers, affected knowledge bases /
+documents / chunks, duration and cost tiers, and suggested actions. Chunking
+changes are `next_ingest` with `rebuildOptional=true`; the workbench confirms
+that only new documents change. Embedding model/dimension changes are blocked
+with an `embedding_contract_requires_rebuild` blocker and an
+`open_embedding_migration` action; the migration itself belongs to D3.
+
 ## Configuration health
 
 `GET /api/v1/tenant/config/health` (tenant owner/admin) returns one check per

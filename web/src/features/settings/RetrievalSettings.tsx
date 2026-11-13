@@ -3,8 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, jsonInit } from "../../api/client";
+import { previewConfigChange } from "../../api/configPreview";
 import { queryKeys } from "../../api/hooks";
 import type { IndexingStrategy, KnowledgeBaseConfigurationV1 } from "../../api/types";
+import { confirmConfigPreview } from "./ConfigPreviewContent";
 import { normalizedStrategy } from "./retrievalFields";
 import { SchemaConfigForm } from "./SchemaConfigForm";
 
@@ -93,6 +95,8 @@ export function RetrievalSettings({ knowledgeBaseId, configuration, canWrite, on
     if (savingRetrieval) return;
     setSavingRetrieval(true);
     try {
+      const preview = await previewConfigChange({ scope: "knowledge_base", knowledgeBaseId, retrieval: override });
+      if (!(await confirmConfigPreview(preview, modal, t))) return;
       await api(`/knowledge-bases/${knowledgeBaseId}/retrieval-config`, jsonInit(override, "PUT"));
       await queryClient.invalidateQueries({ queryKey: queryKeys.configuration(knowledgeBaseId) });
       onSaved();

@@ -53,6 +53,9 @@ describe("schema-driven override serialization", () => {
       kind: "string_list",
       default: ["\n\n"],
       applyMode: "next_ingest",
+      impact: "next_ingest",
+      rebuildScope: "rechunk",
+      risk: "normal",
       sensitivity: "normal",
       labelKey: "chunking.splitMarkers",
     }];

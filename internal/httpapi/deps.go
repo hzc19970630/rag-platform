@@ -3,6 +3,7 @@ package httpapi
 import (
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/confighealth"
+	"github.com/hzc19970630/rag-platform/internal/configpreview"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
 	"github.com/hzc19970630/rag-platform/internal/datasource"
 	"github.com/hzc19970630/rag-platform/internal/identity"
@@ -59,6 +60,7 @@ type TenantDeps struct {
 type ConfigurationDeps struct {
 	TenantConfig *tenantconfig.Service
 	Health       *confighealth.Service
+	Preview      *configpreview.Service
 }
 
 // ModelDeps owns the tenant model catalog: provider CRUD and the merged
@@ -104,6 +106,7 @@ type RouteDeps struct {
 	Tenant        *tenant.Service
 	TenantConfig  *tenantconfig.Service
 	ConfigHealth  *confighealth.Service
+	ConfigPreview *configpreview.Service
 	Queue         *queue.Publisher
 	Tasks         *ingestion.TaskInspector
 	Metrics       *observability.Registry

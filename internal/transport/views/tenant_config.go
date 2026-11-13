@@ -5,6 +5,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/contracts/httpapi"
 	"github.com/hzc19970630/rag-platform/internal/confighealth"
+	"github.com/hzc19970630/rag-platform/internal/configpreview"
 	"github.com/hzc19970630/rag-platform/internal/configschema"
 	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
 )
@@ -39,8 +40,9 @@ func ConfigFieldDefinitions(fields []configschema.Field) []httpapi.ConfigFieldDe
 		items = append(items, httpapi.ConfigFieldDefinition{
 			Key: field.Key, Domain: field.Domain, Group: field.Group, Kind: string(field.Kind),
 			Default: field.Default, Min: field.Min, Max: field.Max, Step: field.Step,
-			UnitKey: field.UnitKey, ApplyMode: field.ApplyMode, Sensitivity: field.Sensitivity,
-			LabelKey: field.LabelKey, DescriptionKey: field.DescriptionKey,
+			UnitKey: field.UnitKey, ApplyMode: field.ApplyMode, Impact: field.Impact,
+			RebuildScope: field.RebuildScope, Risk: field.Risk,
+			Sensitivity: field.Sensitivity, LabelKey: field.LabelKey, DescriptionKey: field.DescriptionKey,
 		})
 	}
 	return items
@@ -86,5 +88,36 @@ func ConfigHealth(report confighealth.Report) httpapi.ConfigHealth {
 func ConfigConnectionResult(result confighealth.ConnectionResult) httpapi.ConfigConnectionTestResult {
 	return httpapi.ConfigConnectionTestResult{
 		Healthy: result.Healthy, Error: result.Error, Dimension: result.Dimension, CheckedAt: result.CheckedAt,
+	}
+}
+
+// ConfigChangePreview maps the read-only preflight report.
+func ConfigChangePreview(preview configpreview.Preview) httpapi.ConfigChangePreview {
+	changes := make([]httpapi.ConfigChange, 0, len(preview.Changes))
+	for _, change := range preview.Changes {
+		changes = append(changes, httpapi.ConfigChange{
+			Domain: change.Domain, Key: change.Key, OldValue: change.OldValue, NewValue: change.NewValue,
+			Source: change.Source, ApplyMode: change.ApplyMode, Impact: change.Impact,
+			RebuildScope: change.RebuildScope, Risk: change.Risk,
+		})
+	}
+	blockers := make([]httpapi.ConfigChangeBlocker, 0, len(preview.Blockers))
+	for _, blocker := range preview.Blockers {
+		blockers = append(blockers, httpapi.ConfigChangeBlocker{
+			Code: blocker.Code, Message: blocker.Message, Remediation: blocker.Remediation,
+		})
+	}
+	return httpapi.ConfigChangePreview{
+		Scope: preview.Scope, KnowledgeBaseID: preview.KnowledgeBaseID, Changes: changes,
+		Impact: preview.Impact, RebuildRequired: preview.RebuildRequired, RebuildOptional: preview.RebuildOptional,
+		RestartRequired: preview.RestartRequired, Blockers: blockers,
+		Affected: httpapi.ConfigChangeAffected{
+			KnowledgeBases: preview.Affected.KnowledgeBases,
+			Documents:      preview.Affected.Documents,
+			Chunks:         preview.Affected.Chunks,
+		},
+		EstimatedDurationTier: preview.EstimatedDurationTier,
+		EstimatedCostTier:     preview.EstimatedCostTier,
+		Actions:               append([]string(nil), preview.Actions...),
 	}
 }

@@ -3,8 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, jsonInit } from "../../api/client";
+import { previewConfigChange } from "../../api/configPreview";
 import { queryKeys, useConfigHealth, useTenantConfiguration } from "../../api/hooks";
 import type { ConfigConnectionTestResult, ConfigHealthCheck, TenantConfiguration } from "../../api/types";
+import { confirmConfigPreview } from "./ConfigPreviewContent";
 import { SchemaConfigForm } from "./SchemaConfigForm";
 
 function checkLabelKey(id: string): string {
@@ -53,7 +55,7 @@ function statusColor(status: string): string {
 
 export function TenantConfigurationTab() {
   const { t } = useTranslation();
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const configuration = useTenantConfiguration();
   const [saving, setSaving] = useState<"" | "retrieval" | "chunking">("");
@@ -66,6 +68,8 @@ export function TenantConfigurationTab() {
         retrieval: domain === "retrieval" ? override : configuration.data.retrieval.tenantOverride,
         chunking: domain === "chunking" ? override : configuration.data.chunking.tenantOverride,
       };
+      const preview = await previewConfigChange({ scope: "tenant", retrieval: body.retrieval, chunking: body.chunking });
+      if (!(await confirmConfigPreview(preview, modal, t))) return;
       await api<TenantConfiguration>("/tenant/config", jsonInit(body, "PUT"));
       message.success(t("configuration.saved"));
       await Promise.all([
