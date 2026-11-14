@@ -5,6 +5,8 @@
 [![License](https://img.shields.io/github/license/hzc19970630/rag-platform)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://hzc19970630.github.io/rag-platform/)
 
+[English](README.en.md) | [简体中文](README.md)
+
 面向企业内部知识库的多租户 RAG 平台。**答案必须带证据，权限和升级都能被审计。**
 
 一条命令本地跑通（无需模型 API Key，使用本地确定性模型）：
@@ -112,7 +114,7 @@ cp .env.example .env
 从 Release 下载并校验产物：
 
 ```bash
-VERSION=v0.1.0
+VERSION=v0.2.0
 gh release download "$VERSION"
 sha256sum -c SHA256SUMS
 
