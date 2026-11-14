@@ -9,6 +9,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
@@ -212,7 +213,7 @@ func (s *Service) publishVersion(ctx context.Context, principal authz.Principal,
 		s.invalidatePage(ctx, page.TenantID, page.ID)
 		return models.WikiPage{}, err
 	}
-	embedding, err := s.embedPage(ctx, page.Title, version.Content)
+	binding, vector, err := s.embedPage(ctx, page.TenantID, page.KnowledgeBaseID, page.Title, version.Content)
 	if err != nil {
 		return models.WikiPage{}, err
 	}
@@ -224,8 +225,8 @@ func (s *Service) publishVersion(ctx context.Context, principal authz.Principal,
 		record := models.KnowledgeIndexRecord{
 			ID: stableID("kir", page.ID, version.ID), TenantID: page.TenantID, KnowledgeBaseID: page.KnowledgeBaseID,
 			WikiPageID: page.ID, WikiPageVersionID: version.ID, Title: page.Title, Content: version.Content,
-			ContentHash: sha256Hex(page.Title + "\n" + version.Content), Embedding: vecutil.Literal(embedding),
-			EmbeddingModel: s.embedder.Name(), EmbeddingDimension: len(embedding),
+			ContentHash: sha256Hex(page.Title + "\n" + version.Content), Embedding: vecutil.Literal(vector),
+			EmbeddingModel: binding.Model, EmbeddingDimension: binding.Dimension,
 			ACLVersion: knowledgeBase.ACLVersion, Status: IndexActive, IndexedAt: &now, CreatedAt: now, UpdatedAt: now,
 		}
 		if err := tx.Create(&record).Error; err != nil {
@@ -297,19 +298,32 @@ func (s *Service) validateSources(ctx context.Context, versionID string) error {
 	return nil
 }
 
-func (s *Service) embedPage(ctx context.Context, title, content string) ([]float32, error) {
-	if s.embedder == nil {
-		return nil, fmt.Errorf("knowledge index requires an embedding adapter")
+func (s *Service) embedPage(ctx context.Context, tenantID, knowledgeBaseID, title, content string) (embedding.Binding, []float32, error) {
+	binding, adapter, err := s.embeddingFor(ctx, tenantID, knowledgeBaseID)
+	if err != nil {
+		return embedding.Binding{}, nil, err
 	}
 	text := strings.TrimSpace(title + "\n" + content)
-	vectors, err := s.embedder.Embed(ctx, []string{text})
+	vectors, err := adapter.Embed(ctx, []string{text})
 	if err != nil {
-		return nil, fmt.Errorf("embed wiki page: %w", err)
+		return embedding.Binding{}, nil, fmt.Errorf("embed wiki page: %w", err)
 	}
-	if len(vectors) != 1 || len(vectors[0]) != s.embedder.Dimension() {
-		return nil, fmt.Errorf("embed wiki page returned an unexpected vector")
+	if len(vectors) != 1 || len(vectors[0]) != binding.Dimension {
+		return embedding.Binding{}, nil, fmt.Errorf("embed wiki page returned an unexpected vector")
 	}
-	return vectors[0], nil
+	return binding, vectors[0], nil
+}
+
+// embeddingFor resolves the knowledge base's vector space. A nil resolver keeps
+// the deployment adapter for fixtures and single-space deployments.
+func (s *Service) embeddingFor(ctx context.Context, tenantID, knowledgeBaseID string) (embedding.Binding, ingestion.Embedder, error) {
+	if s.resolver != nil {
+		return s.resolver.ResolveEmbedding(ctx, tenantID, knowledgeBaseID)
+	}
+	if s.embedder == nil {
+		return embedding.Binding{}, nil, fmt.Errorf("knowledge index requires an embedding adapter")
+	}
+	return embedding.Binding{Model: s.embedder.Name(), Dimension: s.embedder.Dimension()}, s.embedder, nil
 }
 
 func (s *Service) invalidatePage(ctx context.Context, tenantID, pageID string) {

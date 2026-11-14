@@ -1390,3 +1390,32 @@ type ModelProviderTestResult struct {
 	Error     string    `json:"error,omitempty"`
 	CheckedAt time.Time `json:"checkedAt"`
 }
+
+// EmbeddingMigrationStartRequest names the target model. The dimension comes
+// from the model catalog so a caller cannot declare an incompatible space.
+type EmbeddingMigrationStartRequest struct {
+	TargetModel string `json:"targetModel" binding:"required"`
+}
+
+// EmbeddingMigrationV1 is the operator view of a managed vector-space move.
+type EmbeddingMigrationV1 struct {
+	ID              string     `json:"id"`
+	KnowledgeBaseID string     `json:"knowledgeBaseId"`
+	Status          string     `json:"status"`
+	SourceModel     string     `json:"sourceModel"`
+	SourceDimension int        `json:"sourceDimension"`
+	TargetModel     string     `json:"targetModel"`
+	TargetDimension int        `json:"targetDimension"`
+	TotalChunks     int64      `json:"totalChunks"`
+	DoneChunks      int64      `json:"doneChunks"`
+	CursorChunkID   string     `json:"cursorChunkId,omitempty"`
+	ErrorCode       string     `json:"errorCode,omitempty"`
+	ErrorMessage    string     `json:"errorMessage,omitempty"`
+	CreatedBy       string     `json:"createdBy,omitempty"`
+	StartedAt       *time.Time `json:"startedAt,omitempty"`
+	ReadyAt         *time.Time `json:"readyAt,omitempty"`
+	CutoverAt       *time.Time `json:"cutoverAt,omitempty"`
+	FinishedAt      *time.Time `json:"finishedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}

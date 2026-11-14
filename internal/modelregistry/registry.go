@@ -49,6 +49,15 @@ type Resolution struct {
 	Reason     string
 }
 
+// EmbeddingSpace is the exact vector space one knowledge base is pinned to.
+// Deployment means the in-process adapter serves it; otherwise Route describes
+// the tenant provider the composition root must build an adapter for.
+type EmbeddingSpace struct {
+	Binding    model.EmbeddingBinding
+	Deployment bool
+	Route      ProviderRoute
+}
+
 // HealthStatus is one provider probe result.
 type HealthStatus struct {
 	Model      string
@@ -222,6 +231,95 @@ func (r *Registry) ResolveForKnowledgeBase(ctx context.Context, tenantID, knowle
 		return Resolution{}, err
 	}
 	return resolution, nil
+}
+
+// ResolveEmbedding returns the exact vector space a knowledge base is pinned
+// to. Unlike chat and rerank it never falls back: substituting another
+// embedding model would silently mix two vector spaces, so a missing, disabled
+// or mismatched provider is an error the caller must surface.
+func (r *Registry) ResolveEmbedding(ctx context.Context, tenantID, knowledgeBaseID string) (EmbeddingSpace, error) {
+	var row models.KnowledgeBase
+	if err := r.db.WithContext(ctx).
+		Select("id", "embedding_model", "embedding_dimension").
+		Where("tenant_id = ? AND id = ?", tenantID, knowledgeBaseID).
+		Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return EmbeddingSpace{}, apperror.ErrNotFound
+		}
+		return EmbeddingSpace{}, fmt.Errorf("load embedding binding: %w", err)
+	}
+	binding, deployment, route, err := r.embeddingModel(ctx, tenantID, row.EmbeddingModel)
+	if err != nil {
+		return EmbeddingSpace{}, err
+	}
+	if row.EmbeddingDimension != 0 && row.EmbeddingDimension != binding.Dimension {
+		return EmbeddingSpace{}, apperror.Invalidf("knowledge base %s is bound to %s/%d, the model serves %d dimensions", knowledgeBaseID, binding.Model, row.EmbeddingDimension, binding.Dimension)
+	}
+	return EmbeddingSpace{Binding: binding, Deployment: deployment, Route: route}, nil
+}
+
+// ResolveEmbeddingModel validates a binding write and returns the dimension the
+// model actually produces. An empty name resolves to the deployment default.
+func (r *Registry) ResolveEmbeddingModel(ctx context.Context, tenantID, requested string) (model.EmbeddingBinding, error) {
+	binding, _, _, err := r.embeddingModel(ctx, tenantID, requested)
+	return binding, err
+}
+
+// ResolveEmbeddingModelSpace resolves a model name to the space it serves. It
+// backs migrations, where the target model is not yet the knowledge-base
+// binding and the caller needs the provider route to build an adapter.
+func (r *Registry) ResolveEmbeddingModelSpace(ctx context.Context, tenantID, requested string) (EmbeddingSpace, error) {
+	binding, deployment, route, err := r.embeddingModel(ctx, tenantID, requested)
+	if err != nil {
+		return EmbeddingSpace{}, err
+	}
+	return EmbeddingSpace{Binding: binding, Deployment: deployment, Route: route}, nil
+}
+
+// embeddingModel resolves one embedding model name. Empty means the deployment
+// default. It never substitutes another model: a fallback would silently move
+// a knowledge base into a different vector space.
+func (r *Registry) embeddingModel(ctx context.Context, tenantID, requested string) (model.EmbeddingBinding, bool, ProviderRoute, error) {
+	name := strings.TrimSpace(requested)
+	if name == "" {
+		// A pre-upgrade row inherits the deployment default; the binding is
+		// backfilled at startup, so this path only covers an in-flight row.
+		entry, ok := r.models[r.defaults[model.CapabilityEmbedding]]
+		if !ok || !entry.supports(model.CapabilityEmbedding) || entry.Dimension <= 0 {
+			return model.EmbeddingBinding{}, false, ProviderRoute{}, fmt.Errorf("model registry: no deployment embedding model is registered")
+		}
+		return model.EmbeddingBinding{Model: entry.Name, Dimension: entry.Dimension}, true, ProviderRoute{}, nil
+	}
+	if entry, ok := r.models[name]; ok {
+		if !entry.supports(model.CapabilityEmbedding) {
+			return model.EmbeddingBinding{}, false, ProviderRoute{}, apperror.Invalidf("model %q does not support embedding", name)
+		}
+		if entry.Dimension <= 0 {
+			return model.EmbeddingBinding{}, false, ProviderRoute{}, fmt.Errorf("model registry: deployment embedding model %q has no dimension", name)
+		}
+		return model.EmbeddingBinding{Model: entry.Name, Dimension: entry.Dimension}, true, ProviderRoute{}, nil
+	}
+	entry, provider, err := r.loadTenantEntry(ctx, tenantID, name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.EmbeddingBinding{}, false, ProviderRoute{}, apperror.Invalidf("unsupported embedding model %q", name)
+		}
+		return model.EmbeddingBinding{}, false, ProviderRoute{}, fmt.Errorf("resolve embedding model %q: %w", name, err)
+	}
+	if model.Capability(entry.Capability) != model.CapabilityEmbedding {
+		return model.EmbeddingBinding{}, false, ProviderRoute{}, apperror.Invalidf("model %q does not support embedding", name)
+	}
+	if !entry.Enabled || !provider.Enabled {
+		return model.EmbeddingBinding{}, false, ProviderRoute{}, apperror.Invalidf("embedding model %q is disabled", name)
+	}
+	if entry.Dimension <= 0 {
+		return model.EmbeddingBinding{}, false, ProviderRoute{}, apperror.Invalidf("embedding model %q has no dimension", name)
+	}
+	route, err := r.routeFor(provider, entry)
+	if err != nil {
+		return model.EmbeddingBinding{}, false, ProviderRoute{}, fmt.Errorf("resolve embedding provider %q: %w", name, err)
+	}
+	return model.EmbeddingBinding{Model: entry.Model, Dimension: entry.Dimension}, false, route, nil
 }
 
 func bindingName(row models.KnowledgeBase, capability model.Capability) string {

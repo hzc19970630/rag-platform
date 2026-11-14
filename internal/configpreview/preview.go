@@ -342,7 +342,7 @@ func embeddingDiff(currentModel string, currentDimension int, requestedModel str
 	blocker := &Blocker{
 		Code:        BlockerEmbeddingContract,
 		Message:     "Embedding 模型或维度变更属于数据契约变更，旧 Chunk 向量与新配置不兼容。",
-		Remediation: "通过 D3 托管重建执行 create-index → reembed → verify，完成前不要保存并对外提供检索。",
+		Remediation: "通过知识库「模型迁移」发起 create-index → reembed → verify，完成前不要保存并对外提供检索。",
 	}
 	return changes, blocker, nil
 }

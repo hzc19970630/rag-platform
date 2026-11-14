@@ -205,7 +205,7 @@ func BuildKnowledgeBaseConfigurationWithTenant(knowledgeBase models.KnowledgeBas
 	}
 	if knowledgeBase.EmbeddingModel != "" {
 		binding.EmbeddingLocked = true
-		binding.EmbeddingLockReason = "vector contract is pinned to this knowledge base; changing it requires the managed rebuild (D3)"
+		binding.EmbeddingLockReason = "vector contract is pinned to this knowledge base; changing it requires the managed migration"
 	}
 	return KnowledgeBaseConfigurationV1{
 		SchemaVersion:    SchemaKnowledgeBaseConfigurationV1,
@@ -305,7 +305,25 @@ func (s *Service) ConfigurationWithTenant(ctx context.Context, principal authz.P
 		}
 		tenantRaw = raw
 	}
-	return BuildKnowledgeBaseConfigurationWithTenant(row, defaults, tenantRaw, deployment, readOnly)
+	view, err := BuildKnowledgeBaseConfigurationWithTenant(row, defaults, tenantRaw, deployment, readOnly)
+	if err != nil {
+		return KnowledgeBaseConfigurationV1{}, err
+	}
+	// An empty knowledge base may adopt another registered model directly; once
+	// documents exist the vector contract only moves through the migration.
+	if view.ModelBinding.EmbeddingLocked {
+		var documents int64
+		if err := s.db.WithContext(ctx).Model(&models.Document{}).
+			Where("tenant_id = ? AND knowledge_base_id = ?", principal.TenantID, id).
+			Count(&documents).Error; err != nil {
+			return KnowledgeBaseConfigurationV1{}, fmt.Errorf("count knowledge base documents: %w", err)
+		}
+		if documents == 0 {
+			view.ModelBinding.EmbeddingLocked = false
+			view.ModelBinding.EmbeddingLockReason = ""
+		}
+	}
+	return view, nil
 }
 
 // ReplaceRetrievalConfig applies whole-replacement semantics for the

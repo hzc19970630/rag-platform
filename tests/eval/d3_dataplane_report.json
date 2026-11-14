@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "D3DataplaneReportV1",
+  "generatedAt": "2026-11-14T03:33:26Z",
+  "parameters": {
+    "rows": 1000000,
+    "dimension": 1024,
+    "iterations": 10
+  },
+  "setup": {
+    "fillSeconds": 102.429,
+    "indexBuildSeconds": {
+      "legacy": 414.053,
+      "variant": 488.131
+    }
+  },
+  "plans": {
+    "legacy": [
+      "chunks_vector_idx_1024_v1",
+      "document_versions_pkey",
+      "documents_pkey"
+    ],
+    "variant": [
+      "chunk_embeddings_1024_v1",
+      "chunks_pkey",
+      "document_versions_pkey",
+      "documents_pkey"
+    ]
+  },
+  "latencyMs": {
+    "legacy": {
+      "p50": 1833.604,
+      "p95": 2087.783
+    },
+    "variant": {
+      "p50": 4.168,
+      "p95": 98.47
+    }
+  },
+  "gate": {
+    "rule": "variant p95 <= legacy p95 * 1.10 + 5ms and both HNSW indexes are used",
+    "relativeRegressionPercent": -95.284,
+    "passed": true
+  }
+}

@@ -40,6 +40,10 @@ type TenantParamsResolver interface {
 // cannot serve.
 type ModelCatalog interface {
 	ResolveBinding(ctx context.Context, tenantID string, capability model.Capability, requested string) (model.ModelRef, error)
+	// ResolveEmbeddingModel returns the vector dimension a registered embedding
+	// model produces, so a binding write cannot name a model with an
+	// incompatible dimension.
+	ResolveEmbeddingModel(ctx context.Context, tenantID, requested string) (model.EmbeddingBinding, error)
 }
 
 // EmbeddingBinding is the model and dimension this deployment writes and
@@ -223,10 +227,26 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 		if input.EmbeddingDimension != nil {
 			next.Dimension = *input.EmbeddingDimension
 		}
-		if next != (EmbeddingBinding{Model: row.EmbeddingModel, Dimension: row.EmbeddingDimension}) {
-			if next != s.embedding {
+		if s.catalog == nil {
+			// Without a catalog only the deployment space is known.
+			if next.Model == "" {
+				next.Model = s.embedding.Model
+			}
+			if next.Model != s.embedding.Model || (next.Dimension != 0 && next.Dimension != s.embedding.Dimension) {
 				return models.KnowledgeBase{}, apperror.Invalidf("unsupported embedding binding %q/%d: this deployment serves %q/%d", next.Model, next.Dimension, s.embedding.Model, s.embedding.Dimension)
 			}
+			next.Dimension = s.embedding.Dimension
+		} else {
+			resolved, err := s.catalog.ResolveEmbeddingModel(ctx, principal.TenantID, next.Model)
+			if err != nil {
+				return models.KnowledgeBase{}, err
+			}
+			if input.EmbeddingDimension != nil && *input.EmbeddingDimension != resolved.Dimension {
+				return models.KnowledgeBase{}, apperror.Invalidf("embedding dimension %d does not match model %q dimension %d", *input.EmbeddingDimension, resolved.Model, resolved.Dimension)
+			}
+			next = EmbeddingBinding{Model: resolved.Model, Dimension: resolved.Dimension}
+		}
+		if next != (EmbeddingBinding{Model: row.EmbeddingModel, Dimension: row.EmbeddingDimension}) {
 			// An empty binding is a pre-upgrade row, not a contract; adopting the
 			// deployment binding is safe even when documents already exist.
 			if row.EmbeddingModel != "" {

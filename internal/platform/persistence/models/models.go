@@ -248,6 +248,49 @@ type Chunk struct {
 
 func (Chunk) TableName() string { return "chunks" }
 
+// ChunkEmbedding is one vector in one space. A chunk keeps one row per model it
+// has been embedded with, so a migration can build the target space while the
+// source space remains searchable.
+type ChunkEmbedding struct {
+	ChunkID         string    `gorm:"primaryKey;size:96" json:"chunkId"`
+	TenantID        string    `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string    `gorm:"size:96;not null;index" json:"knowledgeBaseId"`
+	Model           string    `gorm:"primaryKey;size:128" json:"model"`
+	Dimension       int       `gorm:"not null" json:"dimension"`
+	Embedding       string    `gorm:"type:halfvec" json:"-"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (ChunkEmbedding) TableName() string { return "chunk_embeddings" }
+
+// EmbeddingMigration is the persisted state of one managed vector-space move.
+// Status is the state machine the worker and the API share.
+type EmbeddingMigration struct {
+	ID              string     `gorm:"primaryKey;size:64" json:"id"`
+	TenantID        string     `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string     `gorm:"size:96;not null;index" json:"knowledgeBaseId"`
+	Status          string     `gorm:"size:32;not null" json:"status"`
+	SourceModel     string     `gorm:"size:128;not null;default:''" json:"sourceModel"`
+	SourceDimension int        `gorm:"not null;default:0" json:"sourceDimension"`
+	TargetModel     string     `gorm:"size:128;not null" json:"targetModel"`
+	TargetDimension int        `gorm:"not null" json:"targetDimension"`
+	TotalChunks     int64      `gorm:"not null;default:0" json:"totalChunks"`
+	DoneChunks      int64      `gorm:"not null;default:0" json:"doneChunks"`
+	CursorChunkID   string     `gorm:"size:96;not null;default:''" json:"cursorChunkId"`
+	ErrorCode       string     `gorm:"size:128;not null;default:''" json:"errorCode"`
+	ErrorMessage    string     `gorm:"type:text;not null;default:''" json:"errorMessage"`
+	CreatedBy       string     `gorm:"size:64;not null;default:''" json:"createdBy"`
+	StartedAt       *time.Time `json:"startedAt"`
+	ReadyAt         *time.Time `json:"readyAt"`
+	CutoverAt       *time.Time `json:"cutoverAt"`
+	FinishedAt      *time.Time `json:"finishedAt"`
+	CreatedAt       time.Time  `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time  `gorm:"not null" json:"updatedAt"`
+}
+
+func (EmbeddingMigration) TableName() string { return "embedding_migrations" }
+
 type EvidencePackage struct {
 	ID                string     `gorm:"primaryKey;size:64" json:"id"`
 	TenantID          string     `gorm:"size:64;not null;index" json:"tenantId"`

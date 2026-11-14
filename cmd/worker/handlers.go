@@ -47,6 +47,33 @@ func (h *taskHandlers) register(mux *asynq.ServeMux) {
 	mux.HandleFunc(queue.TaskTypeWiki, h.wiki)
 	mux.HandleFunc(queue.TaskTypeRelation, h.relation)
 	mux.HandleFunc(queue.TaskTypeAnswer, h.answer)
+	mux.HandleFunc(queue.TaskTypeEmbeddingMigration, h.embeddingMigration)
+}
+
+// embeddingMigration advances one managed vector-space move. The durable job
+// row owns progress; a duplicate delivery re-reads the same batch cursor.
+func (h *taskHandlers) embeddingMigration(ctx context.Context, task *asynq.Task) (err error) {
+	var message tasks.EmbeddingMigration
+	if err := json.Unmarshal(task.Payload(), &message); err != nil {
+		return fmt.Errorf("decode embedding migration task: %w", err)
+	}
+	if h.application.Embeddings == nil {
+		return apperror.Terminalf("embedding_migration_unavailable", "embedding migration service is not configured")
+	}
+	ctx = tenantdb.WithTenant(ctx, message.TenantID)
+	ctx = observability.ExtractTraceParent(ctx, message.TraceParent)
+	ctx, span := observability.StartSpan(ctx, "embedding.migration",
+		attribute.String("tenant.id", message.TenantID),
+		attribute.String("embedding.migration.id", message.MigrationID),
+	)
+	defer func() {
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
+	return h.application.Embeddings.Step(ctx, message.MigrationID)
 }
 
 // answer runs one async answer job. The job row owns the lease and the event

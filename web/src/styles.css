@@ -221,8 +221,8 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .settings-nav { border-right: 1px solid var(--border-secondary); background: var(--bg-subtle); padding: 12px 8px; position: sticky; top: 0; align-self: start; }
 .settings-nav .ant-menu { background: transparent; border-inline-end: 0 !important; }
 .settings-content { padding: 20px 24px 40px; min-width: 0; }
-.settings-section { display: grid; gap: 16px; max-width: 900px; }
-.settings-block { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); }
+.settings-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 900px; }
+.settings-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 20px; border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); }
 .settings-block-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .settings-block-heading h4 { margin: 0 0 4px !important; }
 .settings-form .ant-form-item:last-child { margin-bottom: 0; }
@@ -242,7 +242,13 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .config-control-row .ant-input-number,
 .config-control-row .ant-select { width: 100%; }
 .config-control .config-clear { justify-self: end; height: auto; padding: 0; }
-.settings-select { width: 100%; }
+.settings-select { width: 100%; min-width: 0; max-width: 100%; }
+.settings-select .ant-select-selector { min-width: 0; }
+.settings-select .ant-select-selection-item,
+.settings-select .ant-select-selection-placeholder { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-block { min-width: 0; }
+.settings-block > * { min-width: 0; }
+.settings-block .ant-flex, .settings-block .ant-space { min-width: 0; max-width: 100%; }
 .model-provider-form label { display: grid; gap: 4px; }
 .model-row { align-items: flex-end; }
 .model-row .model-field { display: grid; gap: 2px; min-width: 0; }

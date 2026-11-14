@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/hzc19970630/rag-platform/contracts/tasks"
@@ -24,6 +26,9 @@ const (
 	TaskTypeRelation = tasks.TypeRelation
 	// TaskTypeAnswer carries one async answer job from the API to a worker.
 	TaskTypeAnswer = tasks.TypeAnswer
+	// TaskTypeEmbeddingMigration carries one batch step of a managed embedding
+	// migration. It runs in the maintenance pool because it is operator work.
+	TaskTypeEmbeddingMigration = tasks.TypeEmbeddingMigration
 
 	QueueIngestion   = "ingestion"
 	QueueInteractive = "interactive"
@@ -41,6 +46,31 @@ type Publisher struct {
 func NewPublisher(redisAddr, redisPassword string) *Publisher {
 	options := asynq.RedisClientOpt{Addr: redisAddr, Password: redisPassword}
 	return &Publisher{client: asynq.NewClient(options), inspector: asynq.NewInspector(options)}
+}
+
+// EnqueueEmbeddingMigration publishes the next batch step. The durable row owns
+// progress, so a lost or duplicated message only re-reads the same cursor.
+func (p *Publisher) EnqueueEmbeddingMigration(ctx context.Context, tenantID, migrationID string, attempt int) error {
+	payload, err := json.Marshal(tasks.EmbeddingMigration{
+		SchemaVersion: tasks.SchemaEmbeddingMigration,
+		TenantID:      tenantID,
+		MigrationID:   migrationID,
+		Attempt:       attempt,
+		CreatedAt:     time.Now().UTC(),
+	})
+	if err != nil {
+		return fmt.Errorf("encode embedding migration task: %w", err)
+	}
+	task := asynq.NewTask(TaskTypeEmbeddingMigration, payload)
+	_, err = p.client.EnqueueContext(ctx, task,
+		asynq.Queue(QueueMaintenance),
+		asynq.TaskID(migrationID+":"+strconv.Itoa(attempt)),
+		asynq.MaxRetry(5),
+	)
+	if err != nil && err != asynq.ErrTaskIDConflict {
+		return fmt.Errorf("enqueue embedding migration: %w", err)
+	}
+	return nil
 }
 
 func (p *Publisher) Close() error {

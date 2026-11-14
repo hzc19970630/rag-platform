@@ -17,12 +17,16 @@ const (
 	TypeWiki      = "knowledge.projection.wiki.v1"
 	TypeRelation  = "knowledge.projection.relation.v1"
 	TypeAnswer    = "answer.generate.v1"
+	// TypeEmbeddingMigration carries one batch step of a managed vector-space
+	// move. The durable row owns progress; the task only names it.
+	TypeEmbeddingMigration = "embedding.migration.v1"
 
-	SchemaIngestion = "IngestionTaskV1"
-	SchemaSync      = "connector.sync.v1"
-	SchemaWiki      = "WikiProjectionTaskV1"
-	SchemaRelation  = "RelationProjectionTaskV1"
-	SchemaAnswer    = "AnswerTaskV1"
+	SchemaIngestion          = "IngestionTaskV1"
+	SchemaSync               = "connector.sync.v1"
+	SchemaWiki               = "WikiProjectionTaskV1"
+	SchemaRelation           = "RelationProjectionTaskV1"
+	SchemaAnswer             = "AnswerTaskV1"
+	SchemaEmbeddingMigration = "EmbeddingMigrationTaskV1"
 )
 
 // Ingestion is one Evidence pipeline stage. It carries ids and an object key,
@@ -91,4 +95,20 @@ type Answer struct {
 	SessionOverride string `json:"session_override,omitempty"`
 	TimeoutSeconds  int    `json:"timeout_seconds,omitempty"`
 	TraceParent     string `json:"trace_parent,omitempty"`
+}
+
+// EmbeddingMigration asks a worker to advance one managed embedding migration.
+// Progress lives in embedding_migrations; Attempt only separates queue task ids
+// so a retried batch is not deduplicated away.
+type EmbeddingMigration struct {
+	SchemaVersion string    `json:"schema_version"`
+	TenantID      string    `json:"tenant_id"`
+	MigrationID   string    `json:"migration_id"`
+	Attempt       int       `json:"attempt"`
+	CreatedAt     time.Time `json:"created_at"`
+	TraceParent   string    `json:"trace_parent,omitempty"`
+}
+
+func (t EmbeddingMigration) QueueID() string {
+	return t.MigrationID + ":" + strconv.Itoa(t.Attempt)
 }

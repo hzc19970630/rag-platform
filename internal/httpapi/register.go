@@ -28,4 +28,5 @@ func RegisterRoutes(router *gin.Engine, cfg config.Config, deps RouteDeps, logge
 	RegisterTenantRoutes(protected, TenantDeps{Tenant: deps.Tenant}, mw)
 	RegisterConfigurationRoutes(protected, ConfigurationDeps{TenantConfig: deps.TenantConfig, Health: deps.ConfigHealth, Preview: deps.ConfigPreview}, mw)
 	RegisterModelRoutes(protected, ModelDeps{Models: deps.Models}, mw)
+	RegisterEmbeddingMigrationRoutes(protected, EmbeddingMigrationDeps{Embeddings: deps.Embeddings}, mw)
 }

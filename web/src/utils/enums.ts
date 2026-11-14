@@ -4,7 +4,7 @@ import type { TFunction } from "i18next";
 // enum values to i18n keys themselves: adding a backend state or capability is
 // a change to this file plus the two translation blocks, nothing else.
 
-export type EnumGroup = "status" | "role" | "capability" | "source" | "connector_type" | "provider_kind" | "audit_action" | "audit_resource" | "api_key_status" | "queue";
+export type EnumGroup = "status" | "role" | "capability" | "source" | "connector_type" | "provider_kind" | "audit_action" | "audit_resource" | "api_key_status" | "queue" | "embedding_migration_status";
 export type EnumTone = "success" | "warning" | "error" | "default";
 
 export const STATUS_VALUES = [
@@ -48,11 +48,19 @@ export const QUEUE_VALUES = ["ingestion", "interactive", "projection", "maintena
 export const AUDIT_ACTION_VALUES = [
   "create", "delete", "discard", "login", "manage_members", "purge", "retry", "revoke",
   "rollback", "update_tenant_config", "update_tenant_quota", "write",
+  "embedding_migration_started", "embedding_migration_cutover",
+  "embedding_migration_rolled_back", "embedding_migration_cancelled", "embedding_migration_finalized",
 ] as const;
 
 export const AUDIT_RESOURCE_VALUES = [
   "api_key", "connector", "dead_letter", "document", "graph_run", "graph_snapshot",
   "indexing_strategy", "path", "retrieval_config", "session", "tenant", "tenant_config", "wiki_page",
+  "embedding_migration",
+] as const;
+
+export const EMBEDDING_MIGRATION_STATUS_VALUES = [
+  "pending", "building_index", "reembedding", "verifying", "ready",
+  "cutover", "finalized", "rolled_back", "cancelled", "failed",
 ] as const;
 
 export type StatusValue = (typeof STATUS_VALUES)[number];
@@ -123,6 +131,27 @@ const STATUS_TONES: Record<string, EnumTone> = {
   unknown: "default",
   skipped: "default",
 };
+
+const EMBEDDING_MIGRATION_TONES: Record<string, EnumTone> = {
+  pending: "warning",
+  building_index: "warning",
+  reembedding: "warning",
+  verifying: "warning",
+  ready: "success",
+  cutover: "success",
+  finalized: "default",
+  rolled_back: "warning",
+  cancelled: "default",
+  failed: "error",
+};
+
+export function embeddingMigrationStatusLabel(t: TFunction, status: string): string {
+  return enumLabel(t, "embedding_migration_status", status);
+}
+
+export function embeddingMigrationStatusTone(status: string): EnumTone {
+  return EMBEDDING_MIGRATION_TONES[status] ?? "default";
+}
 
 export function enumLabelKey(group: EnumGroup, value: string): string {
   if (group === "capability") {

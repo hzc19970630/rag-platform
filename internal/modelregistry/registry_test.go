@@ -393,3 +393,125 @@ func TestZeroRequestBudgetDisablesQuota(t *testing.T) {
 		}
 	}
 }
+
+func embeddingCatalog() []Model {
+	return append(catalogModels(nil), Model{
+		Name: "embed-8", Provider: "remote", Version: "v-embed-8", Dimension: 8,
+		Capabilities: []model.Capability{model.CapabilityEmbedding},
+	})
+}
+
+func seedEmbeddingKnowledgeBase(t *testing.T, db *gorm.DB, id, tenantID, embeddingModel string, dimension int) {
+	t.Helper()
+	row := models.KnowledgeBase{
+		ID: id, TenantID: tenantID, OwnerID: "owner", Name: id, ACLVersion: 1,
+		RetrievalConfig: "{}", IndexingStrategy: "{}",
+		EmbeddingModel: embeddingModel, EmbeddingDimension: dimension,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatalf("create embedding knowledge base: %v", err)
+	}
+}
+
+func seedEmbeddingProvider(t *testing.T, db *gorm.DB, tenantID, providerID, modelName string, dimension int, enabled bool) {
+	t.Helper()
+	now := time.Now().UTC()
+	provider := models.ModelProvider{
+		ID: providerID, TenantID: tenantID, Name: providerID, Kind: ProviderKindOpenAICompatible,
+		BaseURL: "https://embed.example/v1", Enabled: enabled, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(&provider).Error; err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
+	// The column defaults to true, so a zero-value false is skipped on insert.
+	if !enabled {
+		if err := db.Model(&models.ModelProvider{}).Where("id = ?", provider.ID).Update("enabled", false).Error; err != nil {
+			t.Fatalf("disable provider: %v", err)
+		}
+	}
+	entry := models.ModelCatalogEntry{
+		ID: providerID + "-entry", TenantID: tenantID, ProviderID: providerID,
+		Model: modelName, Capability: string(model.CapabilityEmbedding), Version: "v1",
+		Dimension: dimension, Enabled: true, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := db.Create(&entry).Error; err != nil {
+		t.Fatalf("create catalog entry: %v", err)
+	}
+}
+
+func TestResolveEmbeddingUsesDeploymentDefault(t *testing.T) {
+	db := openRegistryTestDB(t)
+	seedEmbeddingKnowledgeBase(t, db, "kb-a", "tenant-1", "", 0)
+	registry := newTestRegistry(t, db, Options{
+		Models:   embeddingCatalog(),
+		Defaults: map[model.Capability]string{model.CapabilityEmbedding: "embed-8"},
+	})
+	space, err := registry.ResolveEmbedding(context.Background(), "tenant-1", "kb-a")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if !space.Deployment || space.Binding.Model != "embed-8" || space.Binding.Dimension != 8 {
+		t.Fatalf("unexpected deployment space: %+v", space)
+	}
+}
+
+func TestResolveEmbeddingRejectsDeploymentDimensionMismatch(t *testing.T) {
+	db := openRegistryTestDB(t)
+	seedEmbeddingKnowledgeBase(t, db, "kb-a", "tenant-1", "embed-8", 1024)
+	registry := newTestRegistry(t, db, Options{
+		Models:   embeddingCatalog(),
+		Defaults: map[model.Capability]string{model.CapabilityEmbedding: "embed-8"},
+	})
+	if _, err := registry.ResolveEmbedding(context.Background(), "tenant-1", "kb-a"); err == nil || !strings.Contains(err.Error(), "dimension") {
+		t.Fatalf("expected dimension mismatch, got %v", err)
+	}
+}
+
+func TestResolveEmbeddingRoutesTenantProvider(t *testing.T) {
+	db := openRegistryTestDB(t)
+	seedEmbeddingKnowledgeBase(t, db, "kb-a", "tenant-1", "tenant-embed", 12)
+	seedEmbeddingProvider(t, db, "tenant-1", "provider-1", "tenant-embed", 12, true)
+	registry := newTestRegistry(t, db, Options{
+		Models:   embeddingCatalog(),
+		Defaults: map[model.Capability]string{model.CapabilityEmbedding: "embed-8"},
+	})
+	space, err := registry.ResolveEmbedding(context.Background(), "tenant-1", "kb-a")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if space.Deployment {
+		t.Fatal("tenant entry must not be served by the deployment adapter")
+	}
+	if space.Binding.Model != "tenant-embed" || space.Binding.Dimension != 12 {
+		t.Fatalf("unexpected binding: %+v", space.Binding)
+	}
+	if space.Route.ProviderID != "provider-1" || space.Route.BaseURL != "https://embed.example/v1" {
+		t.Fatalf("unexpected route: %+v", space.Route)
+	}
+}
+
+func TestResolveEmbeddingRejectsDisabledProvider(t *testing.T) {
+	db := openRegistryTestDB(t)
+	seedEmbeddingKnowledgeBase(t, db, "kb-a", "tenant-1", "tenant-embed", 12)
+	seedEmbeddingProvider(t, db, "tenant-1", "provider-1", "tenant-embed", 12, false)
+	registry := newTestRegistry(t, db, Options{
+		Models:   embeddingCatalog(),
+		Defaults: map[model.Capability]string{model.CapabilityEmbedding: "embed-8"},
+	})
+	if _, err := registry.ResolveEmbedding(context.Background(), "tenant-1", "kb-a"); err == nil || !strings.Contains(err.Error(), "disabled") {
+		t.Fatalf("expected disabled provider error, got %v", err)
+	}
+}
+
+func TestResolveEmbeddingRejectsWrongCapability(t *testing.T) {
+	db := openRegistryTestDB(t)
+	seedEmbeddingKnowledgeBase(t, db, "kb-a", "tenant-1", "chat-a", 0)
+	registry := newTestRegistry(t, db, Options{
+		Models:   embeddingCatalog(),
+		Defaults: map[model.Capability]string{model.CapabilityEmbedding: "embed-8"},
+	})
+	if _, err := registry.ResolveEmbedding(context.Background(), "tenant-1", "kb-a"); err == nil || !strings.Contains(err.Error(), "does not support embedding") {
+		t.Fatalf("expected capability error, got %v", err)
+	}
+}

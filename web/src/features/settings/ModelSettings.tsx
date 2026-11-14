@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api, jsonInit } from "../../api/client";
 import { queryKeys, useModelCatalog } from "../../api/hooks";
 import type { KnowledgeBaseConfigurationV1, ModelCatalogEntry } from "../../api/types";
+import { EmbeddingMigration } from "./EmbeddingMigration";
 
 type Props = {
   knowledgeBaseId: string;
@@ -115,14 +116,13 @@ export function ModelSettings({ knowledgeBaseId, configuration, canWrite, onSave
               {binding.rerank.version ? ` · ${binding.rerank.version}` : ""}
             </Typography.Text>
           </div>
-          <div>
-            <Typography.Text strong>{t("models.embedding")}</Typography.Text>
-            <div>
-              <Tag>{`${binding.embedding.model || configuration.readOnly.embedding.model} · ${binding.embeddingDimension || configuration.readOnly.embedding.dimension}`}</Tag>
-              {binding.embeddingLocked ? <Tag color="orange">{t("models.embeddingLocked")}</Tag> : null}
-            </div>
-            <Typography.Text type="secondary">{binding.embeddingLockReason || t("models.embeddingHint")}</Typography.Text>
-          </div>
+          <EmbeddingMigration
+            knowledgeBaseId={knowledgeBaseId}
+            configuration={configuration}
+            catalog={catalog.data ?? []}
+            canWrite={canWrite}
+            onSaved={onSaved}
+          />
           {error ? <Alert type="error" showIcon message={error} /> : null}
           {canWrite ? (
             <Button type="primary" loading={saving} disabled={!dirty} onClick={() => void save()}>

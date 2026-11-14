@@ -25,25 +25,30 @@ import (
 const usage = `usage: embedctl <command> [flags]
 
 commands:
-  check          report pgvector version, chunk vector indexes and stored dimensions
-  create-index   build or replace the chunks HNSW index online for EMBEDDING_DIMENSION
-  reembed        re-embed chunks whose model or dimension no longer matches config
-  verify         fail if any active chunk still holds a stale embedding
+  check               report pgvector version, chunk vector indexes and stored dimensions
+  create-index        build or replace the HNSW indexes online for a dimension
+  backfill-embeddings copy legacy chunk vectors into the D3 variant table
+  reembed             re-embed chunks whose model or dimension no longer matches config
+  verify              fail if any active chunk still holds a stale embedding
 
 create-index runs CREATE INDEX CONCURRENTLY under a versioned name and keeps
 the serving index until the replacement is valid, so writes stay available.
 It is a managed switch, not a routine command.
 
 create-index flags:
-  --dry-run   print the plan without changing the catalog
-  --confirm   skip the confirmation prompt. Required when stdin is not a
-              terminal; EMBED_INDEX_CONFIRM=1 is equivalent.
+  --dimension N  dimension to index (default EMBEDDING_DIMENSION)
+  --dry-run      print the plan without changing the catalog
+  --confirm      skip the confirmation prompt. Required when stdin is not a
+                 terminal; EMBED_INDEX_CONFIRM=1 is equivalent.
+
+create-index builds both the chunks index and the D3 chunk_embeddings index for
+the dimension. It never drops another dimension's index.
 
 The embedding dimension is part of the index contract. Switching model or
 dimension is a managed sequence: create-index, then reembed, then verify, and
 only then enable retrieval on the new vectors.`
 
-var commands = map[string]bool{"check": true, "create-index": true, "reembed": true, "verify": true}
+var commands = map[string]bool{"check": true, "create-index": true, "backfill-embeddings": true, "reembed": true, "verify": true}
 
 func main() {
 	if len(os.Args) < 2 || !commands[os.Args[1]] {
@@ -74,6 +79,12 @@ func main() {
 		checkIndex(ctx, db, logger)
 	case "create-index":
 		createIndex(ctx, db, cfg, logger, os.Args[2:])
+	case "backfill-embeddings":
+		total, err := ingestion.BackfillEmbeddingVariants(ctx, db, 1000)
+		if err != nil {
+			fatal(logger, "backfill_embeddings_failed", err)
+		}
+		logger.Info("backfill_embeddings_complete", "inserted", total)
 	case "reembed":
 		embedder, err := app.NewEmbedder(cfg)
 		if err != nil {
@@ -140,6 +151,22 @@ func checkIndex(ctx context.Context, db *gorm.DB, logger *slog.Logger) {
 	for _, bucket := range report.DimensionHistogram {
 		logger.Info("chunk_dimension", "dimension", bucket.Dimension, "chunks", bucket.Count)
 	}
+	variantReport, err := vector.CheckChunkEmbeddingIndexes(ctx, db)
+	if err != nil {
+		logger.Warn("chunk_embedding_index_check_failed", "error", err)
+		return
+	}
+	for _, index := range variantReport.Indexes {
+		logger.Info("chunk_embedding_index",
+			"name", index.Name,
+			"dimension", index.Dimension,
+			"valid", index.Valid,
+			"definition", index.Definition,
+		)
+	}
+	for _, bucket := range variantReport.DimensionHistogram {
+		logger.Info("chunk_embedding_dimension", "dimension", bucket.Dimension, "chunks", bucket.Count)
+	}
 }
 
 func createIndex(ctx context.Context, db *gorm.DB, cfg config.Config, logger *slog.Logger, args []string) {
@@ -147,21 +174,30 @@ func createIndex(ctx context.Context, db *gorm.DB, cfg config.Config, logger *sl
 	flags.SetOutput(os.Stderr)
 	dryRun := flags.Bool("dry-run", false, "print the online index plan without changing the catalog")
 	confirm := flags.Bool("confirm", false, "skip the confirmation prompt")
+	dimension := flags.Int("dimension", cfg.Embedding.Dimension, "vector dimension to index")
 	if err := flags.Parse(args); err != nil {
 		os.Exit(2)
 	}
+	if *dimension <= 0 {
+		fatal(logger, "create_index_invalid_dimension", fmt.Errorf("dimension must be positive"))
+	}
 	if !*dryRun {
-		if err := confirmIndexBuild(*confirm, cfg.Embedding.Dimension); err != nil {
+		if err := confirmIndexBuild(*confirm, *dimension); err != nil {
 			fatal(logger, "create_index_not_confirmed", err)
 		}
 	}
-	result, err := vector.EnsureChunksIndex(ctx, db, cfg.Embedding.Dimension, vector.IndexOptions{
+	options := vector.IndexOptions{
 		LockTimeout:      time.Duration(cfg.Embedding.IndexLockTimeoutSec) * time.Second,
 		StatementTimeout: time.Duration(cfg.Embedding.IndexStatementTimeoutSec) * time.Second,
 		DryRun:           *dryRun,
-	})
+	}
+	result, err := vector.EnsureChunksIndex(ctx, db, *dimension, options)
 	if err != nil {
 		fatal(logger, "create_index_failed", err)
+	}
+	variant, err := vector.EnsureChunkEmbeddingIndex(ctx, db, *dimension, options)
+	if err != nil {
+		fatal(logger, "create_variant_index_failed", err)
 	}
 	if *dryRun {
 		action := "none"
@@ -170,6 +206,7 @@ func createIndex(ctx context.Context, db *gorm.DB, cfg config.Config, logger *sl
 		}
 		logger.Info("vector_index_plan",
 			"index", result.Index,
+			"variant_index", variant.Index,
 			"dimension", result.Dimension,
 			"action", action,
 			"drops", strings.Join(result.Dropped, ","),
@@ -180,8 +217,10 @@ func createIndex(ctx context.Context, db *gorm.DB, cfg config.Config, logger *sl
 	}
 	logger.Info("vector_index_ready",
 		"index", result.Index,
+		"variant_index", variant.Index,
 		"dimension", result.Dimension,
 		"created", result.Created,
+		"variant_created", variant.Created,
 		"dropped", strings.Join(result.Dropped, ","),
 		"duration_ms", result.Duration.Milliseconds(),
 		"size_bytes", result.SizeBytes,

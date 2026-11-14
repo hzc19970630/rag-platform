@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 )
 
 // RecallRequest is the scope-bearing recall query. Authorization filters are
@@ -114,15 +115,15 @@ type RerankModelResolver interface {
 
 // Embedder is the shared model port: ingestion writes and retrieval queries
 // through the same contract, so the configured model cannot drift between them.
-// Embedder is the model port owned by this package. Adapters implement it
-// structurally, so retrieval never depends on a provider package.
-type Embedder interface {
-	Embed(ctx context.Context, texts []string) ([][]float32, error)
-	// Dimension reports the vector length this adapter produces.
-	Dimension() int
-	// Name identifies the model so vectors from different models are never
-	// compared.
-	Name() string
+type Embedder = embedding.Embedder
+
+// EmbeddingBinding is the vector space a knowledge base is pinned to.
+type EmbeddingBinding = embedding.Binding
+
+// EmbeddingResolver resolves the exact vector space for one knowledge base.
+// Retrieval groups targets by binding and never compares cross-space scores.
+type EmbeddingResolver interface {
+	ResolveEmbedding(ctx context.Context, tenantID, knowledgeBaseID string) (EmbeddingBinding, Embedder, error)
 }
 
 // Authorizer re-checks the final evidence set against the authorization scope.

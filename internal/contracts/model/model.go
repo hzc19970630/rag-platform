@@ -35,6 +35,14 @@ const (
 	CapabilityRerank    Capability = "rerank"
 )
 
+// EmbeddingBinding is the vector space a knowledge base is pinned to. The
+// dimension belongs to the binding because a model name alone does not prove
+// that two deployments produce comparable vectors.
+type EmbeddingBinding struct {
+	Model     string
+	Dimension int
+}
+
 // ModelRef identifies the model and version a binding resolves to. The version
 // is recorded in audit entries so an in-place model upgrade is distinguishable
 // from a routing change.

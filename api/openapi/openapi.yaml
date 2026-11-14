@@ -935,6 +935,62 @@ components:
         version:
           $ref: '#/components/schemas/DocumentVersion'
       type: object
+    EmbeddingMigrationStartRequest:
+      properties:
+        targetModel:
+          type: string
+      required:
+        - targetModel
+      type: object
+    EmbeddingMigrationV1:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        createdBy:
+          type: string
+        cursorChunkId:
+          type: string
+        cutoverAt:
+          format: date-time
+          type: string
+        doneChunks:
+          format: int64
+          type: integer
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        finishedAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        readyAt:
+          format: date-time
+          type: string
+        sourceDimension:
+          type: integer
+        sourceModel:
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        status:
+          type: string
+        targetDimension:
+          type: integer
+        targetModel:
+          type: string
+        totalChunks:
+          format: int64
+          type: integer
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
     Error:
       properties:
         error:
@@ -3952,6 +4008,193 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/documents
       tags:
         - documents
+  /api/v1/knowledge-bases/{id}/embedding-migration:
+    get:
+      operationId: get_knowledge_bases_id_embedding_migration
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingMigrationV1'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/embedding-migration
+      tags:
+        - embedding-migration
+    post:
+      operationId: post_knowledge_bases_id_embedding_migration
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingMigrationStartRequest'
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingMigrationV1'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/embedding-migration
+      tags:
+        - embedding-migration
+  /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel:
+    post:
+      operationId: post_knowledge_bases_id_embedding_migration_migrationId_cancel
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: migrationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingMigrationV1'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel
+      tags:
+        - embedding-migration
+  /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover:
+    post:
+      operationId: post_knowledge_bases_id_embedding_migration_migrationId_cutover
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: migrationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingMigrationV1'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover
+      tags:
+        - embedding-migration
+  /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize:
+    post:
+      operationId: post_knowledge_bases_id_embedding_migration_migrationId_finalize
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: migrationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingMigrationV1'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize
+      tags:
+        - embedding-migration
+  /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback:
+    post:
+      operationId: post_knowledge_bases_id_embedding_migration_migrationId_rollback
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: migrationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingMigrationV1'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback
+      tags:
+        - embedding-migration
   /api/v1/knowledge-bases/{id}/graph/query:
     get:
       operationId: get_knowledge_bases_id_graph_query
@@ -5330,3 +5573,4 @@ tags:
   - name: projections
   - name: operations
   - name: models
+  - name: embedding-migration

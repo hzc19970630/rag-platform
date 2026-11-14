@@ -10,6 +10,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 	"github.com/hzc19970630/rag-platform/internal/contracts/evidence"
 	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/contracts/projectioncache"
@@ -33,9 +34,12 @@ type Authorizer interface {
 }
 
 type Options struct {
-	DB        *gorm.DB
-	Authz     Authorizer
-	Embedder  ingestion.Embedder
+	DB       *gorm.DB
+	Authz    Authorizer
+	Embedder ingestion.Embedder
+	// Resolver selects the knowledge base's vector space. Nil keeps the single
+	// deployment Embedder, which is what fixtures and single-space tests use.
+	Resolver  embedding.Resolver
 	Generator *Generator
 	Extractor *Extractor
 	Publisher Publisher
@@ -56,6 +60,7 @@ type Service struct {
 	db         *gorm.DB
 	authz      Authorizer
 	embedder   ingestion.Embedder
+	resolver   embedding.Resolver
 	generator  *Generator
 	relation   *Extractor
 	publisher  Publisher
@@ -88,7 +93,7 @@ func NewService(options Options) *Service {
 		options.Extractor.SetCache(options.Cache)
 	}
 	return &Service{
-		db: options.DB, authz: options.Authz, embedder: options.Embedder,
+		db: options.DB, authz: options.Authz, embedder: options.Embedder, resolver: options.Resolver,
 		generator: options.Generator, relation: options.Extractor,
 		publisher: options.Publisher, timeout: options.Timeout, store: options.Store,
 		evidence: reader, cache: options.Cache, metrics: recorder,

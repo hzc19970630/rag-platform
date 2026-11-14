@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 102
+const businessRouteCount = 108
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`

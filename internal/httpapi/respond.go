@@ -28,7 +28,7 @@ func writeError(c *gin.Context, err error) {
 	var typeError *json.UnmarshalTypeError
 	var maxBytesError *http.MaxBytesError
 	var validation *apperror.ValidationError
-	invalidJSON := errors.As(err, &syntaxError) || errors.As(err, &typeError) || errors.Is(err, io.ErrUnexpectedEOF)
+	invalidJSON := errors.As(err, &syntaxError) || errors.As(err, &typeError) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 	switch {
 	case errors.As(err, &maxBytesError):
 		// Both the JSON cap and the multipart envelope cap surface through

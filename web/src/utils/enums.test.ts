@@ -8,6 +8,7 @@ import {
   AUDIT_ACTION_VALUES,
   AUDIT_RESOURCE_VALUES,
   CONNECTOR_TYPE_VALUES,
+  EMBEDDING_MIGRATION_STATUS_VALUES,
   PROVIDER_KIND_VALUES,
   QUEUE_VALUES,
   SOURCE_VALUES,
@@ -57,6 +58,9 @@ describe("enum registry", () => {
       }
       for (const queue of QUEUE_VALUES) {
         expect(i18n.exists(enumLabelKey("queue", queue), { lng: language }), `${language} queue.${queue}`).toBe(true);
+      }
+      for (const status of EMBEDDING_MIGRATION_STATUS_VALUES) {
+        expect(i18n.exists(enumLabelKey("embedding_migration_status", status), { lng: language }), `${language} embedding_migration_status.${status}`).toBe(true);
       }
     }
   });

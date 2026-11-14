@@ -693,6 +693,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge-bases/{id}/embedding-migration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/knowledge-bases/{id}/embedding-migration */
+        get: operations["get_knowledge_bases_id_embedding_migration"];
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/embedding-migration */
+        post: operations["post_knowledge_bases_id_embedding_migration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel */
+        post: operations["post_knowledge_bases_id_embedding_migration_migrationId_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover */
+        post: operations["post_knowledge_bases_id_embedding_migration_migrationId_cutover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize */
+        post: operations["post_knowledge_bases_id_embedding_migration_migrationId_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback */
+        post: operations["post_knowledge_bases_id_embedding_migration_migrationId_rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge-bases/{id}/graph/query": {
         parameters: {
             query?: never;
@@ -1913,6 +1999,38 @@ export interface components {
             pipeline?: components["schemas"]["PipelineRun"];
             stages?: components["schemas"]["StageRun"][];
             version?: components["schemas"]["DocumentVersion"];
+        };
+        EmbeddingMigrationStartRequest: {
+            targetModel: string;
+        };
+        EmbeddingMigrationV1: {
+            /** Format: date-time */
+            createdAt?: string;
+            createdBy?: string;
+            cursorChunkId?: string;
+            /** Format: date-time */
+            cutoverAt?: string;
+            /** Format: int64 */
+            doneChunks?: number;
+            errorCode?: string;
+            errorMessage?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            /** Format: date-time */
+            readyAt?: string;
+            sourceDimension?: number;
+            sourceModel?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            status?: string;
+            targetDimension?: number;
+            targetModel?: string;
+            /** Format: int64 */
+            totalChunks?: number;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         Error: {
             error: string;
@@ -4105,6 +4223,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_knowledge_bases_id_embedding_migration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingMigrationV1"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_embedding_migration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmbeddingMigrationStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingMigrationV1"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_embedding_migration_migrationId_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                migrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingMigrationV1"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_embedding_migration_migrationId_cutover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                migrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingMigrationV1"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_embedding_migration_migrationId_finalize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                migrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingMigrationV1"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_embedding_migration_migrationId_rollback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                migrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingMigrationV1"];
                 };
             };
             400: components["responses"]["BadRequest"];

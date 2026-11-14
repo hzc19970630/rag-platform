@@ -246,3 +246,39 @@ func projectChunks(rows []models.Chunk) []Chunk {
 	}
 	return result
 }
+
+// BackfillEmbeddingVariants copies the legacy chunk vectors into the variant
+// table. It is idempotent and batched: the upgrade sequence runs it once before
+// the new read path starts, and a resumed run skips rows already copied.
+func BackfillEmbeddingVariants(ctx context.Context, db *gorm.DB, batchSize int) (int64, error) {
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	const statement = `INSERT INTO chunk_embeddings
+		(chunk_id, tenant_id, knowledge_base_id, model, dimension, embedding, created_at, updated_at)
+		SELECT c.id, c.tenant_id, c.knowledge_base_id, c.embedding_model, c.embedding_dimension,
+		       c.embedding, NOW(), NOW()
+		FROM chunks c
+		WHERE c.parent_id IS NOT NULL
+		  AND c.status IN ?
+		  AND c.embedding IS NOT NULL
+		  AND c.embedding_model <> ''
+		  AND c.embedding_dimension > 0
+		  AND NOT EXISTS (
+		    SELECT 1 FROM chunk_embeddings e
+		    WHERE e.chunk_id = c.id AND e.model = c.embedding_model
+		  )
+		ORDER BY c.id
+		LIMIT ?`
+	var total int64
+	for {
+		result := db.WithContext(ctx).Exec(statement, activeChildChunkStatuses, batchSize)
+		if result.Error != nil {
+			return total, fmt.Errorf("backfill chunk embeddings: %w", result.Error)
+		}
+		total += result.RowsAffected
+		if result.RowsAffected < int64(batchSize) {
+			return total, nil
+		}
+	}
+}

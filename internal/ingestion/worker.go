@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
 	"github.com/hzc19970630/rag-platform/internal/platform/formats"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
@@ -31,17 +32,18 @@ const (
 var DefaultChunking = NewRuneChunker(RuneChunkerOptions{Size: 900, Overlap: 120})
 
 type PipelineWorker struct {
-	db               *gorm.DB
-	objects          ObjectStore
-	reader           DocumentReader
-	embedder         Embedder
-	indexWriter      EvidenceIndexWriter
-	chunker          Chunker
-	chunkingResolver ChunkingResolver
-	timeout          time.Duration
-	projection       ProjectionTrigger
-	leaseOwner       inboxlease.Owner
-	leaseTTL         time.Duration
+	db                *gorm.DB
+	objects           ObjectStore
+	reader            DocumentReader
+	embedder          Embedder
+	embeddingResolver EmbeddingResolver
+	indexWriter       EvidenceIndexWriter
+	chunker           Chunker
+	chunkingResolver  ChunkingResolver
+	timeout           time.Duration
+	projection        ProjectionTrigger
+	leaseOwner        inboxlease.Owner
+	leaseTTL          time.Duration
 }
 
 // ChunkingResolver resolves the chunking policy for one tenant. The worker
@@ -55,6 +57,19 @@ type ChunkingResolver interface {
 // keeps the single policy passed to NewPipelineWorker.
 func (w *PipelineWorker) SetChunkingResolver(resolver ChunkingResolver) {
 	w.chunkingResolver = resolver
+}
+
+// EmbeddingResolver resolves the exact vector space for one knowledge base.
+// The worker calls it per document, so a knowledge base pinned to a tenant
+// embedding provider is written in that provider's space.
+type EmbeddingResolver interface {
+	ResolveEmbedding(ctx context.Context, tenantID, knowledgeBaseID string) (embedding.Binding, Embedder, error)
+}
+
+// SetEmbeddingResolver wires per-knowledge-base embedding routing. A nil
+// resolver keeps the single adapter passed to NewPipelineWorker.
+func (w *PipelineWorker) SetEmbeddingResolver(resolver EmbeddingResolver) {
+	w.embeddingResolver = resolver
 }
 
 func (w *PipelineWorker) runtime() *pipeline.Runtime {
@@ -362,25 +377,42 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	return nil
 }
 
+func (w *PipelineWorker) embeddingFor(ctx context.Context, tenantID, knowledgeBaseID string) (embedding.Binding, Embedder, error) {
+	if w.embeddingResolver != nil {
+		return w.embeddingResolver.ResolveEmbedding(ctx, tenantID, knowledgeBaseID)
+	}
+	if w.embedder == nil {
+		return embedding.Binding{}, nil, fmt.Errorf("embedding adapter is not configured")
+	}
+	return embedding.Binding{Model: w.embedder.Name(), Dimension: w.embedder.Dimension()}, w.embedder, nil
+}
+
 func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 	var version models.DocumentVersion
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
 	}
-	var binding struct {
-		EmbeddingModel     string
-		EmbeddingDimension int
+	// A managed migration rewrites this knowledge base's space in batches. New
+	// writes during that window would be missing from the target verification,
+	// so ingestion waits for the operator to finish or cancel the migration.
+	var migrating int64
+	if err := w.db.WithContext(ctx).Table("embedding_migrations").
+		Where("knowledge_base_id = ? AND status IN ?", version.KnowledgeBaseID,
+			[]string{"pending", "building_index", "reembedding", "verifying", "ready"}).
+		Count(&migrating).Error; err != nil {
+		return fmt.Errorf("check embedding migration: %w", err)
 	}
-	if err := w.db.WithContext(ctx).Table("knowledge_bases").
-		Select("embedding_model, embedding_dimension").
-		Where("id = ?", version.KnowledgeBaseID).Scan(&binding).Error; err != nil {
-		return fmt.Errorf("load knowledge base embedding binding: %w", err)
+	if migrating > 0 {
+		return apperror.Terminalf("embedding_migration_in_progress", "knowledge base %s has an active embedding migration", version.KnowledgeBaseID)
 	}
-	// Writing this document under the current adapter would silently mix two
-	// vector spaces in a knowledge base pinned to another model. The managed
-	// rebuild updates the binding first, so a mismatch is not retryable.
-	if binding.EmbeddingModel != "" && (binding.EmbeddingModel != w.embedder.Name() || binding.EmbeddingDimension != w.embedder.Dimension()) {
-		return apperror.Terminalf("embedding_binding_mismatch", "knowledge base %s is bound to %s/%d, this worker serves %s/%d", version.KnowledgeBaseID, binding.EmbeddingModel, binding.EmbeddingDimension, w.embedder.Name(), w.embedder.Dimension())
+	binding, adapter, err := w.embeddingFor(ctx, version.TenantID, version.KnowledgeBaseID)
+	if err != nil {
+		// A missing, disabled or mismatched embedding provider is a
+		// configuration error; retrying the same document would reproduce it.
+		return apperror.Terminalf("embedding_binding_unavailable", "%v", err)
+	}
+	if adapter == nil {
+		return apperror.Terminalf("embedding_binding_unavailable", "knowledge base %s has no embedding adapter", version.KnowledgeBaseID)
 	}
 	var chunks []models.Chunk
 	// A restarted pipeline can find chunks that its previous attempt already
@@ -396,7 +428,7 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 	for i := range chunks {
 		texts[i] = chunks[i].Content
 	}
-	vectors, err := w.embedder.Embed(ctx, texts)
+	vectors, err := adapter.Embed(ctx, texts)
 	if err != nil {
 		return fmt.Errorf("embedding_error: %w", err)
 	}
@@ -408,12 +440,12 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 	}
 	records := make([]EmbeddingRecord, len(chunks))
 	for index, chunk := range chunks {
-		if len(vectors[index]) != w.embedder.Dimension() {
-			return fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunk.ID, len(vectors[index]), w.embedder.Dimension())
+		if len(vectors[index]) != binding.Dimension {
+			return fmt.Errorf("embedding_error: vector dimension mismatch for chunk %s: got %d, want %d", chunk.ID, len(vectors[index]), binding.Dimension)
 		}
 		records[index] = EmbeddingRecord{ChunkID: chunk.ID, Vector: vectors[index]}
 	}
-	if err := w.indexWriter.WriteEmbeddings(ctx, version.ID, w.embedder.Name(), records); err != nil {
+	if err := w.indexWriter.WriteEmbeddings(ctx, version.ID, binding.Model, records); err != nil {
 		return fmt.Errorf("embedding_error: %w", err)
 	}
 	return nil

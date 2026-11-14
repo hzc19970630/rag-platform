@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -365,38 +367,72 @@ func (s *Service) dimensionCheck(ctx context.Context, tenantID string, now time.
 	if s.db == nil {
 		return newCheck(id, StatusUnknown, SeverityInfo, "无法检查 embedding 维度", "数据库不可用", "", now)
 	}
-	indexDimension, found, err := s.indexDimension(ctx)
-	if err != nil {
-		return newCheck(id, StatusUnknown, SeverityHigh, "无法读取索引维度", err.Error(), "确认 pgvector 索引目录可读", now)
-	}
-	if !found {
-		return newCheck(id, StatusWarning, SeverityHigh, "没有可用的 serving 索引", "无法确认向量维度", "运行 make embed-index", now)
-	}
-	if indexDimension != s.options.EmbeddingDimension {
-		return newCheck(id, StatusError, SeverityHigh, "部署 embedding 维度与索引不一致",
-			fmt.Sprintf("EMBEDDING_DIMENSION=%d，索引维度=%d", s.options.EmbeddingDimension, indexDimension),
-			"要么恢复原维度，要么运行 make embed-rebuild 迁移索引", now)
-	}
+	bindings := make(map[int][]string)
 	if tenantID != "" {
-		var bindings []struct {
+		var rows []struct {
 			ID                 string
 			EmbeddingDimension int
 		}
 		if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.KnowledgeBase{}).
-			Select("id, embedding_dimension").Find(&bindings).Error; err != nil {
+			Select("id, embedding_dimension").Find(&rows).Error; err != nil {
 			return newCheck(id, StatusUnknown, SeverityInfo, "无法读取知识库绑定", err.Error(), "", now)
 		}
-		mismatched := make([]string, 0)
-		for _, binding := range bindings {
-			if binding.EmbeddingDimension != 0 && binding.EmbeddingDimension != indexDimension {
-				mismatched = append(mismatched, fmt.Sprintf("%s=%d", binding.ID, binding.EmbeddingDimension))
+		for _, row := range rows {
+			dimension := row.EmbeddingDimension
+			if dimension == 0 {
+				dimension = s.options.EmbeddingDimension
+			}
+			if dimension > 0 {
+				bindings[dimension] = append(bindings[dimension], row.ID)
 			}
 		}
-		if len(mismatched) > 0 {
-			return newCheck(id, StatusError, SeverityHigh, "知识库 embedding 绑定与索引不一致", strings.Join(mismatched, ", "), "对该知识库执行托管重建（D3）", now)
+	}
+	if len(bindings) == 0 {
+		// No tenant bindings: keep the deployment-level contract check.
+		indexDimension, found, err := s.indexDimension(ctx)
+		if err != nil {
+			return newCheck(id, StatusUnknown, SeverityHigh, "无法读取索引维度", err.Error(), "确认 pgvector 索引目录可读", now)
+		}
+		if !found {
+			return newCheck(id, StatusWarning, SeverityHigh, "没有可用的 serving 索引", "无法确认向量维度", "运行 make embed-index", now)
+		}
+		if indexDimension != s.options.EmbeddingDimension {
+			return newCheck(id, StatusError, SeverityHigh, "部署 embedding 维度与索引不一致",
+				fmt.Sprintf("EMBEDDING_DIMENSION=%d，索引维度=%d", s.options.EmbeddingDimension, indexDimension),
+				"要么恢复原维度，要么运行 make embed-rebuild 迁移索引", now)
+		}
+		return newCheck(id, StatusOK, SeverityInfo, "embedding 维度一致", fmt.Sprintf("维度 %d", indexDimension), "", now)
+	}
+	report, err := s.checkIndexes(ctx)
+	if err != nil {
+		return newCheck(id, StatusUnknown, SeverityHigh, "无法读取向量索引", err.Error(), "确认 pgvector 索引目录可读", now)
+	}
+	indexed := make(map[int]bool, len(report.Indexes))
+	for _, index := range report.Indexes {
+		if index.Valid && index.Dimension > 0 {
+			indexed[index.Dimension] = true
 		}
 	}
-	return newCheck(id, StatusOK, SeverityInfo, "embedding 维度一致", fmt.Sprintf("维度 %d", indexDimension), "", now)
+	if len(indexed) == 0 {
+		return newCheck(id, StatusWarning, SeverityHigh, "没有可用的 serving 索引", "无法确认向量维度", "运行 make embed-index", now)
+	}
+	missing := make([]string, 0)
+	for dimension, ids := range bindings {
+		if !indexed[dimension] {
+			missing = append(missing, fmt.Sprintf("%d:%s", dimension, strings.Join(ids, ",")))
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return newCheck(id, StatusError, SeverityHigh, "知识库 embedding 绑定没有可用索引",
+			strings.Join(missing, "; "), "为对应维度建立 HNSW 索引（make embed-index 或迁移作业）", now)
+	}
+	dimensions := make([]string, 0, len(bindings))
+	for dimension := range bindings {
+		dimensions = append(dimensions, strconv.Itoa(dimension))
+	}
+	sort.Strings(dimensions)
+	return newCheck(id, StatusOK, SeverityInfo, "知识库 embedding 绑定均有索引", "维度 "+strings.Join(dimensions, ", "), "", now)
 }
 
 func (s *Service) rlsCheck(now time.Time) Check {

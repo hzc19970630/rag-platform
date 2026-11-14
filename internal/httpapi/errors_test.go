@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,6 +30,8 @@ func TestWriteErrorMapsDomainAndValidationErrors(t *testing.T) {
 		{"negative bound", apperror.Invalidf("adjacent_expansion must not be negative"), http.StatusBadRequest, "invalid_request"},
 		{"missing field", apperror.Invalidf("query is required"), http.StatusBadRequest, "invalid_request"},
 		{"session override", invalidSessionOverride(t), http.StatusBadRequest, "invalid_request"},
+		{"empty body", io.EOF, http.StatusBadRequest, "invalid_request"},
+		{"truncated body", io.ErrUnexpectedEOF, http.StatusBadRequest, "invalid_request"},
 		// A downstream failure may contain words that look like validation
 		// prose. Only the error type may decide the response.
 		{"internal message with required", errors.New("bucket policy is required"), http.StatusInternalServerError, "internal_error"},

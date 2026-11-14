@@ -16,6 +16,7 @@ import (
 type fakeModelCatalog struct {
 	capability map[string]model.Capability
 	refs       map[string]model.ModelRef
+	dimensions map[string]int
 }
 
 func (f fakeModelCatalog) ResolveBinding(_ context.Context, _ string, capability model.Capability, requested string) (model.ModelRef, error) {
@@ -26,16 +27,30 @@ func (f fakeModelCatalog) ResolveBinding(_ context.Context, _ string, capability
 	return ref, nil
 }
 
+func (f fakeModelCatalog) ResolveEmbeddingModel(_ context.Context, _, requested string) (model.EmbeddingBinding, error) {
+	if f.capability[requested] != model.CapabilityEmbedding {
+		return model.EmbeddingBinding{}, apperror.Invalidf("unsupported embedding model %q", requested)
+	}
+	dimension, ok := f.dimensions[requested]
+	if !ok || dimension <= 0 {
+		return model.EmbeddingBinding{}, apperror.Invalidf("embedding model %q has no dimension", requested)
+	}
+	return model.EmbeddingBinding{Model: requested, Dimension: dimension}, nil
+}
+
 func newFakeModelCatalog() fakeModelCatalog {
 	return fakeModelCatalog{
 		capability: map[string]model.Capability{
 			"chat-a": model.CapabilityChat, "chat-b": model.CapabilityChat, "embed-x": model.CapabilityEmbedding,
+			"m-1024": model.CapabilityEmbedding,
 		},
 		refs: map[string]model.ModelRef{
 			"chat-a":  {Model: "chat-a", Provider: "remote", Version: "2024-08"},
 			"chat-b":  {Model: "chat-b", Provider: "remote", Version: "2025-01"},
 			"embed-x": {Model: "embed-x", Provider: "remote", Version: "v3"},
+			"m-1024":  {Model: "m-1024", Provider: "remote", Version: "v1"},
 		},
+		dimensions: map[string]int{"embed-x": 1024, "m-1024": 1024},
 	}
 }
 
@@ -178,7 +193,7 @@ func TestModelBindingClearRecordsPreviousVersion(t *testing.T) {
 	}
 }
 
-func TestModelBindingDoesNotLoosenEmbeddingDimensionContract(t *testing.T) {
+func TestModelBindingValidatesEmbeddingDimensionAndAllowsRegisteredModels(t *testing.T) {
 	db := openConfigurationTestDB(t)
 	seedAuthorization(t, db)
 	service := NewService(db, mustAuthorizer(t, db), EmbeddingBinding{Model: "m-1024", Dimension: 1024})
@@ -186,12 +201,18 @@ func TestModelBindingDoesNotLoosenEmbeddingDimensionContract(t *testing.T) {
 	principal := authz.Principal{SubjectID: "editor", TenantID: "tenant-1"}
 
 	modelName, dimension := "m-1024", 768
-	if _, err := service.Update(context.Background(), principal, "kb-1", UpdateInput{EmbeddingModel: &modelName, EmbeddingDimension: &dimension}); err == nil || !strings.Contains(err.Error(), "unsupported embedding binding") {
+	if _, err := service.Update(context.Background(), principal, "kb-1", UpdateInput{EmbeddingModel: &modelName, EmbeddingDimension: &dimension}); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("expected dimension mismatch rejection, got %v", err)
 	}
+	// An empty knowledge base may adopt any registered embedding model; the
+	// dimension comes from the catalog, not from the caller.
 	otherModel, otherDimension := "embed-x", 1024
-	if _, err := service.Update(context.Background(), principal, "kb-1", UpdateInput{EmbeddingModel: &otherModel, EmbeddingDimension: &otherDimension}); err == nil || !strings.Contains(err.Error(), "unsupported embedding binding") {
-		t.Fatalf("models outside the deployment binding must stay rejected, got %v", err)
+	row, err := service.Update(context.Background(), principal, "kb-1", UpdateInput{EmbeddingModel: &otherModel, EmbeddingDimension: &otherDimension})
+	if err != nil {
+		t.Fatalf("bind registered embedding model: %v", err)
+	}
+	if row.EmbeddingModel != "embed-x" || row.EmbeddingDimension != 1024 {
+		t.Fatalf("unexpected embedding binding: %s/%d", row.EmbeddingModel, row.EmbeddingDimension)
 	}
 
 	// A chat binding does not touch the embedding columns.
@@ -199,7 +220,7 @@ func TestModelBindingDoesNotLoosenEmbeddingDimensionContract(t *testing.T) {
 	if err := db.Where("id = ?", "kb-1").First(&before).Error; err != nil {
 		t.Fatalf("load knowledge base: %v", err)
 	}
-	row := bindModel(t, service, principal, "kb-1", chatBinding("chat-a"))
+	row = bindModel(t, service, principal, "kb-1", chatBinding("chat-a"))
 	if row.EmbeddingModel != before.EmbeddingModel || row.EmbeddingDimension != before.EmbeddingDimension {
 		t.Fatalf("chat binding must not change embedding binding, got %q/%d", row.EmbeddingModel, row.EmbeddingDimension)
 	}

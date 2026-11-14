@@ -52,6 +52,22 @@ func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, r
 			if result.RowsAffected == 0 {
 				return fmt.Errorf("chunk %s is not part of version %s", record.ChunkID, versionID)
 			}
+			// Dual-write the variant row during the transition. Search reads the
+			// variant table; the legacy column keeps a rolling deployment and
+			// the migration rollback path readable.
+			if err := tx.Exec(
+				`INSERT INTO chunk_embeddings (chunk_id, tenant_id, knowledge_base_id, model, dimension, embedding, created_at, updated_at)
+				 SELECT id, tenant_id, knowledge_base_id, ?, ?, ?::halfvec, ?, ? FROM chunks WHERE id = ?
+				 ON CONFLICT (chunk_id, model) DO UPDATE SET
+				   tenant_id = EXCLUDED.tenant_id,
+				   knowledge_base_id = EXCLUDED.knowledge_base_id,
+				   dimension = EXCLUDED.dimension,
+				   embedding = EXCLUDED.embedding,
+				   updated_at = EXCLUDED.updated_at`,
+				model, len(record.Vector), vecutil.Literal(record.Vector), now, now, record.ChunkID,
+			).Error; err != nil {
+				return fmt.Errorf("store embedding variant for chunk %s: %w", record.ChunkID, err)
+			}
 		}
 		if versionID == "" {
 			return nil
@@ -84,3 +100,44 @@ func (w *Writer) IndexChunks(context.Context, string, []ports.ChunkDocument) err
 // DeleteVersion is a no-op for PostgreSQL: chunks and their BM25 rows are
 // deleted by the pipeline itself. External index adapters must implement it.
 func (w *Writer) DeleteVersion(context.Context, string) error { return nil }
+
+// VariantRecord is one target-space vector written by a managed migration. The
+// chunk row already exists; only the variant row is new.
+type VariantRecord struct {
+	ChunkID         string
+	TenantID        string
+	KnowledgeBaseID string
+	Dimension       int
+	Vector          []float32
+}
+
+// WriteVariants upserts target-space vectors without touching the legacy chunk
+// columns, so the source space stays searchable until cutover.
+func (w *Writer) WriteVariants(ctx context.Context, model string, records []VariantRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		now := time.Now()
+		for _, record := range records {
+			if len(record.Vector) == 0 || len(record.Vector) != record.Dimension {
+				return fmt.Errorf("chunk %s has an invalid variant vector", record.ChunkID)
+			}
+			if err := tx.Exec(
+				`INSERT INTO chunk_embeddings (chunk_id, tenant_id, knowledge_base_id, model, dimension, embedding, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?::halfvec, ?, ?)
+				 ON CONFLICT (chunk_id, model) DO UPDATE SET
+				   tenant_id = EXCLUDED.tenant_id,
+				   knowledge_base_id = EXCLUDED.knowledge_base_id,
+				   dimension = EXCLUDED.dimension,
+				   embedding = EXCLUDED.embedding,
+				   updated_at = EXCLUDED.updated_at`,
+				record.ChunkID, record.TenantID, record.KnowledgeBaseID, model, record.Dimension,
+				vecutil.Literal(record.Vector), now, now,
+			).Error; err != nil {
+				return fmt.Errorf("write embedding variant for chunk %s: %w", record.ChunkID, err)
+			}
+		}
+		return nil
+	})
+}

@@ -43,7 +43,6 @@ type Service struct {
 	db            *gorm.DB
 	keyword       KeywordSearcher
 	vector        VectorSearcher
-	embedder      Embedder
 	expander      ChunkExpander
 	reranker      Reranker
 	rerankModels  RerankModelResolver
@@ -69,8 +68,12 @@ type Options struct {
 	Keyword  KeywordSearcher
 	Vector   VectorSearcher
 	Embedder Embedder
-	Expander ChunkExpander
-	Reranker Reranker
+	// EmbeddingResolver resolves one vector space per target knowledge base.
+	// Nil keeps the single deployment Embedder, which is what unit tests and
+	// single-space fixtures use.
+	EmbeddingResolver EmbeddingResolver
+	Expander          ChunkExpander
+	Reranker          Reranker
 	// RerankModels resolves the knowledge-base rerank binding. Nil keeps the
 	// adapter's configured model.
 	RerankModels RerankModelResolver
@@ -117,7 +120,6 @@ func NewService(options Options) *Service {
 		db:            options.DB,
 		keyword:       options.Keyword,
 		vector:        options.Vector,
-		embedder:      options.Embedder,
 		expander:      options.Expander,
 		reranker:      reranker,
 		rerankModels:  options.RerankModels,
@@ -134,9 +136,9 @@ func NewService(options Options) *Service {
 	if options.Keyword != nil {
 		channels = append(channels, KeywordChannel{Searcher: options.Keyword})
 	}
-	if options.Vector != nil && options.Embedder != nil {
+	if options.Vector != nil && (options.EmbeddingResolver != nil || options.Embedder != nil) {
 		channels = append(channels, VectorChannel{
-			Searcher: options.Vector, Embedder: options.Embedder, Verify: service.verifyEmbeddingBinding, Metrics: service.metrics,
+			Searcher: options.Vector, Embedder: options.Embedder, Resolver: options.EmbeddingResolver, Metrics: service.metrics,
 		})
 	}
 	service.executor = NewPlanExecutor(channels, options.Fusions)
@@ -322,32 +324,6 @@ func (s *Service) rerank(ctx context.Context, model, query string, candidates []
 		}
 	}
 	return s.reranker.Rerank(ctx, query, candidates)
-}
-
-// verifyEmbeddingBinding refuses to embed a query for a knowledge base whose
-// vectors come from another model or dimension. The vector channel fails while
-// keyword recall can still serve the request; an empty binding is a pre-upgrade
-// row and is treated as unbounded.
-func (s *Service) verifyEmbeddingBinding(ctx context.Context, tenantID string, knowledgeBaseIDs []string) error {
-	if s.db == nil || s.embedder == nil {
-		return nil
-	}
-	var rows []models.KnowledgeBase
-	if err := s.db.WithContext(ctx).
-		Select("id", "embedding_model", "embedding_dimension").
-		Where("tenant_id = ? AND id IN ?", tenantID, knowledgeBaseIDs).
-		Find(&rows).Error; err != nil {
-		return fmt.Errorf("load knowledge base embedding bindings: %w", err)
-	}
-	for _, row := range rows {
-		if row.EmbeddingModel == "" {
-			continue
-		}
-		if row.EmbeddingModel != s.embedder.Name() || row.EmbeddingDimension != s.embedder.Dimension() {
-			return fmt.Errorf("knowledge base %s is bound to %s/%d, this deployment serves %s/%d", row.ID, row.EmbeddingModel, row.EmbeddingDimension, s.embedder.Name(), s.embedder.Dimension())
-		}
-	}
-	return nil
 }
 
 // fuseFRL keeps the two-channel call shape for callers that do not build a

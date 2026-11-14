@@ -224,26 +224,86 @@ func (c KeywordChannel) Recall(ctx context.Context, request RecallRequest, param
 	return c.Searcher.SearchKeyword(ctx, request)
 }
 
-// VectorChannel adapts the vector index plus its query embedder. It refuses to
-// embed for a knowledge base bound to another model or dimension, so two vector
-// spaces are never compared.
+// maxEmbeddingSpaces bounds one query's vector fan-out. Every space costs one
+// embedding call and one ANN scan; a larger mixed selection is almost always a
+// mistake rather than a query that needs four-plus vector spaces.
+const maxEmbeddingSpaces = 4
+
+// VectorChannel adapts the vector index plus the per-knowledge-base embedding
+// router. Targets are grouped by (model, dimension); each group is embedded and
+// recalled separately, so vectors from two spaces are never compared.
 type VectorChannel struct {
 	Searcher VectorSearcher
+	// Embedder is the deployment adapter. It serves targets when Resolver is
+	// nil and is not used for a routed group.
 	Embedder Embedder
-	Verify   func(ctx context.Context, tenantID string, knowledgeBaseIDs []string) error
+	Resolver EmbeddingResolver
 	// Metrics is optional; a nil recorder discards observations.
 	Metrics metrics.Recorder
 }
 
 func (c VectorChannel) Name() string { return ChannelVector }
 
+type vectorSpaceGroup struct {
+	binding          EmbeddingBinding
+	embedder         Embedder
+	knowledgeBaseIDs []string
+}
+
 func (c VectorChannel) Recall(ctx context.Context, request RecallRequest, params Params) ([]Hit, error) {
-	if c.Verify != nil {
-		if err := c.Verify(ctx, request.TenantID, request.KnowledgeBaseIDs); err != nil {
-			return nil, fmt.Errorf("embedding binding mismatch: %w", err)
-		}
+	if params.EmbeddingTopK <= 0 || len(request.KnowledgeBaseIDs) == 0 {
+		return nil, nil
 	}
-	vectors, err := c.Embedder.Embed(ctx, []string{request.Query})
+	groups, err := c.groups(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	perSpace := make([][]Hit, 0, len(groups))
+	for _, group := range groups {
+		hits, err := c.recallSpace(ctx, request, params, group)
+		if err != nil {
+			return nil, err
+		}
+		perSpace = append(perSpace, hits)
+	}
+	return interleaveHits(perSpace, params.EmbeddingTopK), nil
+}
+
+func (c VectorChannel) groups(ctx context.Context, request RecallRequest) ([]vectorSpaceGroup, error) {
+	if c.Resolver == nil {
+		if c.Embedder == nil {
+			return nil, fmt.Errorf("embedding adapter is not configured")
+		}
+		return []vectorSpaceGroup{{
+			binding:          EmbeddingBinding{Model: c.Embedder.Name(), Dimension: c.Embedder.Dimension()},
+			embedder:         c.Embedder,
+			knowledgeBaseIDs: request.KnowledgeBaseIDs,
+		}}, nil
+	}
+	groups := make([]vectorSpaceGroup, 0, len(request.KnowledgeBaseIDs))
+	index := make(map[string]int, len(request.KnowledgeBaseIDs))
+	for _, knowledgeBaseID := range request.KnowledgeBaseIDs {
+		binding, embedder, err := c.Resolver.ResolveEmbedding(ctx, request.TenantID, knowledgeBaseID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve embedding for knowledge base %s: %w", knowledgeBaseID, err)
+		}
+		key := fmt.Sprintf("%s\x00%d", binding.Model, binding.Dimension)
+		position, exists := index[key]
+		if !exists {
+			index[key] = len(groups)
+			groups = append(groups, vectorSpaceGroup{binding: binding, embedder: embedder})
+			position = index[key]
+		}
+		groups[position].knowledgeBaseIDs = append(groups[position].knowledgeBaseIDs, knowledgeBaseID)
+	}
+	if len(groups) > maxEmbeddingSpaces {
+		return nil, fmt.Errorf("query spans %d embedding spaces, the maximum is %d; query fewer knowledge bases or align their embedding models", len(groups), maxEmbeddingSpaces)
+	}
+	return groups, nil
+}
+
+func (c VectorChannel) recallSpace(ctx context.Context, request RecallRequest, params Params, group vectorSpaceGroup) ([]Hit, error) {
+	vectors, err := group.embedder.Embed(ctx, []string{request.Query})
 	if err != nil {
 		if c.Metrics != nil {
 			c.Metrics.Inc("model_errors_total", metrics.Labels("model", "embedding", "stage", "query"))
@@ -253,14 +313,46 @@ func (c VectorChannel) Recall(ctx context.Context, request RecallRequest, params
 	if len(vectors) != 1 {
 		return nil, fmt.Errorf("embed query returned %d vectors", len(vectors))
 	}
-	if len(vectors[0]) != c.Embedder.Dimension() {
-		return nil, fmt.Errorf("query vector dimension %d does not match configured dimension %d", len(vectors[0]), c.Embedder.Dimension())
+	if len(vectors[0]) != group.binding.Dimension {
+		return nil, fmt.Errorf("query vector dimension %d does not match the %s binding dimension %d", len(vectors[0]), group.binding.Model, group.binding.Dimension)
 	}
-	request.EmbeddingModel = c.Embedder.Name()
-	request.TopK = params.EmbeddingTopK
-	request.Threshold = params.VectorThreshold
-	request.EFSearch = params.VectorEFSearch
-	request.Oversample = params.VectorOversample
-	request.IterativeScan = params.VectorIterativeScan
-	return c.Searcher.SearchVector(ctx, request, vectors[0])
+	spaceRequest := request
+	spaceRequest.KnowledgeBaseIDs = group.knowledgeBaseIDs
+	spaceRequest.EmbeddingModel = group.binding.Model
+	spaceRequest.TopK = params.EmbeddingTopK
+	spaceRequest.Threshold = params.VectorThreshold
+	spaceRequest.EFSearch = params.VectorEFSearch
+	spaceRequest.Oversample = params.VectorOversample
+	spaceRequest.IterativeScan = params.VectorIterativeScan
+	return c.Searcher.SearchVector(ctx, spaceRequest, vectors[0])
+}
+
+// interleaveHits merges per-space results without comparing cosine scores
+// across spaces: each round takes the next-best hit from every space, which
+// preserves each space's internal ordering before RRF fusion.
+func interleaveHits(spaces [][]Hit, limit int) []Hit {
+	if limit <= 0 {
+		return nil
+	}
+	merged := make([]Hit, 0, limit)
+	for rank := 0; len(merged) < limit; rank++ {
+		progressed := false
+		for _, hits := range spaces {
+			if rank >= len(hits) {
+				continue
+			}
+			progressed = true
+			hit := hits[rank]
+			hit.Rank = len(merged) + 1
+			hit.Channel = ChannelVector
+			merged = append(merged, hit)
+			if len(merged) == limit {
+				break
+			}
+		}
+		if !progressed {
+			break
+		}
+	}
+	return merged
 }

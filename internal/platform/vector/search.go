@@ -37,6 +37,17 @@ func NewSearcherWithMetrics(db *gorm.DB, recorder metrics.Recorder) *Searcher {
 }
 
 const vectorRecallTemplate = `
+WITH ann AS (
+    SELECT e.chunk_id AS chunk_id,
+           1 - (e.embedding::halfvec(%d) <=> ?::halfvec(%d)) AS score
+    FROM chunk_embeddings e
+    WHERE e.tenant_id = ?
+      AND e.knowledge_base_id IN (?)
+      AND e.model = ?
+      AND e.dimension = %d
+    ORDER BY e.embedding::halfvec(%d) <=> ?::halfvec(%d) ASC
+    LIMIT ?
+)
 SELECT c.id AS chunk_id,
        dv.document_id AS document_id,
        c.document_version_id AS document_version_id,
@@ -48,21 +59,17 @@ SELECT c.id AS chunk_id,
        c.heading_path AS heading_path,
        c.page_number AS page_number,
        c.source_path AS source_path,
-       1 - (c.embedding::halfvec(%d) <=> ?::halfvec(%d)) AS score
-FROM chunks c
+       ann.score AS score
+FROM ann
+JOIN chunks c ON c.id = ann.chunk_id
 JOIN document_versions dv ON dv.id = c.document_version_id
 JOIN documents d ON d.id = dv.document_id
-WHERE c.tenant_id = ?
-  AND c.knowledge_base_id IN ?
-  AND c.status = ?
+WHERE c.status = ?
   AND c.parent_id IS NOT NULL
-  AND c.embedding_dimension = %d
-  AND c.embedding_model = ?
-  AND c.embedding IS NOT NULL
   AND d.latest_version_id = c.document_version_id
   AND d.status = ?
   AND d.deleted_at IS NULL
-ORDER BY c.embedding::halfvec(%d) <=> ?::halfvec(%d) ASC
+ORDER BY ann.score DESC
 LIMIT ?`
 
 const vectorEFSearchStatement = "SET LOCAL hnsw.ef_search = %d"
@@ -121,7 +128,12 @@ func (s *Searcher) SearchVector(ctx context.Context, request ports.RecallRequest
 				return fmt.Errorf("set hnsw.iterative_scan: %w", err)
 			}
 		}
-		rows, err := tx.Raw(query, literal, request.TenantID, request.KnowledgeBaseIDs, status.EvidenceReady, request.EmbeddingModel, status.EvidenceReady, literal, limit).Rows()
+		rows, err := tx.Raw(query,
+			literal,
+			request.TenantID, request.KnowledgeBaseIDs, request.EmbeddingModel,
+			literal, limit,
+			status.EvidenceReady, status.EvidenceReady, request.TopK,
+		).Rows()
 		if err != nil {
 			return fmt.Errorf("vector recall: %w", err)
 		}

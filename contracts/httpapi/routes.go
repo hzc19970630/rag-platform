@@ -309,4 +309,18 @@ var Routes = []Route{
 		Success: noContent(), Errors: deleteErrors},
 	{Method: http.MethodPost, Path: "/api/v1/models/providers/{id}/test", OperationID: "post_models_providers_id_test", Tag: "models",
 		Success: ok((*ModelProviderTestResult)(nil)), Errors: commonErrors},
+
+	// embedding migration
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/embedding-migration", OperationID: "post_knowledge_bases_id_embedding_migration", Tag: "embedding-migration",
+		Request: jsonBody((*EmbeddingMigrationStartRequest)(nil)), Success: accepted((*EmbeddingMigrationV1)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/embedding-migration", OperationID: "get_knowledge_bases_id_embedding_migration", Tag: "embedding-migration",
+		Success: ok((*EmbeddingMigrationV1)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel", OperationID: "post_knowledge_bases_id_embedding_migration_migrationId_cancel", Tag: "embedding-migration",
+		Success: ok((*EmbeddingMigrationV1)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover", OperationID: "post_knowledge_bases_id_embedding_migration_migrationId_cutover", Tag: "embedding-migration",
+		Success: ok((*EmbeddingMigrationV1)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback", OperationID: "post_knowledge_bases_id_embedding_migration_migrationId_rollback", Tag: "embedding-migration",
+		Success: ok((*EmbeddingMigrationV1)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize", OperationID: "post_knowledge_bases_id_embedding_migration_migrationId_finalize", Tag: "embedding-migration",
+		Success: ok((*EmbeddingMigrationV1)(nil)), Errors: commonErrors},
 }

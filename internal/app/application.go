@@ -9,10 +9,12 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/confighealth"
 	"github.com/hzc19970630/rag-platform/internal/configpreview"
+	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/contracts/projectioncache"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
 	"github.com/hzc19970630/rag-platform/internal/datasource"
+	"github.com/hzc19970630/rag-platform/internal/embeddingmigration"
 	"github.com/hzc19970630/rag-platform/internal/identity"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/knowledgebase"
@@ -58,6 +60,11 @@ type Application struct {
 	Retrieval     *retrieval.Service
 	Conversation  *conversation.Service
 	Models        *modelregistry.Registry
+	// Embedding resolves the exact vector space and adapter for a knowledge
+	// base. Ingestion, retrieval and projection share this resolver.
+	Embedding embedding.Resolver
+	// Embeddings owns the managed vector-space migration state machine.
+	Embeddings    *embeddingmigration.Service
 	Prompts       *prompts.Registry
 	Ops           *ops.Service
 	Tenant        *tenant.Service
@@ -272,6 +279,19 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		closeAll()
 		return nil, err
 	}
+	embeddingResolver := newEmbeddingRouter(embedder, modelCatalog, cfg)
+	embeddingMigrations, err := embeddingmigration.NewService(embeddingmigration.Options{
+		DB: database, Authz: authorization, Models: modelCatalog, EmbedderFactory: embeddingResolver,
+		Writer:    variantWriter{writer: indexWriter},
+		Indexer:   embeddingIndexEnsurer{db: database, lockTimeout: time.Duration(cfg.Embedding.IndexLockTimeoutSec) * time.Second, statementTimeout: time.Duration(cfg.Embedding.IndexStatementTimeoutSec) * time.Second},
+		Publisher: publisher, BatchSize: 256,
+	})
+	if err != nil {
+		_ = reader.Close()
+		_ = publisher.Close()
+		closeAll()
+		return nil, err
+	}
 	configHealthService := confighealth.NewService(confighealth.Options{
 		DB: database, AppEnv: cfg.AppEnv, EmbeddingDimension: cfg.Embedding.Dimension,
 		RerankSource: cfg.Rerank.Source, BackupDir: cfg.BackupDir, BackupMaxAgeHours: cfg.BackupMaxAgeHours,
@@ -288,6 +308,18 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 			}
 			for _, bucket := range report.DimensionHistogram {
 				result.DimensionHistogram = append(result.DimensionHistogram, confighealth.DimensionCount{Dimension: bucket.Dimension, Count: bucket.Count})
+			}
+			// Search reads the variant table, so its indexes are part of the
+			// same health contract. A pre-0031 database errors; that is reported
+			// by the migration itself, not by hiding the chunks indexes.
+			if variant, err := vector.CheckChunkEmbeddingIndexes(ctx, database); err == nil {
+				for _, status := range variant.Indexes {
+					result.Indexes = append(result.Indexes, confighealth.IndexStatus{Name: status.Name, Dimension: status.Dimension, Valid: status.Valid})
+				}
+				result.DimensionHistogram = result.DimensionHistogram[:0]
+				for _, bucket := range variant.DimensionHistogram {
+					result.DimensionHistogram = append(result.DimensionHistogram, confighealth.DimensionCount{Dimension: bucket.Dimension, Count: bucket.Count})
+				}
 			}
 			return result, nil
 		},
@@ -319,7 +351,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		generationCache = pgprojectioncache.New(database)
 	}
 	projectionService := knowledgeprojection.NewService(knowledgeprojection.Options{
-		DB: database, Authz: authorization, Embedder: embedder, Generator: wikiGenerator, Extractor: relationExtractor,
+		DB: database, Authz: authorization, Embedder: embedder, Resolver: embeddingResolver, Generator: wikiGenerator, Extractor: relationExtractor,
 		Publisher: publisher, Timeout: time.Duration(cfg.TaskTimeoutSeconds) * time.Second,
 		Store:    pgrelationstore.New(database),
 		Evidence: evidencestore.New(database),
@@ -333,7 +365,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	}
 	retrievalService := retrieval.NewService(retrieval.Options{
 		DB: database, Keyword: search.NewBM25Searcher(database), Vector: vector.NewSearcherWithMetrics(database, recorder),
-		Embedder: embedder, Expander: search.NewChunkExpander(database), Reranker: routedReranker,
+		Embedder: embedder, EmbeddingResolver: embeddingResolver, Expander: search.NewChunkExpander(database), Reranker: routedReranker,
 		Authz: authorization, Defaults: retrievalDefaults(cfg.Retrieval), Join: projectionService, Rewriter: queryRewriter, Metrics: recorder,
 		RerankModels: modelCatalog, TenantParams: tenantConfigService,
 	})
@@ -349,7 +381,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

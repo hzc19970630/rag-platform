@@ -51,6 +51,53 @@ chunks are not rewritten; reprocess a version to apply the new policy. The
 worker resolves the policy per document, so two tenants can run different
 chunk sizes on the same deployment.
 
+## Embedding spaces and migration
+
+Each knowledge base is pinned to one vector space `(model, dimension)`. An empty
+knowledge base may bind any embedding model registered by the deployment or the
+tenant catalog; once documents exist the binding only moves through a managed
+migration. Retrieval never substitutes another embedding model: a fallback
+would silently mix two incomparable vector spaces.
+
+Vectors are stored per chunk and model in `chunk_embeddings`. The legacy
+`chunks.embedding` columns remain during the transition and ingestion
+dual-writes both locations, so a previous binary can still read the database.
+Search reads the variant table, which is why the upgrade sequence in
+[releases.md](releases.md) runs `embedctl backfill-embeddings` before the new
+API starts.
+
+A migration is one knowledge base at a time:
+
+| Status | Meaning |
+| --- | --- |
+| `pending` / `building_index` | target index is being created for the target dimension |
+| `reembedding` | active chunks are re-embedded in batches; ingestion for this knowledge base is paused |
+| `verifying` | every active chunk must have a target-space row |
+| `ready` | verified; retrieval still uses the source space until cutover |
+| `cutover` | binding switched to the target; the source space is kept for rollback |
+| `finalized` | source rows deleted; rollback now requires a new migration |
+| `cancelled` / `rolled_back` / `failed` | terminal states |
+
+Endpoints (knowledge-base write permission; viewers are rejected):
+
+```
+POST /api/v1/knowledge-bases/{id}/embedding-migration
+GET  /api/v1/knowledge-bases/{id}/embedding-migration
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize
+```
+
+Rollback is available until finalize: the source rows and source index are left
+in place, so flipping the binding back is immediate. Migration spends the
+tenant's embedding provider calls but does not consume the per-minute request
+budget reserved for online traffic.
+
+Cross-knowledge-base queries group targets by `(model, dimension)`, issue one
+vector recall per space and fuse the per-space rankings. A query spanning more
+than four spaces is rejected instead of comparing incomparable scores.
+
 ## Change impact preflight
 
 `POST /api/v1/config/preview` is a read-only check before saving a tenant or
@@ -74,7 +121,8 @@ documents / chunks, duration and cost tiers, and suggested actions. Chunking
 changes are `next_ingest` with `rebuildOptional=true`; the workbench confirms
 that only new documents change. Embedding model/dimension changes are blocked
 with an `embedding_contract_requires_rebuild` blocker and an
-`open_embedding_migration` action; the migration itself belongs to D3.
+`open_embedding_migration` action. The change is applied through the
+knowledge-base migration, never through the save path.
 
 ## Configuration health
 
@@ -85,8 +133,8 @@ risk area:
 | --- | --- |
 | `model.chat`, `model.embedding`, `model.rerank` | deployment model endpoints are reachable |
 | `model.tenant_providers` | tenant model provider endpoints are reachable |
-| `index.valid` | the chunks HNSW index exists and is valid |
-| `embedding.dimension` | `EMBEDDING_DIMENSION`, the serving index and each knowledge-base binding agree |
+| `index.valid` | the chunks and `chunk_embeddings` HNSW indexes exist and are valid |
+| `embedding.dimension` | every knowledge-base binding has a valid variant index for its dimension |
 | `rls.mode` | production is not running RLS off/shadow |
 | `backup.age` | the newest file under `BACKUP_DIR` is within `BACKUP_MAX_AGE_HOURS` |
 | `license.expiry` | `LICENSE_EXPIRES_AT` is valid and not expired |

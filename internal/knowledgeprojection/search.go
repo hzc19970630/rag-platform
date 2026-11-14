@@ -202,20 +202,21 @@ func (s *Service) searchKnowledgeKeyword(ctx context.Context, tenantID, knowledg
 }
 
 func (s *Service) searchKnowledgeVector(ctx context.Context, tenantID, knowledgeBaseID, query string, limit int) ([]KnowledgeHit, error) {
-	if s.embedder == nil {
-		return nil, fmt.Errorf("knowledge index has no embedding adapter")
+	binding, adapter, err := s.embeddingFor(ctx, tenantID, knowledgeBaseID)
+	if err != nil {
+		return nil, err
 	}
-	vectors, err := s.embedder.Embed(ctx, []string{query})
+	vectors, err := adapter.Embed(ctx, []string{query})
 	if err != nil {
 		return nil, fmt.Errorf("embed knowledge query: %w", err)
 	}
-	if len(vectors) != 1 || len(vectors[0]) != s.embedder.Dimension() {
+	if len(vectors) != 1 || len(vectors[0]) != binding.Dimension {
 		return nil, fmt.Errorf("embed knowledge query returned an unexpected vector")
 	}
-	dimension := len(vectors[0])
+	dimension := binding.Dimension
 	statement := fmt.Sprintf(knowledgeVectorTemplate, dimension, dimension, status.Active, status.Published, dimension, dimension, dimension)
 	literal := vecutil.Literal(vectors[0])
-	rows, err := s.db.WithContext(ctx).Raw(statement, literal, tenantID, knowledgeBaseID, s.embedder.Name(), literal, limit).Rows()
+	rows, err := s.db.WithContext(ctx).Raw(statement, literal, tenantID, knowledgeBaseID, binding.Model, literal, limit).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("knowledge vector recall: %w", err)
 	}

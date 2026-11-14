@@ -6,6 +6,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/configpreview"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
 	"github.com/hzc19970630/rag-platform/internal/datasource"
+	"github.com/hzc19970630/rag-platform/internal/embeddingmigration"
 	"github.com/hzc19970630/rag-platform/internal/identity"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/knowledgebase"
@@ -111,4 +112,5 @@ type RouteDeps struct {
 	Tasks         *ingestion.TaskInspector
 	Metrics       *observability.Registry
 	Models        *modelregistry.Registry
+	Embeddings    *embeddingmigration.Service
 }
