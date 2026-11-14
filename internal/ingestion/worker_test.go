@@ -1,6 +1,10 @@
 package ingestion
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
+)
 
 func TestMimeForFilename(t *testing.T) {
 	cases := map[string]string{
@@ -15,7 +19,7 @@ func TestMimeForFilename(t *testing.T) {
 		"a.unknown": "text/plain",
 	}
 	for name, want := range cases {
-		if got := mimeForFilename(name); got != want {
+		if got := formats.Default().MIMEForFilename(name); got != want {
 			t.Fatalf("mimeForFilename(%q) = %q, want %q", name, got, want)
 		}
 	}

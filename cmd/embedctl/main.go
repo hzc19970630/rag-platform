@@ -14,6 +14,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/app"
 	"github.com/hzc19970630/rag-platform/internal/config"
+	"github.com/hzc19970630/rag-platform/internal/contracts/vectorindex"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/logging"
 	"github.com/hzc19970630/rag-platform/internal/platform/evidenceindex"
@@ -72,13 +73,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer closeDatabase(db)
+	indexManager := vector.NewManager(db)
 
 	ctx := context.Background()
 	switch command {
 	case "check":
-		checkIndex(ctx, db, logger)
+		checkIndex(ctx, indexManager, logger)
 	case "create-index":
-		createIndex(ctx, db, cfg, logger, os.Args[2:])
+		createIndex(ctx, indexManager, cfg, logger, os.Args[2:])
 	case "backfill-embeddings":
 		total, err := ingestion.BackfillEmbeddingVariants(ctx, db, 1000)
 		if err != nil {
@@ -112,8 +114,8 @@ func main() {
 	}
 }
 
-func checkIndex(ctx context.Context, db *gorm.DB, logger *slog.Logger) {
-	report, err := vector.CheckChunksIndexes(ctx, db)
+func checkIndex(ctx context.Context, manager vectorindex.Manager, logger *slog.Logger) {
+	report, err := manager.CheckChunksIndexes(ctx)
 	if err != nil {
 		fatal(logger, "vector_index_check_failed", err)
 	}
@@ -129,12 +131,12 @@ func checkIndex(ctx context.Context, db *gorm.DB, logger *slog.Logger) {
 		}
 	}
 	logger.Info("vector_index_check",
-		"pgvector_version", report.PgvectorVersion,
+		"provider_version", report.ProviderVersion,
 		"indexes", len(report.Indexes),
 		"serving_index", serving,
 		"invalid_indexes", invalid,
 		"database_bytes", report.DatabaseSizeBytes,
-		"chunks_heap_bytes", report.ChunksHeapBytes,
+		"heap_bytes", report.HeapBytes,
 		"disk_free_bytes", report.DiskFreeBytes,
 		"disk_free_scope", report.DiskFreeScope,
 	)
@@ -151,7 +153,7 @@ func checkIndex(ctx context.Context, db *gorm.DB, logger *slog.Logger) {
 	for _, bucket := range report.DimensionHistogram {
 		logger.Info("chunk_dimension", "dimension", bucket.Dimension, "chunks", bucket.Count)
 	}
-	variantReport, err := vector.CheckChunkEmbeddingIndexes(ctx, db)
+	variantReport, err := manager.CheckChunkEmbeddingIndexes(ctx)
 	if err != nil {
 		logger.Warn("chunk_embedding_index_check_failed", "error", err)
 		return
@@ -169,7 +171,7 @@ func checkIndex(ctx context.Context, db *gorm.DB, logger *slog.Logger) {
 	}
 }
 
-func createIndex(ctx context.Context, db *gorm.DB, cfg config.Config, logger *slog.Logger, args []string) {
+func createIndex(ctx context.Context, manager vectorindex.Manager, cfg config.Config, logger *slog.Logger, args []string) {
 	flags := flag.NewFlagSet("create-index", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	dryRun := flags.Bool("dry-run", false, "print the online index plan without changing the catalog")
@@ -186,16 +188,16 @@ func createIndex(ctx context.Context, db *gorm.DB, cfg config.Config, logger *sl
 			fatal(logger, "create_index_not_confirmed", err)
 		}
 	}
-	options := vector.IndexOptions{
+	options := vectorindex.Options{
 		LockTimeout:      time.Duration(cfg.Embedding.IndexLockTimeoutSec) * time.Second,
 		StatementTimeout: time.Duration(cfg.Embedding.IndexStatementTimeoutSec) * time.Second,
 		DryRun:           *dryRun,
 	}
-	result, err := vector.EnsureChunksIndex(ctx, db, *dimension, options)
+	result, err := manager.EnsureChunksIndex(ctx, *dimension, options)
 	if err != nil {
 		fatal(logger, "create_index_failed", err)
 	}
-	variant, err := vector.EnsureChunkEmbeddingIndex(ctx, db, *dimension, options)
+	variant, err := manager.EnsureChunkEmbeddingIndex(ctx, *dimension, options)
 	if err != nil {
 		fatal(logger, "create_variant_index_failed", err)
 	}

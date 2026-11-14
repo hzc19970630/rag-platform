@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
-	"github.com/hzc19970630/rag-platform/internal/platform/formats"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/secrets"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
@@ -49,10 +49,18 @@ type Worker struct {
 	cipher    *secrets.Cipher
 	fetcher   *Fetcher
 	ingestion *ingestion.Service
+	formats   formats.Registry
 }
 
 func NewWorker(db *gorm.DB, cipher *secrets.Cipher, fetcher *Fetcher, ingestionService *ingestion.Service) *Worker {
-	return &Worker{db: db, cipher: cipher, fetcher: fetcher, ingestion: ingestionService}
+	return &Worker{db: db, cipher: cipher, fetcher: fetcher, ingestion: ingestionService, formats: formats.Default()}
+}
+
+// SetFormatRegistry replaces the accepted-format set.
+func (w *Worker) SetFormatRegistry(registry formats.Registry) {
+	if registry != nil {
+		w.formats = registry
+	}
 }
 
 func (w *Worker) Process(ctx context.Context, task SyncTask) error {
@@ -174,7 +182,7 @@ func (w *Worker) Process(ctx context.Context, task SyncTask) error {
 			continue
 		}
 		filename := ItemFilename(item)
-		if !supportedFilename(filename) {
+		if !w.supportedFilename(filename) {
 			counters.failed++
 			summary = appendSummary(summary, item.ExternalID, fmt.Errorf("unsupported file type"))
 			state.Position = index + 1
@@ -475,8 +483,12 @@ func appendSummary(summary, externalID string, line any) string {
 	return truncate(summary+"\n"+message, 4000)
 }
 
-func supportedFilename(name string) bool {
-	return formats.ExtensionSupported(name)
+func (w *Worker) supportedFilename(name string) bool {
+	registry := w.formats
+	if registry == nil {
+		registry = formats.Default()
+	}
+	return registry.ExtensionSupported(name)
 }
 
 // terminalIngestError separates item-level rejections from infrastructure

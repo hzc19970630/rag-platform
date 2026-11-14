@@ -13,6 +13,7 @@ func TestNamesMatchThePublishedFormatList(t *testing.T) {
 }
 
 func TestCanonicalizeKeepsTheUploadPolicy(t *testing.T) {
+	registry := Default()
 	cases := []struct {
 		filename string
 		mime     string
@@ -27,7 +28,7 @@ func TestCanonicalizeKeepsTheUploadPolicy(t *testing.T) {
 		{"a", "", "", false},
 	}
 	for _, tc := range cases {
-		got, ok := Canonicalize(tc.filename, tc.mime)
+		got, ok := registry.Canonicalize(tc.filename, tc.mime)
 		if ok != tc.ok || got != tc.want {
 			t.Fatalf("Canonicalize(%q, %q) = %q/%v, want %q/%v", tc.filename, tc.mime, got, ok, tc.want, tc.ok)
 		}
@@ -35,10 +36,11 @@ func TestCanonicalizeKeepsTheUploadPolicy(t *testing.T) {
 }
 
 func TestMIMEForFilenameDefaultsToText(t *testing.T) {
-	if got := MIMEForFilename("a.PPTX"); got != "application/vnd.openxmlformats-officedocument.presentationml.presentation" {
+	registry := Default()
+	if got := registry.MIMEForFilename("a.PPTX"); got != "application/vnd.openxmlformats-officedocument.presentationml.presentation" {
 		t.Fatalf("unexpected pptx mime %q", got)
 	}
-	if got := MIMEForFilename("unknown.bin"); got != "text/plain" {
+	if got := registry.MIMEForFilename("unknown.bin"); got != "text/plain" {
 		t.Fatalf("unknown extension must fall back to text/plain, got %q", got)
 	}
 }

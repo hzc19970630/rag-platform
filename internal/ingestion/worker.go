@@ -14,8 +14,8 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
+	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
-	"github.com/hzc19970630/rag-platform/internal/platform/formats"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
@@ -44,6 +44,7 @@ type PipelineWorker struct {
 	projection        ProjectionTrigger
 	leaseOwner        inboxlease.Owner
 	leaseTTL          time.Duration
+	formats           formats.Registry
 }
 
 // ChunkingResolver resolves the chunking policy for one tenant. The worker
@@ -64,6 +65,13 @@ func (w *PipelineWorker) SetChunkingResolver(resolver ChunkingResolver) {
 // embedding provider is written in that provider's space.
 type EmbeddingResolver interface {
 	ResolveEmbedding(ctx context.Context, tenantID, knowledgeBaseID string) (embedding.Binding, Embedder, error)
+}
+
+// SetFormatRegistry replaces the accepted-format set.
+func (w *PipelineWorker) SetFormatRegistry(registry formats.Registry) {
+	if registry != nil {
+		w.formats = registry
+	}
 }
 
 // SetEmbeddingResolver wires per-knowledge-base embedding routing. A nil
@@ -94,7 +102,7 @@ func NewPipelineWorker(db *gorm.DB, objects ObjectStore, reader DocumentReader, 
 	if chunker == nil {
 		chunker = DefaultChunking
 	}
-	return &PipelineWorker{db: db, objects: objects, reader: reader, embedder: embedder, indexWriter: indexWriter, chunker: chunker, timeout: timeout}
+	return &PipelineWorker{db: db, objects: objects, reader: reader, embedder: embedder, indexWriter: indexWriter, chunker: chunker, timeout: timeout, formats: formats.Default()}
 }
 
 func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
@@ -192,7 +200,7 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if err != nil {
 		return fmt.Errorf("load source object: %w", err)
 	}
-	source := SourceObject{SchemaVersion: SchemaSourceObject, Envelope: Envelope{SchemaVersion: SchemaSourceObject, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, ContentHash: version.ContentHash}, ObjectKey: version.SourceObjectKey, Filename: filenameFromKey(version.SourceObjectKey), MimeType: mimeForFilename(version.SourceObjectKey), SizeBytes: int64(len(content))}
+	source := SourceObject{SchemaVersion: SchemaSourceObject, Envelope: Envelope{SchemaVersion: SchemaSourceObject, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, ContentHash: version.ContentHash}, ObjectKey: version.SourceObjectKey, Filename: filenameFromKey(version.SourceObjectKey), MimeType: w.mimeForFilename(version.SourceObjectKey), SizeBytes: int64(len(content))}
 	result, err := w.reader.Parse(ctx, source, content)
 	if err != nil {
 		return fmt.Errorf("parser_error: %w", err)
@@ -713,8 +721,12 @@ func filenameFromKey(value string) string {
 	return parts[len(parts)-1]
 }
 
-func mimeForFilename(value string) string {
-	return formats.MIMEForFilename(value)
+func (w *PipelineWorker) mimeForFilename(value string) string {
+	registry := w.formats
+	if registry == nil {
+		registry = formats.Default()
+	}
+	return registry.MIMEForFilename(value)
 }
 
 // terminalParserCode marks parser rejections that cannot succeed on retry:

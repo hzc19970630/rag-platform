@@ -1,6 +1,10 @@
 package ingestion
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
+)
 
 const (
 	wordMime  = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -39,7 +43,7 @@ func TestSupportedMime(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := supportedMime(tc.filename, tc.mimeType)
+			got, ok := formats.Default().Canonicalize(tc.filename, tc.mimeType)
 			if ok != tc.ok {
 				t.Fatalf("supportedMime(%q, %q) accepted = %v; want %v", tc.filename, tc.mimeType, ok, tc.ok)
 			}

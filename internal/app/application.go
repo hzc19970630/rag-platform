@@ -280,10 +280,11 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		return nil, err
 	}
 	embeddingResolver := newEmbeddingRouter(embedder, modelCatalog, cfg)
+	indexManager := vector.NewManager(database)
 	embeddingMigrations, err := embeddingmigration.NewService(embeddingmigration.Options{
 		DB: database, Authz: authorization, Models: modelCatalog, EmbedderFactory: embeddingResolver,
 		Writer:    variantWriter{writer: indexWriter},
-		Indexer:   embeddingIndexEnsurer{db: database, lockTimeout: time.Duration(cfg.Embedding.IndexLockTimeoutSec) * time.Second, statementTimeout: time.Duration(cfg.Embedding.IndexStatementTimeoutSec) * time.Second},
+		Indexer:   embeddingIndexEnsurer{manager: indexManager, lockTimeout: time.Duration(cfg.Embedding.IndexLockTimeoutSec) * time.Second, statementTimeout: time.Duration(cfg.Embedding.IndexStatementTimeoutSec) * time.Second},
 		Publisher: publisher, BatchSize: 256,
 	})
 	if err != nil {
@@ -298,7 +299,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		LicenseExpiresAt: cfg.LicenseExpiresAt, RetrievalConfigFile: cfg.RetrievalConfigFile, RetrievalFileHash: cfg.RetrievalFileHash,
 		Models: modelCatalog, Embedder: embedder,
 		CheckIndexes: func(ctx context.Context) (confighealth.IndexReport, error) {
-			report, err := vector.CheckChunksIndexes(ctx, database)
+			report, err := indexManager.CheckChunksIndexes(ctx)
 			if err != nil {
 				return confighealth.IndexReport{}, err
 			}
@@ -312,7 +313,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 			// Search reads the variant table, so its indexes are part of the
 			// same health contract. A pre-0031 database errors; that is reported
 			// by the migration itself, not by hiding the chunks indexes.
-			if variant, err := vector.CheckChunkEmbeddingIndexes(ctx, database); err == nil {
+			if variant, err := indexManager.CheckChunkEmbeddingIndexes(ctx); err == nil {
 				for _, status := range variant.Indexes {
 					result.Indexes = append(result.Indexes, confighealth.IndexStatus{Name: status.Name, Dimension: status.Dimension, Valid: status.Valid})
 				}
@@ -324,7 +325,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 			return result, nil
 		},
 		IndexDimension: func(ctx context.Context) (int, bool, error) {
-			return vector.ChunksIndexDimension(ctx, database)
+			return indexManager.ChunksIndexDimension(ctx)
 		},
 	})
 	// A knowledge-base binding selects a tenant provider; every other caller

@@ -15,7 +15,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
-	"github.com/hzc19970630/rag-platform/internal/platform/formats"
+	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
@@ -35,6 +35,7 @@ type Service struct {
 	quota     Quota
 	quotas    QuotaResolver
 	index     EvidenceIndexWriter
+	formats   formats.Registry
 }
 
 // QuotaResolver reads the tenant's current limits. The service keeps the
@@ -51,6 +52,14 @@ func (s *Service) SetQuotaResolver(resolver QuotaResolver) {
 // SetIndexWriter wires the Evidence Index write port. It is optional at
 // construction because the API process only needs it for purge; the worker
 // injects it before processing stages.
+// SetFormatRegistry replaces the accepted-format set. A nil registry keeps the
+// built-in static list, which is what tests and single-format deployments use.
+func (s *Service) SetFormatRegistry(registry formats.Registry) {
+	if registry != nil {
+		s.formats = registry
+	}
+}
+
 func (s *Service) SetIndexWriter(writer EvidenceIndexWriter) {
 	s.index = writer
 }
@@ -109,7 +118,7 @@ func NewService(db *gorm.DB, authorizer *authz.Service, objects ObjectStore, pub
 	if retentionDays <= 0 {
 		retentionDays = 30
 	}
-	return &Service{db: db, authz: authorizer, objects: objects, publisher: publisher, maxBytes: maxBytes, retention: time.Duration(retentionDays) * 24 * time.Hour, quota: quota}
+	return &Service{db: db, authz: authorizer, objects: objects, publisher: publisher, maxBytes: maxBytes, retention: time.Duration(retentionDays) * 24 * time.Hour, quota: quota, formats: formats.Default()}
 }
 
 // checkQuota reads tenant usage. Deleted documents do not count: their space is
@@ -210,7 +219,7 @@ func (s *Service) validateUpload(input UploadInput) error {
 	if strings.TrimSpace(input.Filename) == "" {
 		return apperror.Invalidf("filename is required")
 	}
-	if _, ok := supportedMime(input.Filename, input.MimeType); !ok {
+	if _, ok := s.supportedMime(input.Filename, input.MimeType); !ok {
 		return apperror.Invalidf("unsupported mime type")
 	}
 	return nil
@@ -223,7 +232,7 @@ func (s *Service) validateUpload(input UploadInput) error {
 // row exists; interactive uploads keep the stricter "document must exist"
 // behavior when a caller names an ID.
 func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, knowledgeBase models.KnowledgeBase, input UploadInput, restoreDeleted, createMissing bool) (UploadResult, error) {
-	mimeType, _ := supportedMime(input.Filename, input.MimeType)
+	mimeType, _ := s.supportedMime(input.Filename, input.MimeType)
 	if strings.TrimSpace(input.RequestID) == "" {
 		input.RequestID = input.IdempotencyKey
 	}
@@ -498,8 +507,12 @@ func (s *Service) loadResult(ctx context.Context, tenantID, documentID, versionI
 	return UploadResult{Document: document, Version: version, Pipeline: pipeline, Stages: stages}, nil
 }
 
-func supportedMime(filename, mimeType string) (string, bool) {
-	return formats.Canonicalize(filename, mimeType)
+func (s *Service) supportedMime(filename, mimeType string) (string, bool) {
+	registry := s.formats
+	if registry == nil {
+		registry = formats.Default()
+	}
+	return registry.Canonicalize(filename, mimeType)
 }
 
 func objectKeyFor(tenantID, knowledgeBaseID, documentID, versionID, filename string) string {

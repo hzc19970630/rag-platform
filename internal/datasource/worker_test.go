@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
@@ -47,12 +48,12 @@ func TestUnchangedByMetadataUsesVersionAndChecksum(t *testing.T) {
 
 func TestSupportedFilename(t *testing.T) {
 	for _, name := range []string{"a.pdf", "A.DOCX", "notes.md", "readme.txt", "report.xlsx", "deck.pptx", "page.html", "page.htm", "Page.HTM", "PAGE.XLSX"} {
-		if !supportedFilename(name) {
+		if !formats.Default().ExtensionSupported(name) {
 			t.Fatalf("expected %q to be supported", name)
 		}
 	}
 	for _, name := range []string{"", "image.png", "archive.zip", "noext", "legacy.xls", "legacy.ppt"} {
-		if supportedFilename(name) {
+		if formats.Default().ExtensionSupported(name) {
 			t.Fatalf("expected %q to be rejected", name)
 		}
 	}

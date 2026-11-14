@@ -38,6 +38,7 @@ nav:
   - 测试: testing.md
   - 评测方法与复现: evaluation.md
   - 架构: architecture.md
+  - M8 存储迁移清单: m8-migration-checklist.md
   - API: api.md
   - MCP 与 SDK: mcp.md
   - 运维: operations.md

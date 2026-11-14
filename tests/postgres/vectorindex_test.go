@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hzc19970630/rag-platform/internal/contracts/vectorindex"
 	"github.com/hzc19970630/rag-platform/internal/platform/vector"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -74,6 +75,7 @@ func TestOnlineChunksIndexBuildKeepsWritesAvailable(t *testing.T) {
 		t.Skip("online index build is a slow integration test")
 	}
 	admin, gormDB, schema := openIndexFixture(t)
+	manager := vector.NewManager(gormDB)
 	ctx := context.Background()
 	const dimension = 4
 	const rows = 200_000
@@ -120,7 +122,7 @@ FROM generate_series(1, %d) g`, schema, dimension, dimension, rows),
 	buildStarted := make(chan struct{})
 	go func() {
 		close(buildStarted)
-		_, buildErr := vector.EnsureChunksIndex(ctx, gormDB, dimension, vector.IndexOptions{
+		_, buildErr := manager.EnsureChunksIndex(ctx, dimension, vectorindex.Options{
 			LockTimeout:      30 * time.Second,
 			StatementTimeout: 5 * time.Minute,
 		})
@@ -146,14 +148,14 @@ FROM generate_series(1, %d) g`, schema, dimension, dimension, rows),
 		t.Fatalf("build finished too quickly to sample writes (%d samples); increase fixture size", len(during))
 	}
 
-	dimensionNow, exists, err := vector.ChunksIndexDimension(ctx, gormDB)
+	dimensionNow, exists, err := manager.ChunksIndexDimension(ctx)
 	if err != nil {
 		t.Fatalf("read index dimension: %v", err)
 	}
 	if !exists || dimensionNow != dimension {
 		t.Fatalf("expected a valid index at dimension %d, got exists=%t dimension=%d", dimension, exists, dimensionNow)
 	}
-	result, err := vector.EnsureChunksIndex(ctx, gormDB, dimension, vector.IndexOptions{})
+	result, err := manager.EnsureChunksIndex(ctx, dimension, vectorindex.Options{})
 	if err != nil {
 		t.Fatalf("second ensure: %v", err)
 	}
@@ -209,6 +211,7 @@ FROM generate_series(1, %d) g`, schema, dimension, dimension, rows),
 
 func TestChunksIndexDimensionReadsLegacyName(t *testing.T) {
 	admin, gormDB, schema := openIndexFixture(t)
+	manager := vector.NewManager(gormDB)
 	ctx := context.Background()
 	if _, err := admin.ExecContext(ctx, fmt.Sprintf("CREATE TABLE %s.chunks (id TEXT PRIMARY KEY, parent_id TEXT, embedding halfvec, embedding_dimension INT NOT NULL)", schema)); err != nil {
 		t.Fatalf("create chunks: %v", err)
@@ -221,14 +224,14 @@ func TestChunksIndexDimensionReadsLegacyName(t *testing.T) {
 	)); err != nil {
 		t.Fatalf("create legacy index: %v", err)
 	}
-	dimension, exists, err := vector.ChunksIndexDimension(ctx, gormDB)
+	dimension, exists, err := manager.ChunksIndexDimension(ctx)
 	if err != nil {
 		t.Fatalf("read index dimension: %v", err)
 	}
 	if !exists || dimension != 3 {
 		t.Fatalf("expected the legacy index at dimension 3, got exists=%t dimension=%d", exists, dimension)
 	}
-	result, err := vector.EnsureChunksIndex(ctx, gormDB, 3, vector.IndexOptions{})
+	result, err := manager.EnsureChunksIndex(ctx, 3, vectorindex.Options{})
 	if err != nil {
 		t.Fatalf("ensure on legacy index: %v", err)
 	}

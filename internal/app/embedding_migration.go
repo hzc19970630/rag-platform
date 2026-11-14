@@ -4,22 +4,21 @@ import (
 	"context"
 	"time"
 
+	"github.com/hzc19970630/rag-platform/internal/contracts/vectorindex"
 	"github.com/hzc19970630/rag-platform/internal/embeddingmigration"
 	"github.com/hzc19970630/rag-platform/internal/platform/evidenceindex"
-	"github.com/hzc19970630/rag-platform/internal/platform/vector"
-	"gorm.io/gorm"
 )
 
 // embeddingIndexEnsurer bridges the migration domain to the pgvector index
 // manager. Keeping it here avoids a domain -> provider-adapter import.
 type embeddingIndexEnsurer struct {
-	db               *gorm.DB
+	manager          vectorindex.Manager
 	lockTimeout      time.Duration
 	statementTimeout time.Duration
 }
 
 func (e embeddingIndexEnsurer) EnsureIndex(ctx context.Context, dimension int) error {
-	_, err := vector.EnsureChunkEmbeddingIndex(ctx, e.db, dimension, vector.IndexOptions{
+	_, err := e.manager.EnsureChunkEmbeddingIndex(ctx, dimension, vectorindex.Options{
 		LockTimeout:      e.lockTimeout,
 		StatementTimeout: e.statementTimeout,
 	})
