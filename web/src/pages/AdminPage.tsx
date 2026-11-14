@@ -52,6 +52,7 @@ import type {
 } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { ModelProvidersTab } from "../features/models/ModelProvidersTab";
+import { PresetTab } from "../features/settings/PresetTab";
 import { TenantConfigurationTab } from "../features/settings/TenantConfigurationTab";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { usePermissions } from "../session";
@@ -687,6 +688,7 @@ export function AdminPage() {
           { key: "audit", label: t("admin.tabs.audit"), icon: <FileSearchOutlined />, children: auditContent },
           { key: "models", label: t("admin.tabs.models"), icon: <CloudServerOutlined />, children: <ModelProvidersTab /> },
           { key: "configuration", label: t("admin.tabs.configuration"), icon: <SettingOutlined />, children: <TenantConfigurationTab /> },
+          { key: "presets", label: t("admin.tabs.presets"), icon: <CloudServerOutlined />, children: <PresetTab /> },
         ]}
       />
 

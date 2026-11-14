@@ -1258,6 +1258,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/presets */
+        get: operations["get_presets"];
+        put?: never;
+        /** POST /api/v1/presets */
+        post: operations["post_presets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/presets/{name}/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/presets/{name}/{version} */
+        get: operations["get_presets_name_version"];
+        /** PUT /api/v1/presets/{name}/{version} */
+        put: operations["put_presets_name_version"];
+        post?: never;
+        /** DELETE /api/v1/presets/{name}/{version} */
+        delete: operations["delete_presets_name_version"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/presets/{name}/{version}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/presets/{name}/{version}/clone */
+        post: operations["post_presets_name_version_clone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requests/{requestID}/events": {
         parameters: {
             query?: never;
@@ -2262,6 +2316,8 @@ export interface components {
             indexingStrategy?: string;
             name?: string;
             ownerId?: string;
+            presetName?: string;
+            presetVersion?: string;
             retrievalConfig?: string;
             tenantId?: string;
             /** Format: date-time */
@@ -2280,6 +2336,8 @@ export interface components {
         KnowledgeBaseCreateRequest: {
             description?: string;
             name: string;
+            presetName?: string;
+            presetVersion?: string;
         };
         KnowledgeBaseList: {
             items?: components["schemas"]["KnowledgeBase"][];
@@ -2499,6 +2557,29 @@ export interface components {
             traceId?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        Preset: {
+            description?: string;
+            displayName?: string;
+            formats?: string[];
+            name?: string;
+            source?: string;
+            version?: string;
+            vertical?: string;
+        };
+        PresetCloneRequest: {
+            name: string;
+            version: string;
+        };
+        PresetDetail: {
+            manifest?: unknown;
+            source?: string;
+        };
+        PresetList: {
+            items?: components["schemas"]["Preset"][];
+        };
+        PresetWriteRequest: {
+            manifest: unknown;
         };
         PreviewBlock: {
             blockId?: string;
@@ -5279,6 +5360,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskInspection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_presets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresetList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_presets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresetDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_presets_name_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresetDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    put_presets_name_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresetDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    delete_presets_name_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    post_presets_name_version_clone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PresetCloneRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresetDetail"];
                 };
             };
             400: components["responses"]["BadRequest"];

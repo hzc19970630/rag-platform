@@ -93,7 +93,7 @@ func (p *recordingProjection) TriggerRelation(_ context.Context, _, knowledgeBas
 
 type failingChunkingResolver struct{ err error }
 
-func (r failingChunkingResolver) ChunkerForTenant(context.Context, string) (Chunker, error) {
+func (r failingChunkingResolver) ChunkerFor(context.Context, string, string) (Chunker, error) {
 	return nil, r.err
 }
 
@@ -371,7 +371,7 @@ func TestWorkerUsesResolvers(t *testing.T) {
 
 type chunkingResolverFunc func(context.Context, string) (Chunker, error)
 
-func (f chunkingResolverFunc) ChunkerForTenant(ctx context.Context, tenantID string) (Chunker, error) {
+func (f chunkingResolverFunc) ChunkerFor(ctx context.Context, tenantID, knowledgeBaseID string) (Chunker, error) {
 	return f(ctx, tenantID)
 }
 

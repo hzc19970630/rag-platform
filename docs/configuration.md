@@ -98,6 +98,33 @@ Cross-knowledge-base queries group targets by `(model, dimension)`, issue one
 vector recall per space and fuse the per-space rankings. A query spanning more
 than four spaces is rejected instead of comparing incomparable scores.
 
+## Preset packs
+
+A preset pack is versioned data, not an engine branch. The generic enterprise
+baseline (`general-enterprise@1.0.0`) carries retrieval defaults, chunking
+defaults, accepted formats, terminology/masking/compliance declarations and an
+evaluation reference. Pick a pack when creating a knowledge base; the pack name
+and version are stored on the knowledge base, while its retrieval/chunking
+defaults are copied into that knowledge base so a later pack upgrade cannot
+change existing behavior.
+
+```bash
+# in the api image
+preset list
+preset validate general-enterprise@1.0.0
+preset export general-enterprise@1.0.0
+preset diff <a.json> <b.json>
+preset import <manifest.json> --dir config/presets
+```
+
+Manifest keys for retrieval/chunking must exist in the same `configschema`;
+unknown keys or out-of-range values fail validation. Permissions, masking and
+compliance sections are declarations until B6/B8 enforce them; the pack does not
+claim those controls are active. Built-in packs are immutable. Tenant operators
+can clone a built-in pack, import a manifest, then edit/delete their own copy in
+Administration → Preset packs; built-in names stay reserved. Vertical packs
+(`finance`, `healthcare`) reuse the same schema and arrive with a customer.
+
 ## Change impact preflight
 
 `POST /api/v1/config/preview` is a read-only check before saving a tenant or

@@ -19,6 +19,8 @@ func KnowledgeBase(row models.KnowledgeBase) httpapi.KnowledgeBase {
 		ACLVersion:         row.ACLVersion,
 		RetrievalConfig:    row.RetrievalConfig,
 		IndexingStrategy:   row.IndexingStrategy,
+		PresetName:         row.PresetName,
+		PresetVersion:      row.PresetVersion,
 		CreatedAt:          row.CreatedAt,
 		UpdatedAt:          row.UpdatedAt,
 	}
@@ -51,7 +53,7 @@ func KnowledgeBaseMembers(rows []models.KnowledgeBaseMember) []httpapi.Knowledge
 }
 
 func CreateKnowledgeBaseInput(input httpapi.KnowledgeBaseCreateRequest) knowledgebase.CreateInput {
-	return knowledgebase.CreateInput{Name: input.Name, Description: input.Description}
+	return knowledgebase.CreateInput{Name: input.Name, Description: input.Description, PresetName: input.PresetName, PresetVersion: input.PresetVersion}
 }
 
 func UpdateKnowledgeBaseInput(input httpapi.KnowledgeBaseUpdateRequest) knowledgebase.UpdateInput {

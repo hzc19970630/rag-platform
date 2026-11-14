@@ -244,6 +244,8 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .config-control .config-clear { justify-self: end; height: auto; padding: 0; }
 .settings-select { width: 100%; min-width: 0; max-width: 100%; }
 .settings-select .ant-select-selector { min-width: 0; }
+.preset-info { margin-top: 8px; }
+.preset-field .ant-form-item-extra { margin-top: 8px; }
 .settings-select .ant-select-selection-item,
 .settings-select .ant-select-selection-placeholder { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-block { min-width: 0; }

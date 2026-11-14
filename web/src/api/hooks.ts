@@ -22,6 +22,7 @@ import type {
   ModelCatalog,
   ModelProviderList,
   OpsMetrics,
+  PresetSummary,
   ProjectionStatus,
   RetrievalQualitySummary,
   TenantMember,
@@ -53,6 +54,7 @@ export const queryKeys = {
   deadLetters: ["ops", "dead-letters"] as const,
   metrics: ["ops", "metrics"] as const,
   quality: ["ops", "quality"] as const,
+  presets: ["presets"] as const,
   tenantOverview: ["tenant", "overview"] as const,
   tenantQuota: ["tenant", "quota"] as const,
   tenantMembers: ["tenant", "members"] as const,
@@ -243,6 +245,10 @@ export function useDeadLetters() {
 
 export function useOpsMetrics() {
   return useQuery({ queryKey: queryKeys.metrics, queryFn: () => api<OpsMetrics>("/ops/metrics") });
+}
+
+export function usePresets() {
+  return useQuery({ queryKey: queryKeys.presets, queryFn: () => api<{ items: PresetSummary[] }>("/presets") });
 }
 
 export function useOpsQuality() {

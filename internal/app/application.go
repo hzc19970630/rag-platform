@@ -35,6 +35,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
 	"github.com/hzc19970630/rag-platform/internal/platform/vector"
+	"github.com/hzc19970630/rag-platform/internal/presets"
 	"github.com/hzc19970630/rag-platform/internal/prompts"
 	"github.com/hzc19970630/rag-platform/internal/quality"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
@@ -67,6 +68,7 @@ type Application struct {
 	// Embeddings owns the managed vector-space migration state machine.
 	Embeddings    *embeddingmigration.Service
 	Quality       *quality.Service
+	Presets       *presets.Resolver
 	Prompts       *prompts.Registry
 	Ops           *ops.Service
 	Tenant        *tenant.Service
@@ -185,6 +187,13 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		closeAll()
 		return nil, err
 	}
+	presetCatalog, err := presets.LoadBuiltin()
+	if err != nil {
+		_ = authorization.Close()
+		closeAll()
+		return nil, err
+	}
+	presetResolver := presets.NewResolver(presetCatalog, presets.NewStore(database))
 	identityService, err := identity.NewService(maintenance, identityOptions(cfg.Auth))
 	if err != nil {
 		_ = authorization.Close()
@@ -198,6 +207,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		return nil, err
 	}
 	knowledgeBaseService := knowledgebase.NewService(database, authorization, binding)
+	knowledgeBaseService.SetPresetCatalog(presetResolver)
 	deployment := tenantconfig.Deployment{
 		Retrieval: cfg.RetrievalTier(),
 		Chunking:  cfg.ChunkingTier(),
@@ -388,7 +398,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Presets: presetResolver, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

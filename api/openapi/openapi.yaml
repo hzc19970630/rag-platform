@@ -1358,6 +1358,10 @@ components:
           type: string
         ownerId:
           type: string
+        presetName:
+          type: string
+        presetVersion:
+          type: string
         retrievalConfig:
           type: string
         tenantId:
@@ -1390,6 +1394,10 @@ components:
           type: string
         name:
           maxLength: 255
+          type: string
+        presetName:
+          type: string
+        presetVersion:
           type: string
       required:
         - name
@@ -1817,6 +1825,54 @@ components:
         updatedAt:
           format: date-time
           type: string
+      type: object
+    Preset:
+      properties:
+        description:
+          type: string
+        displayName:
+          type: string
+        formats:
+          items:
+            type: string
+          type: array
+        name:
+          type: string
+        source:
+          type: string
+        version:
+          type: string
+        vertical:
+          type: string
+      type: object
+    PresetCloneRequest:
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+      required:
+        - name
+        - version
+      type: object
+    PresetDetail:
+      properties:
+        manifest: {}
+        source:
+          type: string
+      type: object
+    PresetList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Preset'
+          type: array
+      type: object
+    PresetWriteRequest:
+      properties:
+        manifest: {}
+      required:
+        - manifest
       type: object
     PreviewBlock:
       properties:
@@ -5063,6 +5119,183 @@ paths:
       summary: GET /api/v1/ops/tasks/{key}
       tags:
         - operations
+  /api/v1/presets:
+    get:
+      operationId: get_presets
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/presets
+      tags:
+        - presets
+    post:
+      operationId: post_presets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresetWriteRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetDetail'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/presets
+      tags:
+        - presets
+  /api/v1/presets/{name}/{version}:
+    delete:
+      operationId: delete_presets_name_version
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/presets/{name}/{version}
+      tags:
+        - presets
+    get:
+      operationId: get_presets_name_version
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetDetail'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/presets/{name}/{version}
+      tags:
+        - presets
+    put:
+      operationId: put_presets_name_version
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresetWriteRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetDetail'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PUT /api/v1/presets/{name}/{version}
+      tags:
+        - presets
+  /api/v1/presets/{name}/{version}/clone:
+    post:
+      operationId: post_presets_name_version_clone
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: version
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PresetCloneRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresetDetail'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/presets/{name}/{version}/clone
+      tags:
+        - presets
   /api/v1/requests/{requestID}/events:
     get:
       operationId: get_requests_requestID_events
@@ -5735,6 +5968,7 @@ tags:
   - name: identity
   - name: tenant
   - name: configuration
+  - name: presets
   - name: knowledge-bases
   - name: documents
   - name: conversations

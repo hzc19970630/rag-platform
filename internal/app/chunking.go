@@ -17,8 +17,8 @@ func TenantChunkingResolver(service *tenantconfig.Service) ingestion.ChunkingRes
 	return tenantChunkingResolver{service: service}
 }
 
-func (r tenantChunkingResolver) ChunkerForTenant(ctx context.Context, tenantID string) (ingestion.Chunker, error) {
-	policy, err := r.service.ChunkingForTenant(ctx, tenantID)
+func (r tenantChunkingResolver) ChunkerFor(ctx context.Context, tenantID, knowledgeBaseID string) (ingestion.Chunker, error) {
+	policy, err := r.service.ChunkingForKnowledgeBase(ctx, tenantID, knowledgeBaseID)
 	if err != nil {
 		return nil, err
 	}

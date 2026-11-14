@@ -99,6 +99,11 @@ type KnowledgeBase struct {
 	// be changed once documents exist; the managed rebuild moves both together.
 	EmbeddingModel     string `gorm:"size:128;not null;default:''" json:"embeddingModel"`
 	EmbeddingDimension int    `gorm:"not null;default:0" json:"embeddingDimension"`
+	// PresetName/Version record the B23 pack this knowledge base was created
+	// from. ChunkingConfig keeps the pack defaults local to this knowledge base.
+	PresetName     string `gorm:"size:64;not null;default:''" json:"presetName"`
+	PresetVersion  string `gorm:"size:32;not null;default:''" json:"presetVersion"`
+	ChunkingConfig string `gorm:"type:jsonb;not null;default:'{}'" json:"-"`
 	// ChatModel and RerankModel are runtime bindings resolved through the model
 	// registry. Empty means inherit the deployment default. The version columns
 	// make an in-place provider upgrade visible in the binding audit.
@@ -528,6 +533,19 @@ type RetrievalEvalRun struct {
 }
 
 func (RetrievalEvalRun) TableName() string { return "retrieval_eval_runs" }
+
+type TenantPreset struct {
+	ID        string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID  string    `gorm:"size:64;not null;uniqueIndex:tenant_presets_unique" json:"tenantId"`
+	Name      string    `gorm:"size:64;not null;uniqueIndex:tenant_presets_unique" json:"name"`
+	Version   string    `gorm:"size:32;not null;uniqueIndex:tenant_presets_unique" json:"version"`
+	Manifest  string    `gorm:"type:jsonb;not null" json:"-"`
+	CreatedBy string    `gorm:"size:64;not null;default:''" json:"createdBy"`
+	CreatedAt time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (TenantPreset) TableName() string { return "tenant_presets" }
 
 type StreamEvent struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"-"`

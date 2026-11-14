@@ -51,7 +51,7 @@ type PipelineWorker struct {
 // calls it per document, so a policy change applies to the next ingestion
 // without rewriting existing chunks.
 type ChunkingResolver interface {
-	ChunkerForTenant(ctx context.Context, tenantID string) (Chunker, error)
+	ChunkerFor(ctx context.Context, tenantID, knowledgeBaseID string) (Chunker, error)
 }
 
 // SetChunkingResolver wires the tenant-aware chunking policy. A nil resolver
@@ -330,7 +330,7 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	}
 	chunker := w.chunker
 	if w.chunkingResolver != nil {
-		resolved, err := w.chunkingResolver.ChunkerForTenant(ctx, version.TenantID)
+		resolved, err := w.chunkingResolver.ChunkerFor(ctx, version.TenantID, version.KnowledgeBaseID)
 		if err != nil {
 			return fmt.Errorf("resolve chunking policy: %w", err)
 		}

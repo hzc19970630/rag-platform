@@ -485,3 +485,18 @@ export type RetrievalQualitySummary = {
     createdAt: string;
   };
 };
+
+export type PresetSummary = {
+  name: string;
+  version: string;
+  displayName: string;
+  description: string;
+  vertical: string;
+  formats: string[];
+  source: string;
+};
+
+export type PresetDetail = {
+  source: string;
+  manifest: Record<string, unknown>;
+};

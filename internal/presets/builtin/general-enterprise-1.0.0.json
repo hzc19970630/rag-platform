@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "EnterprisePresetV1",
+  "name": "general-enterprise",
+  "version": "1.0.0",
+  "displayName": "通用企业基线",
+  "description": "面向通用企业文档库的基线默认值：混合召回、保守阈值、可追溯引用；不包含行业专属规则。",
+  "vertical": "general",
+  "retrieval": {
+    "top_k": 8,
+    "embedding_top_k": 20,
+    "keyword_top_k": 20,
+    "vector_threshold": 0.2,
+    "keyword_threshold": 0,
+    "rerank_enabled": false,
+    "rerank_top_k": 8,
+    "rerank_threshold": -10,
+    "vector_ef_search": 0,
+    "vector_oversample": 1,
+    "vector_iterative_scan": true,
+    "context_token_limit": 4000,
+    "adjacent_expansion": 0,
+    "max_adjacent_chunks": 0,
+    "rrf_k": 60,
+    "expansion_score_factor": 0.5
+  },
+  "chunking": {
+    "size": 800,
+    "overlap": 80,
+    "min_size": 40,
+    "split_markers": ["\n\n", "\n", "。", "！", "？", ";"]
+  },
+  "formats": ["pdf-text", "docx", "xlsx", "pptx", "html", "markdown", "txt"],
+  "terminology": {"terms": [], "synonyms": {}},
+  "permissions": {"mode": "knowledge_base", "note": "部门树/文件夹/单文档 ACL 由 B6 交付；本包只声明知识库级权限。"},
+  "masking": {"rules": [], "note": "PII/DLP 规则由 B8 交付；本包只声明预留位置。"},
+  "compliance": {"frameworks": [], "note": "等保/ISO/行业条款由 B8 与法务确认；本包不构成合规结论。"},
+  "evaluation": {"suite": "m3", "dataset": "tests/eval/m3", "gates": {"documentHitRate": 0.85}},
+  "connectors": ["http_manifest"],
+  "questions": [
+    "这份文档的核心结论是什么？",
+    "请给出支持结论的原文引用。",
+    "文档中定义了哪些关键术语？"
+  ]
+}

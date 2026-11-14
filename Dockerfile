@@ -15,7 +15,8 @@ RUN LDFLAGS="-buildid= -X github.com/hzc19970630/rag-platform/internal/buildinfo
     CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/worker ./cmd/worker && \
     CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/migrate ./cmd/migrate && \
     CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/seed ./cmd/seed && \
-    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/embedctl ./cmd/embedctl
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/embedctl ./cmd/embedctl && \
+    CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o /out/preset ./cmd/preset
 
 FROM alpine:3.22@sha256:bfe7ceb9f09ec0566c48fb93356e45a47a00be5a1dd14fa5b909e7709c66b034
 ARG VERSION=dev
@@ -33,6 +34,7 @@ COPY --from=build /out/worker /usr/local/bin/worker
 COPY --from=build /out/migrate /usr/local/bin/migrate
 COPY --from=build /out/seed /usr/local/bin/seed
 COPY --from=build /out/embedctl /usr/local/bin/embedctl
+COPY --from=build /out/preset /usr/local/bin/preset
 COPY migrations /app/migrations
 COPY config /app/config
 RUN chown -R app:app /app

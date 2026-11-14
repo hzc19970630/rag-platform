@@ -16,6 +16,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/queue"
 	"github.com/hzc19970630/rag-platform/internal/platform/ratelimit"
+	"github.com/hzc19970630/rag-platform/internal/presets"
 	"github.com/hzc19970630/rag-platform/internal/quality"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/tenant"
@@ -117,4 +118,5 @@ type RouteDeps struct {
 	Models        *modelregistry.Registry
 	Embeddings    *embeddingmigration.Service
 	Quality       *quality.Service
+	Presets       *presets.Resolver
 }

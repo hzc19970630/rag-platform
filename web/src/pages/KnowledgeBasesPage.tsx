@@ -1,11 +1,11 @@
 import { DeleteOutlined, MessageOutlined, MoreOutlined, PlusOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
-import { App, Button, Card, Dropdown, Flex, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Dropdown, Flex, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, jsonInit } from "../api/client";
-import { queryKeys, useKnowledgeBases } from "../api/hooks";
+import { queryKeys, useKnowledgeBases, usePresets } from "../api/hooks";
 import type { KnowledgeBase } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -23,13 +23,16 @@ export function KnowledgeBasesPage() {
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const knowledgeBases = useKnowledgeBases();
+  const presets = usePresets();
   const { canWrite, canDelete, canChat } = usePermissions();
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("updated");
   const [createOpen, setCreateOpen] = useState(params.get("new") === "1");
   const [wizardOpen, setWizardOpen] = useState(params.get("setup") === "1");
   const [creating, setCreating] = useState(false);
-  const [form] = Form.useForm<{ name: string; description?: string }>();
+  const [presetInfo, setPresetInfo] = useState<import("../api/types").PresetSummary | null>(null);
+  const [presetValue, setPresetValue] = useState("");
+  const [form] = Form.useForm<{ name: string; description?: string; preset?: string }>();
 
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -41,17 +44,22 @@ export function KnowledgeBasesPage() {
       });
   }, [knowledgeBases.data, search, sort]);
 
-  async function create(values: { name: string; description?: string }) {
+  async function create(values: { name: string; description?: string; preset?: string }) {
     if (creating) return;
     setCreating(true);
     try {
+      const [presetName, presetVersion] = (values.preset ?? "").split("@");
       const created = await api<KnowledgeBase>("/knowledge-bases", jsonInit({
         name: values.name.trim(),
         description: values.description ?? "",
+        presetName: presetName ?? "",
+        presetVersion: presetVersion ?? "",
       }));
       message.success(t("knowledgeBase.created"));
       setCreateOpen(false);
       form.resetFields();
+      setPresetInfo(null);
+      setPresetValue("");
       await queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases });
       if (created?.id) navigate(`/knowledge-bases/${created.id}`);
     } catch (cause) {
@@ -192,7 +200,7 @@ export function KnowledgeBasesPage() {
         okText={t("common.create")}
         cancelText={t("common.cancel")}
         confirmLoading={creating}
-        onCancel={() => { setCreateOpen(false); form.resetFields(); }}
+        onCancel={() => { setCreateOpen(false); form.resetFields(); setPresetInfo(null); setPresetValue(""); }}
         onOk={() => form.submit()}
         destroyOnHidden
       >
@@ -202,6 +210,31 @@ export function KnowledgeBasesPage() {
           </Form.Item>
           <Form.Item label={t("knowledgeBase.descriptionField")} name="description">
             <Input.TextArea rows={3} placeholder={t("knowledgeBase.descriptionPlaceholder")} />
+          </Form.Item>
+          <Form.Item label={t("knowledgeBase.preset")} name="preset" extra={t("knowledgeBase.presetHint")} className="preset-field">
+            <Select
+              allowClear
+              placeholder={t("knowledgeBase.presetNone")}
+              loading={presets.isLoading}
+              value={presetValue || undefined}
+              onChange={(value: string) => {
+                setPresetValue(value ?? "");
+                setPresetInfo((presets.data?.items ?? []).find((preset) => `${preset.name}@${preset.version}` === value) ?? null);
+              }}
+              options={(presets.data?.items ?? []).map((preset) => ({
+                value: `${preset.name}@${preset.version}`,
+                label: `${preset.displayName} · ${preset.version}${preset.source === "tenant" ? " · 自定义" : ""}`,
+              }))}
+            />
+            {presetInfo ? (
+              <Alert
+                className="preset-info"
+                type="info"
+                showIcon
+                message={presetInfo.description || presetInfo.displayName}
+                description={`${t("knowledgeBase.presetFormats")}: ${presetInfo.formats.join(", ")}`}
+              />
+            ) : null}
           </Form.Item>
         </Form>
       </Modal>

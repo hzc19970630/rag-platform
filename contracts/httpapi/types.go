@@ -342,6 +342,8 @@ type KnowledgeBase struct {
 	ACLVersion         int64     `json:"aclVersion"`
 	RetrievalConfig    string    `json:"retrievalConfig"`
 	IndexingStrategy   string    `json:"indexingStrategy"`
+	PresetName         string    `json:"presetName"`
+	PresetVersion      string    `json:"presetVersion"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 }
@@ -351,8 +353,10 @@ type KnowledgeBaseList struct {
 }
 
 type KnowledgeBaseCreateRequest struct {
-	Name        string `json:"name" binding:"required,min=1,max=255" oa:"maxLength=255"`
-	Description string `json:"description"`
+	Name          string `json:"name" binding:"required,min=1,max=255" oa:"maxLength=255"`
+	PresetName    string `json:"presetName"`
+	PresetVersion string `json:"presetVersion"`
+	Description   string `json:"description"`
 }
 
 type KnowledgeBaseUpdateRequest struct {
@@ -1461,4 +1465,32 @@ type RetrievalEvalRun struct {
 	ConfigHash      string             `json:"configHash"`
 	Metrics         map[string]float64 `json:"metrics,omitempty"`
 	CreatedAt       time.Time          `json:"createdAt"`
+}
+
+type Preset struct {
+	Name        string   `json:"name"`
+	Version     string   `json:"version"`
+	DisplayName string   `json:"displayName"`
+	Description string   `json:"description"`
+	Vertical    string   `json:"vertical"`
+	Formats     []string `json:"formats"`
+	Source      string   `json:"source"`
+}
+
+type PresetDetail struct {
+	Source   string          `json:"source"`
+	Manifest json.RawMessage `json:"manifest"`
+}
+
+type PresetWriteRequest struct {
+	Manifest json.RawMessage `json:"manifest" binding:"required"`
+}
+
+type PresetCloneRequest struct {
+	Name    string `json:"name" binding:"required"`
+	Version string `json:"version" binding:"required"`
+}
+
+type PresetList struct {
+	Items []Preset `json:"items"`
 }

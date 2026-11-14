@@ -142,6 +142,18 @@ var Routes = []Route{
 		Request: jsonBody((*ConfigChangePreviewRequest)(nil)), Success: ok((*ConfigChangePreview)(nil)), Errors: commonErrors},
 
 	// knowledge bases
+	{Method: http.MethodGet, Path: "/api/v1/presets", OperationID: "get_presets", Tag: "presets",
+		Success: ok((*PresetList)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/presets/{name}/{version}", OperationID: "get_presets_name_version", Tag: "presets",
+		Success: ok((*PresetDetail)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/presets", OperationID: "post_presets", Tag: "presets",
+		Request: jsonBody((*PresetWriteRequest)(nil)), Success: created((*PresetDetail)(nil)), Errors: commonErrors},
+	{Method: http.MethodPut, Path: "/api/v1/presets/{name}/{version}", OperationID: "put_presets_name_version", Tag: "presets",
+		Request: jsonBody((*PresetWriteRequest)(nil)), Success: ok((*PresetDetail)(nil)), Errors: commonErrors},
+	{Method: http.MethodDelete, Path: "/api/v1/presets/{name}/{version}", OperationID: "delete_presets_name_version", Tag: "presets",
+		Success: noContent(), Errors: deleteErrors},
+	{Method: http.MethodPost, Path: "/api/v1/presets/{name}/{version}/clone", OperationID: "post_presets_name_version_clone", Tag: "presets",
+		Request: jsonBody((*PresetCloneRequest)(nil)), Success: created((*PresetDetail)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases", OperationID: "get_knowledge_bases", Tag: "knowledge-bases",
 		Success: ok((*KnowledgeBaseList)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases", OperationID: "post_knowledge_bases", Tag: "knowledge-bases",

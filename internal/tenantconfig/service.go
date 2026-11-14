@@ -205,6 +205,49 @@ func (s *Service) ChunkingForTenant(ctx context.Context, tenantID string) (Chunk
 	return resolved, nil
 }
 
+// ChunkingForKnowledgeBase resolves the tenant policy and then overlays the
+// knowledge base's preset/explicit chunking defaults.
+func (s *Service) ChunkingForKnowledgeBase(ctx context.Context, tenantID, knowledgeBaseID string) (ChunkPolicy, error) {
+	resolved, err := s.ChunkingForTenant(ctx, tenantID)
+	if err != nil {
+		return ChunkPolicy{}, err
+	}
+	if strings.TrimSpace(knowledgeBaseID) == "" {
+		return resolved, nil
+	}
+	var row models.KnowledgeBase
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).
+		Select("id", "chunking_config").Where("id = ?", knowledgeBaseID).Take(&row).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return resolved, nil
+		}
+		return ChunkPolicy{}, fmt.Errorf("load knowledge base chunking config: %w", err)
+	}
+	override, err := parseObject(row.ChunkingConfig)
+	if err != nil {
+		return ChunkPolicy{}, err
+	}
+	if len(override) == 0 {
+		return resolved, nil
+	}
+	if err := configschema.Validate(configschema.DomainChunking, override); err != nil {
+		return ChunkPolicy{}, err
+	}
+	encoded, err := json.Marshal(override)
+	if err != nil {
+		return ChunkPolicy{}, fmt.Errorf("encode knowledge base chunking config: %w", err)
+	}
+	var typed chunkingOverride
+	if err := json.Unmarshal(encoded, &typed); err != nil {
+		return ChunkPolicy{}, apperror.Invalidf("decode knowledge base chunking config: %w", err)
+	}
+	resolved = typed.Apply(resolved)
+	if err := resolved.Validate(); err != nil {
+		return ChunkPolicy{}, err
+	}
+	return resolved, nil
+}
+
 func tenantRerankEnabled(row models.Tenant) bool {
 	var value map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(row.RetrievalConfig), &value); err != nil {

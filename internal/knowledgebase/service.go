@@ -15,6 +15,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/contracts/model"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/presets"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 )
@@ -27,7 +28,15 @@ type Service struct {
 	catalog      ModelCatalog
 	tenantParams TenantParamsResolver
 	quality      QualityGate
+	presets      PresetCatalog
 }
+
+// PresetCatalog resolves B23 preset packs.
+type PresetCatalog interface {
+	Get(ctx context.Context, tenantID, name, version string) (presets.Manifest, error)
+}
+
+func (s *Service) SetPresetCatalog(catalog PresetCatalog) { s.presets = catalog }
 
 // QualityGate blocks high-risk retrieval saves without a recent evaluation.
 type QualityGate interface {
@@ -63,8 +72,10 @@ type EmbeddingBinding struct {
 }
 
 type CreateInput struct {
-	Name        string `json:"name" binding:"required,min=1,max=255"`
-	Description string `json:"description"`
+	Name          string `json:"name" binding:"required,min=1,max=255"`
+	Description   string `json:"description"`
+	PresetName    string `json:"presetName"`
+	PresetVersion string `json:"presetVersion"`
 }
 
 type UpdateInput struct {
@@ -142,6 +153,27 @@ func (s *Service) Create(ctx context.Context, principal authz.Principal, input C
 		return models.KnowledgeBase{}, err
 	}
 	knowledgeBase := models.KnowledgeBase{ID: id, TenantID: principal.TenantID, OwnerID: principal.SubjectID, Name: input.Name, Description: input.Description, EmbeddingModel: s.embedding.Model, EmbeddingDimension: s.embedding.Dimension, ACLVersion: 1}
+	if strings.TrimSpace(input.PresetName) != "" {
+		if s.presets == nil {
+			return models.KnowledgeBase{}, apperror.Invalidf("preset catalog is not configured")
+		}
+		manifest, err := s.presets.Get(ctx, principal.TenantID, input.PresetName, input.PresetVersion)
+		if err != nil {
+			return models.KnowledgeBase{}, err
+		}
+		retrievalConfig, err := json.Marshal(manifest.Retrieval)
+		if err != nil {
+			return models.KnowledgeBase{}, fmt.Errorf("encode preset retrieval defaults: %w", err)
+		}
+		chunkingConfig, err := json.Marshal(manifest.Chunking)
+		if err != nil {
+			return models.KnowledgeBase{}, fmt.Errorf("encode preset chunking defaults: %w", err)
+		}
+		knowledgeBase.RetrievalConfig = string(retrievalConfig)
+		knowledgeBase.ChunkingConfig = string(chunkingConfig)
+		knowledgeBase.PresetName = manifest.Name
+		knowledgeBase.PresetVersion = manifest.Version
+	}
 	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		if err := tx.Create(&knowledgeBase).Error; err != nil {
 			return err
