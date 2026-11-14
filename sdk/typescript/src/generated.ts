@@ -2329,6 +2329,8 @@ export interface components {
             indexingStrategy?: components["schemas"]["IndexingStrategy"];
             knowledgeBaseId?: string;
             modelBinding?: components["schemas"]["ModelBinding"];
+            presetName?: string;
+            presetVersion?: string;
             readOnly?: components["schemas"]["ReadOnlySystemConfiguration"];
             retrieval?: components["schemas"]["RetrievalConfiguration"];
             schemaVersion?: string;
