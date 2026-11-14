@@ -8,6 +8,12 @@ LABEL org.opencontainers.image.title="rag-platform-docreader" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.source="https://github.com/hzc19970630/rag-platform"
 
+# The pinned slim image still ships zlib1g before the current Debian security
+# update; pull the fixed package so the Trivy HIGH/CRITICAL gate stays honest.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --create-home --uid 10001 docreader
 WORKDIR /app
 COPY services/docreader/main.py services/docreader/requirements.txt ./
