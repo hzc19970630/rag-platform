@@ -5,15 +5,33 @@
 [![License](https://img.shields.io/github/license/hzc19970630/rag-platform)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://hzc19970630.github.io/rag-platform/)
 
-面向企业内部知识库的多租户 RAG 平台：把数字文档加工成可治理、可检索、可追溯的证据，并输出带引用的答案。
+面向企业内部知识库的多租户 RAG 平台。**答案必须带证据，权限和升级都能被审计。**
 
-- **有依据的回答**：混合检索（BM25 + 向量 + RRF）后生成，引用必须指向本次授权证据；证据不足时拒答。
-- **企业治理**：租户/知识库 RBAC、API Key、审计、租户配额、可选的 PostgreSQL RLS 纵深防御。
-- **可运营的入库**：解析、切分、向量化、索引全异步；状态机、幂等键、重试、死信、reconcile 与断线续传。
-- **可演进的知识层**：Evidence RAG 之外，可选 LLM Wiki 投影与关系投影，按知识库独立启停。
-- **可交付的发布**：语义化版本、扫描后的镜像、CycloneDX SBOM、cosign 无密钥签名、升级/回滚手册。
+一条命令本地跑通（无需模型 API Key，使用本地确定性模型）：
 
-> 当前版本 [v0.1.0](https://github.com/hzc19970630/rag-platform/releases/tag/v0.1.0)。项目仍在快速演进，生产使用前请阅读[能力边界](#能力边界)与[安全策略](SECURITY.md)。
+```bash
+git clone https://github.com/hzc19970630/rag-platform.git
+cd rag-platform && cp .env.example .env && ./scripts/quickstart.sh
+```
+
+打开 <http://localhost:5173>，创建知识库、上传 `examples/demo/retrieval-handbook.md`，然后提问：
+“How does hybrid recall combine keyword and vector results?”。答案会带引用，证据不足时拒答。
+
+**为什么不是又一个 RAG Demo**
+
+- **证据链是一等公民**：引用注册与校验、越权引用拦截、权限负向用例、无证据拒答都在答案路径里。
+- **升级可回滚**：知识库级向量空间迁移（变体表 + 回填 + 切换/回滚），有可复现的 v0.1.0 → v0.2.0 升级演练脚本。
+- **治理可评审**：租户/知识库 RBAC、API Key、审计、配额，可选 PostgreSQL RLS（ENABLE + FORCE）。
+- **零配置但不锁死**：预置包是数据件；建库复制默认值，租户可克隆/编辑自己的包，内置包只读。
+- **可被集成**：stdio MCP（8 个受权工具）与 TypeScript/Python SDK。
+
+**v0.2.0 新增**：检索质量闭环（反馈、引用点击、评估回归与高风险保存门禁）、预置包与租户自定义包、
+Per-KB Embedding 迁移与回填、配置变更预检。完整变更见 [CHANGELOG](CHANGELOG.md)。
+
+> 当前版本 [v0.2.0](https://github.com/hzc19970630/rag-platform/releases/tag/v0.2.0)。
+> 生产使用前请阅读[能力边界](#能力边界)与[安全策略](SECURITY.md)：暂不支持 OCR、HA/K8s 与多连接器。
+
+[快速开始](docs/quickstart.md) · [在线文档](https://hzc19970630.github.io/rag-platform/) · [Release](https://github.com/hzc19970630/rag-platform/releases/latest) · [竞品对比](docs/comparison.md)
 
 ## 架构
 
