@@ -23,6 +23,8 @@
 70 internal/conversation
 70 internal/embeddingmigration
 70 internal/modelregistry
+70 internal/presets
+70 internal/quality
 70 internal/retrieval
 70 internal/config
 70 internal/confighealth
@@ -55,5 +57,6 @@
 
 # Tier 0: declarative code with no meaningful unit-test surface.
 0 internal/buildinfo
+0 internal/status
 0 internal/platform/token
 0 internal/platform/persistence/models

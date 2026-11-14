@@ -146,6 +146,12 @@ d3-acceptance:
 b23-acceptance:
 	./scripts/b23_acceptance.sh
 
+# Real v0.1.0 -> HEAD upgrade drill with locally built images. Creates two
+# detached worktrees and a disposable Compose project; never touches .env,
+# never runs migrate down or finalizes D3. Report: tests/eval/upgrade_drill_report.json.
+upgrade-drill:
+	./scripts/upgrade_drill.sh
+
 d3-dataplane:
 	python3 scripts/d3_dataplane.py
 

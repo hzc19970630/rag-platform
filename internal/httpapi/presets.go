@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/hzc19970630/rag-platform/contracts/httpapi"
+	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/presets"
 	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
@@ -31,12 +32,17 @@ func RegisterPresetRoutes(protected *gin.RouterGroup, deps PresetDeps, mw Middle
 		c.JSON(http.StatusOK, views.PresetList(entries))
 	})
 	protected.GET("/presets/:name/:version", func(c *gin.Context) {
-		manifest, err := deps.Catalog.Get(c.Request.Context(), accessContext(c).Principal.TenantID, c.Param("name"), c.Param("version"))
+		tenantID := accessContext(c).Principal.TenantID
+		source := deps.Catalog.Source(c.Request.Context(), tenantID, c.Param("name"), c.Param("version"))
+		if source == "" {
+			writeError(c, apperror.ErrNotFound)
+			return
+		}
+		manifest, err := deps.Catalog.Get(c.Request.Context(), tenantID, c.Param("name"), c.Param("version"))
 		if err != nil {
 			writeError(c, err)
 			return
 		}
-		source := deps.Catalog.Source(c.Request.Context(), accessContext(c).Principal.TenantID, c.Param("name"), c.Param("version"))
 		c.JSON(http.StatusOK, views.PresetDetail(manifest, source))
 	})
 

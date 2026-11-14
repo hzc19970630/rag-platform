@@ -133,12 +133,12 @@ export function PresetTab() {
       title: t("presets.actions"), key: "actions", width: 320,
       render: (_, row) => (
         <Space wrap>
-          <Button size="small" onClick={() => void view(row)}>{t("presets.view")}</Button>
-          <Button size="small" onClick={() => { setCloneSource(row); setCloneName(`${row.name}-custom`); setCloneVersion("1.0.0"); setCloneOpen(true); }}>{t("presets.clone")}</Button>
-          {row.source === "tenant" ? <Button size="small" onClick={() => void openEdit(row)}>{t("presets.edit")}</Button> : null}
+          <Button data-testid="preset-view" size="small" onClick={() => void view(row)}>{t("presets.view")}</Button>
+          <Button data-testid="preset-clone" size="small" onClick={() => { setCloneSource(row); setCloneName(`${row.name}-custom`); setCloneVersion("1.0.0"); setCloneOpen(true); }}>{t("presets.clone")}</Button>
+          {row.source === "tenant" ? <Button data-testid="preset-edit" size="small" onClick={() => void openEdit(row)}>{t("presets.edit")}</Button> : null}
           {row.source === "tenant" ? (
-            <Popconfirm title={t("presets.deleteConfirm")} onConfirm={() => void remove(row)}>
-              <Button size="small" danger>{t("presets.delete")}</Button>
+            <Popconfirm title={t("presets.deleteConfirm")} okText={t("presets.delete")} cancelText={t("common.cancel")} onConfirm={() => void remove(row)}>
+              <Button data-testid="preset-delete" size="small" danger>{t("presets.delete")}</Button>
             </Popconfirm>
           ) : null}
         </Space>
@@ -154,6 +154,7 @@ export function PresetTab() {
       <Flex vertical gap={12}>
         <Alert type="info" showIcon message={t("presets.hint")} />
         <Table
+          data-testid="preset-table"
           rowKey={(row) => `${row.name}@${row.version}`}
           columns={columns}
           dataSource={presets.data?.items ?? []}

@@ -52,6 +52,9 @@ npm run e2e:report   # 打开最近一次 HTML 报告
 | `e2e/admin.spec.ts` | B4 管理台回归：概览、配额、成员、审计入口 |
 | `e2e/accessibility.spec.ts` | axe WCAG 2.1 A/AA；`Ctrl/Cmd+K` 打开全局搜索、`Esc` 关闭 |
 | `e2e/responsive.spec.ts` | 375/768/1280 断点无横向溢出；移动端导航入口 |
+| `e2e/embedding-migration.spec.ts` | D3 知识库模型迁移面板：当前空间、目标模型选择、375/1280 布局 |
+| `e2e/quality-feedback.spec.ts` | B14/D5 问答反馈 → 引用点击 → 运维检索质量指标 |
+| `e2e/presets.spec.ts` | B23 预置包查看/克隆/编辑/删除，并用自定义包建库校验默认值 |
 
 主链路用唯一知识库名隔离数据，测试结束通过 API 删除知识库；文档删除在 UI 中完成并校验行消失。上传、问答和引用是真实后端调用，不使用接口 mock（登录页可访问性用例只 mock `/me` 以展示未登录状态）。
 

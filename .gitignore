@@ -17,6 +17,8 @@ coverage.out
 
 # Evaluation reports produced by CI runs themselves
 tests/eval/ci/
+# Local upgrade drill output (not a committed baseline)
+tests/eval/upgrade_drill_report.json
 
 # Playwright
 web/playwright-report/

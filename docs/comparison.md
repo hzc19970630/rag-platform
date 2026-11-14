@@ -45,12 +45,15 @@ corpus or acceptance criteria.
 | Knowledge model | Chunks; optional relation projection over evidence | Chunks + Wiki pages + Neo4j knowledge graph (GraphRAG) | Chunks with template-based chunking; agentic multi-step retrieval | Chunks/retrieval nodes inside workflows |
 | Answer provenance | Citation registration and validation; refusal when evidence is insufficient; permission-negative evaluation | Citations with answer-to-passage navigation; explicit refusal policy not documented | Citations with chunk visualization; evidence verification in agentic RAG; refusal policy not documented | Not documented |
 | Multi-tenancy / auth | Tenant/KB RBAC, API keys, audit, quotas; application scoping plus PostgreSQL RLS, static tenancy checks, and authorization revisions | Workspace RBAC with four roles, per-resource ownership, per-workspace audit; row-level isolation not documented | Multi-tenancy/RBAC/audit not documented in the reviewed README | RBAC and SSO in the enterprise edition; multi-tenancy/audit not documented |
+| Model routing / re-embedding | Per-KB chat/rerank/embedding binding, tenant provider catalog, variant vectors by (chunk, model, dimension), managed migration with build → verify → cutover → rollback and a backfill CLI | Model configuration documented; per-KB vector-space migration runbook not documented | Embedding model selection documented; per-KB space migration runbook not documented | Model providers are first-class; per-KB vector-space migration not documented |
+| Quality operations | Explicit helpful/unhelpful feedback, citation clicks, evaluation-report import, regression threshold with alerting, and a recent-eval gate before high-risk retrieval changes | Not documented in the reviewed README | Evaluation tooling exists; inline feedback and a save-time regression gate are not documented | Annotation/evaluation features exist; a save-time regression gate is not documented |
+| Zero-config presets | Versioned manifest pack copied into each KB at creation; tenant can clone/import/edit own packs; built-in packs immutable | Templates/onboarding documented; versioned tenant preset packs not documented | Chunking templates exist; versioned tenant preset packs not documented | App templates exist; versioned tenant preset packs not documented |
 | Async ingestion reliability | Outbox/inbox, stage state machine, idempotency, leases, dead letters, reconcile | Task queue and worker-pool governance; reliability primitives not documented at this depth | Task pipeline and Syncer service | Workflow/task engine |
 | Parsing / OCR | Digital documents only; scanned PDFs and images are rejected explicitly | Multimodal parsing, OCR preprocessing, image-vector retrieval, EPUB/MHTML | DeepDoc layout analysis, OCR, and table recognition (CPU inference) | Text extraction from common formats; OCR not documented |
 | Connectors | `http_manifest` only | 10 sources: Feishu wiki/Drive, Lark, Confluence, GitLab, Tencent IMA, Notion, Yuque, DingTalk Docs, Seafile, RSS | File sources, sitemap ingestion, BigQuery incremental sync; broader catalog not documented | Tools/MCP and custom APIs; document-connector catalog not documented |
 | Agent / workflow | Not a focus | ReAct agent, skills, sandboxes, browser, memory, automations | Agent templates, agentic RAG with thinking modes | Strong visual workflow and agent builder |
 | Observability | Prometheus metrics, OTLP tracing, 10 alert rules, Alertmanager routing, Grafana dashboards | Langfuse tracing for agent steps and pipelines | Basic monitoring | Observability integrations |
-| Browser E2E | Playwright coverage of upload → parse → retrieve → answer → delete plus accessibility | Not documented | Not documented | Not documented |
+| Browser E2E | Playwright coverage of the main chain, admin console, accessibility, D3 migration entry, B14 quality feedback, and B23 presets | Not documented | Not documented | Not documented |
 | Deployment | Compose; no Helm, no offline bundle | Compose, Helm, Lite single binary, desktop | Compose; no Helm in reviewed README | Compose, cloud |
 | License | MIT; ParadeDB/MinIO (AGPL) and Redis 7.4 (SSPL/RSALv2) are distribution decisions | MIT (READM); check bundled components | Apache-2.0 | Custom license with conditions |
 | Maturity | Early 0.1.x; public repository created 2026-11-03 | Active, Tencent-backed, large community | Active, very large community | Mature ecosystem |
@@ -127,6 +130,15 @@ loaded with this repository's corpus, or benchmarked here.
   projects documents row-level isolation.
 - **Operable asynchronous ingestion**: explicit stage state, outbox/inbox, leases,
   dead letters, and reconciliation are core primitives.
+- **Searchable upgrades**: per-KB embedding spaces with a managed migration state
+  machine (build → verify → cutover → rollback), a 1M-row ANN performance gate,
+  and a tested expand-only upgrade path with a required backfill.
+- **Quality loop tied to releases**: inline feedback, citation clicks, imported
+  evaluation reports, regression alerting, and a save-time gate that requires a
+  recent evaluation before high-risk retrieval changes.
+- **Zero-config packages without engine forks**: versioned preset manifests are
+  data; knowledge bases copy defaults at creation, and tenant operators can
+  clone/edit their own packs while built-in packs stay immutable.
 - **Reviewable delivery**: one OpenAPI source of truth, generated TypeScript
   types, CycloneDX SBOM, cosign-signed images, upgrade/rollback runbooks,
   reproducible evaluation, and a Prometheus/Grafana/Alertmanager package.
@@ -141,9 +153,10 @@ loaded with this repository's corpus, or benchmarked here.
   10 sources and 10 IM channels.
 - **Application breadth**: no agent builder, skills sandbox, or workflow canvas.
   Dify, WeKnora, and RAGFlow cover these.
-- **Zero-configuration onboarding**: no setup wizard, sample knowledge base, or
-  system doctor; deployment still exposes many environment variables. WeKnora
-  offers onboarding, a Lite binary, and a desktop app.
+- **Zero-configuration breadth**: the setup wizard, config preview, and a generic
+  enterprise preset exist, but there are no industry-specific packs (finance /
+  healthcare), no Lite binary, and no desktop app. WeKnora offers onboarding, a
+  Lite binary, and a desktop app.
 - **Deployment options**: Compose only; no official Helm chart or offline bundle.
 - **Community/maturity**: much smaller than WeKnora, RAGFlow, or Dify. APIs and
   schemas may change before 1.0.

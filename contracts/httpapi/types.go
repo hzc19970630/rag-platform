@@ -498,6 +498,8 @@ type KnowledgeBaseConfiguration struct {
 	Retrieval        RetrievalConfiguration      `json:"retrieval"`
 	ModelBinding     ModelBinding                `json:"modelBinding"`
 	ReadOnly         ReadOnlySystemConfiguration `json:"readOnly"`
+	PresetName       string                      `json:"presetName,omitempty"`
+	PresetVersion    string                      `json:"presetVersion,omitempty"`
 }
 
 // ModelBinding reports the effective chat/rerank/embedding model of a

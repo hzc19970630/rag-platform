@@ -39,9 +39,18 @@ async function readError(response: APIResponse): Promise<string> {
   return `${response.status()} ${await response.text()}`.trim();
 }
 
-export async function createKnowledgeBase(api: APIRequestContext, name: string): Promise<KnowledgeBase> {
+export async function createKnowledgeBase(
+  api: APIRequestContext,
+  name: string,
+  options: { presetName?: string; presetVersion?: string } = {},
+): Promise<KnowledgeBase> {
   const response = await api.post("knowledge-bases", {
-    data: { name, description: "Playwright E2E" },
+    data: {
+      name,
+      description: "Playwright E2E",
+      presetName: options.presetName ?? "",
+      presetVersion: options.presetVersion ?? "",
+    },
   });
   if (response.status() !== 201) throw new Error(`create knowledge base: ${await readError(response)}`);
   return (await response.json()) as KnowledgeBase;
@@ -95,4 +104,52 @@ export async function searchEvidence(
   });
   if (!response.ok()) throw new Error(`search: ${await readError(response)}`);
   return (await response.json()) as EvidenceSet;
+}
+
+export type MessageView = {
+  message: { id: string; role: string; status: string; content: string };
+  citations: Array<{ chunkId: string; index: number }>;
+};
+
+export async function listMessages(api: APIRequestContext, conversationId: string): Promise<MessageView[]> {
+  const response = await api.get(`sessions/${conversationId}/messages`);
+  if (!response.ok()) throw new Error(`list messages: ${await readError(response)}`);
+  const body = (await response.json()) as { items?: MessageView[] };
+  return body.items ?? [];
+}
+
+export type PresetSummary = {
+  name: string;
+  version: string;
+  displayName: string;
+  source: string;
+  formats: string[];
+};
+
+export async function listPresets(api: APIRequestContext): Promise<PresetSummary[]> {
+  const response = await api.get("presets");
+  if (!response.ok()) throw new Error(`list presets: ${await readError(response)}`);
+  const body = (await response.json()) as { items?: PresetSummary[] };
+  return body.items ?? [];
+}
+
+export async function deletePreset(api: APIRequestContext, name: string, version: string): Promise<void> {
+  const response = await api.delete(`presets/${name}/${version}`);
+  if (response.status() !== 204 && response.status() !== 404) {
+    throw new Error(`delete preset: ${await readError(response)}`);
+  }
+}
+
+export type QualitySummary = {
+  helpful: number;
+  unhelpful: number;
+  citationClicks: number;
+  helpfulRate: number;
+  qualityStatus: string;
+};
+
+export async function readQuality(api: APIRequestContext): Promise<QualitySummary> {
+  const response = await api.get("ops/quality?days=30");
+  if (!response.ok()) throw new Error(`read quality: ${await readError(response)}`);
+  return (await response.json()) as QualitySummary;
 }

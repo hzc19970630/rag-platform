@@ -28,6 +28,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/ratelimit"
 	"github.com/hzc19970630/rag-platform/internal/platform/secrets"
+	"github.com/hzc19970630/rag-platform/internal/presets"
 	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -75,7 +76,7 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&models.WikiPage{}, &models.WikiPageVersion{}, &models.WikiPageSource{},
 		&models.KnowledgeIndexRecord{}, &models.ProjectionRun{}, &models.ProjectionStageRun{},
 		&models.KnowledgeProjectionState{}, &models.EvidencePackage{}, &models.TaskInbox{}, &models.TaskDeadLetter{},
-		&models.PipelineRun{}, &models.StageRun{}, &models.OutboxEvent{}, &models.SyncRun{}, &models.AnswerJob{}, &models.Message{}, &models.Tenant{}, &models.Connector{}, &models.ConnectorItem{}, &models.Conversation{}, &models.Message{}, &models.MessageCitation{}, &models.StreamEvent{}, &models.ModelProvider{}, &models.ModelCatalogEntry{},
+		&models.PipelineRun{}, &models.StageRun{}, &models.OutboxEvent{}, &models.SyncRun{}, &models.AnswerJob{}, &models.Message{}, &models.Tenant{}, &models.Connector{}, &models.ConnectorItem{}, &models.Conversation{}, &models.Message{}, &models.MessageCitation{}, &models.StreamEvent{}, &models.ModelProvider{}, &models.ModelCatalogEntry{}, &models.TenantPreset{},
 	); err != nil {
 		t.Fatalf("migrate http projection tables: %v", err)
 	}
@@ -216,6 +217,11 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	if err != nil {
 		t.Fatalf("model registry: %v", err)
 	}
+	builtinPresets, err := presets.LoadBuiltin()
+	if err != nil {
+		t.Fatalf("load builtin presets: %v", err)
+	}
+	presetResolver := presets.NewResolver(builtinPresets, presets.NewStore(db))
 	cfg := config.Config{
 		AppEnv: "test", MaxFileBytes: 1 << 20,
 		Retrieval: config.RetrievalConfig{
@@ -232,8 +238,9 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		Projection: projection, KnowledgeBase: knowledgeBases, Ingestion: ingestionService,
 		DataSources: dataSources, TenantConfig: tenantConfig, ConfigPreview: configPreview, ConfigHealth: configHealth,
 		Conversation: conversationService, Models: modelRegistry,
-		Tasks: ingestion.NewTaskInspector(db, nil),
-		Ops:   ops.NewService(httpOpsStore{}), Metrics: observability.New(),
+		Presets: presetResolver,
+		Tasks:   ingestion.NewTaskInspector(db, nil),
+		Ops:     ops.NewService(httpOpsStore{}), Metrics: observability.New(),
 	}, slog.Default())
 	return router, db
 }

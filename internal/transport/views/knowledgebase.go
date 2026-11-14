@@ -89,6 +89,8 @@ func KnowledgeBaseConfiguration(view knowledgebase.KnowledgeBaseConfigurationV1)
 		Retrieval:        RetrievalConfiguration(view.Retrieval),
 		ModelBinding:     ModelBinding(view.ModelBinding),
 		ReadOnly:         ReadOnlySystemConfiguration(view.ReadOnly),
+		PresetName:       view.PresetName,
+		PresetVersion:    view.PresetVersion,
 	}
 }
 

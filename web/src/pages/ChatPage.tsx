@@ -532,6 +532,7 @@ function MessageBubble(props: { item: MessageView; conversationId: string; onOpe
           <Space size={4} className="chat-feedback">
             <Typography.Text type="secondary">{t("chat.feedbackPrompt")}</Typography.Text>
             <Button
+              data-testid="message-feedback-helpful"
               size="small"
               type={rating === "helpful" ? "primary" : "text"}
               icon={<LikeOutlined />}
@@ -541,6 +542,7 @@ function MessageBubble(props: { item: MessageView; conversationId: string; onOpe
               {t("chat.feedbackHelpful")}
             </Button>
             <Button
+              data-testid="message-feedback-unhelpful"
               size="small"
               type={rating === "unhelpful" ? "primary" : "text"}
               icon={<DislikeOutlined />}

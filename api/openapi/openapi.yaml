@@ -1381,6 +1381,10 @@ components:
           type: string
         modelBinding:
           $ref: '#/components/schemas/ModelBinding'
+        presetName:
+          type: string
+        presetVersion:
+          type: string
         readOnly:
           $ref: '#/components/schemas/ReadOnlySystemConfiguration'
         retrieval:

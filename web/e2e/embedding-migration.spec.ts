@@ -2,14 +2,12 @@ import { resolve } from "node:path";
 import { test, expect } from "./support/fixtures";
 import { createKnowledgeBase, deleteKnowledgeBase, waitForDocument } from "./support/api";
 
-const screenshotDir = "C:/rag-ui-audit";
-
 async function expectNoPageOverflow(page: import("@playwright/test").Page, label: string) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow, `${label}: document overflow ${overflow}px`).toBeLessThanOrEqual(1);
 }
 
-test("embedding migration panel renders, targets are selectable and layout stays inside the viewport", async ({ page, api }) => {
+test("embedding migration panel renders, targets are selectable and layout stays inside the viewport", async ({ page, api }, testInfo) => {
   test.setTimeout(240_000);
   const suffix = Date.now();
   const knowledgeBaseName = `e2e-migration-${suffix}`;
@@ -58,7 +56,7 @@ test("embedding migration panel renders, targets are selectable and layout stays
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await expectNoPageOverflow(page, "1280");
-    await page.screenshot({ path: `${screenshotDir}/d3-migration-1280.png` });
+    await page.screenshot({ path: testInfo.outputPath("d3-migration-1280.png") });
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.getByTestId("embedding-migration").scrollIntoViewIfNeeded();
@@ -69,7 +67,7 @@ test("embedding migration panel renders, targets are selectable and layout stays
       return body ? body.scrollWidth - body.clientWidth : 0;
     });
     expect(drawerOverflow, "settings drawer horizontal overflow").toBeLessThanOrEqual(1);
-    await page.screenshot({ path: `${screenshotDir}/d3-migration-375.png` });
+    await page.screenshot({ path: testInfo.outputPath("d3-migration-375.png") });
 
     // An empty knowledge base edits the binding directly instead of migrating.
     const empty = await createKnowledgeBase(api, `e2e-empty-${suffix}`);

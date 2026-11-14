@@ -87,6 +87,16 @@ changed_dirs="$(
     || true
 )"
 
+# A package that was deleted in the change set has no profile record; only
+# directories that still contain Go sources are ratcheted.
+changed_dirs="$(
+  printf '%s\n' "$changed_dirs" | while IFS= read -r dir; do
+    [[ -n "$dir" ]] || continue
+    compgen -G "$dir/*.go" >/dev/null || continue
+    printf '%s\n' "$dir"
+  done
+)"
+
 if [[ -z "$changed_dirs" ]]; then
   printf '::notice title=Coverage gate::no changed internal packages; gate skipped\n'
   exit 0

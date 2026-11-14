@@ -363,18 +363,19 @@ function QualityContent() {
     : data.qualityStatus === "passed" ? t("ops.qualityPassed") : t("ops.qualityNoEval");
   return (
     <Card
+      data-testid="ops-quality"
       title={t("ops.quality")}
       extra={<Button size="small" icon={<ReloadOutlined />} onClick={() => void quality.refetch()}>{t("common.refresh")}</Button>}
     >
       <Flex vertical gap={16}>
         <Space size={8} wrap>
-          <Tag color={statusColor}>{statusLabelText}</Tag>
+          <Tag data-testid="ops-quality-status" color={statusColor}>{statusLabelText}</Tag>
           <Typography.Text type="secondary">{t("ops.qualityHint")}</Typography.Text>
         </Space>
         <Descriptions size="small" column={4}>
-          <Descriptions.Item label={t("ops.qualityHelpful")}>{data.helpful}</Descriptions.Item>
-          <Descriptions.Item label={t("ops.qualityUnhelpful")}>{data.unhelpful}</Descriptions.Item>
-          <Descriptions.Item label={t("ops.qualityClicks")}>{data.citationClicks}</Descriptions.Item>
+          <Descriptions.Item label={t("ops.qualityHelpful")}><span data-testid="ops-quality-helpful">{data.helpful}</span></Descriptions.Item>
+          <Descriptions.Item label={t("ops.qualityUnhelpful")}><span data-testid="ops-quality-unhelpful">{data.unhelpful}</span></Descriptions.Item>
+          <Descriptions.Item label={t("ops.qualityClicks")}><span data-testid="ops-quality-clicks">{data.citationClicks}</span></Descriptions.Item>
           <Descriptions.Item label={t("ops.qualityRate")}>{`${Math.round(data.helpfulRate * 100)}%`}</Descriptions.Item>
         </Descriptions>
         {data.latestEval ? (

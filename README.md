@@ -71,13 +71,16 @@ cp .env.example .env
 | --- | --- | --- |
 | 文档入库 | 可用 | PDF（数字文本层）、DOCX、XLSX、PPTX、Markdown、TXT、HTML |
 | 混合检索 | 可用 | BM25 与向量并行召回，RRF 融合，可配置 Rerank |
+| 检索质量闭环 | 可用 | 回答有帮助/没帮助、引用点击、评估报告导入与回归告警，高风险变更保存前必须回放评估集 |
+| 零配置预置包 | 可用 | 内置通用企业包；建库选包复制默认值，租户可克隆/导入/编辑自己的包，内置包只读 |
 | 引用与拒答 | 可用 | 引用回查 Chunk、文档版本；越权/未注册引用拒绝输出 |
 | 多租户与 RBAC | 可用 | Owner/Admin/Editor/Viewer、API Key、审计、租户配额 |
 | 文档生命周期 | 可用 | 版本、重新解析、回滚、软删除、保留期清理 |
 | 外部数据源 | 可用（单类型） | `http_manifest` 增量同步、tombstone、SSRF 防护、凭据加密 |
 | Wiki / 关系投影 | 可用（可选） | 按知识库开关；投影失败不阻断 Evidence RAG |
 | 异步问答 | 可用 | Worker 生成、SSE 续传、租约与终态收敛 |
-| 浏览器 E2E | 可用 | Playwright 覆盖上传→解析→检索→问答→删除与可访问性检查 |
+| 向量空间迁移 | 可用 | 按知识库切换 Embedding 模型/维度，重建→验证→切换→回滚，旧空间保留到 finalize |
+| 浏览器 E2E | 可用 | Playwright 覆盖主链路、管理台、可访问性，以及 D3 迁移入口、B14 质量反馈、B23 预置包 |
 | 可观测性 | 可用 | Prometheus 指标、OTLP 追踪、告警规则与 Grafana 面板 |
 | MCP / SDK | 可用 | stdio MCP（8 个受权工具）与 TypeScript/Python SDK |
 | OCR / 图片 | 未支持 | 扫描 PDF、混合扫描页返回明确错误；金融扫描件优先排期 |
@@ -150,7 +153,7 @@ go run ./cmd/openapi -check
 ## 能力边界
 
 - 仅支持含可提取文本层的 PDF；扫描件、图片和混合扫描 PDF 不做 OCR。
-- 一个知识库绑定一个 Embedding 模型与维度；切换需要重建索引，尚未支持灰度。
+- 一个知识库同一时刻只有一个生效的 Embedding 模型与维度；切换走“迁移作业 + 回填 + 切换/回滚”，`finalize` 后旧向量被清理，只能靠备份恢复。
 - Rerank 默认关闭，需要基于评估集显式开启。
 - 关系投影使用 PostgreSQL 关系表，不提供独立图数据库或图可视化。
 - 外部连接器目前只有 `http_manifest`。

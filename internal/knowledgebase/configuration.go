@@ -123,6 +123,8 @@ type KnowledgeBaseConfigurationV1 struct {
 	Retrieval        RetrievalConfigurationV1      `json:"retrieval"`
 	ModelBinding     ModelBindingV1                `json:"modelBinding"`
 	ReadOnly         ReadOnlySystemConfigurationV1 `json:"readOnly"`
+	PresetName       string                        `json:"presetName,omitempty"`
+	PresetVersion    string                        `json:"presetVersion,omitempty"`
 }
 
 // ReadOnlySystemConfiguration projects the non-secret environment/YAML surface.
@@ -221,8 +223,10 @@ func BuildKnowledgeBaseConfigurationWithTenant(knowledgeBase models.KnowledgeBas
 			Schema:                configschema.FieldsFor(configschema.DomainRetrieval),
 			Fields:                fields,
 		},
-		ModelBinding: binding,
-		ReadOnly:     readOnly,
+		ModelBinding:  binding,
+		ReadOnly:      readOnly,
+		PresetName:    knowledgeBase.PresetName,
+		PresetVersion: knowledgeBase.PresetVersion,
 	}, nil
 }
 

@@ -206,13 +206,14 @@ export function KnowledgeBasesPage() {
       >
         <Form form={form} layout="vertical" onFinish={(values) => void create(values)}>
           <Form.Item label={t("knowledgeBase.name")} name="name" rules={[{ required: true, message: t("knowledgeBase.nameRequired") }]}>
-            <Input maxLength={255} placeholder={t("knowledgeBase.namePlaceholder")} autoFocus />
+            <Input data-testid="kb-name-input" maxLength={255} placeholder={t("knowledgeBase.namePlaceholder")} autoFocus />
           </Form.Item>
           <Form.Item label={t("knowledgeBase.descriptionField")} name="description">
             <Input.TextArea rows={3} placeholder={t("knowledgeBase.descriptionPlaceholder")} />
           </Form.Item>
           <Form.Item label={t("knowledgeBase.preset")} name="preset" extra={t("knowledgeBase.presetHint")} className="preset-field">
             <Select
+              data-testid="kb-preset-select"
               allowClear
               placeholder={t("knowledgeBase.presetNone")}
               loading={presets.isLoading}
@@ -223,11 +224,12 @@ export function KnowledgeBasesPage() {
               }}
               options={(presets.data?.items ?? []).map((preset) => ({
                 value: `${preset.name}@${preset.version}`,
-                label: `${preset.displayName} · ${preset.version}${preset.source === "tenant" ? " · 自定义" : ""}`,
+                label: `${preset.displayName} · ${preset.version}${preset.source === "tenant" ? ` · ${preset.name}` : ""}`,
               }))}
             />
             {presetInfo ? (
               <Alert
+                data-testid="kb-preset-info"
                 className="preset-info"
                 type="info"
                 showIcon

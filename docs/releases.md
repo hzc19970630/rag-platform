@@ -162,7 +162,7 @@ docker compose --env-file .env "${BASE_ARGS[@]}" exec api api --version
 先判断迁移是否向后兼容：
 
 - **兼容（推荐路径）**：新版本只做 expand 型变更（加表/加列/加索引），旧二进制仍可运行。直接重新固定上一个镜像 digest，不恢复数据库。
-- **不兼容**：迁移删改列/表或改变语义。必须在维护窗口内停止写入、恢复升级前备份和对象存储，再启动旧版本。**不要**把旧二进制直接指向已迁移的库，也不要把 `migrate -down` 当成通用回滚手段：只有带 `*.down.sql` 的迁移可回退（当前仅 `0027_drop_casbin_rule`），其余迁移只向前。
+- **不兼容**：迁移删改列/表或改变语义。必须在维护窗口内停止写入、恢复升级前备份和对象存储，再启动旧版本。**不要**把旧二进制直接指向已迁移的库。`0028`–`0035` 均提供 `*.down.sql`，但 down 只允许在演练环境或空库使用；生产回滚优先“恢复升级前备份 + 向前修复”，因为 D3 `finalize` 会清理旧向量空间，此时只能靠备份恢复。`migrate -down` 不是通用回滚手段。
 
 兼容回滚命令：
 
@@ -216,3 +216,14 @@ RAG_DOCREADER_IMAGE=ghcr.io/hzc19970630/rag-platform/docreader@sha256:fedcba9876
 Windows 上直接构建的基础镜像会把迁移 SQL 以 CRLF 写入镜像，而发布镜像由 Linux CI 以 LF 构建；用前者初始化的本地库切换到发布镜像时，`migrate -check` 会报 `checksum mismatch`。演练前应让构建上下文保持 LF（例如临时设置 `core.autocrlf=false` 后重新检出），不要通过修改校验和绕过生产库检查。
 
 生产升级/回滚演练必须记录：开始与结束时间、源/目标 digest、`migrate -check` 结果、`readyz` 恢复时间、登录/上传/问答抽查结果、回滚是否恢复备份。演练报告归档到运维记录，不提交到仓库。
+
+### 7.1 一键升级演练（本地双镜像）
+
+`scripts/upgrade_drill.sh`（`make upgrade-drill`）把上节流程自动化，用本地构建的 `v0.1.0` 与 `HEAD` 镜像在独立 Compose 项目中跑完整升级与回滚：
+
+- 在仓库外创建 `v0.1.0` 与 `HEAD` 两个 detached worktree，分别构建 `api`/`docreader` 镜像；不读取、不修改仓库 `.env`，演练用配置由 `.env.example` 生成。
+- 独立项目名与偏移端口（默认 API 18082、Postgres 55432、Redis 56379、MinIO 59000/59001），可与开发栈并行；不启动 `web`。
+- 旧栈执行 `migrate → seed → docreader/worker/api`，上传两篇示例文档，记录 Chunk/向量数并完成一次检索与 SSE 问答。
+- 升级顺序为 `停 api/worker → migrate → backfill-embeddings（连跑两次，第二次 inserted=0）→ docreader → worker → api`；断言变体行数、`migrate -check`、`readyz` 耗时、`plan.vectorEnabled` 与检索条数、SSE 完成、`GET /presets` 内置包、B14 质量接口和租户包 CRUD。
+- 回滚只切回旧镜像（0031 expand、0032–0035 加表），断言旧版检索与问答仍可用；**不执行 `migrate down`、不 finalize**。down 迁移只在一次性副本库验证。
+- 报告写入 `tests/eval/upgrade_drill_report.json`（已 gitignore），包含版本/commit/镜像 ID、各阶段耗时、回填计数、`readyz`、断言明细与回滚结论。任何断言失败时脚本以非零退出并保留失败明细。
