@@ -1,0 +1,1201 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="多租户、证据驱动的企业知识库平台">
+      
+      
+      
+        <link rel="canonical" href="https://hzc19970630.github.io/rag-platform/configuration/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Business configuration - RAG Platform</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#business-configuration" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="RAG Platform" class="md-header__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RAG Platform
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Business configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RAG Platform" class="md-nav__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RAG Platform
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    故障排查
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    评测方法与复现
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../m8-migration-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    M8 存储迁移清单
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP 与 SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    运维
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    发布与回滚
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    竞品对比
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安全策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    贡献指南
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../licensing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    许可证
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-relationstore-port/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构决策
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#single-source-of-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single source of truth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#chunking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chunking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#embedding-spaces-and-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding spaces and migration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-impact-preflight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change impact preflight
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-deployment-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional deployment settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workbench" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workbench
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a field
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="business-configuration">Business configuration<a class="headerlink" href="#business-configuration" title="Permanent link">&para;</a></h1>
+<p>The platform separates <strong>deployment connection settings</strong> from <strong>business
+policy</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Where it lives</th>
+<th>Editable by</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Schema default</td>
+<td><code>internal/configschema</code></td>
+<td>code review</td>
+<td>safe fallback for every field</td>
+</tr>
+<tr>
+<td>Deployment</td>
+<td>env / <code>config/config.yaml</code></td>
+<td>operator, restart required</td>
+<td><code>RETRIEVAL_CONFIG_FILE</code>, <code>CHUNK_*</code>, model endpoints</td>
+</tr>
+<tr>
+<td>Tenant</td>
+<td><code>tenants.retrieval_config</code> / <code>tenants.chunking_config</code></td>
+<td>tenant owner/admin in Administration → Business configuration</td>
+<td>default retrieval and chunking for every knowledge base</td>
+</tr>
+<tr>
+<td>Knowledge base</td>
+<td><code>knowledge_bases.retrieval_config</code></td>
+<td>editor of that knowledge base</td>
+<td>a single knowledge base overriding <code>top_k</code></td>
+</tr>
+<tr>
+<td>Session</td>
+<td>request <code>sessionOverride</code></td>
+<td>caller</td>
+<td>an experiment that must not persist</td>
+</tr>
+</tbody>
+</table>
+<p>Resolution order is schema default → deployment → tenant → knowledge base →
+session. Every layer is validated against the same schema, so a value cannot
+be valid at one tier and invalid at another.</p>
+<h2 id="single-source-of-truth">Single source of truth<a class="headerlink" href="#single-source-of-truth" title="Permanent link">&para;</a></h2>
+<p><code>internal/configschema/schema.go</code> declares each field once:</p>
+<ul>
+<li>key, domain (<code>retrieval</code> / <code>chunking</code>), group and JSON kind</li>
+<li>safe default, min/max/step and unit</li>
+<li><code>applyMode</code>: <code>next_retrieval</code> (next query) or <code>next_ingest</code> (new documents)</li>
+<li>sensitivity and i18n label keys</li>
+</ul>
+<p>Server validation, the OpenAPI schema document, the workbench form and the
+per-field source report all read this declaration. Adding a retrieval parameter
+therefore does not require a new hand-written field row in the workbench or a
+new OpenAPI property; the engine still has to consume the value. Ranges are
+enforced in exactly one place: <code>configschema.Validate</code>.</p>
+<p><code>GET /api/v1/knowledge-bases/{id}/configuration</code> and
+<code>GET /api/v1/tenant/config</code> return, for every field:</p>
+<ul>
+<li><code>value</code>: the effective value</li>
+<li><code>default</code>: the safe schema default</li>
+<li><code>deployment</code>: the deployment value when the operator set it</li>
+<li><code>source</code>: <code>default</code>, <code>deployment</code>, <code>tenant</code>, <code>knowledge_base</code> or <code>session</code></li>
+<li><code>applyMode</code>: when the change takes effect</li>
+</ul>
+<p>Unknown keys are rejected by <code>PUT /tenant/config</code>, <code>PUT
+/knowledge-bases/{id}/retrieval-config</code> and <code>PATCH /knowledge-bases/{id}</code>. A
+parameter removed from the schema can no longer be written; the configuration
+health check reports stored rows that still contain it.</p>
+<h2 id="chunking">Chunking<a class="headerlink" href="#chunking" title="Permanent link">&para;</a></h2>
+<p>Tenant chunking policy applies to documents chunked after the change. Existing
+chunks are not rewritten; reprocess a version to apply the new policy. The
+worker resolves the policy per document, so two tenants can run different
+chunk sizes on the same deployment.</p>
+<h2 id="embedding-spaces-and-migration">Embedding spaces and migration<a class="headerlink" href="#embedding-spaces-and-migration" title="Permanent link">&para;</a></h2>
+<p>Each knowledge base is pinned to one vector space <code>(model, dimension)</code>. An empty
+knowledge base may bind any embedding model registered by the deployment or the
+tenant catalog; once documents exist the binding only moves through a managed
+migration. Retrieval never substitutes another embedding model: a fallback
+would silently mix two incomparable vector spaces.</p>
+<p>Vectors are stored per chunk and model in <code>chunk_embeddings</code>. The legacy
+<code>chunks.embedding</code> columns remain during the transition and ingestion
+dual-writes both locations, so a previous binary can still read the database.
+Search reads the variant table, which is why the upgrade sequence in
+<a href="../releases/">releases.md</a> runs <code>embedctl backfill-embeddings</code> before the new
+API starts.</p>
+<p>A migration is one knowledge base at a time:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pending</code> / <code>building_index</code></td>
+<td>target index is being created for the target dimension</td>
+</tr>
+<tr>
+<td><code>reembedding</code></td>
+<td>active chunks are re-embedded in batches; ingestion for this knowledge base is paused</td>
+</tr>
+<tr>
+<td><code>verifying</code></td>
+<td>every active chunk must have a target-space row</td>
+</tr>
+<tr>
+<td><code>ready</code></td>
+<td>verified; retrieval still uses the source space until cutover</td>
+</tr>
+<tr>
+<td><code>cutover</code></td>
+<td>binding switched to the target; the source space is kept for rollback</td>
+</tr>
+<tr>
+<td><code>finalized</code></td>
+<td>source rows deleted; rollback now requires a new migration</td>
+</tr>
+<tr>
+<td><code>cancelled</code> / <code>rolled_back</code> / <code>failed</code></td>
+<td>terminal states</td>
+</tr>
+</tbody>
+</table>
+<p>Endpoints (knowledge-base write permission; viewers are rejected):</p>
+<div class="highlight"><pre><span></span><code>POST /api/v1/knowledge-bases/{id}/embedding-migration
+GET  /api/v1/knowledge-bases/{id}/embedding-migration
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cancel
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/cutover
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback
+POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/finalize
+</code></pre></div>
+<p>Rollback is available until finalize: the source rows and source index are left
+in place, so flipping the binding back is immediate. Migration spends the
+tenant's embedding provider calls but does not consume the per-minute request
+budget reserved for online traffic.</p>
+<p>Cross-knowledge-base queries group targets by <code>(model, dimension)</code>, issue one
+vector recall per space and fuse the per-space rankings. A query spanning more
+than four spaces is rejected instead of comparing incomparable scores.</p>
+<h2 id="change-impact-preflight">Change impact preflight<a class="headerlink" href="#change-impact-preflight" title="Permanent link">&para;</a></h2>
+<p><code>POST /api/v1/config/preview</code> is a read-only check before saving a tenant or
+knowledge-base change. It never writes configuration, rebuilds an index or
+enqueues ingestion work. The request states <code>scope</code> (<code>tenant</code> or
+<code>knowledge_base</code>), the proposed retrieval/chunking documents, and optionally a
+proposed embedding model/dimension.</p>
+<p>Every field declares <code>impact</code>:</p>
+<table>
+<thead>
+<tr>
+<th>impact</th>
+<th>Meaning</th>
+<th>Save behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>hot</code></td>
+<td>effective on the next retrieval</td>
+<td>saved directly</td>
+</tr>
+<tr>
+<td><code>next_ingest</code></td>
+<td>applies to documents ingested/reprocessed later</td>
+<td>saved after confirmation; history rebuild is optional</td>
+</tr>
+<tr>
+<td><code>rebuild</code></td>
+<td>old data is incompatible until a migration completes</td>
+<td>blocked; the report points at the migration</td>
+</tr>
+<tr>
+<td><code>restart</code></td>
+<td>the process must restart</td>
+<td>blocked; restart is required</td>
+</tr>
+</tbody>
+</table>
+<p>The response includes the effective old→new diff, <code>rebuildRequired</code>,
+<code>rebuildOptional</code>, <code>restartRequired</code>, blockers, affected knowledge bases /
+documents / chunks, duration and cost tiers, and suggested actions. Chunking
+changes are <code>next_ingest</code> with <code>rebuildOptional=true</code>; the workbench confirms
+that only new documents change. Embedding model/dimension changes are blocked
+with an <code>embedding_contract_requires_rebuild</code> blocker and an
+<code>open_embedding_migration</code> action. The change is applied through the
+knowledge-base migration, never through the save path.</p>
+<h2 id="configuration-health">Configuration health<a class="headerlink" href="#configuration-health" title="Permanent link">&para;</a></h2>
+<p><code>GET /api/v1/tenant/config/health</code> (tenant owner/admin) returns one check per
+risk area:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model.chat</code>, <code>model.embedding</code>, <code>model.rerank</code></td>
+<td>deployment model endpoints are reachable</td>
+</tr>
+<tr>
+<td><code>model.tenant_providers</code></td>
+<td>tenant model provider endpoints are reachable</td>
+</tr>
+<tr>
+<td><code>index.valid</code></td>
+<td>the chunks and <code>chunk_embeddings</code> HNSW indexes exist and are valid</td>
+</tr>
+<tr>
+<td><code>embedding.dimension</code></td>
+<td>every knowledge-base binding has a valid variant index for its dimension</td>
+</tr>
+<tr>
+<td><code>rls.mode</code></td>
+<td>production is not running RLS off/shadow</td>
+</tr>
+<tr>
+<td><code>backup.age</code></td>
+<td>the newest file under <code>BACKUP_DIR</code> is within <code>BACKUP_MAX_AGE_HOURS</code></td>
+</tr>
+<tr>
+<td><code>license.expiry</code></td>
+<td><code>LICENSE_EXPIRES_AT</code> is valid and not expired</td>
+</tr>
+<tr>
+<td><code>drift.retrieval_file</code></td>
+<td><code>RETRIEVAL_CONFIG_FILE</code> has not changed since startup without a restart</td>
+</tr>
+<tr>
+<td><code>drift.stored_config</code></td>
+<td>tenant/knowledge-base JSON does not contain unknown or out-of-range keys</td>
+</tr>
+</tbody>
+</table>
+<p>Statuses are <code>ok</code>, <code>warning</code>, <code>error</code>, <code>unknown</code> and <code>skipped</code>. High-risk
+warnings (stale backup, shadow RLS, expired license, unreachable model,
+index/dimension mismatch, config drift) are counted in <code>highRisk</code> and shown in
+Administration → Business configuration.</p>
+<p><code>POST /api/v1/tenant/config/test-connection</code> probes one capability
+(<code>chat</code>, <code>embedding</code>, <code>rerank</code>) with the stored deployment adapter, or a tenant
+provider when <code>providerId</code> is supplied. Credentials never travel in the request
+body. The embedding test also embeds a probe sentence and compares the returned
+dimension with <code>EMBEDDING_DIMENSION</code>.</p>
+<h2 id="optional-deployment-settings">Optional deployment settings<a class="headerlink" href="#optional-deployment-settings" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BACKUP_DIR</code></td>
+<td>directory the backup scripts write to; empty makes the backup check <code>unknown</code></td>
+</tr>
+<tr>
+<td><code>BACKUP_MAX_AGE_HOURS</code></td>
+<td>staleness threshold for the newest backup (default 24)</td>
+</tr>
+<tr>
+<td><code>LICENSE_EXPIRES_AT</code></td>
+<td>RFC3339 or <code>YYYY-MM-DD</code>; no license issuer exists yet, so empty reports <code>unknown</code></td>
+</tr>
+</tbody>
+</table>
+<p>The API container must see <code>BACKUP_DIR</code> for the backup check to be meaningful.
+Mount it read-only; the check never writes.</p>
+<h2 id="workbench">Workbench<a class="headerlink" href="#workbench" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Administration → Business configuration</strong>: tenant retrieval/chunking
+  overrides, per-field source/apply mode, health panel and connection tests.</li>
+<li><strong>Knowledge base → Settings → Retrieval &amp; indexing</strong>: knowledge-base
+  overrides rendered from the same schema.</li>
+<li><strong>First-run setup</strong>: on an empty knowledge-base list, the wizard checks that
+  chat and embedding models exist, creates the first knowledge base and shows
+  sample questions. Model credentials and endpoints remain in Administration →
+  Model providers or env/YAML.</li>
+</ul>
+<h2 id="adding-a-field">Adding a field<a class="headerlink" href="#adding-a-field" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Add the declaration to <code>internal/configschema/schema.go</code> (default, range,
+   group, apply mode, label key).</li>
+<li>Add the engine field and wire the value where it is consumed.</li>
+<li>Add i18n text for <code>labelKey</code> and <code>unitKey</code> if new.</li>
+<li>Run <code>go test ./...</code>, <code>go run ./cmd/openapi -check</code>, <code>npm test</code> and
+   <code>npm run build</code>. No OpenAPI DTO or workbench field list needs editing.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

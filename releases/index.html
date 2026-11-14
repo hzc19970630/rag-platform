@@ -1,0 +1,1320 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="多租户、证据驱动的企业知识库平台">
+      
+      
+      
+        <link rel="canonical" href="https://hzc19970630.github.io/rag-platform/releases/">
+      
+      
+        <link rel="prev" href="../operations/">
+      
+      
+        <link rel="next" href="../comparison/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>发布与回滚 - RAG Platform</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#_1" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="RAG Platform" class="md-header__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            RAG Platform
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              发布与回滚
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到深色模式"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="切换到深色模式" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="切换到浅色模式"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="切换到浅色模式" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="RAG Platform" class="md-nav__button md-logo" aria-label="RAG Platform" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    RAG Platform
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hzc19970630/rag-platform" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hzc19970630/rag-platform
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    首页
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速开始
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    故障排查
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../evaluation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    评测方法与复现
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../m8-migration-checklist/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    M8 存储迁移清单
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP 与 SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    运维
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    发布与回滚
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    发布与回滚
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. 版本规则
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 发布产物
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. 触发发布
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. 校验产物
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 升级
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. 升级">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 升级前
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 升级步骤
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 升级后验证
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. 回滚
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. 本地演练
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    竞品对比
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安全策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    贡献指南
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../licensing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    许可证
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adr/0001-relationstore-port/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    架构决策
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. 版本规则
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 发布产物
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. 触发发布
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. 校验产物
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 升级
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. 升级">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 升级前
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 升级步骤
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 升级后验证
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. 回滚
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. 本地演练
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="_1">发布、升级与回滚<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h1>
+<p>本文件是发布工程的操作入口：版本规则、发布产物、签名与 SBOM 校验、升级步骤和回滚边界。日常运维（备份恢复、优雅关闭、故障演练）见 <a href="../operations/">operations.md</a>。</p>
+<h2 id="1">1. 版本规则<a class="headerlink" href="#1" title="Permanent link">&para;</a></h2>
+<ul>
+<li>版本遵循 <a href="https://semver.org/">Semantic Versioning</a>：<code>vMAJOR.MINOR.PATCH</code>，预发布追加 <code>-rc.N</code> 等后缀（如 <code>v0.2.0-rc.1</code>）。tag 不使用 build metadata（<code>+...</code>），因为 Docker 镜像 tag 不允许 <code>+</code>。</li>
+<li>tag 必须打在 <code>main</code> 上；<code>main</code> 受分支保护，发布内容只能通过 PR 合入。</li>
+<li>每个版本在 <a href="https://github.com/hzc19970630/rag-platform/blob/main/CHANGELOG.md">CHANGELOG.md</a> 有对应条目；<code>Unreleased</code> 只记录尚未发布的变更。</li>
+<li>破坏性变更、需要人工迁移的变更和回滚限制必须写进 CHANGELOG 与本文第 6 节。</li>
+<li>版本、提交和构建时间通过 <code>-ldflags -X</code> 注入：<code>api --version</code>、API/worker 启动日志 <code>build_info</code>、镜像 OCI 标签（<code>org.opencontainers.image.version/revision/created/source</code>）三处一致。</li>
+</ul>
+<h2 id="2">2. 发布产物<a class="headerlink" href="#2" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>产物</th>
+<th>名称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API 镜像</td>
+<td><code>ghcr.io/hzc19970630/rag-platform/api:&lt;version&gt;</code></td>
+<td>多二进制镜像：<code>api</code>、<code>worker</code>、<code>migrate</code>、<code>seed</code>、<code>embedctl</code></td>
+</tr>
+<tr>
+<td>解析器镜像</td>
+<td><code>ghcr.io/hzc19970630/rag-platform/docreader:&lt;version&gt;</code></td>
+<td>数字文档解析 sidecar</td>
+</tr>
+<tr>
+<td>MCP 镜像</td>
+<td><code>ghcr.io/hzc19970630/rag-platform/mcp:&lt;version&gt;</code></td>
+<td>stdio MCP Server，非 root，<code>docker run -i</code> 使用</td>
+</tr>
+<tr>
+<td>MCP 二进制</td>
+<td><code>rag-mcp-&lt;version&gt;-&lt;os&gt;-&lt;arch&gt;[.exe]</code></td>
+<td>linux/darwin/windows × amd64/arm64，六份产物</td>
+</tr>
+<tr>
+<td>前端静态包</td>
+<td><code>rag-platform-web-&lt;version&gt;.tar.gz</code></td>
+<td><code>web/dist</code>，构建时固定 <code>VITE_API_BASE_URL=/api/v1</code></td>
+</tr>
+<tr>
+<td>SBOM</td>
+<td><code>rag-platform-api-&lt;version&gt;.cdx.json</code>、<code>rag-platform-docreader-&lt;version&gt;.cdx.json</code>、<code>rag-platform-mcp-&lt;version&gt;.cdx.json</code></td>
+<td>CycloneDX</td>
+</tr>
+<tr>
+<td>清单</td>
+<td><code>release-manifest.txt</code></td>
+<td>版本、完整 commit、构建时间、三个镜像的 tag@digest 与 MCP 二进制</td>
+</tr>
+<tr>
+<td>校验和</td>
+<td><code>SHA256SUMS</code>、<code>SHA256SUMS.cosign.bundle</code></td>
+<td>覆盖清单、前端包、三个 SBOM 与 MCP 二进制；bundle 为 cosign 无密钥签名</td>
+</tr>
+<tr>
+<td>镜像签名</td>
+<td>OCI registry 中的 cosign 签名</td>
+<td>对 <code>api</code>/<code>docreader</code>/<code>mcp</code> 的 digest 签名</td>
+</tr>
+</tbody>
+</table>
+<p>镜像同时推送 <code>sha-&lt;12位提交&gt;</code> 标签，便于按提交追溯。生产环境应固定 digest，不要依赖浮动标签。GHCR 包首次发布后如仓库公开，需在 GitHub Packages 设置里把三个包改为 public，否则匿名 <code>docker pull</code> 会失败。</p>
+<h2 id="3">3. 触发发布<a class="headerlink" href="#3" title="Permanent link">&para;</a></h2>
+<ol>
+<li>把 <code>CHANGELOG.md</code> 的 <code>Unreleased</code> 内容整理为 <code>## [X.Y.Z] - YYYY-MM-DD</code>，保留空的 <code>Unreleased</code>。</li>
+<li>通过 PR 合入 <code>main</code>，等待 <code>ci</code> 的 <code>verify</code>/<code>integration</code>/<code>security</code> 全部通过。</li>
+<li>在 <code>main</code> 的最新提交上创建带注释的 tag 并推送（需要发布权限，属于对共享状态的写操作，须经确认）：</li>
+</ol>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>checkout<span class="w"> </span>main<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>pull<span class="w"> </span>--ff-only
+git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v0.1.0<span class="w"> </span>-m<span class="w"> </span><span class="s2">"rag-platform v0.1.0"</span>
+git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v0.1.0
+</code></pre></div>
+<ol>
+<li>tag 推送触发 <a href="https://github.com/hzc19970630/rag-platform/blob/main/.github/workflows/release.yml">release.yml</a>：</li>
+<li><code>verify</code>：tag 语义化格式、gofmt、checkdeps、OpenAPI 漂移、租户静态门禁、<code>go test</code>、<code>go vet</code>、<code>go mod verify</code>、前端测试与构建。</li>
+<li><code>publish</code>：构建三个镜像与六份 MCP 二进制 → Trivy HIGH/CRITICAL 门禁（未修复项忽略）→ 生成 SBOM → 推送 GHCR → cosign keyless 签名 digest → 打包前端 → 校验和签名 → 创建 GitHub Release（预发布 tag 自动标记 prerelease）。</li>
+<li>镜像先扫描后推送；扫描失败时不会产生签名，也不会创建 Release。</li>
+<li>查看进度并在失败时用同一 tag 重跑工作流：</li>
+</ol>
+<div class="highlight"><pre><span></span><code>gh<span class="w"> </span>run<span class="w"> </span>list<span class="w"> </span>--workflow<span class="w"> </span>release.yml
+gh<span class="w"> </span>run<span class="w"> </span>watch
+</code></pre></div>
+<ol>
+<li>建议在仓库设置中为 <code>v*</code> 增加 tag protection rule，只允许发布者创建/删除发布 tag。</li>
+</ol>
+<h2 id="4">4. 校验产物<a class="headerlink" href="#4" title="Permanent link">&para;</a></h2>
+<p>从 Release 下载全部产物：</p>
+<div class="highlight"><pre><span></span><code><span class="nv">VERSION</span><span class="o">=</span>v0.1.0
+gh<span class="w"> </span>release<span class="w"> </span>download<span class="w"> </span><span class="s2">"</span><span class="nv">$VERSION</span><span class="s2">"</span>
+sha256sum<span class="w"> </span>-c<span class="w"> </span>SHA256SUMS
+</code></pre></div>
+<p>校验镜像签名（digest 取自 <code>release-manifest.txt</code>）：</p>
+<div class="highlight"><pre><span></span><code><span class="nv">IMAGE</span><span class="o">=</span>ghcr.io/hzc19970630/rag-platform/api
+<span class="nv">DIGEST</span><span class="o">=</span>sha256:...<span class="w">   </span><span class="c1"># release-manifest.txt 中 @ 之后的部分</span>
+
+cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/hzc19970630/rag-platform/.github/workflows/release.yml@refs/tags/</span><span class="si">${</span><span class="nv">VERSION</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">"</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">@</span><span class="si">${</span><span class="nv">DIGEST</span><span class="si">}</span><span class="s2">"</span>
+</code></pre></div>
+<p>校验 <code>SHA256SUMS</code> 的 blob 签名：</p>
+<div class="highlight"><pre><span></span><code>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--bundle<span class="w"> </span>SHA256SUMS.cosign.bundle<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">"https://github.com/hzc19970630/rag-platform/.github/workflows/release.yml@refs/tags/</span><span class="si">${</span><span class="nv">VERSION</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">"https://token.actions.githubusercontent.com"</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>SHA256SUMS
+</code></pre></div>
+<p>检查 SBOM 与镜像版本：</p>
+<div class="highlight"><pre><span></span><code>jq<span class="w"> </span><span class="s1">'.components | length'</span><span class="w"> </span>rag-platform-api-<span class="s2">"</span><span class="nv">$VERSION</span><span class="s2">"</span>.cdx.json
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">@</span><span class="si">${</span><span class="nv">DIGEST</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>--version
+docker<span class="w"> </span>image<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">'{{json .Config.Labels}}'</span><span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">@</span><span class="si">${</span><span class="nv">DIGEST</span><span class="si">}</span><span class="s2">"</span>
+</code></pre></div>
+<p><code>--version</code> 输出与 <code>release-manifest.txt</code> 中的 version/commit/built_at 必须一致。cosign keyless 依赖公开的 Fulcio/Rekor；受限网络中的离线部署需另行配置密钥签名，本仓库默认不覆盖该场景。</p>
+<h2 id="5">5. 升级<a class="headerlink" href="#5" title="Permanent link">&para;</a></h2>
+<h3 id="51">5.1 升级前<a class="headerlink" href="#51" title="Permanent link">&para;</a></h3>
+<ol>
+<li>阅读目标版本 CHANGELOG 的 Added/Changed/Deprecated/Removed/Security 与本文第 6 节。</li>
+<li>记录当前版本与 digest，确认可回退：</li>
+</ol>
+<div class="highlight"><pre><span></span><code>docker<span class="w"> </span>image<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">'{{index .RepoDigests 0}}'</span><span class="w"> </span>ghcr.io/hzc19970630/rag-platform/api:&lt;当前版本&gt;
+</code></pre></div>
+<ol>
+<li>按 <a href="../operations/">operations.md</a> 第 3 节完成数据库逻辑备份；要求分钟级 RPO 的环境同时确认 WAL/PITR 与对象存储备份可用。</li>
+<li>只读检查迁移兼容性（不会修改数据库），预期日志含 <code>migrations_compatible</code>：</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">RAG_VERSION</span><span class="o">=</span>v0.1.0
+<span class="nv">BASE_ARGS</span><span class="o">=(</span>-f<span class="w"> </span>deploy/docker-compose/docker-compose.yml<span class="w"> </span>-f<span class="w"> </span>deploy/docker-compose/release.compose.yml<span class="o">)</span>
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--no-deps<span class="w"> </span>migrate<span class="w"> </span>-check
+</code></pre></div>
+<h3 id="52">5.2 升级步骤<a class="headerlink" href="#52" title="Permanent link">&para;</a></h3>
+<p><code>release.compose.yml</code> 用发布镜像替换本地构建，支持 tag 或 digest 两种固定方式。覆盖文件使用 Compose 的 <code>!reset</code> 语法（Docker Compose 2.24+）；基础文件里的 <code>web</code> 服务仍是开发服务器，生产前端按上面的静态包方式部署。</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">RAG_VERSION</span><span class="o">=</span>v0.1.0
+<span class="c1"># 或者硬固定 digest：</span>
+<span class="c1"># export RAG_API_IMAGE=ghcr.io/hzc19970630/rag-platform/api@sha256:...</span>
+<span class="c1"># export RAG_DOCREADER_IMAGE=ghcr.io/hzc19970630/rag-platform/docreader@sha256:...</span>
+
+<span class="nv">BASE_ARGS</span><span class="o">=(</span>-f<span class="w"> </span>deploy/docker-compose/docker-compose.yml<span class="w"> </span>-f<span class="w"> </span>deploy/docker-compose/release.compose.yml<span class="o">)</span>
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>pull
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--no-deps<span class="w"> </span>migrate
+<span class="c1"># D3: copy existing vectors into chunk_embeddings before the new API reads them.</span>
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--no-deps<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--entrypoint<span class="w"> </span>embedctl<span class="w"> </span>api<span class="w"> </span>backfill-embeddings
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--no-build<span class="w"> </span>docreader
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--no-build<span class="w"> </span>worker<span class="w"> </span>api
+</code></pre></div>
+<ul>
+<li>顺序固定为 <strong>migrate → backfill-embeddings → docreader → worker → api</strong>。<code>backfill-embeddings</code> 把旧 <code>chunks.embedding</code> 复制到 <code>chunk_embeddings</code>；新版本的向量检索只读变体表，未回填就启动 API 会让旧文档暂时不可向量召回。命令幂等、可重复执行，每批 1000 条，升级中断后重跑即可续传。</li>
+<li>迁移 <code>0031_embedding_variants</code> 与回填是向前兼容的：旧二进制仍读 <code>chunks.embedding</code>，且新版本入库双写该列，因此回退到旧镜像不需要数据库回退（除非已经执行过迁移的 <code>finalize</code> 清理）。</li>
+<li><code>seed</code> 是幂等任务，<code>api</code> 的 <code>depends_on</code> 会以发布镜像自动执行它；不要手工跳过 migrate 直接启动 api。</li>
+<li>Web 不在镜像里。升级时解压前端包到版本目录，校验通过后原子切换软链接，例如：</li>
+</ul>
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span>/srv/rag-web/releases/<span class="s2">"</span><span class="nv">$RAG_VERSION</span><span class="s2">"</span>
+tar<span class="w"> </span>-xzf<span class="w"> </span>rag-platform-web-<span class="s2">"</span><span class="nv">$RAG_VERSION</span><span class="s2">"</span>.tar.gz<span class="w"> </span>-C<span class="w"> </span>/srv/rag-web/releases/<span class="s2">"</span><span class="nv">$RAG_VERSION</span><span class="s2">"</span>
+ln<span class="w"> </span>-sfn<span class="w"> </span>/srv/rag-web/releases/<span class="s2">"</span><span class="nv">$RAG_VERSION</span><span class="s2">"</span><span class="w"> </span>/srv/rag-web/current
+</code></pre></div>
+<p>Nginx 的 <code>root</code> 指向 <code>/srv/rag-web/current</code>；旧版本目录保留到回滚窗口结束。反向代理需把 <code>/api/</code> 转发到 API，静态资源缺失时回退 <code>index.html</code>。</p>
+<h3 id="53">5.3 升级后验证<a class="headerlink" href="#53" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsS<span class="w"> </span>http://localhost:8082/healthz
+curl<span class="w"> </span>-fsS<span class="w"> </span>http://localhost:8082/readyz
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>logs<span class="w"> </span>--no-color<span class="w"> </span>api<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>build_info
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="nb">exec</span><span class="w"> </span>api<span class="w"> </span>api<span class="w"> </span>--version
+</code></pre></div>
+<p>再按发布检查单验证：登录（OIDC/API Key）、知识库列表、文档上传与解析、检索、问答 SSE、审计页与配额页。异步答案升级后确认 worker 能消费新任务且续传事件完整。</p>
+<h2 id="6">6. 回滚<a class="headerlink" href="#6" title="Permanent link">&para;</a></h2>
+<p>先判断迁移是否向后兼容：</p>
+<ul>
+<li><strong>兼容（推荐路径）</strong>：新版本只做 expand 型变更（加表/加列/加索引），旧二进制仍可运行。直接重新固定上一个镜像 digest，不恢复数据库。</li>
+<li><strong>不兼容</strong>：迁移删改列/表或改变语义。必须在维护窗口内停止写入、恢复升级前备份和对象存储，再启动旧版本。<strong>不要</strong>把旧二进制直接指向已迁移的库，也不要把 <code>migrate -down</code> 当成通用回滚手段：只有带 <code>*.down.sql</code> 的迁移可回退（当前仅 <code>0027_drop_casbin_rule</code>），其余迁移只向前。</li>
+</ul>
+<p>兼容回滚命令：</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">RAG_VERSION</span><span class="o">=</span>&lt;上一版本&gt;
+<span class="c1"># 或 export RAG_API_IMAGE=...@sha256:&lt;上一 digest&gt;</span>
+<span class="c1">#    export RAG_DOCREADER_IMAGE=...@sha256:&lt;上一 digest&gt;</span>
+<span class="nv">BASE_ARGS</span><span class="o">=(</span>-f<span class="w"> </span>deploy/docker-compose/docker-compose.yml<span class="w"> </span>-f<span class="w"> </span>deploy/docker-compose/release.compose.yml<span class="o">)</span>
+docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">BASE_ARGS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>--no-build<span class="w"> </span>worker<span class="w"> </span>api<span class="w"> </span>docreader
+</code></pre></div>
+<p>前端回滚把 <code>current</code> 软链接指回上一个版本目录即可，无需重新构建。</p>
+<p>不兼容回滚：</p>
+<ol>
+<li>停止 <code>api</code> 与 <code>worker</code>，阻止新写入；记录停止时间点。</li>
+<li>按 <a href="../operations/">operations.md</a> 第 3.3 节在隔离库恢复备份，核对 <code>schema_migrations</code> 与 <code>authorization_revisions</code>；对象存储恢复到同一时点。</li>
+<li>把数据库指回恢复后的实例，用上一版本镜像启动 <code>worker</code>、<code>api</code>、<code>docreader</code>。</li>
+<li>验证 <code>readyz</code>、登录、检索、问答与审计；确认无重复/丢失的 outbox 事件后再恢复流量。</li>
+<li>在 CHANGELOG/事故记录中登记回滚原因、耗时和数据损失窗口。</li>
+</ol>
+<h2 id="7">7. 本地演练<a class="headerlink" href="#7" title="Permanent link">&para;</a></h2>
+<p>发布流水线本身只在 tag 推送时运行；本地可验证构建注入、镜像内容和编排解析，不替代生产升级窗口的完整演练：</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># 1) 构建带版本信息的镜像</span>
+docker<span class="w"> </span>build<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>v0.0.0-drill.1<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">COMMIT</span><span class="o">=</span><span class="k">$(</span>git<span class="w"> </span>rev-parse<span class="w"> </span>--short<span class="o">=</span><span class="m">12</span><span class="w"> </span>HEAD<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">BUILD_DATE</span><span class="o">=</span><span class="k">$(</span>git<span class="w"> </span>log<span class="w"> </span>-1<span class="w"> </span>--format<span class="o">=</span>%cI<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-t<span class="w"> </span>rag-platform:b9-drill<span class="w"> </span>.
+
+<span class="c1"># 2) 验证版本注入与 OCI 标签</span>
+docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>rag-platform:b9-drill<span class="w"> </span>--version
+docker<span class="w"> </span>image<span class="w"> </span>inspect<span class="w"> </span>--format<span class="w"> </span><span class="s1">'{{json .Config.Labels}}'</span><span class="w"> </span>rag-platform:b9-drill
+
+<span class="c1"># 3) 验证发布编排能解析 tag 与 digest 两种固定方式</span>
+<span class="nv">RAG_VERSION</span><span class="o">=</span>v0.0.0-drill.1<span class="w"> </span>docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env.example<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>deploy/docker-compose/docker-compose.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>deploy/docker-compose/release.compose.yml<span class="w"> </span>config<span class="w"> </span>--quiet
+<span class="nv">RAG_API_IMAGE</span><span class="o">=</span>ghcr.io/hzc19970630/rag-platform/api@sha256:0123456789abcdef<span class="w"> </span><span class="se">\</span>
+<span class="nv">RAG_DOCREADER_IMAGE</span><span class="o">=</span>ghcr.io/hzc19970630/rag-platform/docreader@sha256:fedcba9876543210<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>docker<span class="w"> </span>compose<span class="w"> </span>--env-file<span class="w"> </span>.env.example<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>deploy/docker-compose/docker-compose.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>deploy/docker-compose/release.compose.yml<span class="w"> </span>config<span class="w"> </span>--quiet
+
+<span class="c1"># 4) 在维护窗口演练：拉取真实 Release，执行第 5.2 节升级，再用第 6 节切回上一 digest</span>
+</code></pre></div>
+<p>Windows 上直接构建的基础镜像会把迁移 SQL 以 CRLF 写入镜像，而发布镜像由 Linux CI 以 LF 构建；用前者初始化的本地库切换到发布镜像时，<code>migrate -check</code> 会报 <code>checksum mismatch</code>。演练前应让构建上下文保持 LF（例如临时设置 <code>core.autocrlf=false</code> 后重新检出），不要通过修改校验和绕过生产库检查。</p>
+<p>生产升级/回滚演练必须记录：开始与结束时间、源/目标 digest、<code>migrate -check</code> 结果、<code>readyz</code> 恢复时间、登录/上传/问答抽查结果、回滚是否恢复备份。演练报告归档到运维记录，不提交到仓库。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  回到页面顶部
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
