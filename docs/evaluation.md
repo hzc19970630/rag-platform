@@ -204,3 +204,20 @@ python3 scripts/eval_suite.py --auth api-key \
 - M7：多跳图 100% vs 严格 RAG 70%（+30%，6 个 graph-only rescue），建议保留有界图查询。
 - 失败案例：首次 M3 运行因 `fact-rerank-default` 返回 `ungrounded_answer`，`groundedness=0.9565` 未过门禁；失败报告保留为 `m3_eval_report.failed-20261108T074653Z.json`，同配置重跑通过。这说明单次绿色运行不代表稳定，发布决策前应重复运行。
 - 已完成一次人工评审：栈地址脱敏，模型与维度、`limitations`、失败报告均保留，未发现凭据或本机路径。外部独立复现仍未完成，不能把本基线当作第三方结论；后续每次更新基线仍需同样评审。
+
+## 6. 检索质量闭环（B14 + D5）
+
+在线反馈与离线评估共用同一个质量视图：
+
+- **反馈采集**：助手消息支持“有帮助 / 没帮助”，打开引用时自动记录 `citation_click`。数据写入 `retrieval_feedback`，按租户/操作者隔离；重复评分更新同一条记录，同一引用重复点击幂等。
+- **质量汇总**：`GET /api/v1/ops/quality?days=30[&knowledgeBaseId=...]` 返回有帮助率、负面反馈、引用点击、最近一次评估和 `qualityStatus`（`passed` / `regressed` / `failed` / `no_eval`）。
+- **评估入库**：`POST /api/v1/ops/quality/eval-runs` 导入 m3/rerank 对比报告；脚本：
+  ```bash
+  python3 scripts/quality_upload.py --report tests/eval/m3_eval_report.json \
+    --knowledge-base-id kb-dev --config-hash "$(sha256sum config/config.yaml | cut -d' ' -f1)"
+  ```
+  新报告会与同范围上一次报告比较 `documentHitRate`、`recallAtK`、`citationAccuracy`、`groundedness`、`refusalRate`、`permissionNegativeDenials`；任一指标下降超过 0.02 标记为 `regressed`。
+- **保存门禁**：`rerank_enabled` 属于高风险项。7 天内没有同范围评估报告时，配置预检返回 `quality_eval_required`，保存被阻止；先导入报告再保存。
+- **告警**：`retrieval_quality_regressions_total` 计数出现增长时触发 `RagRetrievalQualityRegression`。
+
+运营顺序：调整检索/rerank → 在评估集回放 → 导入报告 → 查看质量视图 → 保存配置。

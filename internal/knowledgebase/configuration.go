@@ -348,6 +348,17 @@ func (s *Service) writeRetrievalConfig(ctx context.Context, principal authz.Prin
 		}
 		return models.KnowledgeBase{}, fmt.Errorf("load knowledge base: %w", err)
 	}
+	if s.quality != nil && override.RerankEnabled != nil && *override.RerankEnabled {
+		var current retrieval.ParamsOverride
+		if raw, err := retrieval.ParseOverride(row.RetrievalConfig); err == nil {
+			current = raw
+		}
+		if current.RerankEnabled == nil || !*current.RerankEnabled {
+			if err := s.quality.RequireRecentEval(ctx, principal.TenantID, id); err != nil {
+				return models.KnowledgeBase{}, err
+			}
+		}
+	}
 	encoded, err := json.Marshal(override)
 	if err != nil {
 		return models.KnowledgeBase{}, fmt.Errorf("encode retrieval config: %w", err)

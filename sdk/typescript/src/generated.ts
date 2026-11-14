@@ -1190,6 +1190,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ops/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/ops/quality */
+        get: operations["get_ops_quality"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ops/quality/eval-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/ops/quality/eval-runs */
+        post: operations["post_ops_quality_eval_runs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ops/reconcile": {
         parameters: {
             query?: never;
@@ -1288,6 +1322,23 @@ export interface paths {
         put?: never;
         /** POST /api/v1/sessions/{id}/messages */
         post: operations["post_sessions_id_messages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{id}/messages/{messageId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/sessions/{id}/messages/{messageId}/feedback */
+        post: operations["post_sessions_id_messages_messageId_feedback"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2636,6 +2687,33 @@ export interface components {
             };
             tenantOverride?: components["schemas"]["RetrievalConfigOverride"];
         };
+        RetrievalEvalRun: {
+            configHash?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            id?: string;
+            kind?: string;
+            knowledgeBaseId?: string;
+            metrics?: {
+                [key: string]: number;
+            };
+            status?: string;
+        };
+        RetrievalEvalRunRequest: {
+            configHash?: string;
+            kind: string;
+            knowledgeBaseId?: string;
+            metrics: {
+                [key: string]: number;
+            };
+            report?: unknown;
+            status: string;
+        };
+        RetrievalFeedbackRequest: {
+            chunkId?: string;
+            citationId?: string;
+            kind: string;
+        };
         RetrievalParams: {
             adjacent_expansion?: number;
             context_token_limit?: number;
@@ -2653,6 +2731,27 @@ export interface components {
             vector_iterative_scan?: boolean;
             vector_oversample?: number;
             vector_threshold?: number;
+        };
+        RetrievalQualityChunk: {
+            chunkId?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        RetrievalQualitySummary: {
+            /** Format: int64 */
+            citationClicks?: number;
+            /** Format: int64 */
+            helpful?: number;
+            helpfulRate?: number;
+            latestEval?: components["schemas"]["RetrievalEvalRun"];
+            /** Format: int64 */
+            messages?: number;
+            qualityStatus?: string;
+            /** Format: date-time */
+            since?: string;
+            topUnhelpful?: components["schemas"]["RetrievalQualityChunk"][];
+            /** Format: int64 */
+            unhelpful?: number;
         };
         ScopeView: {
             aclVersion?: string;
@@ -5086,6 +5185,58 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    get_ops_quality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetrievalQualitySummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_ops_quality_eval_runs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetrievalEvalRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetrievalEvalRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     post_ops_reconcile: {
         parameters: {
             query?: never;
@@ -5291,6 +5442,35 @@ export interface operations {
                 content: {
                     "text/event-stream": components["schemas"]["StreamEvent"];
                 };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_sessions_id_messages_messageId_feedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                messageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetrievalFeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];

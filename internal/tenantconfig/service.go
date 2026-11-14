@@ -79,7 +79,15 @@ type Service struct {
 	db         *gorm.DB
 	authz      Authorizer
 	deployment Deployment
+	quality    QualityGate
 }
+
+// QualityGate blocks high-risk retrieval saves without a recent evaluation.
+type QualityGate interface {
+	RequireRecentEval(ctx context.Context, tenantID, knowledgeBaseID string) error
+}
+
+func (s *Service) SetQualityGate(gate QualityGate) { s.quality = gate }
 
 func NewService(db *gorm.DB, authorizer Authorizer, deployment Deployment) *Service {
 	return &Service{db: db, authz: authorizer, deployment: deployment}
@@ -104,7 +112,7 @@ func (s *Service) Put(ctx context.Context, principal authz.Principal, input Inpu
 	if err := s.authz.RequireTenantOperator(ctx, principal); err != nil {
 		return View{}, err
 	}
-	_, retrievalJSON, err := normalizeRetrieval(input.Retrieval)
+	override, retrievalJSON, err := normalizeRetrieval(input.Retrieval)
 	if err != nil {
 		return View{}, err
 	}
@@ -113,6 +121,11 @@ func (s *Service) Put(ctx context.Context, principal authz.Principal, input Inpu
 		return View{}, err
 	}
 	before, beforeErr := s.loadTenant(ctx, principal.TenantID)
+	if s.quality != nil && override.RerankEnabled != nil && *override.RerankEnabled && !tenantRerankEnabled(before) {
+		if err := s.quality.RequireRecentEval(ctx, principal.TenantID, ""); err != nil {
+			return View{}, err
+		}
+	}
 	reason := configAuditReason(before, beforeErr, retrievalJSON, chunkingJSON)
 	audit := models.AuditLog{
 		TenantID: principal.TenantID, ActorID: principal.SubjectID,
@@ -190,6 +203,22 @@ func (s *Service) ChunkingForTenant(ctx context.Context, tenantID string) (Chunk
 		return ChunkPolicy{}, err
 	}
 	return resolved, nil
+}
+
+func tenantRerankEnabled(row models.Tenant) bool {
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(row.RetrievalConfig), &value); err != nil {
+		return false
+	}
+	raw, ok := value["rerank_enabled"]
+	if !ok {
+		return false
+	}
+	var enabled bool
+	if err := json.Unmarshal(raw, &enabled); err != nil {
+		return false
+	}
+	return enabled
 }
 
 func (s *Service) loadTenant(ctx context.Context, tenantID string) (models.Tenant, error) {

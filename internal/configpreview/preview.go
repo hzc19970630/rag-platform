@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
@@ -212,6 +213,9 @@ func (s *Service) previewTenant(ctx context.Context, principal authz.Principal, 
 		blockers = append(blockers, *embeddingBlocker)
 	}
 	blockers = append(blockers, rebuildBlockers(changes)...)
+	if blocker := s.qualityBlocker(ctx, principal.TenantID, "", changes); blocker != nil {
+		blockers = append(blockers, *blocker)
+	}
 	return summarize(ScopeTenant, "", changes, blockers, Affected{
 		KnowledgeBases: int64(len(ids)), Documents: documents, Chunks: chunks,
 	}), nil
@@ -273,6 +277,9 @@ func (s *Service) previewKnowledgeBase(ctx context.Context, principal authz.Prin
 	affected := Affected{}
 	if changed || len(embeddingChanges) > 0 {
 		affected = Affected{KnowledgeBases: 1, Documents: documents, Chunks: chunks}
+	}
+	if blocker := s.qualityBlocker(ctx, principal.TenantID, kb.ID, changes); blocker != nil {
+		blockers = append(blockers, *blocker)
 	}
 	return summarize(ScopeKnowledgeBase, kb.ID, changes, blockers, affected), nil
 }
@@ -354,6 +361,41 @@ func embeddingChange(key string, oldValue, newValue any) Change {
 		Domain: "embedding", Key: key, OldValue: oldJSON, NewValue: newJSON,
 		Source: "deployment", ApplyMode: "rebuild", Impact: ImpactRebuild,
 		RebuildScope: configschema.RebuildReembed, Risk: configschema.RiskHigh,
+	}
+}
+
+// qualityBlocker requires a recent evaluation run before a high-risk retrieval
+// change is saved. Embedding changes are excluded: they go through the managed
+// migration, which has its own verification.
+func (s *Service) qualityBlocker(ctx context.Context, tenantID, knowledgeBaseID string, changes []Change) *Blocker {
+	required := false
+	for _, change := range changes {
+		if change.Risk == configschema.RiskHigh && change.Domain != "embedding" {
+			required = true
+			break
+		}
+	}
+	if !required || s.db == nil {
+		return nil
+	}
+	query := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.RetrievalEvalRun{}).
+		Where("tenant_id = ? AND created_at >= ?", tenantID, time.Now().Add(-7*24*time.Hour))
+	if knowledgeBaseID != "" {
+		query = query.Where("knowledge_base_id = '' OR knowledge_base_id = ?", knowledgeBaseID)
+	}
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		// A pre-0033 database has no eval table yet; leave the change to the
+		// migration rather than blocking every save.
+		return nil
+	}
+	if count > 0 {
+		return nil
+	}
+	return &Blocker{
+		Code:        "quality_eval_required",
+		Message:     "该检索变更属于高风险项，保存前必须有一次 7 天内的评估集回放。",
+		Remediation: "先在评估集上跑 m3/rerank 对比并导入报告（运维 → 检索质量），再保存该变更。",
 	}
 }
 

@@ -498,6 +498,37 @@ type MessageCitation struct {
 
 func (MessageCitation) TableName() string { return "message_citations" }
 
+type RetrievalFeedback struct {
+	ID              string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID        string    `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string    `gorm:"size:96;not null;index" json:"knowledgeBaseId"`
+	ConversationID  string    `gorm:"size:64;not null" json:"conversationId"`
+	MessageID       string    `gorm:"size:64;not null;index" json:"messageId"`
+	CitationID      string    `gorm:"size:96;not null;default:''" json:"citationId"`
+	ChunkID         string    `gorm:"size:96;not null;default:''" json:"chunkId"`
+	Kind            string    `gorm:"size:32;not null" json:"kind"`
+	ActorID         string    `gorm:"size:64;not null" json:"actorId"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (RetrievalFeedback) TableName() string { return "retrieval_feedback" }
+
+type RetrievalEvalRun struct {
+	ID              string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID        string    `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string    `gorm:"size:96;not null;default:''" json:"knowledgeBaseId"`
+	Kind            string    `gorm:"size:32;not null" json:"kind"`
+	Status          string    `gorm:"size:32;not null" json:"status"`
+	ConfigHash      string    `gorm:"size:128;not null;default:''" json:"configHash"`
+	Metrics         string    `gorm:"type:jsonb;not null;default:'{}'" json:"-"`
+	Report          string    `gorm:"type:jsonb;not null;default:'{}'" json:"-"`
+	CreatedBy       string    `gorm:"size:64;not null;default:''" json:"createdBy"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+}
+
+func (RetrievalEvalRun) TableName() string { return "retrieval_eval_runs" }
+
 type StreamEvent struct {
 	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"-"`
 	RequestID string    `gorm:"size:128;not null;index" json:"requestId"`

@@ -1419,3 +1419,46 @@ type EmbeddingMigrationV1 struct {
 	CreatedAt       time.Time  `json:"createdAt"`
 	UpdatedAt       time.Time  `json:"updatedAt"`
 }
+
+// RetrievalFeedbackRequest records one answer rating or citation click.
+type RetrievalFeedbackRequest struct {
+	Kind       string `json:"kind" binding:"required"`
+	CitationID string `json:"citationId"`
+	ChunkID    string `json:"chunkId"`
+}
+
+type RetrievalQualityChunk struct {
+	ChunkID string `json:"chunkId"`
+	Count   int64  `json:"count"`
+}
+
+type RetrievalQualitySummary struct {
+	Helpful        int64                   `json:"helpful"`
+	Unhelpful      int64                   `json:"unhelpful"`
+	CitationClicks int64                   `json:"citationClicks"`
+	HelpfulRate    float64                 `json:"helpfulRate"`
+	Messages       int64                   `json:"messages"`
+	TopUnhelpful   []RetrievalQualityChunk `json:"topUnhelpful"`
+	Since          time.Time               `json:"since"`
+	QualityStatus  string                  `json:"qualityStatus"`
+	LatestEval     *RetrievalEvalRun       `json:"latestEval,omitempty"`
+}
+
+type RetrievalEvalRunRequest struct {
+	Kind            string             `json:"kind" binding:"required"`
+	KnowledgeBaseID string             `json:"knowledgeBaseId"`
+	Status          string             `json:"status" binding:"required"`
+	ConfigHash      string             `json:"configHash"`
+	Metrics         map[string]float64 `json:"metrics" binding:"required"`
+	Report          json.RawMessage    `json:"report"`
+}
+
+type RetrievalEvalRun struct {
+	ID              string             `json:"id"`
+	KnowledgeBaseID string             `json:"knowledgeBaseId"`
+	Kind            string             `json:"kind"`
+	Status          string             `json:"status"`
+	ConfigHash      string             `json:"configHash"`
+	Metrics         map[string]float64 `json:"metrics,omitempty"`
+	CreatedAt       time.Time          `json:"createdAt"`
+}

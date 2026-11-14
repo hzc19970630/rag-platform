@@ -36,6 +36,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
 	"github.com/hzc19970630/rag-platform/internal/platform/vector"
 	"github.com/hzc19970630/rag-platform/internal/prompts"
+	"github.com/hzc19970630/rag-platform/internal/quality"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/tenant"
 	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
@@ -65,6 +66,7 @@ type Application struct {
 	Embedding embedding.Resolver
 	// Embeddings owns the managed vector-space migration state machine.
 	Embeddings    *embeddingmigration.Service
+	Quality       *quality.Service
 	Prompts       *prompts.Registry
 	Ops           *ops.Service
 	Tenant        *tenant.Service
@@ -370,6 +372,10 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		Authz: authorization, Defaults: retrievalDefaults(cfg.Retrieval), Join: projectionService, Rewriter: queryRewriter, Metrics: recorder,
 		RerankModels: modelCatalog, TenantParams: tenantConfigService,
 	})
+	qualityService := quality.NewService(database)
+	qualityService.SetMetrics(recorder)
+	tenantConfigService.SetQualityGate(qualityService)
+	knowledgeBaseService.SetQualityGate(qualityService)
 	conversationService := conversation.NewService(conversation.Options{
 		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: routedChatter, Models: modelCatalog,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
@@ -382,7 +388,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

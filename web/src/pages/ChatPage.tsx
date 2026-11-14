@@ -1,6 +1,8 @@
 import {
   ArrowLeftOutlined,
+  DislikeOutlined,
   FileTextOutlined,
+  LikeOutlined,
   LoadingOutlined,
   MessageOutlined,
   PlusOutlined,
@@ -348,6 +350,7 @@ export function ChatPage() {
                     return (
                       <MessageBubble
                         item={row.item}
+                        conversationId={current.id}
                         onOpenCitation={openCitation}
                         onShowCitations={(citations) => setCitationDrawer({ title: current.title || t("chat.untitled"), citations })}
                       />
@@ -470,10 +473,34 @@ export function ChatPage() {
   );
 }
 
-function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Citation) => void; onShowCitations: (citations: Citation[]) => void }) {
-  const { item, onOpenCitation, onShowCitations } = props;
+function MessageBubble(props: { item: MessageView; conversationId: string; onOpenCitation: (citation: Citation) => void; onShowCitations: (citations: Citation[]) => void }) {
+  const { item, conversationId, onOpenCitation, onShowCitations } = props;
   const { t } = useTranslation();
+  const { message: toast } = App.useApp();
+  const [rating, setRating] = useState("");
+  const [ratingBusy, setRatingBusy] = useState(false);
   const isUser = item.message.role === "user";
+
+  async function submitRating(kind: "helpful" | "unhelpful") {
+    setRatingBusy(true);
+    try {
+      await api(`/sessions/${conversationId}/messages/${item.message.id}/feedback`, jsonInit({ kind }));
+      setRating(kind);
+      toast.success(t("chat.feedbackThanks"));
+    } catch {
+      toast.error(t("chat.feedbackFailed"));
+    } finally {
+      setRatingBusy(false);
+    }
+  }
+
+  function openCitation(citation: Citation) {
+    void api(`/sessions/${conversationId}/messages/${item.message.id}/feedback`, jsonInit({
+      kind: "citation_click",
+      chunkId: citation.chunkId,
+    })).catch(() => undefined);
+    onOpenCitation(citation);
+  }
   return (
     <div className={`message-row ${isUser ? "user" : "assistant"}`} data-testid={isUser ? "message-user" : "message-assistant"}>
       <div className={`chat-bubble ${isUser ? "user" : "assistant"}`}>
@@ -489,17 +516,40 @@ function MessageBubble(props: { item: MessageView; onOpenCitation: (citation: Ci
         </Flex>
         {isUser
           ? <Typography.Paragraph>{item.message.content}</Typography.Paragraph>
-          : <AnswerText content={item.message.content} citations={item.citations} onOpen={onOpenCitation} />}
+          : <AnswerText content={item.message.content} citations={item.citations} onOpen={openCitation} />}
         {item.message.errorCode && (
           <Alert type="error" showIcon message={item.message.errorCode} description={item.message.errorMessage} />
         )}
         {item.citations.length > 0 && (
           <>
-            <CitationList citations={item.citations} onOpen={onOpenCitation} />
+            <CitationList citations={item.citations} onOpen={openCitation} />
             <Button type="link" size="small" onClick={() => onShowCitations(item.citations)}>
               {t("chat.viewCitations", { count: item.citations.length })}
             </Button>
           </>
+        )}
+        {!isUser && item.message.status !== "FAILED" && (
+          <Space size={4} className="chat-feedback">
+            <Typography.Text type="secondary">{t("chat.feedbackPrompt")}</Typography.Text>
+            <Button
+              size="small"
+              type={rating === "helpful" ? "primary" : "text"}
+              icon={<LikeOutlined />}
+              loading={ratingBusy}
+              onClick={() => void submitRating("helpful")}
+            >
+              {t("chat.feedbackHelpful")}
+            </Button>
+            <Button
+              size="small"
+              type={rating === "unhelpful" ? "primary" : "text"}
+              icon={<DislikeOutlined />}
+              loading={ratingBusy}
+              onClick={() => void submitRating("unhelpful")}
+            >
+              {t("chat.feedbackUnhelpful")}
+            </Button>
+          </Space>
         )}
       </div>
     </div>

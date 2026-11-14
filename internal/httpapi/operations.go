@@ -15,6 +15,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/modelregistry"
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
+	"github.com/hzc19970630/rag-platform/internal/quality"
 	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
 
@@ -28,6 +29,39 @@ func RegisterOperationsRoutes(protected *gin.RouterGroup, cfg config.Config, dep
 
 	ops := protected.Group("/ops")
 	ops.Use(requireOperator(mw))
+	ops.POST("/quality/eval-runs", func(c *gin.Context) {
+		var input httpapi.RetrievalEvalRunRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		principal := accessContext(c).Principal
+		run, err := deps.Quality.RecordEvalRun(c.Request.Context(), principal.TenantID, quality.EvalRunInput{
+			Kind: input.Kind, KnowledgeBaseID: input.KnowledgeBaseID, Status: input.Status,
+			ConfigHash: input.ConfigHash, Metrics: input.Metrics, Report: input.Report, CreatedBy: principal.SubjectID,
+		})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusCreated, views.RetrievalEvalRun(run))
+	})
+	ops.GET("/quality", func(c *gin.Context) {
+		days := intQuery(c, "days")
+		if days <= 0 {
+			days = 30
+		}
+		if days > 365 {
+			days = 365
+		}
+		since := time.Now().Add(-time.Duration(days) * 24 * time.Hour)
+		summary, err := deps.Quality.Summary(c.Request.Context(), accessContext(c).Principal.TenantID, c.Query("knowledgeBaseId"), since)
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.RetrievalQualitySummary(summary))
+	})
 	ops.GET("/tasks/:key", func(c *gin.Context) {
 		inspection, err := deps.Tasks.Inspect(c.Request.Context(), accessContext(c).Principal, c.Param("key"))
 		if err != nil {

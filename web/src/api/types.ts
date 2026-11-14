@@ -466,3 +466,22 @@ export type ProjectionStatus = {
   pages: PageCounts;
   graph: GraphCounts;
 };
+
+export type RetrievalQualitySummary = {
+  helpful: number;
+  unhelpful: number;
+  citationClicks: number;
+  helpfulRate: number;
+  messages: number;
+  topUnhelpful: Array<{ chunkId: string; count: number }>;
+  since: string;
+  qualityStatus: string;
+  latestEval?: {
+    id: string;
+    kind: string;
+    status: string;
+    configHash: string;
+    metrics?: Record<string, number>;
+    createdAt: string;
+  };
+};

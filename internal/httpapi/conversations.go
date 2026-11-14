@@ -12,6 +12,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/quality"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
@@ -68,6 +69,21 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 			return
 		}
 		c.JSON(http.StatusOK, httpapi.MessageList{Items: views.MessageViews(rows)})
+	})
+	sessions.POST("/:id/messages/:messageId/feedback", func(c *gin.Context) {
+		var input httpapi.RetrievalFeedbackRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		principal := accessContext(c).Principal
+		if _, err := deps.Quality.Submit(c.Request.Context(), principal, c.Param("id"), c.Param("messageId"), quality.SubmitInput{
+			Kind: input.Kind, CitationID: input.CitationID, ChunkID: input.ChunkID,
+		}); err != nil {
+			writeError(c, err)
+			return
+		}
+		c.Status(http.StatusNoContent)
 	})
 	sessions.POST("/:id/messages", func(c *gin.Context) {
 		var input httpapi.MessageCreateRequest

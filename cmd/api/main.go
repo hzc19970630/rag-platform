@@ -60,7 +60,7 @@ func main() {
 		KnowledgeBase: application.KnowledgeBase, Ingestion: application.Ingestion, Conversation: application.Conversation,
 		Retrieval: application.Retrieval, DataSources: application.DataSources, Projection: application.Projection,
 		Ops: application.Ops, Tenant: application.Tenant, TenantConfig: application.TenantConfig, ConfigHealth: application.ConfigHealth, ConfigPreview: application.ConfigPreview, Queue: application.Queue, Tasks: application.Tasks,
-		Metrics: metricsRegistry, Models: application.Models, Embeddings: application.Embeddings,
+		Metrics: metricsRegistry, Models: application.Models, Embeddings: application.Embeddings, Quality: application.Quality,
 	}, logger)
 
 	// ReadHeaderTimeout blocks slowloris-style header trickling; ReadTimeout

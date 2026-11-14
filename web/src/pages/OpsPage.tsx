@@ -29,7 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, jsonInit } from "../api/client";
-import { queryKeys, useAPIKeys, useDeadLetters, useOpsMetrics } from "../api/hooks";
+import { queryKeys, useAPIKeys, useDeadLetters, useOpsMetrics, useOpsQuality } from "../api/hooks";
 import type { APIKeyView, DeadLetter } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
@@ -350,6 +350,60 @@ export function OpsPage() {
     </Card>
   );
 
+function QualityContent() {
+  const { t } = useTranslation();
+  const quality = useOpsQuality();
+  if (quality.isLoading) return <LoadingBlock />;
+  if (quality.error) return <QueryFallback error={quality.error} retry={() => void quality.refetch()} />;
+  const data = quality.data;
+  if (!data) return null;
+  const statusColor = data.qualityStatus === "regressed" ? "red" : data.qualityStatus === "passed" ? "green" : "default";
+  const statusLabelText = data.qualityStatus === "regressed"
+    ? t("ops.qualityRegressed")
+    : data.qualityStatus === "passed" ? t("ops.qualityPassed") : t("ops.qualityNoEval");
+  return (
+    <Card
+      title={t("ops.quality")}
+      extra={<Button size="small" icon={<ReloadOutlined />} onClick={() => void quality.refetch()}>{t("common.refresh")}</Button>}
+    >
+      <Flex vertical gap={16}>
+        <Space size={8} wrap>
+          <Tag color={statusColor}>{statusLabelText}</Tag>
+          <Typography.Text type="secondary">{t("ops.qualityHint")}</Typography.Text>
+        </Space>
+        <Descriptions size="small" column={4}>
+          <Descriptions.Item label={t("ops.qualityHelpful")}>{data.helpful}</Descriptions.Item>
+          <Descriptions.Item label={t("ops.qualityUnhelpful")}>{data.unhelpful}</Descriptions.Item>
+          <Descriptions.Item label={t("ops.qualityClicks")}>{data.citationClicks}</Descriptions.Item>
+          <Descriptions.Item label={t("ops.qualityRate")}>{`${Math.round(data.helpfulRate * 100)}%`}</Descriptions.Item>
+        </Descriptions>
+        {data.latestEval ? (
+          <Descriptions size="small" column={3} title={t("ops.qualityLatestEval")}>
+            <Descriptions.Item label="documentHitRate">{data.latestEval.metrics?.documentHitRate ?? "-"}</Descriptions.Item>
+            <Descriptions.Item label="recallAtK">{data.latestEval.metrics?.recallAtK ?? "-"}</Descriptions.Item>
+            <Descriptions.Item label="groundedness">{data.latestEval.metrics?.groundedness ?? "-"}</Descriptions.Item>
+            <Descriptions.Item label="citationAccuracy">{data.latestEval.metrics?.citationAccuracy ?? "-"}</Descriptions.Item>
+            <Descriptions.Item label="refusalRate">{data.latestEval.metrics?.refusalRate ?? "-"}</Descriptions.Item>
+            <Descriptions.Item label={t("ops.qualityEvalStatus")}>{data.latestEval.status}</Descriptions.Item>
+          </Descriptions>
+        ) : (
+          <Alert type="info" showIcon message={t("ops.qualityNoEvalHint")} />
+        )}
+        {data.topUnhelpful.length > 0 && (
+          <div>
+            <Typography.Text strong>{t("ops.qualityTopUnhelpful")}</Typography.Text>
+            <ul>
+              {data.topUnhelpful.map((item) => (
+                <li key={item.chunkId}><Typography.Text code>{item.chunkId}</Typography.Text> · {item.count}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Flex>
+    </Card>
+  );
+}
+
   return (
     <div className="page">
       <PageHeader title={t("ops.title")} description={t("ops.description")} />
@@ -358,6 +412,7 @@ export function OpsPage() {
         onChange={setTab}
         items={[
           { key: "runtime", label: t("ops.metrics"), icon: <ApiOutlined />, children: metricsContent },
+          { key: "quality", label: t("ops.quality"), icon: <CloudSyncOutlined />, children: <QualityContent /> },
           { key: "deadLetters", label: t("ops.deadLetters"), icon: <WarningOutlined />, children: deadLetterContent },
           { key: "apiKeys", label: t("ops.apiKeys"), icon: <ApiOutlined />, children: keysContent },
         ]}

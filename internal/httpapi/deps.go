@@ -16,6 +16,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/queue"
 	"github.com/hzc19970630/rag-platform/internal/platform/ratelimit"
+	"github.com/hzc19970630/rag-platform/internal/quality"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/tenant"
 	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
@@ -42,6 +43,7 @@ type ConversationDeps struct {
 	Authorization *authz.Service
 	Conversation  *conversation.Service
 	Retrieval     *retrieval.Service
+	Quality       *quality.Service
 }
 
 type DataSourceDeps struct {
@@ -78,7 +80,8 @@ type OperationsDeps struct {
 	// Metrics is the process registry shared with the composition root.
 	Metrics *observability.Registry
 	// Models exposes provider health for degradation visibility.
-	Models *modelregistry.Registry
+	Models  *modelregistry.Registry
+	Quality *quality.Service
 }
 
 type MiddlewareDeps struct {
@@ -113,4 +116,5 @@ type RouteDeps struct {
 	Metrics       *observability.Registry
 	Models        *modelregistry.Registry
 	Embeddings    *embeddingmigration.Service
+	Quality       *quality.Service
 }

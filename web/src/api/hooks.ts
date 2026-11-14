@@ -23,6 +23,7 @@ import type {
   ModelProviderList,
   OpsMetrics,
   ProjectionStatus,
+  RetrievalQualitySummary,
   TenantMember,
   TenantOverview,
   TenantQuota,
@@ -51,6 +52,7 @@ export const queryKeys = {
   apiKeys: ["api-keys"] as const,
   deadLetters: ["ops", "dead-letters"] as const,
   metrics: ["ops", "metrics"] as const,
+  quality: ["ops", "quality"] as const,
   tenantOverview: ["tenant", "overview"] as const,
   tenantQuota: ["tenant", "quota"] as const,
   tenantMembers: ["tenant", "members"] as const,
@@ -241,6 +243,10 @@ export function useDeadLetters() {
 
 export function useOpsMetrics() {
   return useQuery({ queryKey: queryKeys.metrics, queryFn: () => api<OpsMetrics>("/ops/metrics") });
+}
+
+export function useOpsQuality() {
+  return useQuery({ queryKey: queryKeys.quality, queryFn: () => api<RetrievalQualitySummary>("/ops/quality?days=30") });
 }
 
 export function useTenantOverview(enabled = true) {

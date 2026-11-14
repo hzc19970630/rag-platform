@@ -203,6 +203,8 @@ var Routes = []Route{
 		Request: jsonBody((*ConversationCreateRequest)(nil)), Success: created((*Conversation)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/sessions/{id}/messages", OperationID: "get_sessions_id_messages", Tag: "conversations",
 		Success: ok((*MessageList)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/sessions/{id}/messages/{messageId}/feedback", OperationID: "post_sessions_id_messages_messageId_feedback", Tag: "conversations",
+		Request: jsonBody((*RetrievalFeedbackRequest)(nil)), Success: noContent(), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/sessions/{id}/messages", OperationID: "post_sessions_id_messages", Tag: "conversations",
 		Request: jsonBody((*MessageCreateRequest)(nil)), Success: eventStream((*StreamEvent)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/requests/{requestID}/events", OperationID: "get_requests_requestID_events", Tag: "conversations",
@@ -295,6 +297,10 @@ var Routes = []Route{
 		Success: ok(OpsMetrics{}), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/ops/metrics/prometheus", OperationID: "get_ops_metrics_prometheus", Tag: "operations",
 		Success: plainText(""), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/ops/quality", OperationID: "get_ops_quality", Tag: "operations",
+		Success: ok((*RetrievalQualitySummary)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/ops/quality/eval-runs", OperationID: "post_ops_quality_eval_runs", Tag: "operations",
+		Request: jsonBody((*RetrievalEvalRunRequest)(nil)), Success: created((*RetrievalEvalRun)(nil)), Errors: commonErrors},
 
 	// model providers
 	{Method: http.MethodGet, Path: "/api/v1/models/catalog", OperationID: "get_models_catalog", Tag: "models",

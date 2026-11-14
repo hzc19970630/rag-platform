@@ -104,3 +104,12 @@ groups:
         annotations:
           summary: "Model errors exceeded 3 in 10 minutes"
           description: "Chat or embedding calls are failing; check provider health, quota and network from api/worker."
+      - alert: RagRetrievalQualityRegression
+        expr: increase(retrieval_quality_regressions_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: ticket
+          service: rag-retrieval
+        annotations:
+          summary: "A retrieval evaluation marked quality regressed"
+          description: "An imported eval run dropped a compared metric by more than 0.02. Review /ops quality before saving retrieval changes."

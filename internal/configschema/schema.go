@@ -153,7 +153,7 @@ var fields = []Field{
 	{Key: "max_adjacent_chunks", Domain: DomainRetrieval, Group: "expansion", Kind: KindInt, Default: raw(2), Min: ptr(0), Step: ptr(1), UnitKey: "retrieval.unitChunks", ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.max_adjacent_chunks"},
 	{Key: "expansion_score_factor", Domain: DomainRetrieval, Group: "expansion", Kind: KindFloat, Default: raw(0.5), Min: ptr(0), Max: ptr(1), Step: ptr(0.05), ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.expansion_score_factor"},
 	// retrieval: rerank
-	{Key: "rerank_enabled", Domain: DomainRetrieval, Group: "rerank", Kind: KindBool, Default: raw(false), ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.rerank_enabled"},
+	{Key: "rerank_enabled", Domain: DomainRetrieval, Group: "rerank", Kind: KindBool, Default: raw(false), ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, Risk: RiskHigh, LabelKey: "retrieval.rerank_enabled"},
 	{Key: "rerank_top_k", Domain: DomainRetrieval, Group: "rerank", Kind: KindInt, Default: raw(8), Min: ptr(0), Max: ptr(200), Step: ptr(1), UnitKey: "retrieval.unitCount", ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.rerank_top_k"},
 	{Key: "rerank_threshold", Domain: DomainRetrieval, Group: "rerank", Kind: KindFloat, Default: raw(-10), Min: ptr(-10), Max: ptr(10), Step: ptr(0.01), ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.rerank_threshold"},
 	// retrieval: context

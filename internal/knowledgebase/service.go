@@ -26,7 +26,15 @@ type Service struct {
 	embedding    EmbeddingBinding
 	catalog      ModelCatalog
 	tenantParams TenantParamsResolver
+	quality      QualityGate
 }
+
+// QualityGate blocks high-risk retrieval saves without a recent evaluation.
+type QualityGate interface {
+	RequireRecentEval(ctx context.Context, tenantID, knowledgeBaseID string) error
+}
+
+func (s *Service) SetQualityGate(gate QualityGate) { s.quality = gate }
 
 // TenantParamsResolver loads the tenant tier of the retrieval override chain.
 // Nil keeps the deployment-plus-knowledge-base view used by tests.
