@@ -1,4 +1,4 @@
-.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint nightly acceptance b15a-acceptance b15c-acceptance d3-acceptance d3-dataplane d3-dataplane-validate m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
+.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint coverage coverage-gate nightly acceptance b15a-acceptance b15c-acceptance d3-acceptance d3-dataplane d3-dataplane-validate m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -74,6 +74,14 @@ test:
 lint:
 	$(GO_RUN) sh -c 'test -z "$$(gofmt -d $$(find cmd internal tests -name "*.go"))" && go run ./cmd/checkdeps && go run ./cmd/openapi -check && go run ./cmd/checktenancy && go vet ./...'
 	cd web && npm run build
+
+# Coverage is intentionally separate from test/lint: the gate only looks at
+# packages touched by the change set and starts in warn mode.
+coverage:
+	$(GO_RUN) go test -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+
+coverage-gate:
+	./scripts/coverage_gate.sh --base "$${COVERAGE_BASE:-origin/main}" --profile coverage.out --threshold "$${COVERAGE_THRESHOLD:-70}" --mode "$${COVERAGE_GATE_MODE:-warn}"
 
 # Nightly-only scale/load checks. TEST_POSTGRES_URL is optional; the graph test
 # uses SQLite, the replay load test skips without Postgres.

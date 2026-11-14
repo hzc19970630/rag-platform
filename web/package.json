@@ -9,6 +9,7 @@
     "codegen": "openapi-typescript ../api/openapi/openapi.yaml -o src/api/generated.ts",
     "codegen:check": "npm run codegen && git diff --exit-code -- src/api/generated.ts",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:report": "playwright show-report",
@@ -37,6 +38,7 @@
     "@types/node": "^24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@vitest/coverage-v8": "5.0.3",
     "jsdom": "^29.1.1",
     "openapi-typescript": "7.13.0",
     "vitest": "5.0.3"

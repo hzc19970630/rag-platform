@@ -11,6 +11,8 @@ build/
 __pycache__/
 *.py[cod]
 coverage/
+coverage.out
+*.coverprofile
 *.tsbuildinfo
 
 # Evaluation reports produced by CI runs themselves

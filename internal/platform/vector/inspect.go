@@ -2,6 +2,7 @@ package vector
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"syscall"
 
@@ -42,6 +43,63 @@ type CheckReport struct {
 	DiskFreeScope string
 }
 
+// inspectSession is the subset of a dedicated connection used by the read-only
+// diagnostics. It mirrors indexSession so report assembly and failure paths can
+// be tested without a live database.
+type inspectSession interface {
+	PgvectorVersion(ctx context.Context) (string, error)
+	ChunkIndexes(ctx context.Context) ([]indexRecord, error)
+	IndexSizeBytes(ctx context.Context, name string) (int64, error)
+	DatabaseSize(ctx context.Context) (int64, error)
+	ChunksHeapSize(ctx context.Context) (int64, error)
+	DimensionHistogram(ctx context.Context) ([]DimensionCount, error)
+}
+
+type postgresInspectSession struct {
+	connection *sql.Conn
+}
+
+func (s postgresInspectSession) PgvectorVersion(ctx context.Context) (string, error) {
+	return (&postgresIndexSession{connection: s.connection}).PgvectorVersion(ctx)
+}
+
+func (s postgresInspectSession) ChunkIndexes(ctx context.Context) ([]indexRecord, error) {
+	return listChunksIndexes(ctx, s.connection)
+}
+
+func (s postgresInspectSession) IndexSizeBytes(ctx context.Context, name string) (int64, error) {
+	return (&postgresIndexSession{connection: s.connection}).IndexSizeBytes(ctx, name)
+}
+
+func (s postgresInspectSession) DatabaseSize(ctx context.Context) (int64, error) {
+	var size int64
+	err := s.connection.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&size)
+	return size, err
+}
+
+func (s postgresInspectSession) ChunksHeapSize(ctx context.Context) (int64, error) {
+	var size int64
+	err := s.connection.QueryRowContext(ctx, "SELECT COALESCE(pg_relation_size(to_regclass('chunks')), 0)").Scan(&size)
+	return size, err
+}
+
+func (s postgresInspectSession) DimensionHistogram(ctx context.Context) ([]DimensionCount, error) {
+	rows, err := s.connection.QueryContext(ctx, "SELECT embedding_dimension, count(*) FROM chunks WHERE embedding IS NOT NULL GROUP BY embedding_dimension ORDER BY embedding_dimension")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var histogram []DimensionCount
+	for rows.Next() {
+		var bucket DimensionCount
+		if err := rows.Scan(&bucket.Dimension, &bucket.Count); err != nil {
+			return nil, fmt.Errorf("scan embedding dimension histogram: %w", err)
+		}
+		histogram = append(histogram, bucket)
+	}
+	return histogram, rows.Err()
+}
+
 // CheckChunksIndexes collects index diagnostics without modifying the catalog.
 func CheckChunksIndexes(ctx context.Context, db *gorm.DB) (CheckReport, error) {
 	var report CheckReport
@@ -53,9 +111,12 @@ func CheckChunksIndexes(ctx context.Context, db *gorm.DB) (CheckReport, error) {
 	if err != nil {
 		return report, fmt.Errorf("acquire check connection: %w", err)
 	}
-	session := &postgresIndexSession{connection: connection}
 	defer connection.Close()
+	return checkChunksIndexes(ctx, postgresInspectSession{connection: connection})
+}
 
+func checkChunksIndexes(ctx context.Context, session inspectSession) (CheckReport, error) {
+	var report CheckReport
 	version, err := session.PgvectorVersion(ctx)
 	if err != nil {
 		return report, err
@@ -77,27 +138,17 @@ func CheckChunksIndexes(ctx context.Context, db *gorm.DB) (CheckReport, error) {
 		report.Indexes = append(report.Indexes, status)
 	}
 
-	if err := sqlDB.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&report.DatabaseSizeBytes); err != nil {
+	if report.DatabaseSizeBytes, err = session.DatabaseSize(ctx); err != nil {
 		return report, fmt.Errorf("read database size: %w", err)
 	}
-	if err := sqlDB.QueryRowContext(ctx, "SELECT COALESCE(pg_relation_size(to_regclass('chunks')), 0)").Scan(&report.ChunksHeapBytes); err != nil {
+	if report.ChunksHeapBytes, err = session.ChunksHeapSize(ctx); err != nil {
 		return report, fmt.Errorf("read chunks heap size: %w", err)
 	}
-	rows, err := sqlDB.QueryContext(ctx, "SELECT embedding_dimension, count(*) FROM chunks WHERE embedding IS NOT NULL GROUP BY embedding_dimension ORDER BY embedding_dimension")
+	histogram, err := session.DimensionHistogram(ctx)
 	if err != nil {
 		return report, fmt.Errorf("read embedding dimension histogram: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var bucket DimensionCount
-		if err := rows.Scan(&bucket.Dimension, &bucket.Count); err != nil {
-			return report, fmt.Errorf("scan embedding dimension histogram: %w", err)
-		}
-		report.DimensionHistogram = append(report.DimensionHistogram, bucket)
-	}
-	if err := rows.Err(); err != nil {
-		return report, fmt.Errorf("read embedding dimension histogram: %w", err)
-	}
+	report.DimensionHistogram = histogram
 
 	if free, err := diskFreeBytes("/"); err == nil {
 		report.DiskFreeBytes = free

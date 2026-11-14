@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 )
@@ -28,6 +29,8 @@ func writeError(c *gin.Context, err error) {
 	var typeError *json.UnmarshalTypeError
 	var maxBytesError *http.MaxBytesError
 	var validation *apperror.ValidationError
+	var fieldErrors validator.ValidationErrors
+	fieldValidation := errors.As(err, &fieldErrors)
 	invalidJSON := errors.As(err, &syntaxError) || errors.As(err, &typeError) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 	switch {
 	case errors.As(err, &maxBytesError):
@@ -64,12 +67,16 @@ func writeError(c *gin.Context, err error) {
 		// the storage error: it carries the object key.
 		status = http.StatusConflict
 		code = apperror.CodeContentUnavailable
-	case errors.As(err, &validation), invalidJSON:
+	case errors.As(err, &validation), invalidJSON, fieldValidation:
 		status = http.StatusBadRequest
 		code = apperror.CodeInvalidRequest
 	}
 	response := gin.H{"error": code}
 	switch {
+	case fieldValidation:
+		// Binding errors carry validator struct/field paths; keep the response
+		// stable instead of echoing implementation details.
+		response["message"] = "request validation failed"
 	case errors.Is(err, apperror.ErrContentUnavailable):
 		response["message"] = "document content is unavailable in object storage"
 	case status >= http.StatusBadRequest && status < http.StatusInternalServerError && err != nil:

@@ -83,3 +83,34 @@ describe("enum registry", () => {
     expect(statusTone("ok")).toBe("success");
   });
 });
+
+describe("enum label helpers", () => {
+  it("resolves known labels and falls back for unknown values", async () => {
+    const helpers = await import("./enums");
+    const t = i18n.t as TFunction;
+    const labels = [
+      helpers.statusLabel(t, "EVIDENCE_READY"),
+      helpers.statusLabel(t, "SOMETHING_NEW"),
+      helpers.roleLabel(t, "owner"),
+      helpers.roleLabel(t, "unknown-role"),
+      helpers.capabilityLabel(t, "chat"),
+      helpers.sourceLabel(t, "tenant"),
+      helpers.connectorTypeLabel(t, "http_manifest"),
+      helpers.providerKindLabel(t, "openai"),
+      helpers.apiKeyStatusLabel(t, "active"),
+      helpers.queueLabel(t, "ingestion"),
+      helpers.auditActionLabel(t, "write"),
+      helpers.auditResourceLabel(t, "knowledge_base"),
+      helpers.embeddingMigrationStatusLabel(t, "reembedding"),
+      helpers.enumLabel(t, "status", "STALE"),
+    ];
+    for (const label of labels) {
+      expect(typeof label).toBe("string");
+      expect(label.length).toBeGreaterThan(0);
+    }
+    expect(["neutral", "info", "success", "warning", "error", "processing"]).toContain(helpers.statusTone("EVIDENCE_READY"));
+    expect(helpers.statusTone("unknown")).toBeTruthy();
+    expect(helpers.toneColor("success")).toBeTruthy();
+    expect(helpers.embeddingMigrationStatusTone("reembedding")).toBeTruthy();
+  });
+});

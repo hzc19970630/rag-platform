@@ -49,6 +49,12 @@ type indexRecord struct {
 	Definition string
 }
 
+// rowQueryer is implemented by both *sql.DB and *sql.Conn, so catalog reads
+// can run on the dedicated build connection or the shared pool.
+type rowQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
 // IndexOptions controls an online index build. Zero timeouts mean "no limit",
 // matching PostgreSQL's own defaults; the shipped configuration sets a lock
 // timeout so a rebuild fails instead of waiting forever behind a long
@@ -439,7 +445,7 @@ func quoteIndexName(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
-func listChunksIndexes(ctx context.Context, database *sql.DB) ([]indexRecord, error) {
+func listChunksIndexes(ctx context.Context, database rowQueryer) ([]indexRecord, error) {
 	rows, err := database.QueryContext(ctx, chunkIndexesQuery, ChunksIndexName)
 	if err != nil {
 		return nil, fmt.Errorf("read chunks vector indexes: %w", err)

@@ -25,8 +25,12 @@ func (e embeddingIndexEnsurer) EnsureIndex(ctx context.Context, dimension int) e
 	return err
 }
 
+type variantSink interface {
+	WriteVariants(ctx context.Context, model string, records []evidenceindex.VariantRecord) error
+}
+
 type variantWriter struct {
-	writer *evidenceindex.Writer
+	writer variantSink
 }
 
 func (w variantWriter) WriteVariants(ctx context.Context, model string, records []embeddingmigration.VariantRecord) error {

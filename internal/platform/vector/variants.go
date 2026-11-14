@@ -36,18 +36,78 @@ type EmbeddingIndexReport struct {
 	DimensionHistogram []DimensionCount
 }
 
-func CheckChunkEmbeddingIndexes(ctx context.Context, db *gorm.DB) (EmbeddingIndexReport, error) {
-	var report EmbeddingIndexReport
+// variantSession is the subset of a dedicated PostgreSQL connection used by
+// the variant index lifecycle. It mirrors indexSession so the catalog and
+// failure paths can be exercised without a live database.
+type variantSession interface {
+	PgvectorVersion(ctx context.Context) (string, error)
+	ListIndexes(ctx context.Context) ([]indexRecord, error)
+	DimensionHistogram(ctx context.Context) ([]DimensionCount, error)
+	Exec(ctx context.Context, statement string) error
+}
+
+type postgresVariantSession struct {
+	connection *sql.Conn
+}
+
+func (s postgresVariantSession) PgvectorVersion(ctx context.Context) (string, error) {
+	var version string
+	if err := s.connection.QueryRowContext(ctx, pgvectorVersionQuery).Scan(&version); err != nil {
+		return "", err
+	}
+	return version, nil
+}
+
+func (s postgresVariantSession) ListIndexes(ctx context.Context) ([]indexRecord, error) {
+	return listEmbeddingIndexes(ctx, s.connection)
+}
+
+func (s postgresVariantSession) DimensionHistogram(ctx context.Context) ([]DimensionCount, error) {
+	rows, err := s.connection.QueryContext(ctx, "SELECT dimension, count(*) FROM chunk_embeddings GROUP BY dimension ORDER BY dimension")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var histogram []DimensionCount
+	for rows.Next() {
+		var bucket DimensionCount
+		if err := rows.Scan(&bucket.Dimension, &bucket.Count); err != nil {
+			return nil, fmt.Errorf("scan chunk embedding dimension: %w", err)
+		}
+		histogram = append(histogram, bucket)
+	}
+	return histogram, rows.Err()
+}
+
+func (s postgresVariantSession) Exec(ctx context.Context, statement string) error {
+	_, err := s.connection.ExecContext(ctx, statement)
+	return err
+}
+
+func openVariantSession(ctx context.Context, db *gorm.DB, purpose string) (variantSession, func(), error) {
 	sqlDB, err := db.DB()
 	if err != nil {
-		return report, fmt.Errorf("database handle: %w", err)
+		return nil, nil, fmt.Errorf("database handle: %w", err)
 	}
 	connection, err := sqlDB.Conn(ctx)
 	if err != nil {
-		return report, fmt.Errorf("acquire check connection: %w", err)
+		return nil, nil, fmt.Errorf("acquire %s connection: %w", purpose, err)
 	}
-	defer connection.Close()
-	records, err := listEmbeddingIndexes(ctx, connection)
+	return postgresVariantSession{connection: connection}, func() { _ = connection.Close() }, nil
+}
+
+func CheckChunkEmbeddingIndexes(ctx context.Context, db *gorm.DB) (EmbeddingIndexReport, error) {
+	session, closeSession, err := openVariantSession(ctx, db, "check")
+	if err != nil {
+		return EmbeddingIndexReport{}, err
+	}
+	defer closeSession()
+	return checkChunkEmbeddingIndexes(ctx, session)
+}
+
+func checkChunkEmbeddingIndexes(ctx context.Context, session variantSession) (EmbeddingIndexReport, error) {
+	var report EmbeddingIndexReport
+	records, err := session.ListIndexes(ctx)
 	if err != nil {
 		return report, err
 	}
@@ -64,19 +124,12 @@ func CheckChunkEmbeddingIndexes(ctx context.Context, db *gorm.DB) (EmbeddingInde
 			report.Indexes = append(report.Indexes, status)
 		}
 	}
-	rows, err := connection.QueryContext(ctx, "SELECT dimension, count(*) FROM chunk_embeddings GROUP BY dimension ORDER BY dimension")
+	histogram, err := session.DimensionHistogram(ctx)
 	if err != nil {
 		return report, fmt.Errorf("read chunk embedding dimensions: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var bucket DimensionCount
-		if err := rows.Scan(&bucket.Dimension, &bucket.Count); err != nil {
-			return report, fmt.Errorf("scan chunk embedding dimension: %w", err)
-		}
-		report.DimensionHistogram = append(report.DimensionHistogram, bucket)
-	}
-	return report, rows.Err()
+	report.DimensionHistogram = histogram
+	return report, nil
 }
 
 // EnsureChunkEmbeddingIndex builds the variant HNSW index for one dimension.
@@ -86,44 +139,46 @@ func EnsureChunkEmbeddingIndex(ctx context.Context, db *gorm.DB, dimension int, 
 	if dimension <= 0 {
 		return EnsureResult{}, fmt.Errorf("vector dimension must be a positive integer, got %d", dimension)
 	}
-	sqlDB, err := db.DB()
+	session, closeSession, err := openVariantSession(ctx, db, "index build")
 	if err != nil {
-		return EnsureResult{}, fmt.Errorf("database handle: %w", err)
+		return EnsureResult{}, err
 	}
-	connection, err := sqlDB.Conn(ctx)
-	if err != nil {
-		return EnsureResult{}, fmt.Errorf("acquire index build connection: %w", err)
-	}
-	defer connection.Close()
-	start := time.Now()
-	result := EnsureResult{Dimension: dimension}
-	defer func() { result.Duration = time.Since(start) }()
+	defer closeSession()
+	return ensureChunkEmbeddingIndex(ctx, session, dimension, options)
+}
 
-	var version string
-	if err := connection.QueryRowContext(ctx, pgvectorVersionQuery).Scan(&version); err != nil {
+func ensureChunkEmbeddingIndex(ctx context.Context, session variantSession, dimension int, options IndexOptions) (result EnsureResult, err error) {
+	result = EnsureResult{Dimension: dimension}
+	start := time.Now()
+	defer func() { result.Duration = time.Since(start) }()
+	if dimension <= 0 {
+		return result, fmt.Errorf("vector dimension must be a positive integer, got %d", dimension)
+	}
+	version, err := session.PgvectorVersion(ctx)
+	if err != nil {
 		return result, fmt.Errorf("read pgvector version: %w", err)
 	}
 	if err := checkPgvectorVersion(version); err != nil {
 		return result, err
 	}
-	if _, err := connection.ExecContext(ctx, fmt.Sprintf("SET lock_timeout = %d", options.LockTimeout.Milliseconds())); err != nil {
+	if err := session.Exec(ctx, fmt.Sprintf("SET lock_timeout = %d", options.LockTimeout.Milliseconds())); err != nil {
 		return result, fmt.Errorf("configure index build session: %w", err)
 	}
 	defer func() {
 		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_, _ = connection.ExecContext(resetCtx, "RESET lock_timeout")
+		_ = session.Exec(resetCtx, "RESET lock_timeout")
 	}()
-	if _, err := connection.ExecContext(ctx, fmt.Sprintf("SET statement_timeout = %d", options.StatementTimeout.Milliseconds())); err != nil {
+	if err := session.Exec(ctx, fmt.Sprintf("SET statement_timeout = %d", options.StatementTimeout.Milliseconds())); err != nil {
 		return result, fmt.Errorf("configure index build session: %w", err)
 	}
 	defer func() {
 		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
-		_, _ = connection.ExecContext(resetCtx, "RESET statement_timeout")
+		_ = session.Exec(resetCtx, "RESET statement_timeout")
 	}()
 
-	records, err := listEmbeddingIndexes(ctx, connection)
+	records, err := session.ListIndexes(ctx)
 	if err != nil {
 		return result, err
 	}
@@ -155,13 +210,13 @@ func EnsureChunkEmbeddingIndex(ctx context.Context, db *gorm.DB, dimension int, 
 		"CREATE INDEX CONCURRENTLY %s ON chunk_embeddings USING hnsw ((embedding::halfvec(%d)) halfvec_cosine_ops) WITH (m = 16, ef_construction = 64) WHERE dimension = %d",
 		quoteIndexName(target), dimension, dimension,
 	)
-	if _, err := connection.ExecContext(ctx, statement); err != nil {
+	if err := session.Exec(ctx, statement); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		_, _ = connection.ExecContext(cleanupCtx, "DROP INDEX CONCURRENTLY IF EXISTS "+quoteIndexName(target))
+		_ = session.Exec(cleanupCtx, "DROP INDEX CONCURRENTLY IF EXISTS "+quoteIndexName(target))
 		return result, fmt.Errorf("create chunk embedding index at dimension %d: %w", dimension, err)
 	}
-	records, err = listEmbeddingIndexes(ctx, connection)
+	records, err = session.ListIndexes(ctx)
 	if err != nil {
 		return result, err
 	}

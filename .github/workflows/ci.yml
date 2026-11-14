@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -44,7 +46,17 @@ jobs:
       - name: Tenancy static gate
         run: go run ./cmd/checktenancy
       - name: Go tests
-        run: go test ./...
+        run: go test -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage gate (changed packages)
+        env:
+          COVERAGE_GATE_MODE: warn
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          ./scripts/coverage_gate.sh --base "$base" --profile coverage.out --threshold 70 --mode "$COVERAGE_GATE_MODE"
       - name: Go race tests
         run: go test -race ./internal/... ./cmd/...
       - name: Go vet
@@ -59,6 +71,10 @@ jobs:
           npm test -- --passWithNoTests
           npm run e2e:typecheck
           npm run build
+      - name: Web coverage (warn)
+        working-directory: web
+        continue-on-error: true
+        run: npm run test:coverage
       - name: TypeScript SDK
         working-directory: sdk/typescript
         run: |

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 )
@@ -18,6 +19,19 @@ import (
 // The error contract is part of the API surface: a documented constraint
 // violation must be a 400 with a stable code, and an unexpected failure must
 // not leak its message.
+type requiredProbe struct {
+	Capability string `validate:"required"`
+}
+
+func bindingValidationError(t *testing.T) error {
+	t.Helper()
+	if err := validator.New().Struct(requiredProbe{}); err != nil {
+		return err
+	}
+	t.Fatal("expected a binding validation error")
+	return nil
+}
+
 func TestWriteErrorMapsDomainAndValidationErrors(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -31,6 +45,7 @@ func TestWriteErrorMapsDomainAndValidationErrors(t *testing.T) {
 		{"missing field", apperror.Invalidf("query is required"), http.StatusBadRequest, "invalid_request"},
 		{"session override", invalidSessionOverride(t), http.StatusBadRequest, "invalid_request"},
 		{"empty body", io.EOF, http.StatusBadRequest, "invalid_request"},
+		{"binding validation", bindingValidationError(t), http.StatusBadRequest, "invalid_request"},
 		{"truncated body", io.ErrUnexpectedEOF, http.StatusBadRequest, "invalid_request"},
 		// A downstream failure may contain words that look like validation
 		// prose. Only the error type may decide the response.
