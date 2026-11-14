@@ -56,7 +56,7 @@ jobs:
           else
             base="${{ github.event.before }}"
           fi
-          ./scripts/coverage_gate.sh --base "$base" --profile coverage.out --threshold 70 --mode "$COVERAGE_GATE_MODE"
+          ./scripts/coverage_gate.sh --base "$base" --profile coverage.out --tiers scripts/coverage_tiers.txt --threshold 70 --mode "$COVERAGE_GATE_MODE"
       - name: Go race tests
         run: go test -race ./internal/... ./cmd/...
       - name: Go vet

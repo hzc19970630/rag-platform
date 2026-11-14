@@ -81,7 +81,7 @@ coverage:
 	$(GO_RUN) go test -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 
 coverage-gate:
-	./scripts/coverage_gate.sh --base "$${COVERAGE_BASE:-origin/main}" --profile coverage.out --threshold "$${COVERAGE_THRESHOLD:-70}" --mode "$${COVERAGE_GATE_MODE:-warn}"
+	./scripts/coverage_gate.sh --base "$${COVERAGE_BASE:-origin/main}" --profile coverage.out --tiers "$${COVERAGE_TIERS:-scripts/coverage_tiers.txt}" --threshold "$${COVERAGE_THRESHOLD:-70}" --mode "$${COVERAGE_GATE_MODE:-warn}"
 
 # Nightly-only scale/load checks. TEST_POSTGRES_URL is optional; the graph test
 # uses SQLite, the replay load test skips without Postgres.

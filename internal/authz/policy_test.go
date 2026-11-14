@@ -113,3 +113,28 @@ func TestRefreshPoliciesClearsCaches(t *testing.T) {
 		t.Fatalf("caches not cleared: %d/%d/%d", len(service.tenants), len(service.scopes), len(service.revisionByTenant))
 	}
 }
+
+func TestPrincipalAllowsActionForAPIKeys(t *testing.T) {
+	cases := []struct {
+		name      string
+		principal Principal
+		action    string
+		want      bool
+	}{
+		{"session credentials always pass", Principal{CredentialType: "session"}, "delete", true},
+		{"api key without capabilities", Principal{CredentialType: "api_key"}, "write", true},
+		{"api key with read", Principal{CredentialType: "api_key", Capabilities: []string{"knowledge_base:read"}}, "read", true},
+		{"api key missing read", Principal{CredentialType: "api_key", Capabilities: []string{"knowledge_base:write"}}, "read", false},
+		{"api key with write", Principal{CredentialType: "api_key", Capabilities: []string{"knowledge_base:write"}}, "write", true},
+		{"api key missing delete", Principal{CredentialType: "api_key", Capabilities: []string{"knowledge_base:read"}}, "delete", false},
+		{"api key with manage_members", Principal{CredentialType: "api_key", Capabilities: []string{"knowledge_base:manage_members"}}, "manage_members", true},
+		{"unknown actions defer to policy", Principal{CredentialType: "api_key", Capabilities: []string{"chat"}}, "custom_action", true},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			if got := principalAllowsAction(test.principal, test.action); got != test.want {
+				t.Fatalf("principalAllowsAction(%q) = %v, want %v", test.action, got, test.want)
+			}
+		})
+	}
+}

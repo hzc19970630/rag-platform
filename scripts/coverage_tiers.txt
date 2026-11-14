@@ -1,0 +1,59 @@
+# Per-package coverage floors for changed packages.
+#
+# Format: <minimum statement coverage> <package path prefix>
+# The longest matching prefix wins. A threshold of 0 opts a declarative or
+# entry package out of the gate (it is still listed). Paths not matched fall
+# back to --threshold (default 70).
+#
+# Tier 75: security and delivery guarantees. A regression here is expensive.
+75 internal/authz
+75 internal/identity
+75 internal/platform/tenantdb
+75 internal/platform/secrets
+75 internal/platform/outbox
+75 internal/platform/persistence/inboxlease
+
+# Tier 70: core business domains and configuration.
+70 internal/ingestion
+70 internal/platform/vector
+70 internal/httpapi
+70 internal/knowledgeprojection
+70 internal/knowledgebase
+70 internal/datasource
+70 internal/conversation
+70 internal/embeddingmigration
+70 internal/modelregistry
+70 internal/retrieval
+70 internal/config
+70 internal/confighealth
+70 internal/configpreview
+70 internal/configschema
+70 internal/tenant
+70 internal/tenantconfig
+70 internal/ops
+70 internal/pipeline
+70 internal/platform/llm
+70 internal/platform/rerank
+70 internal/platform/observability
+70 internal/platform/ratelimit
+
+# Tier 50: infrastructure adapters and legacy surfaces. Ratchet upward as
+# their suites grow instead of blocking unrelated work immediately.
+50 internal/platform/queue
+50 internal/platform/storage
+50 internal/platform/search
+50 internal/platform/relationstore
+50 internal/platform/evidenceindex
+50 internal/platform/evidencestore
+50 internal/platform/persistence
+50 internal/transport/views
+50 internal/platform/docreader
+50 internal/platform/netprobe
+50 internal/platform/cjk
+50 internal/logging
+50 internal/apperror
+
+# Tier 0: declarative code with no meaningful unit-test surface.
+0 internal/buildinfo
+0 internal/platform/token
+0 internal/platform/persistence/models
