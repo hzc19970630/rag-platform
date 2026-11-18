@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, FileSearchOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
-import { Alert, App, Button, Card, Flex, List, Space, Table, Tag, Typography, type TableColumnsType } from "antd";
+import { Alert, App, Button, Card, Collapse, Flex, List, Space, Table, Tag, Typography, type TableColumnsType } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,8 +16,10 @@ import {
 import type { DocumentVersionView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
+import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { usePermissions } from "../session";
+import { documentFailureText, documentStageLabel, documentStatusLabel } from "../utils/enums";
 import { formatSize, formatTime } from "../utils/format";
 
 export function DocumentPage() {
@@ -101,7 +103,7 @@ export function DocumentPage() {
         <Space size={8} wrap>
           <Typography.Text strong>v{version.version}</Typography.Text>
           {version.current && <Tag color="green">{t("document.current")}</Tag>}
-          <StatusBadge status={version.current ? "ACTIVE" : version.status} />
+          <DocumentStatusBadge status={version.current ? "ACTIVE" : version.status} />
         </Space>
       ),
     },
@@ -118,6 +120,7 @@ export function DocumentPage() {
   ];
 
   const chunkItems = chunks.data?.pages.flatMap((page) => page.items) ?? [];
+  const currentVersion = versions.data?.items.find((version) => version.current);
 
   return (
     <div className="page">
@@ -128,7 +131,7 @@ export function DocumentPage() {
           { title: data.document.filename },
         ]}
         title={data.document.filename}
-        description={`${t("document.version")} ${data.version.id} · ${data.version.status}${data.version.errorCode ? ` · ${data.version.errorCode}` : ""}`}
+        description={[currentVersion ? `v${currentVersion.version}` : "", documentStatusLabel(t, data.version.status)].filter(Boolean).join(" · ")}
         extra={(
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={back}>{t("common.back")}</Button>
@@ -139,30 +142,43 @@ export function DocumentPage() {
       />
 
       <Card className="detail-card" title={t("document.status")}>
-        <ol className="stage-list">
-          {data.stages.map((stage) => (
-            <li key={stage.stage}>
-              <span className="stage-name">{stage.stage}</span>
-              <StatusBadge status={stage.status} />
-              <span className="stage-attempts">{t("document.attempts", { count: stage.attempts })}</span>
-              {stage.errorCode && <Typography.Text type="danger">{stage.errorCode}</Typography.Text>}
-            </li>
-          ))}
-        </ol>
+        <Space size={8} wrap>
+          <DocumentStatusBadge status={data.version.status} />
+          {!data.contentReady && data.version.status !== "FAILED" && (
+            <Typography.Text type="secondary">{t("document.processing")}</Typography.Text>
+          )}
+        </Space>
         {!data.contentReady && (
           <Alert
             className="settings-alert"
             type={data.version.status === "FAILED" ? "error" : "info"}
             showIcon
-            message={data.version.status === "FAILED"
-              ? `${t("document.failed")}: ${data.version.errorCode ?? "unknown"}${data.version.errorMessage ? ` · ${data.version.errorMessage}` : ""}`
-              : t("document.processing")}
+            message={data.version.status === "FAILED" ? documentFailureText(t, data.version.errorCode) : t("document.processing")}
           />
         )}
+        <Collapse
+          ghost
+          items={[{
+            key: "detail",
+            label: t("document.stages"),
+            children: (
+              <ol className="stage-list">
+                {data.stages.map((stage) => (
+                  <li key={stage.stage}>
+                    <span className="stage-name">{documentStageLabel(t, stage.stage)}</span>
+                    <StatusBadge status={stage.status} />
+                    <span className="stage-attempts">{t("document.attempts", { count: stage.attempts })}</span>
+                    {stage.errorCode && <Typography.Text type="danger">{t("document.errorCode")}: {stage.errorCode}</Typography.Text>}
+                  </li>
+                ))}
+              </ol>
+            ),
+          }]}
+        />
       </Card>
 
       {focused.data && (
-        <Card className="detail-card highlight" title={`${t("document.citation")} · ${focused.data.chunkId}`}>
+        <Card className="detail-card highlight" title={t("document.citation")}>
           <Typography.Text type="secondary">
             {focused.data.headingPath || t("document.noHeading")} · {t("document.position", { page: focused.data.pageNumber })} · {focused.data.sourcePath || t("document.noSource")}
           </Typography.Text>
@@ -202,7 +218,7 @@ export function DocumentPage() {
                   {content.data.blocks.map((block) => (
                     <div className="block" key={block.blockId}>
                       <Typography.Text type="secondary">
-                        {block.headingPath || t("document.noHeading")} · {t("document.position", { page: block.pageNumber })} · {block.kind}
+                        {block.headingPath || t("document.noHeading")} · {t("document.position", { page: block.pageNumber })} · {t(`document.blockKinds.${block.kind}`, { defaultValue: block.kind })}
                       </Typography.Text>
                       <Typography.Paragraph>{block.text}</Typography.Paragraph>
                     </div>
@@ -223,7 +239,6 @@ export function DocumentPage() {
                 <List.Item className={chunk.chunkId === chunkId ? "chunk focused" : "chunk"}>
                   <div className="chunk-body">
                     <Space size={8} wrap>
-                      <Typography.Text code>{chunk.chunkId}</Typography.Text>
                       <Typography.Text type="secondary">
                         #{chunk.ordinal} · {t("document.position", { page: chunk.pageNumber })} · {chunk.headingPath || t("document.noHeading")}
                       </Typography.Text>

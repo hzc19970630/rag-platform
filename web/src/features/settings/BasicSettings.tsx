@@ -82,10 +82,6 @@ export function BasicSettings({ knowledgeBase, canWrite, onSaved }: Props) {
             />
           </Form.Item>
         </Form>
-        <div className="read-only-row">
-          <Typography.Text type="secondary">{t("common.id")}: <code>{knowledgeBase.id}</code></Typography.Text>
-          <Typography.Text type="secondary">ACL {knowledgeBase.aclVersion}</Typography.Text>
-        </div>
         {error && <Alert type="error" showIcon message={error} className="settings-alert" />}
         {canWrite && (
           <Flex justify="flex-end" gap={8} className="settings-actions">

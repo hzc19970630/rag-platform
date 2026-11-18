@@ -1,3 +1,4 @@
+import { apiErrorDetail, friendlyApiMessage, friendlyStatusMessage } from "./errorMessages";
 import type { DocumentView, StreamEvent } from "./types";
 
 export const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8082/api/v1";
@@ -10,30 +11,28 @@ export function devHeaders(dev = import.meta.env.DEV): Record<string, string> {
 export class ApiError extends Error {
   status: number;
   code: string;
+  detail: string;
 
-  constructor(status: number, message: string, code = "") {
+  constructor(status: number, message: string, code = "", detail = "") {
     super(message);
     this.status = status;
     this.code = code;
-  }
-}
-
-async function errorText(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: string; message?: string };
-    return [body.error, body.message].filter(Boolean).join(": ") || `请求失败 (${response.status})`;
-  } catch {
-    return response.statusText || `请求失败 (${response.status})`;
+    this.detail = detail;
   }
 }
 
 async function toApiError(response: Response): Promise<ApiError> {
+  let body: { error?: string; message?: string } = {};
   try {
-    const body = (await response.clone().json()) as { error?: string; message?: string };
-    return new ApiError(response.status, [body.error, body.message].filter(Boolean).join(": "), body.error ?? "");
+    body = (await response.clone().json()) as { error?: string; message?: string };
   } catch {
-    return new ApiError(response.status, await errorText(response));
+    return new ApiError(response.status, friendlyStatusMessage(response.status), "", response.statusText);
   }
+  const code = body.error ?? "";
+  const message = body.error || body.message
+    ? friendlyApiMessage(code, body.message ?? "")
+    : friendlyStatusMessage(response.status);
+  return new ApiError(response.status, message, code, apiErrorDetail(code, body.message ?? ""));
 }
 
 let refreshPromise: Promise<boolean> | null = null;

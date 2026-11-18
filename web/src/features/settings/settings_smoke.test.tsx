@@ -133,7 +133,7 @@ describe("settings panels", () => {
     members.unmount();
 
     const connectors = renderPanel(<DataSourceSettings knowledgeBaseId="kb-1" canOperate />);
-    await waitFor(() => expect(connectors.container.textContent).toContain("连接器"));
+    await waitFor(() => expect(connectors.container.textContent).toContain("数据源"));
     connectors.unmount();
 
     const projection = renderPanel(<ProjectionPanel knowledgeBaseId="kb-1" canWrite={false} />);
@@ -151,7 +151,7 @@ describe("settings panels", () => {
         onSaved={() => undefined}
       />,
     );
-    expect(migration.container.textContent).toContain("Embedding");
+    expect(migration.container.textContent).toContain("向量模型");
     migration.unmount();
 
     renderPanel(

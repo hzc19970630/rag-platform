@@ -128,7 +128,7 @@ describe("page smoke tests", () => {
   it("renders the operations page for administrators", async () => {
     stubFetch();
     const page = renderPage(<OpsPage />, "/ops");
-    await waitFor(() => expect(page.container.textContent).toContain("死信"));
+    await waitFor(() => expect(page.container.textContent).toContain("失败任务"));
   });
 
   it("hides the operations page from non-administrators", async () => {

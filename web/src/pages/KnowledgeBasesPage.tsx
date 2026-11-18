@@ -185,9 +185,8 @@ export function KnowledgeBasesPage() {
                     : <Tag>{t("knowledgeBase.noCapability")}</Tag>}
                 </Space>
                 <Typography.Text type="secondary" className="kb-meta">
-                  ACL {kb.aclVersion} · {t("common.updatedAt")} {formatTime(kb.updatedAt)}
+                  {t("common.updatedAt")} {formatTime(kb.updatedAt)}
                 </Typography.Text>
-                <Typography.Text type="secondary" className="kb-id" ellipsis={{ tooltip: kb.id }}>{kb.id}</Typography.Text>
               </div>
             </Card>
           );

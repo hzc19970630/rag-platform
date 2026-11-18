@@ -19,9 +19,9 @@ import { api, uploadDocument } from "../api/client";
 import { queryKeys, terminalVersionStatuses, useConfiguration, useDocuments, useKnowledgeBase } from "../api/hooks";
 import type { DocumentSummary } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
+import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
-import { StatusBadge } from "../components/StatusBadge";
 import { SettingsDrawer } from "../features/settings/SettingsDrawer";
 import { MembersSettings } from "../features/settings/MembersSettings";
 import { ProjectionPanel } from "../features/settings/ProjectionPanel";
@@ -112,9 +112,7 @@ export function KnowledgeBasePage() {
         )}
       />
       <Space size={8} wrap className="kb-summary">
-        <Tag>ACL {kb.aclVersion}</Tag>
         <Typography.Text type="secondary">{t("knowledgeBase.updated")} {formatTime(kb.updatedAt)}</Typography.Text>
-        <Typography.Text type="secondary" copyable={{ text: kb.id }} className="kb-id">{kb.id}</Typography.Text>
       </Space>
       {configuration.error && <Alert type="error" showIcon message={t("settings.configLoadFailed")} description={configuration.error instanceof Error ? configuration.error.message : undefined} className="settings-alert" />}
       <Tabs activeKey={activeTab} onChange={setTab} items={tabItems} className="kb-tabs" />
@@ -229,11 +227,10 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
               {item.document.filename}
             </Typography.Link>
           </span>
-          <Typography.Text type="secondary" className="doc-id">{item.document.id}</Typography.Text>
         </div>
       ),
     },
-    { title: t("document.status"), key: "status", width: 160, render: (_, item) => <StatusBadge status={item.version.status} /> },
+    { title: t("document.status"), key: "status", width: 160, render: (_, item) => <DocumentStatusBadge status={item.version.status} /> },
     { title: t("document.version"), key: "version", width: 120, render: (_, item) => `v${item.version.version} · ${formatSize(item.version.sizeBytes)}` },
     { title: t("common.updatedAt"), key: "updated", width: 190, render: (_, item) => formatTime(item.document.updatedAt) },
     {
@@ -290,14 +287,6 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
           pagination={false}
           scroll={{ x: 980 }}
           tableLayout="fixed"
-          expandable={{
-            expandedRowRender: (item) => (
-              <div className="doc-expanded">
-                <Typography.Text type="secondary">{t("document.version")} {item.version.id}</Typography.Text>
-                {item.version.errorCode && <Typography.Text type="danger">{item.version.errorCode}{item.version.errorMessage ? ` · ${item.version.errorMessage}` : ""}</Typography.Text>}
-              </div>
-            ),
-          }}
         />
       )}
       {documents.hasNextPage && (

@@ -38,7 +38,7 @@ import { VirtualMessageList } from "../components/VirtualMessageList";
 import { VirtualSessionList } from "../components/VirtualSessionList";
 import { usePermissions } from "../session";
 import { formatTime } from "../utils/format";
-import { statusLabel } from "../utils/enums";
+import { answerFailureText, statusLabel } from "../utils/enums";
 
 // StrictMode mounts effects twice in development; sharing the in-flight
 // creation keeps a knowledge-base entry point from opening two sessions.
@@ -460,7 +460,7 @@ export function ChatPage() {
                     </Button>
                   </Space>
                   <Typography.Text type="secondary">
-                    {t("document.position", { page: citation.pageNumber })} · {t("chat.fusionScore")} {citation.score.toFixed(3)}
+                    {t("document.position", { page: citation.pageNumber })}
                   </Typography.Text>
                   <Typography.Paragraph className="quote">{citation.quote}</Typography.Paragraph>
                 </Flex>
@@ -509,7 +509,6 @@ function MessageBubble(props: { item: MessageView; conversationId: string; onOpe
           <Space size={8}>
             <Typography.Text type="secondary" className="chat-message-status">
               {statusLabel(t, item.message.status)}
-              {item.message.errorCode ? ` · ${item.message.errorCode}` : ""}
             </Typography.Text>
             <Typography.Text type="secondary" className="chat-message-status">{formatTime(item.message.createdAt)}</Typography.Text>
           </Space>
@@ -518,7 +517,7 @@ function MessageBubble(props: { item: MessageView; conversationId: string; onOpe
           ? <Typography.Paragraph>{item.message.content}</Typography.Paragraph>
           : <AnswerText content={item.message.content} citations={item.citations} onOpen={openCitation} />}
         {item.message.errorCode && (
-          <Alert type="error" showIcon message={item.message.errorCode} description={item.message.errorMessage} />
+          <Alert type="error" showIcon message={answerFailureText(t, item.message.errorCode)} />
         )}
         {item.citations.length > 0 && (
           <>
@@ -568,7 +567,7 @@ export function CitationList(props: { citations: Citation[]; onOpen: (citation: 
             [{citation.index}] {citation.headingPath || t("chat.citationFallback")}
           </Button>
           <Typography.Text type="secondary" className="citation-meta">
-            {t("document.position", { page: citation.pageNumber })} · {t("chat.fusionScore")} {citation.score.toFixed(3)}
+            {t("document.position", { page: citation.pageNumber })}
           </Typography.Text>
           <Typography.Paragraph className="citation-quote">{citation.quote}</Typography.Paragraph>
         </li>

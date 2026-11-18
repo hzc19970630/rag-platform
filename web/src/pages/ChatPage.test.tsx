@@ -25,12 +25,12 @@ describe("chat citations", () => {
     expect(screen.queryByRole("button", { name: /\[2\]/ })).toBeNull();
   });
 
-  it("shows the citation heading, page, score and quote", () => {
+  it("shows the citation heading, page and quote", () => {
     const onOpen = vi.fn();
     render(<CitationList citations={[citation]} onOpen={onOpen} />);
 
     expect(screen.getByText(/验收标准/)).toBeInTheDocument();
-    expect(screen.getByText(/0\.820/)).toBeInTheDocument();
+    expect(screen.getByText(/第 3 页/)).toBeInTheDocument();
     expect(screen.getByText(/可访问的原文片段/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /验收标准/ }));
     expect(onOpen).toHaveBeenCalledWith(citation);

@@ -113,4 +113,22 @@ describe("enum label helpers", () => {
     expect(helpers.toneColor("success")).toBeTruthy();
     expect(helpers.embeddingMigrationStatusTone("reembedding")).toBeTruthy();
   });
+
+  it("maps document and answer failure codes to localized copy", async () => {
+    const { answerFailureText, documentFailureText } = await import("./enums");
+    const codes = [
+      "insufficient_evidence", "citation_rejected", "ungrounded_answer", "model_error",
+      "timeout", "client_disconnected", "cancelled", "worker_lost", "worker_error",
+      "queue_unavailable", "job_invalid", "forbidden",
+    ];
+    for (const language of languages) {
+      const t = i18n.getFixedT(language) as TFunction;
+      for (const code of codes) {
+        expect(answerFailureText(t, code), `${language} ${code}`).not.toBe(code);
+      }
+      expect(answerFailureText(t, "unknown_code")).toBe(t("chat.failures.generic"));
+      expect(documentFailureText(t, "unsupported_scanned_pdf")).toBe(t("document.failures.scannedPdf"));
+      expect(documentFailureText(t, "unknown_code")).toBe(t("document.failures.generic"));
+    }
+  });
 });

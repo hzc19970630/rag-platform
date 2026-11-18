@@ -193,7 +193,6 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .doc-name { display: grid; gap: 2px; min-width: 0; }
 .doc-name a { overflow-wrap: anywhere; }
 .doc-id { font-size: 0.72rem; overflow-wrap: anywhere; }
-.doc-expanded { display: grid; gap: 4px; padding: 4px 8px; }
 .doc-error { color: var(--error) !important; }
 
 /* Document detail */

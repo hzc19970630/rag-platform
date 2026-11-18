@@ -168,6 +168,97 @@ export function statusLabel(t: TFunction, status: string): string {
   return enumLabel(t, "status", status);
 }
 
+const DOCUMENT_STATUS_GROUPS: Record<string, string> = {
+  RECEIVED: "pending",
+  STORED: "pending",
+  PENDING: "pending",
+  QUEUED: "pending",
+  PARSING: "processing",
+  PARSED: "processing",
+  NORMALIZING: "processing",
+  NORMALIZED: "processing",
+  CHUNKING: "processing",
+  CHUNKED: "processing",
+  EMBEDDING: "processing",
+  EMBEDDED: "processing",
+  INDEXING: "processing",
+  PROCESSING: "processing",
+  RUNNING: "processing",
+  RETRYING: "processing",
+  EVIDENCE_READY: "ready",
+  ACTIVE: "ready",
+  KNOWLEDGE_READY: "ready",
+  SUCCEEDED: "ready",
+  COMPLETED: "ready",
+  FAILED: "failed",
+  FAILED_WIKI: "failed",
+  FAILED_RELATION: "failed",
+  DEAD: "failed",
+  CANCELLED: "cancelled",
+  STALE: "stale",
+};
+
+export function documentStatusGroup(status: string): string {
+  return DOCUMENT_STATUS_GROUPS[status] ?? "";
+}
+
+export function documentStatusLabel(t: TFunction, status: string): string {
+  const group = documentStatusGroup(status);
+  return group ? t(`document.summary.${group}`) : statusLabel(t, status);
+}
+
+export function documentStatusTone(status: string): EnumTone {
+  switch (documentStatusGroup(status)) {
+    case "ready":
+      return "success";
+    case "failed":
+    case "cancelled":
+      return "error";
+    case "pending":
+    case "processing":
+      return "warning";
+    default:
+      return "default";
+  }
+}
+
+export function documentStageLabel(t: TFunction, stage: string): string {
+  return t(`document.stageNames.${stage}`, { defaultValue: stage });
+}
+
+const DOCUMENT_FAILURE_KEYS: Record<string, string> = {
+  unsupported_scanned_pdf: "document.failures.scannedPdf",
+  unsupported_legacy_office: "document.failures.legacyOffice",
+  unsupported_corrupt_document: "document.failures.corrupt",
+  document_too_complex: "document.failures.tooComplex",
+  unsupported_mime_type: "document.failures.unsupportedMime",
+  empty_document: "document.failures.empty",
+  parser_error: "document.failures.parser",
+};
+
+export function documentFailureText(t: TFunction, code?: string): string {
+  return t((code && DOCUMENT_FAILURE_KEYS[code]) || "document.failures.generic");
+}
+
+const ANSWER_FAILURE_KEYS: Record<string, string> = {
+  insufficient_evidence: "chat.failures.insufficientEvidence",
+  citation_rejected: "chat.failures.citationRejected",
+  ungrounded_answer: "chat.failures.ungrounded",
+  model_error: "chat.failures.modelError",
+  timeout: "chat.failures.timeout",
+  client_disconnected: "chat.failures.disconnected",
+  cancelled: "chat.failures.cancelled",
+  worker_lost: "chat.failures.interrupted",
+  worker_error: "chat.failures.workerError",
+  queue_unavailable: "chat.failures.queueUnavailable",
+  job_invalid: "chat.failures.invalid",
+  forbidden: "chat.failures.forbidden",
+};
+
+export function answerFailureText(t: TFunction, code?: string): string {
+  return t((code && ANSWER_FAILURE_KEYS[code]) || "chat.failures.generic");
+}
+
 export function roleLabel(t: TFunction, role: string): string {
   return enumLabel(t, "role", role);
 }
