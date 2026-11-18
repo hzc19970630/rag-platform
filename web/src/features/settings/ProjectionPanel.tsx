@@ -18,6 +18,18 @@ type Props = {
 
 type RunKind = "wiki" | "graph";
 
+// Backend run errors carry a stable code; users see a localized reason instead
+// of the developer-facing English message.
+const PROJECTION_ERROR_KEYS: Record<string, string> = {
+  empty_relation_projection: "projection.errorReason.emptyRelation",
+  unsourced_relations: "projection.errorReason.unsourcedRelations",
+  untraceable_relation: "projection.errorReason.untraceableRelation",
+  stale_relation_source: "projection.errorReason.staleRelationSource",
+  no_evidence: "projection.errorReason.noEvidence",
+  graph_disabled: "projection.errorReason.graphDisabled",
+  relation_extractor_missing: "projection.errorReason.extractorMissing",
+};
+
 export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }: Props) {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
@@ -71,6 +83,15 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
 
   const columns = (kind: RunKind): ColumnsType<ProjectionRun> => [
     { title: t("projection.runStatus"), dataIndex: "status", key: "status", render: (value: string) => <StatusBadge status={value} /> },
+    {
+      title: t("projection.failureReason"),
+      key: "failureReason",
+      render: (_, run) => {
+        if (!run.status.startsWith("FAILED_")) return "-";
+        const key = PROJECTION_ERROR_KEYS[run.errorCode ?? ""] ?? "projection.errorReason.fallback";
+        return <Typography.Text type="secondary">{t(key)}</Typography.Text>;
+      },
+    },
     { title: t("projection.runModel"), dataIndex: "model", key: "model", render: (value?: string) => value || "-" },
     { title: t("common.createdAt"), dataIndex: "createdAt", key: "createdAt", render: (value?: string) => formatTime(value) },
     {

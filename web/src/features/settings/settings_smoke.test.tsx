@@ -140,6 +140,32 @@ describe("settings panels", () => {
     await waitFor(() => expect(projection.container.textContent?.length).toBeGreaterThan(0));
   });
 
+  it("explains failed relation projections instead of the raw backend message", async () => {
+    stubFetch((url) => {
+      if (url.endsWith("/projection")) return {
+        joinStatus: "KNOWLEDGE_PARTIAL",
+        wikiEnabled: true,
+        graphEnabled: true,
+        runs: [],
+        relationRuns: [{
+          id: "prj-1",
+          projectionType: "relation",
+          status: "FAILED_RELATION",
+          errorCode: "empty_relation_projection",
+          errorMessage: "extraction produced no sourced relation",
+          createdAt: "2026-11-18T00:00:00Z",
+          updatedAt: "2026-11-18T00:00:00Z",
+        }],
+        pages: { total: 0, published: 0, pendingReview: 0, stale: 0, indexed: 0 },
+        graph: { snapshots: 0, activeSnapshot: "", entities: 0, relations: 0, pendingReview: 0 },
+      };
+      return {};
+    });
+    const projection = renderPanel(<ProjectionPanel knowledgeBaseId="kb-1" canWrite={false} />);
+    await waitFor(() => expect(projection.container.textContent).toContain(i18n.t("projection.errorReason.emptyRelation")));
+    expect(projection.container.textContent).not.toContain("extraction produced no sourced relation");
+  });
+
   it("renders the embedding migration panel and settings drawer", async () => {
     stubFetch(() => ({}));
     const migration = renderPanel(
