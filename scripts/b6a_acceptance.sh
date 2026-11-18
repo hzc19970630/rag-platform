@@ -161,8 +161,17 @@ request POST /api/v1/search 200 "$tmp_dir/search.json" "${headers[@]}" \
   -H 'Content-Type: application/json' -d "{\"query\":\"evergreen clause\",\"knowledgeBaseId\":\"$kb_id\",\"tagIds\":[\"$tag_two\"]}"
 [[ "$("$python_bin" -c 'import json,sys; d=json.load(open(sys.argv[1])); print(all(item.get("documentId") == sys.argv[2] for item in d.get("items", [])))' "$tmp_dir/search.json" "$inside_doc")" == "True" ]]
 
-request POST "/api/v1/knowledge-bases/$kb_id/documents/batch" 200 "$tmp_dir/move-root.json" "${headers[@]}" \
-  -H 'Content-Type: application/json' -d "{\"action\":\"move\",\"documentIds\":[\"$inside_doc\"],\"folderId\":\"\"}"
+# ---------------------------------------------------------------------------
+# Recursive folder delete removes the subtree and its documents.
+# ---------------------------------------------------------------------------
+request POST "/api/v1/knowledge-bases/$kb_id/folders" 201 "$tmp_dir/archive.json" "${headers[@]}" \
+  -H 'Content-Type: application/json' -d '{"name":"Archive"}'
+archive_folder="$("$python_bin" -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$tmp_dir/archive.json")"
+request POST "/api/v1/knowledge-bases/$kb_id/documents/batch" 200 "$tmp_dir/move-archive.json" "${headers[@]}" \
+  -H 'Content-Type: application/json' -d "{\"action\":\"move\",\"documentIds\":[\"$inside_doc\"],\"folderId\":\"$archive_folder\"}"
+request DELETE "/api/v1/folders/$archive_folder?recursive=true" 204 "$tmp_dir/delete-archive.json" "${headers[@]}"
+request GET "/api/v1/knowledge-bases/$kb_id/documents" 200 "$tmp_dir/after-recursive.json" "${headers[@]}"
+[[ "$(json 'len(d["items"])' "$tmp_dir/after-recursive.json")" == "0" ]]
 request DELETE "/api/v1/folders/$child_folder" 204 "$tmp_dir/delete-child.json" "${headers[@]}"
 request DELETE "/api/v1/folders/$root_folder" 204 "$tmp_dir/delete-root.json" "${headers[@]}"
 request DELETE "/api/v1/tags/$tag_one" 204 "$tmp_dir/delete-tag.json" "${headers[@]}"

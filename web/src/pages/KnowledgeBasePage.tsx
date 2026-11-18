@@ -29,7 +29,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { api, jsonInit, uploadDocument } from "../api/client";
+import { api, downloadDocument, jsonInit, uploadDocument } from "../api/client";
 import {
   queryKeys,
   terminalVersionStatuses,
@@ -39,7 +39,7 @@ import {
   useKnowledgeBase,
   useTags,
 } from "../api/hooks";
-import type { BatchDocumentsResult, DocumentSummary, Folder } from "../api/types";
+import type { BatchDocumentsResult, DocumentPage, DocumentSummary, Folder, Tag as TagView } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { FOLDER_ALL, FOLDER_ROOT, FolderTree } from "../components/FolderTree";
@@ -52,6 +52,8 @@ import { usePermissions } from "../session";
 import { formatSize, formatTime } from "../utils/format";
 
 const accept = ".pdf,.docx,.xlsx,.pptx,.md,.txt,.html,.htm";
+const EMPTY_FOLDERS: Folder[] = [];
+const EMPTY_TAGS: TagView[] = [];
 
 export function KnowledgeBasePage() {
   const { knowledgeBaseId = "" } = useParams();
@@ -121,7 +123,7 @@ export function KnowledgeBasePage() {
   ];
 
   return (
-    <div className="page">
+    <div className="page kb-detail-page">
       <PageHeader
         breadcrumbs={[{ title: t("knowledgeBase.title"), to: "/knowledge-bases" }, { title: kb.name }]}
         title={kb.name}
@@ -180,8 +182,8 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
   const uploadRef = useRef<HTMLInputElement>(null);
   const replaceRef = useRef<HTMLInputElement>(null);
   const replaceTarget = useRef("");
-  const folders = useFolders(knowledgeBaseId).data ?? [];
-  const tags = useTags(knowledgeBaseId).data ?? [];
+  const folders = useFolders(knowledgeBaseId).data ?? EMPTY_FOLDERS;
+  const tags = useTags(knowledgeBaseId).data ?? EMPTY_TAGS;
   const folderId = folderKey === FOLDER_ALL ? "" : folderKey === FOLDER_ROOT ? "root" : folderKey;
   const documents = useDocuments(knowledgeBaseId, { folderId, tagIds: tagFilter });
   const items = documents.data?.pages.flatMap((page) => page.items) ?? [];
@@ -247,6 +249,66 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
     setFolderName(folder.name);
     setFolderParent(folder.parentId ?? "");
     setFolderDialog({ mode, folder });
+  }
+
+  async function downloadFolderDocuments(folders: Folder[]) {
+    setBatchBusy("download");
+    let downloaded = 0;
+    try {
+      // A parent folder already includes its subtree, so selected parent/child
+      // pairs must not download the same document twice.
+      const files = new Map<string, string>();
+      for (const folder of folders) {
+        let cursor = "";
+        do {
+          const params = new URLSearchParams({ limit: "50", folder_id: folder.id });
+          if (cursor) params.set("cursor", cursor);
+          const page = await api<DocumentPage>(`/knowledge-bases/${knowledgeBaseId}/documents?${params.toString()}`);
+          for (const item of page.items) {
+            files.set(item.document.id, item.document.filename);
+          }
+          cursor = page.hasMore ? page.nextCursor : "";
+        } while (cursor);
+      }
+      for (const [documentId, filename] of files) {
+        await downloadDocument(documentId, filename);
+        downloaded += 1;
+        // Browsers rate-limit bursts of programmatic downloads.
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+      }
+      message.success(t("folder.downloadDone", { count: downloaded }));
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : t("folder.downloadFailed"));
+    } finally {
+      setBatchBusy("");
+    }
+  }
+
+  function batchRemoveFolders(folders: Folder[]) {
+    modal.confirm({
+      title: t("folder.batchDeleteTitle", { count: folders.length }),
+      content: t("folder.batchDeleteConfirm"),
+      okText: t("common.delete"),
+      okButtonProps: { danger: true },
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        let failed = 0;
+        for (const folder of folders) {
+          try {
+            await api(`/folders/${folder.id}?recursive=true`, { method: "DELETE" });
+          } catch {
+            failed += 1;
+          }
+        }
+        if (failed > 0) {
+          message.warning(t("folder.batchDeletePartial", { failed }));
+        } else {
+          message.success(t("folder.batchDeleteDone"));
+        }
+        if (folders.some((folder) => folder.id === folderKey)) setFolderKey(FOLDER_ALL);
+        await refresh();
+      },
+    });
   }
 
   async function saveFolder() {
@@ -451,11 +513,14 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
           folders={folders}
           selectedKey={folderKey}
           canWrite={canWrite}
+          canDelete={canDelete}
           onSelect={(key) => { setFolderKey(key); setSelected([]); }}
           onCreate={openCreateFolder}
           onRename={(folder) => openFolderDialog(folder, "rename")}
           onMove={(folder) => openFolderDialog(folder, "move")}
           onDelete={removeFolder}
+          onDownload={(selection) => void downloadFolderDocuments(selection)}
+          onBatchDelete={batchRemoveFolders}
         />
         <div className="kb-documents-main">
           <Flex justify="space-between" align="center" gap={12} wrap="wrap" className="tab-toolbar">

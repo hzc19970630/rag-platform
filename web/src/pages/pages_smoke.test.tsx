@@ -160,6 +160,13 @@ describe("page smoke tests", () => {
     await screen.findByText("Finance");
     fireEvent.click(screen.getByText("Contracts"));
     await waitFor(() => expect(calls.some((url) => url.includes("folder_id=fld-1"))).toBe(true));
+
+    const search = screen.getByPlaceholderText("搜索文件夹");
+    fireEvent.change(search, { target: { value: "zzz" } });
+    expect(await screen.findByText("没有匹配的文件夹。")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "" } });
+    expect(await screen.findByText("Contracts")).toBeInTheDocument();
+
   });
 
   it("submits a batch move for selected documents", async () => {

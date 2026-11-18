@@ -46,10 +46,10 @@ func TestFolderTreeLifecycle(t *testing.T) {
 	if _, err := service.UpdateFolder(ctx, owner, root.ID, FolderUpdate{ParentID: &moved.ID}); err == nil {
 		t.Fatal("moving a folder into its own subtree must be rejected")
 	}
-	if err := service.DeleteFolder(ctx, owner, root.ID); err == nil {
+	if err := service.DeleteFolder(ctx, owner, root.ID, false); err == nil {
 		t.Fatal("deleting a non-empty folder must be rejected")
 	}
-	if err := service.DeleteFolder(ctx, owner, moved.ID); err != nil {
+	if err := service.DeleteFolder(ctx, owner, moved.ID, false); err != nil {
 		t.Fatalf("delete empty folder: %v", err)
 	}
 	folders, err := service.ListFolders(ctx, owner, "kb-a")
@@ -163,5 +163,39 @@ func TestBatchDocumentsMoveAndPartialFailure(t *testing.T) {
 	}
 	if _, err := service.BatchDocuments(ctx, owner, "kb-a", BatchInput{Action: "unknown", DocumentIDs: []string{"doc-a"}}); err == nil {
 		t.Fatal("unknown batch action must be rejected")
+	}
+}
+
+func TestRecursiveFolderDeleteSoftDeletesDocuments(t *testing.T) {
+	service, principal := newPreviewFixture(t)
+	ctx := context.Background()
+	owner := principal()
+
+	root, err := service.CreateFolder(ctx, owner, "kb-a", "Contracts", "")
+	if err != nil {
+		t.Fatalf("create root folder: %v", err)
+	}
+	child, err := service.CreateFolder(ctx, owner, "kb-a", "2026", root.ID)
+	if err != nil {
+		t.Fatalf("create child folder: %v", err)
+	}
+	if _, err := service.BatchDocuments(ctx, owner, "kb-a", BatchInput{
+		Action: BatchMove, DocumentIDs: []string{"doc-a"}, FolderID: child.ID,
+	}); err != nil {
+		t.Fatalf("move document into folder: %v", err)
+	}
+	if err := service.DeleteFolder(ctx, owner, root.ID, true); err != nil {
+		t.Fatalf("recursive delete: %v", err)
+	}
+	folders, err := service.ListFolders(ctx, owner, "kb-a")
+	if err != nil || len(folders) != 0 {
+		t.Fatalf("folders after recursive delete = %+v, %v", folders, err)
+	}
+	page, err := service.ListDocuments(ctx, owner, "kb-a", DocumentFilter{}, "", 0)
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("documents after recursive delete = %+v, %v", page, err)
+	}
+	if _, err := service.Get(ctx, owner, "doc-a"); !errors.Is(err, apperror.ErrNotFound) {
+		t.Fatalf("soft-deleted document must not be readable, got %v", err)
 	}
 }

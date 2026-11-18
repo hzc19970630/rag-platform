@@ -106,6 +106,22 @@ export async function openDocumentPreview(documentId: string): Promise<void> {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+// downloadDocument saves the original file instead of opening a tab. The preview
+// endpoint already enforces document permissions, so this adds no new surface.
+export async function downloadDocument(documentId: string, filename: string): Promise<void> {
+  const response = await request(`/documents/${documentId}/preview`);
+  if (!response.ok) throw await toApiError(response);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 function parseSSEBlock(raw: string): StreamEvent | undefined {
   let eventType = "message";
   let eventId = "";

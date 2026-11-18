@@ -1,5 +1,14 @@
-import { DeleteOutlined, EditOutlined, FolderAddOutlined, FolderOutlined, MoreOutlined } from "@ant-design/icons";
-import { Button, Dropdown, Tree, Typography } from "antd";
+import {
+  CloseOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  FolderAddOutlined,
+  FolderOutlined,
+  MoreOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
+import { Button, Checkbox, Dropdown, Flex, Input, Space, Tooltip, Tree, Typography } from "antd";
 import type { DataNode } from "antd/es/tree";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,24 +21,56 @@ type Props = {
   folders: Folder[];
   selectedKey: string;
   canWrite: boolean;
+  canDelete: boolean;
   onSelect: (key: string) => void;
   onCreate: (parentID: string) => void;
   onRename: (folder: Folder) => void;
   onMove: (folder: Folder) => void;
   onDelete: (folder: Folder) => void;
+  onDownload: (folders: Folder[]) => void;
+  onBatchDelete: (folders: Folder[]) => void;
 };
 
-export function FolderTree({ folders, selectedKey, canWrite, onSelect, onCreate, onRename, onMove, onDelete }: Props) {
+export function FolderTree(props: Props) {
   const { t } = useTranslation();
+  const { folders, selectedKey, canWrite, canDelete, onSelect, onCreate, onRename, onMove, onDelete, onDownload, onBatchDelete } = props;
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [checkedKeys, setCheckedKeys] = useState<string[]>([]);
+
   // The folder list arrives asynchronously, so defaultExpandAll would run on an
   // empty tree. Expand every folder whenever the set changes instead.
   useEffect(() => {
-    setExpandedKeys((current) => Array.from(new Set([...current, ...folders.map((folder) => folder.id)])));
+    setExpandedKeys((current) => {
+      const next = new Set([...current, ...folders.map((folder) => folder.id)]);
+      return next.size === current.length ? current : Array.from(next);
+    });
+    const live = new Set(folders.map((folder) => folder.id));
+    setCheckedKeys((current) => {
+      const next = current.filter((id) => live.has(id));
+      return next.length === current.length ? current : next;
+    });
   }, [folders]);
+
   const treeData = useMemo<DataNode[]>(() => {
+    const visible = new Set<string>();
+    const needle = query.trim().toLowerCase();
+    if (needle) {
+      const byID = new Map(folders.map((folder) => [folder.id, folder]));
+      for (const folder of folders) {
+        if (!folder.name.toLowerCase().includes(needle)) continue;
+        visible.add(folder.id);
+        let parent = folder.parentId ?? "";
+        while (parent) {
+          visible.add(parent);
+          parent = byID.get(parent)?.parentId ?? "";
+        }
+      }
+    }
     const children = new Map<string, Folder[]>();
     for (const folder of folders) {
+      if (needle && !visible.has(folder.id)) continue;
       const parent = folder.parentId ?? "";
       const list = children.get(parent) ?? [];
       list.push(folder);
@@ -43,31 +84,42 @@ export function FolderTree({ folders, selectedKey, canWrite, onSelect, onCreate,
           title: (
             <span className="folder-title">
               <span className="folder-title-name">{folder.name}</span>
-              {canWrite && (
-                <Dropdown
-                  trigger={["click"]}
-                  menu={{
-                    items: [
-                      { key: "rename", icon: <EditOutlined />, label: t("folder.rename") },
-                      { key: "move", icon: <FolderOutlined />, label: t("folder.move") },
-                      { key: "delete", icon: <DeleteOutlined />, label: t("folder.delete"), danger: true },
-                    ],
-                    onClick: ({ key, domEvent }) => {
-                      domEvent.stopPropagation();
-                      if (key === "rename") onRename(folder);
-                      if (key === "move") onMove(folder);
-                      if (key === "delete") onDelete(folder);
-                    },
-                  }}
-                >
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<MoreOutlined />}
-                    aria-label={t("folder.actions")}
-                    onClick={(event) => event.stopPropagation()}
-                  />
-                </Dropdown>
+              {canWrite && !editing && (
+                <span className="folder-actions">
+                  <Tooltip title={t("folder.createChild")}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<FolderAddOutlined />}
+                      aria-label={t("folder.createChild")}
+                      onClick={(event) => { event.stopPropagation(); onCreate(folder.id); }}
+                    />
+                  </Tooltip>
+                  <Dropdown
+                    trigger={["click"]}
+                    menu={{
+                      items: [
+                        { key: "rename", icon: <EditOutlined />, label: t("folder.rename") },
+                        { key: "move", icon: <FolderOutlined />, label: t("folder.move") },
+                        { key: "delete", icon: <DeleteOutlined />, label: t("folder.delete"), danger: true },
+                      ],
+                      onClick: ({ key, domEvent }) => {
+                        domEvent.stopPropagation();
+                        if (key === "rename") onRename(folder);
+                        if (key === "move") onMove(folder);
+                        if (key === "delete") onDelete(folder);
+                      },
+                    }}
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<MoreOutlined />}
+                      aria-label={t("folder.actions")}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                  </Dropdown>
+                </span>
               )}
             </span>
           ),
@@ -75,30 +127,103 @@ export function FolderTree({ folders, selectedKey, canWrite, onSelect, onCreate,
         }));
     }
     return [
-      { key: FOLDER_ALL, title: t("folder.all"), selectable: true },
-      { key: FOLDER_ROOT, title: t("folder.root"), selectable: true },
+      { key: FOLDER_ALL, title: t("folder.all"), selectable: !editing, disableCheckbox: true },
+      { key: FOLDER_ROOT, title: t("folder.root"), selectable: !editing, disableCheckbox: true },
       ...build(""),
     ];
-  }, [folders, canWrite, onDelete, onMove, onRename, t]);
+  }, [folders, query, editing, canWrite, onDelete, onMove, onRename, t]);
 
   const parentID = selectedKey === FOLDER_ALL || selectedKey === FOLDER_ROOT ? "" : selectedKey;
+  const selectedFolders = folders.filter((folder) => checkedKeys.includes(folder.id));
+  const allChecked = folders.length > 0 && selectedFolders.length === folders.length;
+  const partiallyChecked = selectedFolders.length > 0 && !allChecked;
+
+  function exitEditing() {
+    setEditing(false);
+    setCheckedKeys([]);
+  }
 
   return (
     <div className="folder-panel">
-      <div className="folder-panel-head">
-        <Typography.Text strong>{t("folder.title")}</Typography.Text>
-        {canWrite && (
-          <Button size="small" icon={<FolderAddOutlined />} onClick={() => onCreate(parentID)}>
-            {t("folder.create")}
-          </Button>
-        )}
-      </div>
+      {editing ? (
+        <Flex className="folder-panel-head folder-panel-head-edit" align="center" justify="space-between" gap={8} wrap="wrap">
+          <Checkbox
+            checked={allChecked}
+            indeterminate={partiallyChecked}
+            onChange={(event) => setCheckedKeys(event.target.checked ? folders.map((folder) => folder.id) : [])}
+          >
+            {t("folder.selectedCount", { count: selectedFolders.length })}
+          </Checkbox>
+          <Space size={4} wrap>
+            <Tooltip title={t("folder.download")}>
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                aria-label={t("folder.download")}
+                disabled={selectedFolders.length === 0}
+                onClick={() => onDownload(selectedFolders)}
+              />
+            </Tooltip>
+            {canDelete && (
+              <Tooltip title={t("folder.batchDelete")}>
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  aria-label={t("folder.batchDelete")}
+                  disabled={selectedFolders.length === 0}
+                  onClick={() => onBatchDelete(selectedFolders)}
+                />
+              </Tooltip>
+            )}
+            <Tooltip title={t("folder.exitEdit")}>
+              <Button size="small" type="text" icon={<CloseOutlined />} aria-label={t("folder.exitEdit")} onClick={exitEditing} />
+            </Tooltip>
+          </Space>
+        </Flex>
+      ) : (
+        <div className="folder-panel-head">
+          <Typography.Text strong>{t("folder.title")}</Typography.Text>
+          <Space size={4}>
+            <Input
+              size="small"
+              allowClear
+              className="folder-search"
+              prefix={<SearchOutlined />}
+              placeholder={t("folder.search")}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            {canWrite && (
+              <Tooltip title={t("folder.create")}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<FolderAddOutlined />}
+                  aria-label={t("folder.create")}
+                  onClick={() => onCreate(parentID)}
+                />
+              </Tooltip>
+            )}
+            <Tooltip title={t("folder.edit")}>
+              <Button size="small" type="text" icon={<EditOutlined />} aria-label={t("folder.edit")} onClick={() => setEditing(true)} />
+            </Tooltip>
+          </Space>
+        </div>
+      )}
+      {query.trim() !== "" && treeData.length <= 2 && (
+        <Typography.Paragraph type="secondary" className="folder-search-empty">{t("folder.noMatch")}</Typography.Paragraph>
+      )}
       <Tree
         blockNode
         treeData={treeData}
         expandedKeys={expandedKeys}
         onExpand={(keys) => setExpandedKeys(keys.map(String))}
-        selectedKeys={[selectedKey]}
+        checkable={editing}
+        checkedKeys={checkedKeys}
+        onCheck={(keys) => setCheckedKeys((Array.isArray(keys) ? keys : keys.checked).map(String))}
+        selectable={!editing}
+        selectedKeys={editing ? [] : [selectedKey]}
         onSelect={(keys) => onSelect(String(keys[0] ?? FOLDER_ALL))}
       />
     </div>

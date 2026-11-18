@@ -190,13 +190,22 @@ func (s *Service) UpdateFolder(ctx context.Context, principal authz.Principal, f
 	return s.loadFolderByID(ctx, principal.TenantID, folder.ID)
 }
 
-func (s *Service) DeleteFolder(ctx context.Context, principal authz.Principal, folderID string) error {
+func (s *Service) DeleteFolder(ctx context.Context, principal authz.Principal, folderID string, recursive bool) error {
 	folder, err := s.loadFolderByID(ctx, principal.TenantID, folderID)
 	if err != nil {
 		return err
 	}
-	if _, err := s.authorizedKnowledgeBase(ctx, principal, folder.KnowledgeBaseID, "write"); err != nil {
+	action := "write"
+	if recursive {
+		// Deleting documents is a delete-level action; a recursive folder delete
+		// must not be reachable with write-only permission.
+		action = "delete"
+	}
+	if _, err := s.authorizedKnowledgeBase(ctx, principal, folder.KnowledgeBaseID, action); err != nil {
 		return err
+	}
+	if recursive {
+		return s.deleteFolderTree(ctx, principal, folder)
 	}
 	var children int64
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Folder{}).
@@ -230,6 +239,52 @@ func (s *Service) DeleteFolder(ctx context.Context, principal authz.Principal, f
 		return err
 	}
 	return s.recordWorkspaceAudit(ctx, principal, "delete", "folder", folder.ID, folder.Name)
+}
+
+// deleteFolderTree removes one folder subtree and soft-deletes every live
+// document inside it. Folders themselves have no recycle bin; documents keep
+// their retention window and are detached so a restore lands at the root.
+func (s *Service) deleteFolderTree(ctx context.Context, principal authz.Principal, folder models.Folder) error {
+	var subtree []models.Folder
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("knowledge_base_id = ? AND path LIKE ?", folder.KnowledgeBaseID, folder.Path+"%").
+		Order("depth DESC").Find(&subtree).Error; err != nil {
+		return fmt.Errorf("load folder subtree: %w", err)
+	}
+	folderIDs := make([]string, 0, len(subtree))
+	for _, node := range subtree {
+		folderIDs = append(folderIDs, node.ID)
+	}
+	var documents []models.Document
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+		Where("knowledge_base_id = ? AND folder_id IN ? AND deleted_at IS NULL", folder.KnowledgeBaseID, folderIDs).
+		Find(&documents).Error; err != nil {
+		return fmt.Errorf("load folder documents: %w", err)
+	}
+	for _, document := range documents {
+		if err := s.Delete(ctx, principal, document.ID); err != nil {
+			return err
+		}
+	}
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).
+			Where("knowledge_base_id = ? AND folder_id IN ?", folder.KnowledgeBaseID, folderIDs).
+			Update("folder_id", nil).Error; err != nil {
+			return fmt.Errorf("detach folder documents: %w", err)
+		}
+		for _, node := range subtree {
+			if err := tenantdb.MustScoped(tx, principal.TenantID).
+				Where("id = ? AND knowledge_base_id = ?", node.ID, folder.KnowledgeBaseID).
+				Delete(&models.Folder{}).Error; err != nil {
+				return fmt.Errorf("delete folder subtree: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return s.recordWorkspaceAudit(ctx, principal, "delete", "folder", folder.ID, folder.Name+" (recursive)")
 }
 
 func (s *Service) loadFolder(ctx context.Context, tenantID, knowledgeBaseID, folderID string) (models.Folder, error) {

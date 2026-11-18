@@ -142,6 +142,9 @@ body.resizing { cursor: col-resize; user-select: none; }
 .search-result { cursor: pointer; padding-inline: 8px !important; border-radius: var(--radius); }
 .search-result:hover { background: var(--bg-subtle); }
 .app-content { width: 100%; max-width: var(--content-max); margin: 0 auto; padding: 20px 28px 32px; }
+/* The knowledge-space workspace is a working surface: let it use the screen
+   instead of leaving large gutters on wide monitors. */
+.app-content:has(.kb-detail-page) { max-width: none; }
 .app-content:has(.chat-workspace) { padding: 16px 20px; }
 .route-loading { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
 
@@ -196,12 +199,17 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .doc-error { color: var(--error) !important; }
 
 /* Knowledge space: folder rail, tag filters and batch actions */
-.kb-documents-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+.kb-documents-layout { display: grid; grid-template-columns: clamp(240px, 20vw, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
 .kb-documents-main { display: grid; gap: 12px; min-width: 0; }
 .folder-panel { border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); padding: 10px 8px; min-height: 240px; }
 .folder-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 6px 10px; }
+.folder-panel-head-edit { border-bottom: 1px solid var(--border-secondary); margin-bottom: 6px; }
+.folder-search { width: 112px; }
+.folder-search-empty { padding: 0 6px; font-size: 0.8rem; }
 .folder-title { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .folder-title-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-actions { display: inline-flex; align-items: center; gap: 2px; opacity: 0; transition: opacity 0.12s ease; }
+.ant-tree-treenode:hover .folder-actions, .folder-actions:focus-within { opacity: 1; }
 .batch-bar { padding: 8px 10px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--brand-soft); }
 .tag-filter { min-width: 200px; }
 .tag-manager-list { display: grid; gap: 4px; margin-top: 14px; }

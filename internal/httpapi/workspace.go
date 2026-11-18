@@ -56,7 +56,7 @@ func RegisterKnowledgeSpaceRoutes(protected *gin.RouterGroup, cfg config.Config,
 	})
 
 	protected.DELETE("/folders/:folderID", func(c *gin.Context) {
-		if err := deps.Ingestion.DeleteFolder(c.Request.Context(), accessContext(c).Principal, c.Param("folderID")); err != nil {
+		if err := deps.Ingestion.DeleteFolder(c.Request.Context(), accessContext(c).Principal, c.Param("folderID"), c.Query("recursive") == "true"); err != nil {
 			writeError(c, err)
 			return
 		}

@@ -8,6 +8,36 @@ import (
 	contract "github.com/hzc19970630/rag-platform/contracts/httpapi"
 )
 
+func TestRecursiveFolderDeleteRoute(t *testing.T) {
+	router, _ := newProjectionHTTPRouter(t)
+	recorder := projectionRequest(t, router, http.MethodPost, "/api/v1/knowledge-bases/kb-a/folders", `{"name":"Archive"}`)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("create folder status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var folder contract.Folder
+	if err := json.Unmarshal(recorder.Body.Bytes(), &folder); err != nil {
+		t.Fatalf("decode folder: %v", err)
+	}
+	recorder = projectionRequest(t, router, http.MethodPost, "/api/v1/knowledge-bases/kb-a/documents/batch",
+		`{"action":"move","documentIds":["doc-a"],"folderId":"`+folder.ID+`"}`)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("move into folder status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if recorder := projectionRequest(t, router, http.MethodDelete, "/api/v1/folders/"+folder.ID+"?recursive=true", ""); recorder.Code != http.StatusNoContent {
+		t.Fatalf("recursive delete status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	recorder = projectionRequest(t, router, http.MethodGet, "/api/v1/knowledge-bases/kb-a/folders", "")
+	var folders contract.FolderList
+	if err := json.Unmarshal(recorder.Body.Bytes(), &folders); err != nil || len(folders.Items) != 0 {
+		t.Fatalf("folders after recursive delete = %+v, %v", folders, err)
+	}
+	recorder = projectionRequest(t, router, http.MethodGet, "/api/v1/knowledge-bases/kb-a/documents", "")
+	var page contract.DocumentPage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &page); err != nil || len(page.Items) != 0 {
+		t.Fatalf("documents after recursive delete = %+v, %v", page, err)
+	}
+}
+
 func TestKnowledgeSpaceRoutes(t *testing.T) {
 	router, _ := newProjectionHTTPRouter(t)
 
