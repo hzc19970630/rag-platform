@@ -17,7 +17,7 @@ test("preset packs can be inspected, cloned, edited and applied to a knowledge b
     await expect(builtin.getByTestId("preset-delete")).toHaveCount(0);
 
     await builtin.getByTestId("preset-clone").click();
-    const cloneDialog = page.getByRole("dialog").filter({ hasText: "克隆为租户自定义包" });
+    const cloneDialog = page.getByRole("dialog").filter({ hasText: "克隆为组织自定义包" });
     await cloneDialog.getByLabel("新包名").fill(customName);
     await cloneDialog.getByRole("button", { name: /克\s*隆/ }).click();
     const custom = page.getByRole("row").filter({ hasText: `${customName}@1.0.0` });
@@ -25,7 +25,7 @@ test("preset packs can be inspected, cloned, edited and applied to a knowledge b
     await expect(custom.getByTestId("preset-edit")).toBeVisible();
 
     await custom.getByTestId("preset-edit").click();
-    const editor = page.getByRole("dialog").filter({ hasText: "编辑租户预置包" });
+    const editor = page.getByRole("dialog").filter({ hasText: "编辑组织预置包" });
     const textarea = editor.locator("textarea");
     await expect(textarea).toContainText("EnterprisePresetV1");
     const manifest = (await textarea.inputValue()).replace('"top_k": 8', '"top_k": 5');

@@ -35,7 +35,7 @@ test("knowledge base list has no WCAG 2.1 AA violations", async ({ page }) => {
 
 test("tenant administration has no WCAG 2.1 AA violations", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page.getByRole("heading", { name: "租户管理", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "组织管理", level: 2 })).toBeVisible();
   await expect(page.getByText("文档上限")).toBeVisible();
   await expectNoViolations(page);
 });

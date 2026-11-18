@@ -45,7 +45,7 @@ test("embedding migration panel renders, targets are selectable and layout stays
     await expect(page.getByTestId("embedding-migration")).toBeVisible();
     await page.getByTestId("embedding-migration").scrollIntoViewIfNeeded();
     await expect(page.getByText("模型迁移", { exact: true })).toBeVisible();
-    await expect(page.getByText("当前空间")).toBeVisible();
+    await expect(page.getByText("当前模型")).toBeVisible();
     await expect(page.getByText(/迁移期间该知识库暂停入库/)).toBeVisible();
 
     const target = page.getByTestId("embedding-migration-target");
