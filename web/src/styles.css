@@ -216,6 +216,36 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .tag-manager-row { padding: 6px 0; border-bottom: 1px solid var(--border-secondary); }
 .modal-field { display: block; margin-top: 12px; }
 
+/* Desktop workspace: the folder rail and the document list are equal-height
+   panels that fill the space below the tabs and scroll internally, instead of
+   leaving a blank strip under short content. */
+@media (min-width: 961px) {
+  .app-content:has(.kb-detail-page) { height: calc(100dvh - var(--topbar-height)); display: flex; flex-direction: column; }
+  .kb-detail-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .kb-detail-page > .page-header, .kb-detail-page > .kb-summary, .kb-detail-page > .ant-alert { flex: none; }
+  .kb-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .kb-tabs .ant-tabs-nav { flex: none; }
+  .kb-tabs .ant-tabs-body-holder { flex: 1; min-height: 0; overflow: auto; }
+  .kb-tabs .ant-tabs-body, .kb-tabs .ant-tabs-content { height: 100%; min-height: 0; }
+  .kb-tabs .tab-panel { height: 100%; min-height: 0; }
+  .kb-documents-layout { height: 100%; min-height: 0; align-items: stretch; }
+  .folder-panel { display: flex; flex-direction: column; min-height: 0; }
+  .folder-panel-head, .folder-search-empty { flex: none; }
+  .folder-panel > .ant-tree { flex: 1; min-height: 0; overflow: auto; }
+  .kb-documents-main {
+    height: 100%;
+    min-height: 0;
+    align-content: start;
+    overflow: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-lg);
+    background: var(--bg-container);
+    box-shadow: var(--shadow-card);
+  }
+  .kb-documents-main .tab-toolbar { position: sticky; top: 0; z-index: 2; background: var(--bg-container); }
+}
+
 @media (max-width: 960px) {
   .kb-documents-layout { grid-template-columns: 1fr; }
   .folder-panel { min-height: 0; }
