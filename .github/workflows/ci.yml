@@ -316,7 +316,7 @@ jobs:
           go-package: ./...
       - name: npm audit
         working-directory: web
-        run: npm audit --audit-level=high
+        run: node ../scripts/npm_audit_gate.mjs
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:

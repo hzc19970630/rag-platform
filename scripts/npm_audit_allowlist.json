@@ -1,0 +1,12 @@
+{
+  "allow": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "severity": "high",
+      "reason": "ReDoS in lib/parse.js reached only through Vite/Vitest file matching. No patched release exists yet (npm latest is 4.0.7, advisory covers <=4.0.7).",
+      "added": "2026-11-18",
+      "removeWhen": "picomatch publishes a fixed version that clears npm audit"
+    }
+  ]
+}
