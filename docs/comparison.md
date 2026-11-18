@@ -22,7 +22,7 @@ here. Star counts are a distribution signal, not a quality signal.
 
 | Project | Stars | Latest version (source) | License | Last push | Deployment |
 | --- | ---: | --- | --- | --- | --- |
-| RAG Platform | 1 | 0.1.x | MIT (application); bundled dependencies reviewed separately | 2026-11-13 | Docker Compose |
+| RAG Platform | 1 | v0.2.0 (CHANGELOG 2026-11-14) | MIT (application); bundled dependencies reviewed separately | 2026-11-13 | Docker Compose |
 | WeKnora | 37,364 | v0.9.0 (2026-10-29) | MIT per README; GitHub API reports `NOASSERTION` | 2026-11-09 | Compose, Helm, Lite single binary, desktop |
 | RAGFlow | 94,112 | 1.0.0 (2026-11-06) | Apache-2.0 | 2026-11-13 | Compose; source build |
 | Dify | 161,081 | Not stated in README | Dify Open Source License (Apache-2.0 with additional conditions) | 2026-11-13 | Compose, cloud |

@@ -119,7 +119,7 @@ preset import <manifest.json> --dir config/presets
 
 Manifest keys for retrieval/chunking must exist in the same `configschema`;
 unknown keys or out-of-range values fail validation. Permissions, masking and
-compliance sections are declarations until B6/B8 enforce them; the pack does not
+compliance sections are declarations until B6-c/B8 enforce them; the pack does not
 claim those controls are active. Built-in packs are immutable. Tenant operators
 can clone a built-in pack, import a manifest, then edit/delete their own copy in
 Administration → Preset packs; built-in names stay reserved. Vertical packs
