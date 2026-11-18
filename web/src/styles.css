@@ -216,6 +216,38 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .tag-manager-row { padding: 6px 0; border-bottom: 1px solid var(--border-secondary); }
 .modal-field { display: block; margin-top: 12px; }
 
+/* Knowledge space: on-demand chat side panel. The panel is collapsed by
+   default so the document workspace keeps its full width. */
+.kb-detail-body { display: flex; gap: 16px; flex: 1; min-height: 0; align-items: stretch; }
+.kb-detail-body > .kb-tabs { flex: 1; min-width: 0; }
+.kb-chat-panel {
+  position: relative;
+  flex: none;
+  display: flex;
+  min-height: 0;
+  padding: 12px 10px;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  background: var(--bg-container);
+  box-shadow: var(--shadow-card);
+}
+.kb-chat-resizer {
+  position: absolute;
+  top: 0;
+  left: -5px;
+  z-index: 2;
+  width: 8px;
+  height: 100%;
+  border-radius: 4px;
+  cursor: col-resize;
+}
+.kb-chat-resizer:hover, .kb-chat-resizer:focus-visible { background: var(--brand-soft); outline: 2px solid var(--brand); outline-offset: -2px; }
+.session-list { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.session-list-heading { padding: 0 4px 10px; }
+.session-list-empty { display: grid; gap: 10px; justify-items: start; padding: 6px; }
+.session-list-empty .ant-typography { margin: 0; font-size: 0.82rem; }
+.session-list .chat-session-groups { flex: 1; min-height: 0; }
+
 /* Desktop workspace: the folder rail and the document list are equal-height
    panels that fill the space below the tabs and scroll internally, instead of
    leaving a blank strip under short content. */
@@ -346,10 +378,7 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .projection-runs h5 { margin: 0 !important; }
 
 /* Chat workbench */
-.chat-workspace { display: grid; grid-template-columns: 276px minmax(0, 1fr); gap: 16px; height: calc(100dvh - var(--topbar-height) - 32px); min-height: 520px; }
-.chat-sessions { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); overflow: hidden; }
-.chat-sessions-heading { padding: 14px 14px 10px; }
-.chat-sessions-empty { padding: 8px 14px; font-size: 0.8rem; }
+.chat-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; height: calc(100dvh - var(--topbar-height) - 32px); min-height: 520px; }
 .chat-session-groups { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 12px; }
 .chat-session-group { display: block; padding: 12px 8px 4px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .chat-session { display: block; width: 100%; padding: 9px 10px !important; border-radius: var(--radius); border: 0 !important; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -454,7 +483,6 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
   .settings-nav .ant-menu-item { margin: 0 !important; width: auto !important; }
   .settings-content { padding: 16px 18px 32px; }
   .switch-grid { grid-template-columns: 1fr; }
-  .chat-workspace { grid-template-columns: 232px minmax(0, 1fr); }
   .setting-row { grid-template-columns: 1fr; gap: 8px; }
   .setting-control { justify-items: stretch; }
   .inline-form .field-label { width: 100%; }
@@ -472,7 +500,6 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
   .page-extra { width: 100%; justify-content: flex-start; }
   .kb-grid { grid-template-columns: 1fr; }
   .chat-workspace { grid-template-columns: 1fr; height: auto; min-height: 0; gap: 10px; }
-  .chat-sessions { max-height: 210px; }
   .chat-main { min-height: 68dvh; }
   .chat-bubble { max-width: 100%; }
   .chat-scroll { padding: 14px; }

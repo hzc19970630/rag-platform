@@ -5,7 +5,6 @@ import {
   LikeOutlined,
   LoadingOutlined,
   MessageOutlined,
-  PlusOutlined,
   SendOutlined,
 } from "@ant-design/icons";
 import {
@@ -30,28 +29,15 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { streamAnswer, type AnswerStreamPhase } from "../api/answerStream";
 import { api, jsonInit } from "../api/client";
+import { createConversation } from "../api/conversations";
 import { queryKeys, useConversations, useKnowledgeBases, useMessages } from "../api/hooks";
 import type { Citation, Conversation, MessageView, StreamEvent } from "../api/types";
 import { EmptyState } from "../components/EmptyState";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { VirtualMessageList } from "../components/VirtualMessageList";
-import { VirtualSessionList } from "../components/VirtualSessionList";
 import { usePermissions } from "../session";
 import { formatTime } from "../utils/format";
 import { answerFailureText, statusLabel } from "../utils/enums";
-
-// StrictMode mounts effects twice in development; sharing the in-flight
-// creation keeps a knowledge-base entry point from opening two sessions.
-const sessionCreations = new Map<string, Promise<Conversation>>();
-
-function createConversation(knowledgeBaseId: string): Promise<Conversation> {
-  const pending = sessionCreations.get(knowledgeBaseId);
-  if (pending) return pending;
-  const request = api<Conversation>("/sessions", jsonInit({ knowledge_base_id: knowledgeBaseId }))
-    .finally(() => sessionCreations.delete(knowledgeBaseId));
-  sessionCreations.set(knowledgeBaseId, request);
-  return request;
-}
 
 type StreamedAnswer = {
   content: string;
@@ -67,10 +53,6 @@ type ChatRow =
   | { key: string; kind: "pending"; content: string }
   | { key: string; kind: "asking" }
   | { key: string; kind: "stream-error"; message: string };
-
-type SessionRow =
-  | { key: string; kind: "group"; name: string }
-  | { key: string; kind: "conversation"; conversation: Conversation };
 
 const noMessages: MessageView[] = [];
 
@@ -105,27 +87,6 @@ export function ChatPage() {
     () => new Map((knowledgeBases.data ?? []).map((kb) => [kb.id, kb.name])),
     [knowledgeBases.data],
   );
-
-  const sessionRows = useMemo<SessionRow[]>(() => {
-    const grouped = new Map<string, Conversation[]>();
-    for (const conversation of conversations.data ?? []) {
-      const rows = grouped.get(conversation.knowledgeBaseId) ?? [];
-      rows.push(conversation);
-      grouped.set(conversation.knowledgeBaseId, rows);
-    }
-    const rows: SessionRow[] = [];
-    for (const [knowledgeBaseId, groupedConversations] of grouped) {
-      rows.push({
-        key: `group:${knowledgeBaseId}`,
-        kind: "group",
-        name: knowledgeBaseNames.get(knowledgeBaseId) ?? knowledgeBaseId,
-      });
-      for (const conversation of groupedConversations) {
-        rows.push({ key: `conversation:${conversation.id}`, kind: "conversation", conversation });
-      }
-    }
-    return rows;
-  }, [conversations.data, knowledgeBaseNames]);
 
   const listedConversation = (conversations.data ?? []).find((item) => item.id === conversationId);
   const current = session?.id === conversationId ? session : listedConversation;
@@ -275,42 +236,6 @@ export function ChatPage() {
 
   return (
     <div className="chat-workspace">
-      <aside className="chat-sessions" aria-label={t("chat.conversations")}>
-        <Flex justify="space-between" align="center" className="chat-sessions-heading">
-          <Typography.Text strong>{t("chat.conversations")}</Typography.Text>
-          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setNewOpen(true)}>
-            {t("chat.newShort")}
-          </Button>
-        </Flex>
-        {conversations.isLoading && <LoadingBlock />}
-        {conversations.error && <QueryFallback error={conversations.error} retry={() => void conversations.refetch()} />}
-        {!conversations.isLoading && sessionRows.length === 0 && (
-          <Typography.Paragraph type="secondary" className="chat-sessions-empty">
-            {t("chat.noConversations")}
-          </Typography.Paragraph>
-        )}
-        <VirtualSessionList
-          rows={sessionRows}
-          estimateSize={(index) => (sessionRows[index]?.kind === "group" ? 38 : 56)}
-          renderRow={(row) => row.kind === "group" ? (
-            <Typography.Text type="secondary" className="chat-session-group">
-              {row.name}
-            </Typography.Text>
-          ) : (
-            <button
-              type="button"
-              className={row.conversation.id === conversationId ? "chat-session active" : "chat-session"}
-              onClick={() => navigate(`/chat/${row.conversation.id}`)}
-            >
-              <Flex vertical gap={2} className="chat-session-body">
-                <Typography.Text ellipsis>{row.conversation.title || t("chat.untitled")}</Typography.Text>
-                <Typography.Text type="secondary" className="chat-session-time">{formatTime(row.conversation.updatedAt)}</Typography.Text>
-              </Flex>
-            </button>
-          )}
-        />
-      </aside>
-
       <section className="chat-main">
         {!current && (
           <div className="chat-empty">
@@ -327,7 +252,12 @@ export function ChatPage() {
           <>
             <header className="chat-main-header">
               <Space size={8} wrap>
-                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate("/knowledge-bases")} aria-label={t("common.back")} />
+                <Button
+                  type="text"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => navigate(currentKnowledgeBaseId ? `/knowledge-bases/${currentKnowledgeBaseId}` : "/knowledge-bases")}
+                  aria-label={t("common.back")}
+                />
                 <MessageOutlined />
                 <Typography.Title level={4}>{current.title || t("chat.untitled")}</Typography.Title>
                 <Tag>{currentKnowledgeBaseName}</Tag>

@@ -18,7 +18,9 @@ test("answer feedback updates the retrieval quality view", async ({ page, api },
     );
     await waitForDocument(api, knowledgeBaseId, "retrieval-handbook.md");
 
-    await page.getByRole("button", { name: /问\s*答/ }).click();
+    await page.getByTestId("kb-chat-toggle").click();
+    await expect(page.getByTestId("kb-chat-panel")).toBeVisible();
+    await page.getByTestId("session-new").click();
     await expect(page).toHaveURL(/\/chat\/[^/?#]+$/);
     const conversationId = new URL(page.url()).pathname.split("/").filter(Boolean).pop() ?? "";
     expect(conversationId).not.toBe("");

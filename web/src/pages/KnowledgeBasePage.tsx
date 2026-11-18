@@ -1,8 +1,10 @@
 import {
   ArrowLeftOutlined,
+  CloseOutlined,
   DeleteOutlined,
   FolderOutlined,
   MessageOutlined,
+  PushpinOutlined,
   ReloadOutlined,
   SettingOutlined,
   SyncOutlined,
@@ -13,6 +15,7 @@ import {
   Alert,
   App,
   Button,
+  Drawer,
   Flex,
   Input,
   Modal,
@@ -26,14 +29,16 @@ import {
   type TableColumnsType,
 } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadDocument, jsonInit, uploadDocument } from "../api/client";
+import { createConversation } from "../api/conversations";
 import {
   queryKeys,
   terminalVersionStatuses,
   useConfiguration,
+  useConversations,
   useDocuments,
   useFolders,
   useKnowledgeBase,
@@ -45,15 +50,30 @@ import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { FOLDER_ALL, FOLDER_ROOT, FolderTree } from "../components/FolderTree";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
+import { SessionList } from "../components/SessionList";
 import { SettingsDrawer } from "../features/settings/SettingsDrawer";
 import { MembersSettings } from "../features/settings/MembersSettings";
 import { ProjectionPanel } from "../features/settings/ProjectionPanel";
 import { usePermissions } from "../session";
+import { clampKbChatWidth, usePreferences } from "../store/preferences";
 import { formatSize, formatTime } from "../utils/format";
 
 const accept = ".pdf,.docx,.xlsx,.pptx,.md,.txt,.html,.htm";
 const EMPTY_FOLDERS: Folder[] = [];
 const EMPTY_TAGS: TagView[] = [];
+const CHAT_PANEL_QUERY = "(min-width: 1101px)";
+
+function useMinWidth(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia?.(query).matches ?? true);
+  useEffect(() => {
+    const media = window.matchMedia?.(query);
+    if (!media) return;
+    const onChange = () => setMatches(media.matches);
+    media.addEventListener?.("change", onChange);
+    return () => media.removeEventListener?.("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 export function KnowledgeBasePage() {
   const { knowledgeBaseId = "" } = useParams();
@@ -66,6 +86,64 @@ export function KnowledgeBasePage() {
   const { canWrite, canManage, canDelete, canChat, canOperate } = usePermissions();
   const queryClient = useQueryClient();
   const settingsOpen = searchParams.get("settings") === "1";
+  const { message } = App.useApp();
+  const conversations = useConversations();
+  const wideChat = useMinWidth(CHAT_PANEL_QUERY);
+  const chatPinned = usePreferences((state) => state.kbChatPinned);
+  const chatWidth = usePreferences((state) => state.kbChatWidth);
+  const setChatPinned = usePreferences((state) => state.setKbChatPinned);
+  const setChatWidth = usePreferences((state) => state.setKbChatWidth);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [creatingSession, setCreatingSession] = useState(false);
+  const [dragWidth, setDragWidth] = useState<number>();
+  const dragging = useRef(false);
+  const latestDragWidth = useRef<number | undefined>(undefined);
+
+  const kbConversations = useMemo(
+    () => (conversations.data ?? []).filter((item) => item.knowledgeBaseId === knowledgeBaseId),
+    [conversations.data, knowledgeBaseId],
+  );
+
+  useEffect(() => {
+    if (chatPinned) setChatOpen(true);
+  }, [chatPinned]);
+
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      if (!dragging.current) return;
+      const next = clampKbChatWidth(window.innerWidth - event.clientX);
+      latestDragWidth.current = next;
+      setDragWidth(next);
+    };
+    const up = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      document.body.classList.remove("resizing");
+      if (latestDragWidth.current !== undefined) setChatWidth(latestDragWidth.current);
+      latestDragWidth.current = undefined;
+      setDragWidth(undefined);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, [setChatWidth]);
+
+  async function startSession() {
+    if (creatingSession) return;
+    setCreatingSession(true);
+    try {
+      const created = await createConversation(knowledgeBaseId);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      navigate(`/chat/${created.id}`);
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : t("chat.createFailed"));
+    } finally {
+      setCreatingSession(false);
+    }
+  }
 
   if (knowledgeBase.isLoading) return <LoadingBlock />;
   if (knowledgeBase.error) return <QueryFallback error={knowledgeBase.error} retry={() => void knowledgeBase.refetch()} />;
@@ -122,6 +200,40 @@ export function KnowledgeBasePage() {
     }] : []),
   ];
 
+  const chatSessions = (
+    <SessionList
+      items={kbConversations}
+      loading={conversations.isLoading}
+      error={conversations.error}
+      onRetry={() => void conversations.refetch()}
+      onSelect={(conversation) => navigate(`/chat/${conversation.id}`)}
+      onCreate={() => void startSession()}
+      creating={creatingSession}
+      actions={wideChat ? (
+        <>
+          <Tooltip title={chatPinned ? t("chat.unpin") : t("chat.pin")}>
+            <Button
+              type={chatPinned ? "primary" : "text"}
+              size="small"
+              icon={<PushpinOutlined />}
+              aria-label={chatPinned ? t("chat.unpin") : t("chat.pin")}
+              onClick={() => { setChatPinned(!chatPinned); setChatOpen(true); }}
+            />
+          </Tooltip>
+          <Tooltip title={t("chat.collapsePanel")}>
+            <Button
+              type="text"
+              size="small"
+              icon={<CloseOutlined />}
+              aria-label={t("chat.collapsePanel")}
+              onClick={() => { setChatPinned(false); setChatOpen(false); }}
+            />
+          </Tooltip>
+        </>
+      ) : undefined}
+    />
+  );
+
   return (
     <div className="page kb-detail-page">
       <PageHeader
@@ -131,7 +243,16 @@ export function KnowledgeBasePage() {
         extra={(
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate("/knowledge-bases")}>{t("common.back")}</Button>
-            {canChat && <Button icon={<MessageOutlined />} onClick={() => navigate(`/chat?kb=${encodeURIComponent(kb.id)}`)}>{t("knowledgeBase.chat")}</Button>}
+            {canChat && (
+              <Button
+                icon={<MessageOutlined />}
+                data-testid="kb-chat-toggle"
+                aria-expanded={chatOpen}
+                onClick={() => setChatOpen((open) => !open)}
+              >
+                {t("knowledgeBase.chat")}
+              </Button>
+            )}
             <Button icon={<SettingOutlined />} onClick={openSettings} disabled={!configuration.data}>{t("knowledgeBase.settings")}</Button>
           </Space>
         )}
@@ -140,7 +261,38 @@ export function KnowledgeBasePage() {
         <Typography.Text type="secondary">{t("knowledgeBase.updated")} {formatTime(kb.updatedAt)}</Typography.Text>
       </Space>
       {configuration.error && <Alert type="error" showIcon message={t("settings.configLoadFailed")} description={configuration.error instanceof Error ? configuration.error.message : undefined} className="settings-alert" />}
-      <Tabs activeKey={activeTab} onChange={setTab} items={tabItems} className="kb-tabs" />
+      <div className="kb-detail-body">
+        <Tabs activeKey={activeTab} onChange={setTab} items={tabItems} className="kb-tabs" />
+        {canChat && wideChat && chatOpen && (
+          <aside className="kb-chat-panel" style={{ width: dragWidth ?? chatWidth }} data-testid="kb-chat-panel" aria-label={t("chat.conversations")}>
+            <div
+              className="kb-chat-resizer"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("chat.resizePanel")}
+              tabIndex={0}
+              onPointerDown={() => { dragging.current = true; document.body.classList.add("resizing"); }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft") setChatWidth(chatWidth + 16);
+                if (event.key === "ArrowRight") setChatWidth(chatWidth - 16);
+              }}
+            />
+            {chatSessions}
+          </aside>
+        )}
+      </div>
+      {canChat && !wideChat && (
+        <Drawer
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          placement="right"
+          size={360}
+          title={t("chat.conversations")}
+          data-testid="kb-chat-drawer"
+        >
+          {chatSessions}
+        </Drawer>
+      )}
       {configuration.data && (
         <SettingsDrawer
           open={settingsOpen}

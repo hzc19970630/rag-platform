@@ -41,7 +41,9 @@ test("upload, parse, search, answer and delete document", async ({ page, api }) 
     expect(evidence.plan.vectorEnabled).toBe(true);
     expect(evidence.plan.keywordEnabled).toBe(true);
 
-    await page.getByRole("button", { name: /问\s*答/ }).click();
+    await page.getByTestId("kb-chat-toggle").click();
+    await expect(page.getByTestId("kb-chat-panel")).toBeVisible();
+    await page.getByTestId("session-new").click();
     await expect(page).toHaveURL(/\/chat\/[^/?#]+$/);
 
     await page.getByRole("textbox", { name: "问题" }).fill(
