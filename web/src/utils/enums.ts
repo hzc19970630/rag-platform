@@ -53,8 +53,8 @@ export const AUDIT_ACTION_VALUES = [
 ] as const;
 
 export const AUDIT_RESOURCE_VALUES = [
-  "api_key", "connector", "dead_letter", "document", "graph_run", "graph_snapshot",
-  "indexing_strategy", "path", "retrieval_config", "session", "tenant", "tenant_config", "wiki_page",
+  "api_key", "connector", "dead_letter", "document", "folder", "graph_run", "graph_snapshot",
+  "indexing_strategy", "path", "retrieval_config", "session", "tag", "tenant", "tenant_config", "wiki_page",
   "embedding_migration",
 ] as const;
 

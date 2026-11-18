@@ -85,10 +85,11 @@ export function jsonInit(body: unknown, method = "POST"): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
-export function uploadDocument(knowledgeBaseId: string, file: File, documentId?: string): Promise<DocumentView> {
+export function uploadDocument(knowledgeBaseId: string, file: File, documentId?: string, folderId?: string): Promise<DocumentView> {
   const form = new FormData();
   form.append("file", file);
   if (documentId) form.append("document_id", documentId);
+  if (folderId) form.append("folder_id", folderId);
   return api<DocumentView>(`/knowledge-bases/${knowledgeBaseId}/documents`, {
     method: "POST",
     headers: { "Idempotency-Key": `web-${crypto.randomUUID()}` },

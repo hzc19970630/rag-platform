@@ -38,6 +38,7 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 		result, err := deps.Ingestion.Upload(c.Request.Context(), accessContext(c).Principal, ingestion.UploadInput{
 			KnowledgeBaseID: c.Param("id"),
 			DocumentID:      c.PostForm("document_id"),
+			FolderID:        c.PostForm("folder_id"),
 			Filename:        header.Filename,
 			MimeType:        header.Header.Get("Content-Type"),
 			Content:         content,
@@ -54,8 +55,9 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 	})
 
 	protected.GET("/knowledge-bases/:id/documents", func(c *gin.Context) {
+		filter := ingestion.DocumentFilter{FolderID: strings.TrimSpace(c.Query("folder_id")), TagIDs: splitCSV(c.Query("tag_ids"))}
 		page, err := deps.Ingestion.ListDocuments(c.Request.Context(), accessContext(c).Principal,
-			c.Param("id"), c.Query("cursor"), intQuery(c, "limit"))
+			c.Param("id"), filter, c.Query("cursor"), intQuery(c, "limit"))
 		if err != nil {
 			writeError(c, err)
 			return

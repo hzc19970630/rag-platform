@@ -32,7 +32,8 @@ DECLARE
         'answer_jobs',
         'api_keys', 'audit_logs', 'auth_sessions', 'authorization_revisions',
         'chunks', 'connector_items', 'connectors', 'conversations',
-        'document_versions', 'documents', 'evidence_packages', 'graph_entities',
+        'document_tags', 'document_versions', 'documents', 'evidence_packages',
+        'folders', 'graph_entities',
         'graph_entity_aliases', 'graph_relation_sources', 'graph_relations',
         'graph_snapshots', 'knowledge_bases', 'knowledge_index_records',
         'knowledge_projection_states', 'memberships', 'message_citations',
@@ -41,7 +42,7 @@ DECLARE
         'task_inbox', 'wiki_page_sources', 'wiki_page_versions', 'wiki_pages',
         'stage_runs', 'projection_stage_runs', 'knowledge_base_members',
         'chunk_embeddings', 'embedding_migrations', 'retrieval_feedback',
-        'retrieval_eval_runs', 'tenant_presets'
+        'retrieval_eval_runs', 'tags', 'tenant_presets'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tenant_tables LOOP

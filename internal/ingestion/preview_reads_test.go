@@ -56,11 +56,11 @@ func TestPreviewReadPaths(t *testing.T) {
 	service, principal := newPreviewFixture(t)
 	ctx := context.Background()
 
-	page, err := service.ListDocuments(ctx, principal(), "kb-a", "", 0)
+	page, err := service.ListDocuments(ctx, principal(), "kb-a", DocumentFilter{}, "", 0)
 	if err != nil || len(page.Items) != 1 || page.Items[0].Document.ID != "doc-a" {
 		t.Fatalf("ListDocuments = %+v, %v", page, err)
 	}
-	if _, err := service.ListDocuments(ctx, principal(), "kb-a", "bad-cursor", 0); err == nil {
+	if _, err := service.ListDocuments(ctx, principal(), "kb-a", DocumentFilter{}, "bad-cursor", 0); err == nil {
 		t.Fatal("invalid cursor must be rejected")
 	}
 

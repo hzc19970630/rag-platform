@@ -27,6 +27,9 @@ type QueryInput struct {
 	KnowledgeBaseID string
 	// SessionOverride is the third parameter tier, supplied per request.
 	SessionOverride string
+	// TagIDs narrows evidence to documents carrying every listed tag. Tags
+	// never grant access; authorization still comes from the scope.
+	TagIDs []string
 	// History is the recent conversation context. The default planner records
 	// only its size; a future planner can use it for follow-up rewriting.
 	History []HistoryTurn
@@ -194,7 +197,10 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		return EvidenceSet{}, err
 	}
 
-	recall := RecallRequest{TenantID: scope.TenantID, KnowledgeBaseIDs: targetIDs, Query: retrievalQuery}
+	recall := RecallRequest{TenantID: scope.TenantID, KnowledgeBaseIDs: targetIDs, Query: retrievalQuery, TagIDs: normalizeTagIDs(input.TagIDs)}
+	if len(recall.TagIDs) > maxRecallTagFilters {
+		return EvidenceSet{}, apperror.Invalidf("too many tag filters")
+	}
 	planQuery := input
 	planQuery.Query = retrievalQuery
 	plan, err := s.planner.Plan(ctx, PlanInput{
@@ -484,4 +490,23 @@ func contains(values []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+const maxRecallTagFilters = 20
+
+func normalizeTagIDs(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }

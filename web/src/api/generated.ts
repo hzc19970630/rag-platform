@@ -535,6 +535,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/folders/{folderID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** DELETE /api/v1/folders/{folderID} */
+        delete: operations["delete_folders_folderID"];
+        options?: never;
+        head?: never;
+        /** PATCH /api/v1/folders/{folderID} */
+        patch: operations["patch_folders_folderID"];
+        trace?: never;
+    };
     "/api/v1/graph/runs/{runId}": {
         parameters: {
             query?: never;
@@ -693,6 +711,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge-bases/{id}/documents/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/documents/batch */
+        post: operations["post_knowledge_bases_id_documents_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge-bases/{id}/embedding-migration": {
         parameters: {
             query?: never;
@@ -773,6 +808,24 @@ export interface paths {
         put?: never;
         /** POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback */
         post: operations["post_knowledge_bases_id_embedding_migration_migrationId_rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/knowledge-bases/{id}/folders */
+        get: operations["get_knowledge_bases_id_folders"];
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/folders */
+        post: operations["post_knowledge_bases_id_folders"];
         delete?: never;
         options?: never;
         head?: never;
@@ -944,6 +997,24 @@ export interface paths {
         put?: never;
         /** POST /api/v1/knowledge-bases/{id}/sync/cancel */
         post: operations["post_knowledge_bases_id_sync_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/knowledge-bases/{id}/tags */
+        get: operations["get_knowledge_bases_id_tags"];
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/tags */
+        post: operations["post_knowledge_bases_id_tags"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1399,6 +1470,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tags/{tagID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** DELETE /api/v1/tags/{tagID} */
+        delete: operations["delete_tags_tagID"];
+        options?: never;
+        head?: never;
+        /** PATCH /api/v1/tags/{tagID} */
+        patch: operations["patch_tags_tagID"];
+        trace?: never;
+    };
     "/api/v1/tenant": {
         parameters: {
             query?: never;
@@ -1705,6 +1794,21 @@ export interface components {
             sessionCookie: string;
             sessionTTLHours: number;
         };
+        BatchDocumentResult: {
+            documentId?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            ok?: boolean;
+        };
+        BatchDocumentsRequest: {
+            action: string;
+            documentIds: string[];
+            folderId?: string;
+            tagIds?: string[];
+        };
+        BatchDocumentsResult: {
+            items?: components["schemas"]["BatchDocumentResult"][];
+        };
         CancelResult: {
             cancelled: boolean;
         };
@@ -1993,6 +2097,7 @@ export interface components {
             deletedAt?: string;
             deletedBy?: string;
             filename?: string;
+            folderId?: string;
             id?: string;
             knowledgeBaseId?: string;
             latestVersionId?: string;
@@ -2043,7 +2148,12 @@ export interface components {
             contentReady?: boolean;
             document?: components["schemas"]["Document"];
             previewable?: boolean;
+            tags?: components["schemas"]["DocumentTagRef"][];
             version?: components["schemas"]["DocumentVersionSummary"];
+        };
+        DocumentTagRef: {
+            id?: string;
+            name?: string;
         };
         DocumentUploadRequest: {
             document_id?: string;
@@ -2173,6 +2283,29 @@ export interface components {
             rerankApplied?: boolean;
             schemaVersion?: string;
             tokenEstimate?: number;
+        };
+        Folder: {
+            /** Format: date-time */
+            createdAt?: string;
+            depth?: number;
+            id?: string;
+            knowledgeBaseId?: string;
+            name?: string;
+            parentId?: string;
+            path?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        FolderCreateRequest: {
+            name: string;
+            parentId?: string;
+        };
+        FolderList: {
+            items?: components["schemas"]["Folder"][];
+        };
+        FolderUpdateRequest: {
+            name?: string;
+            parentId?: string;
         };
         GraphCounts: {
             activeSnapshot?: string;
@@ -2848,6 +2981,7 @@ export interface components {
             knowledgeBaseId?: string;
             query?: string;
             sessionOverride?: string;
+            tagIds?: string[];
         };
         StageRun: {
             attempts?: number;
@@ -2879,6 +3013,24 @@ export interface components {
             request_id: string;
             sequence: number;
             type: string;
+        };
+        Tag: {
+            /** Format: date-time */
+            createdAt?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            name?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        TagCreateRequest: {
+            name: string;
+        };
+        TagList: {
+            items?: components["schemas"]["Tag"][];
+        };
+        TagUpdateRequest: {
+            name: string;
         };
         TaskDeadLetter: {
             attempts?: number;
@@ -4037,6 +4189,60 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    delete_folders_folderID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patch_folders_folderID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     get_graph_runs_runId: {
         parameters: {
             query?: never;
@@ -4413,6 +4619,36 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    post_knowledge_bases_id_documents_batch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchDocumentsResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     get_knowledge_bases_id_embedding_migration: {
         parameters: {
             query?: never;
@@ -4569,6 +4805,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmbeddingMigrationV1"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_knowledge_bases_id_folders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_folders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -4860,6 +5152,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_knowledge_bases_id_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -5718,6 +6066,60 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    delete_tags_tagID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tagID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    patch_tags_tagID: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tagID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];

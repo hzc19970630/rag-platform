@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
@@ -72,6 +73,8 @@ WHERE c.status = ?
 ORDER BY ann.score DESC
 LIMIT ?`
 
+const vectorTagFilter = "\n  AND (SELECT count(*) FROM document_tags dt WHERE dt.document_id = dv.document_id AND dt.tenant_id = ? AND dt.tag_id IN ?) = ?"
+
 const vectorEFSearchStatement = "SET LOCAL hnsw.ef_search = %d"
 
 // vectorIterativeScanStatement enables pgvector's filtered-scan continuation.
@@ -114,6 +117,19 @@ func (s *Searcher) SearchVector(ctx context.Context, request ports.RecallRequest
 	// modifier is safe; it cannot carry user input.
 	query := fmt.Sprintf(vectorRecallTemplate, dimension, dimension, dimension, dimension, dimension)
 	literal := vecutil.Literal(embedding)
+	args := []any{
+		literal,
+		request.TenantID, request.KnowledgeBaseIDs, request.EmbeddingModel,
+		literal, limit,
+		status.EvidenceReady, status.EvidenceReady,
+	}
+	// The ANN CTE runs before tag filtering, so a highly selective tag filter
+	// can return fewer than TopK rows; oversample is the escape hatch.
+	if len(request.TagIDs) > 0 {
+		query = strings.Replace(query, "ORDER BY ann.score DESC", vectorTagFilter+"ORDER BY ann.score DESC", 1)
+		args = append(args, request.TenantID, request.TagIDs, len(request.TagIDs))
+	}
+	args = append(args, request.TopK)
 
 	var hits []ports.Hit
 	err := tenantdb.InTx(ctx, s.db, request.TenantID, func(tx *gorm.DB) error {
@@ -128,12 +144,7 @@ func (s *Searcher) SearchVector(ctx context.Context, request ports.RecallRequest
 				return fmt.Errorf("set hnsw.iterative_scan: %w", err)
 			}
 		}
-		rows, err := tx.Raw(query,
-			literal,
-			request.TenantID, request.KnowledgeBaseIDs, request.EmbeddingModel,
-			literal, limit,
-			status.EvidenceReady, status.EvidenceReady, request.TopK,
-		).Rows()
+		rows, err := tx.Raw(query, args...).Rows()
 		if err != nil {
 			return fmt.Errorf("vector recall: %w", err)
 		}

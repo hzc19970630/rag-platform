@@ -31,7 +31,7 @@ func TestHealthReportsStaleBackupAndExpiredLicense(t *testing.T) {
 	if err := os.WriteFile(backup, []byte("dump"), 0o644); err != nil {
 		t.Fatalf("write backup: %v", err)
 	}
-	old := time.Now().Add(-72 * time.Hour)
+	old := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC).Add(-72 * time.Hour)
 	if err := os.Chtimes(backup, old, old); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}

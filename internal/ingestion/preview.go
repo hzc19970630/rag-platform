@@ -25,6 +25,11 @@ const (
 
 	defaultPageLimit = 50
 	maxPageLimit     = 200
+
+	// maxTagFilters bounds how many labels can narrow one list or search.
+	maxTagFilters = 20
+	// maxBatchDocuments caps one batch request across the workspace UI.
+	maxBatchDocuments = 100
 )
 
 // DocumentPreview is DocumentPreviewV1: the parsed structure of the current
@@ -110,6 +115,22 @@ type DocumentSummary struct {
 	Version      DocumentVersionSummary `json:"version"`
 	ContentReady bool                   `json:"contentReady"`
 	Previewable  bool                   `json:"previewable"`
+	Tags         []TagRef               `json:"tags"`
+}
+
+// TagRef is the label shown on a document. Tags only narrow lists and
+// retrieval; they never grant access.
+type TagRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// DocumentFilter narrows a document page. FolderID is empty for the whole
+// knowledge base, "root" for documents outside any folder, or a folder id whose
+// subtree is included. TagIDs use AND semantics.
+type DocumentFilter struct {
+	FolderID string
+	TagIDs   []string
 }
 
 // DocumentPage is DocumentPageV1: the documents of one knowledge base, newest
@@ -216,13 +237,33 @@ func (s *Service) Chunks(ctx context.Context, principal authz.Principal, documen
 // ListDocuments returns DocumentPageV1 for one knowledge base. Soft-deleted
 // documents are excluded: Delete only flips documents.status to CANCELLED and
 // leaves the row (and its versions) in place.
-func (s *Service) ListDocuments(ctx context.Context, principal authz.Principal, knowledgeBaseID, cursor string, limit int) (DocumentPage, error) {
+func (s *Service) ListDocuments(ctx context.Context, principal authz.Principal, knowledgeBaseID string, filter DocumentFilter, cursor string, limit int) (DocumentPage, error) {
 	if _, err := s.authorizedKnowledgeBase(ctx, principal, knowledgeBaseID, "read"); err != nil {
 		return DocumentPage{}, err
+	}
+	if len(filter.TagIDs) > maxTagFilters || len(filter.TagIDs) > 0 {
+		if err := s.validateTagIDs(ctx, principal.TenantID, knowledgeBaseID, filter.TagIDs); err != nil {
+			return DocumentPage{}, err
+		}
 	}
 	limit = clampPageLimit(limit)
 	query := s.db.WithContext(ctx).Where("tenant_id = ? AND knowledge_base_id = ? AND status <> ? AND deleted_at IS NULL",
 		principal.TenantID, knowledgeBaseID, StatusCancelled)
+	switch {
+	case filter.FolderID == "root":
+		query = query.Where("folder_id IS NULL")
+	case filter.FolderID != "":
+		folder, err := s.loadFolder(ctx, principal.TenantID, knowledgeBaseID, filter.FolderID)
+		if err != nil {
+			return DocumentPage{}, err
+		}
+		query = query.Where("folder_id IN (SELECT id FROM folders WHERE tenant_id = ? AND knowledge_base_id = ? AND path LIKE ?)",
+			principal.TenantID, knowledgeBaseID, folder.Path+"%")
+	}
+	for _, tagID := range filter.TagIDs {
+		query = query.Where("EXISTS (SELECT 1 FROM document_tags dt WHERE dt.document_id = documents.id AND dt.tenant_id = ? AND dt.tag_id = ?)",
+			principal.TenantID, tagID)
+	}
 	if cursor != "" {
 		before, err := decodeDocumentCursor(cursor)
 		if err != nil {
@@ -244,6 +285,10 @@ func (s *Service) ListDocuments(ctx context.Context, principal authz.Principal, 
 	if err != nil {
 		return DocumentPage{}, err
 	}
+	tags, err := s.documentTags(ctx, principal.TenantID, knowledgeBaseID, rows)
+	if err != nil {
+		return DocumentPage{}, err
+	}
 	page := DocumentPage{
 		SchemaVersion: SchemaDocumentPage, KnowledgeBaseID: knowledgeBaseID,
 		Items: make([]DocumentSummary, 0, len(rows)), HasMore: hasMore,
@@ -258,6 +303,7 @@ func (s *Service) ListDocuments(ctx context.Context, principal authz.Principal, 
 			},
 			ContentReady: version.Status == StatusEvidenceReady,
 			Previewable:  version.Status != StatusCancelled && version.SourceObjectKey != "",
+			Tags:         tags[row.ID],
 		})
 	}
 	if hasMore && len(rows) > 0 {
@@ -288,6 +334,37 @@ func (s *Service) latestVersions(ctx context.Context, documents []models.Documen
 		versions[row.ID] = row
 	}
 	return versions, nil
+}
+
+// documentTags loads every tag for one page of documents in a single query.
+func (s *Service) documentTags(ctx context.Context, tenantID, knowledgeBaseID string, documents []models.Document) (map[string][]TagRef, error) {
+	ids := make([]string, 0, len(documents))
+	for _, document := range documents {
+		ids = append(ids, document.ID)
+	}
+	tags := make(map[string][]TagRef, len(ids))
+	if len(ids) == 0 {
+		return tags, nil
+	}
+	type row struct {
+		DocumentID string
+		ID         string
+		Name       string
+	}
+	var rows []row
+	err := s.db.WithContext(ctx).Table("document_tags").
+		Select("document_tags.document_id AS document_id, tags.id AS id, tags.name AS name").
+		Joins("JOIN tags ON tags.id = document_tags.tag_id").
+		Where("document_tags.tenant_id = ? AND document_tags.knowledge_base_id = ? AND document_tags.document_id IN ?", tenantID, knowledgeBaseID, ids).
+		Order("tags.name").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("load document tags: %w", err)
+	}
+	for _, item := range rows {
+		tags[item.DocumentID] = append(tags[item.DocumentID], TagRef{ID: item.ID, Name: item.Name})
+	}
+	return tags, nil
 }
 
 // clampPageLimit applies the paging bounds shared by ChunkPageV1 and

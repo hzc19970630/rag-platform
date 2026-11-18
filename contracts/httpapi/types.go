@@ -530,6 +530,7 @@ type Document struct {
 	MimeType        string     `json:"mimeType"`
 	Status          string     `json:"status"`
 	LatestVersionID string     `json:"latestVersionId"`
+	FolderID        string     `json:"folderId"`
 	DeletedAt       *time.Time `json:"deletedAt,omitempty"`
 	DeletedBy       string     `json:"deletedBy,omitempty"`
 	PurgeAfter      *time.Time `json:"purgeAfter,omitempty"`
@@ -607,6 +608,77 @@ type DocumentSummary struct {
 	Version      DocumentVersionSummary `json:"version"`
 	ContentReady bool                   `json:"contentReady"`
 	Previewable  bool                   `json:"previewable"`
+	Tags         []DocumentTagRef       `json:"tags"`
+}
+
+type DocumentTagRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type Folder struct {
+	ID              string    `json:"id"`
+	KnowledgeBaseID string    `json:"knowledgeBaseId"`
+	ParentID        string    `json:"parentId"`
+	Name            string    `json:"name"`
+	Path            string    `json:"path"`
+	Depth           int       `json:"depth"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type FolderList struct {
+	Items []Folder `json:"items"`
+}
+
+type FolderCreateRequest struct {
+	Name     string `json:"name" binding:"required" oa:"required,maxLength=255"`
+	ParentID string `json:"parentId"`
+}
+
+type FolderUpdateRequest struct {
+	Name     *string `json:"name" oa:"maxLength=255"`
+	ParentID *string `json:"parentId"`
+}
+
+type Tag struct {
+	ID              string    `json:"id"`
+	KnowledgeBaseID string    `json:"knowledgeBaseId"`
+	Name            string    `json:"name"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type TagList struct {
+	Items []Tag `json:"items"`
+}
+
+type TagCreateRequest struct {
+	Name string `json:"name" binding:"required" oa:"required,maxLength=64"`
+}
+
+type TagUpdateRequest struct {
+	Name string `json:"name" binding:"required" oa:"required,maxLength=64"`
+}
+
+// BatchDocumentsRequest applies one action to up to 100 documents. A partial
+// success is reported per item instead of failing the whole request.
+type BatchDocumentsRequest struct {
+	Action      string   `json:"action" binding:"required"`
+	DocumentIDs []string `json:"documentIds" binding:"required"`
+	FolderID    string   `json:"folderId"`
+	TagIDs      []string `json:"tagIds"`
+}
+
+type BatchDocumentResult struct {
+	DocumentID   string `json:"documentId"`
+	OK           bool   `json:"ok"`
+	ErrorCode    string `json:"errorCode,omitempty"`
+	ErrorMessage string `json:"errorMessage,omitempty"`
+}
+
+type BatchDocumentsResult struct {
+	Items []BatchDocumentResult `json:"items"`
 }
 
 type DocumentPage struct {
@@ -786,9 +858,10 @@ type EvidenceSet struct {
 }
 
 type SearchRequest struct {
-	Query           string `json:"query"`
-	KnowledgeBaseID string `json:"knowledgeBaseId"`
-	SessionOverride string `json:"sessionOverride"`
+	Query           string   `json:"query"`
+	KnowledgeBaseID string   `json:"knowledgeBaseId"`
+	SessionOverride string   `json:"sessionOverride"`
+	TagIDs          []string `json:"tagIds"`
 }
 
 type ConversationCreateRequest struct {

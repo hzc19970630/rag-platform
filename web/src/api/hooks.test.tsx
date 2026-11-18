@@ -56,6 +56,7 @@ describe("queryKeys", () => {
   it("keeps resource keys stable and scoped", () => {
     expect(queryKeys.knowledgeBase("kb-1")).toEqual(["knowledge-bases", "kb-1"]);
     expect(queryKeys.documents("kb-1")).toEqual(["knowledge-bases", "kb-1", "documents"]);
+    expect(queryKeys.documents("kb-1", { folderId: "fld-1", tagIds: ["tag-1"] })).toEqual(["knowledge-bases", "kb-1", "documents", "fld-1", "tag-1"]);
     expect(queryKeys.audit({ action: "write" })).toEqual(["audit", { action: "write" }]);
     expect(queryKeys.messages("conv-1")).toEqual(["conversations", "conv-1", "messages"]);
   });

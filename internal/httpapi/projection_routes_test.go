@@ -73,6 +73,7 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&models.KnowledgeBase{}, &models.KnowledgeBaseMember{}, &models.Membership{},
 		&models.AuthorizationRevision{}, &models.AuditLog{},
 		&models.Document{}, &models.DocumentVersion{}, &models.Chunk{},
+		&models.Folder{}, &models.Tag{}, &models.DocumentTag{},
 		&models.WikiPage{}, &models.WikiPageVersion{}, &models.WikiPageSource{},
 		&models.KnowledgeIndexRecord{}, &models.ProjectionRun{}, &models.ProjectionStageRun{},
 		&models.KnowledgeProjectionState{}, &models.EvidencePackage{}, &models.TaskInbox{}, &models.TaskDeadLetter{},

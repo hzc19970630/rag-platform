@@ -50,12 +50,21 @@ WHERE c.tenant_id = ?
 ORDER BY score DESC
 LIMIT ?`
 
+const bm25TagFilter = "  AND (SELECT count(*) FROM document_tags dt WHERE dt.document_id = d.id AND dt.tenant_id = ? AND dt.tag_id IN ?) = ?\n"
+
 func (s *BM25Searcher) SearchKeyword(ctx context.Context, request ports.RecallRequest) ([]ports.Hit, error) {
 	expression := SanitizeBM25Query(request.Query)
 	if expression == "" || request.TopK <= 0 || len(request.KnowledgeBaseIDs) == 0 {
 		return nil, nil
 	}
-	rows, err := s.db.WithContext(ctx).Raw(bm25RecallQuery, request.TenantID, request.KnowledgeBaseIDs, status.EvidenceReady, status.EvidenceReady, expression, request.TopK).Rows()
+	query := bm25RecallQuery
+	args := []any{request.TenantID, request.KnowledgeBaseIDs, status.EvidenceReady, status.EvidenceReady, expression}
+	if len(request.TagIDs) > 0 {
+		query = strings.Replace(query, "ORDER BY score DESC", bm25TagFilter+"ORDER BY score DESC", 1)
+		args = append(args, request.TenantID, request.TagIDs, len(request.TagIDs))
+	}
+	args = append(args, request.TopK)
+	rows, err := s.db.WithContext(ctx).Raw(query, args...).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("bm25 recall: %w", err)
 	}

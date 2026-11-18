@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS document_tags;
+DROP TABLE IF EXISTS tags;
+ALTER TABLE documents DROP COLUMN IF EXISTS folder_id;
+DROP TABLE IF EXISTS folders;

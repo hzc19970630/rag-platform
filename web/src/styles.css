@@ -195,6 +195,24 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .doc-id { font-size: 0.72rem; overflow-wrap: anywhere; }
 .doc-error { color: var(--error) !important; }
 
+/* Knowledge space: folder rail, tag filters and batch actions */
+.kb-documents-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+.kb-documents-main { display: grid; gap: 12px; min-width: 0; }
+.folder-panel { border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); padding: 10px 8px; min-height: 240px; }
+.folder-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 6px 10px; }
+.folder-title { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.folder-title-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-bar { padding: 8px 10px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--brand-soft); }
+.tag-filter { min-width: 200px; }
+.tag-manager-list { display: grid; gap: 4px; margin-top: 14px; }
+.tag-manager-row { padding: 6px 0; border-bottom: 1px solid var(--border-secondary); }
+.modal-field { display: block; margin-top: 12px; }
+
+@media (max-width: 960px) {
+  .kb-documents-layout { grid-template-columns: 1fr; }
+  .folder-panel { min-height: 0; }
+}
+
 /* Document detail */
 .detail-card { border-color: var(--border-secondary) !important; box-shadow: var(--shadow-card); }
 .detail-card.highlight { border-color: var(--brand) !important; box-shadow: 0 0 0 2px var(--brand-soft); }

@@ -14,6 +14,8 @@ type RecallRequest struct {
 	TenantID         string
 	KnowledgeBaseIDs []string
 	Query            string
+	// TagIDs restricts recall to documents carrying every listed tag.
+	TagIDs []string
 	// EmbeddingModel is the model that produced the query vector. Vector recall
 	// filters on it so a chunk embedded by another model is never compared.
 	EmbeddingModel string

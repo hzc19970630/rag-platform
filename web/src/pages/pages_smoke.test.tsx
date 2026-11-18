@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp } from "antd";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -65,9 +65,9 @@ function pageData(url: string): unknown {
   return {};
 }
 
-function stubFetch(handler: (url: string) => { status?: number; body: unknown } = (url) => ({ body: pageData(url) })) {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const response = handler(String(input));
+function stubFetch(handler: (url: string, init?: RequestInit) => { status?: number; body: unknown } = (url) => ({ body: pageData(url) })) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const response = handler(String(input), init);
     return new Response(JSON.stringify(response.body ?? {}), {
       status: response.status ?? 200,
       headers: { "Content-Type": "application/json" },
@@ -117,6 +117,88 @@ describe("page smoke tests", () => {
     stubFetch();
     const page = renderPage(<KnowledgeBasePage />, "/knowledge-bases/kb-1");
     await waitFor(() => expect(page.container.textContent).toContain("Test KB"));
+  });
+
+  it("filters documents by folder and shows tags", async () => {
+    const calls: string[] = [];
+    stubFetch((url) => {
+      calls.push(url);
+      if (url.includes("/knowledge-bases/kb-1/folders")) {
+        return {
+          body: {
+            items: [{
+              id: "fld-1", knowledgeBaseId: "kb-1", parentId: "", name: "Contracts",
+              path: "/fld-1/", depth: 1, createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z",
+            }],
+          },
+        };
+      }
+      if (url.includes("/knowledge-bases/kb-1/tags")) {
+        return { body: { items: [{ id: "tag-1", knowledgeBaseId: "kb-1", name: "Finance", createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z" }] } };
+      }
+      if (url.includes("/knowledge-bases/kb-1/documents")) {
+        return {
+          body: {
+            items: [{
+              document: {
+                id: "doc-1", filename: "contract.pdf", mimeType: "application/pdf", status: "EVIDENCE_READY",
+                latestVersionId: "ver-1", folderId: "", createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z",
+              },
+              version: { id: "ver-1", version: 1, sizeBytes: 10, status: "EVIDENCE_READY" },
+              contentReady: true,
+              previewable: true,
+              tags: [{ id: "tag-1", name: "Finance" }],
+            }],
+            nextCursor: "",
+            hasMore: false,
+          },
+        };
+      }
+      return { body: pageData(url) };
+    });
+    renderPage(<KnowledgeBasePage />, "/knowledge-bases/kb-1");
+    await screen.findByText("Finance");
+    fireEvent.click(screen.getByText("Contracts"));
+    await waitFor(() => expect(calls.some((url) => url.includes("folder_id=fld-1"))).toBe(true));
+  });
+
+  it("submits a batch move for selected documents", async () => {
+    const bodies: string[] = [];
+    stubFetch((url, init) => {
+      if (url.endsWith("/knowledge-bases/kb-1/documents/batch")) {
+        bodies.push(String(init?.body ?? ""));
+        return { body: { items: [{ documentId: "doc-1", ok: true }] } };
+      }
+      if (url.includes("/knowledge-bases/kb-1/documents")) {
+        return {
+          body: {
+            items: [{
+              document: {
+                id: "doc-1", filename: "contract.pdf", mimeType: "application/pdf", status: "EVIDENCE_READY",
+                latestVersionId: "ver-1", folderId: "", createdAt: "2026-11-01T00:00:00Z", updatedAt: "2026-11-01T00:00:00Z",
+              },
+              version: { id: "ver-1", version: 1, sizeBytes: 10, status: "EVIDENCE_READY" },
+              contentReady: true,
+              previewable: true,
+              tags: [],
+            }],
+            nextCursor: "",
+            hasMore: false,
+          },
+        };
+      }
+      return { body: pageData(url) };
+    });
+    const page = renderPage(<KnowledgeBasePage />, "/knowledge-bases/kb-1");
+    await screen.findByText("contract.pdf");
+    const checkbox = page.container.querySelector(".ant-table-tbody .ant-checkbox-input") as HTMLInputElement;
+    expect(checkbox).toBeTruthy();
+    fireEvent.click(checkbox);
+    await screen.findByText(/已选 1 项/);
+    fireEvent.click(screen.getByRole("button", { name: /移\s*动/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^确\s*认$/ }));
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+    expect(JSON.parse(bodies[0])).toMatchObject({ action: "move", documentIds: ["doc-1"], folderId: "" });
   });
 
   it("renders a document detail page", async () => {

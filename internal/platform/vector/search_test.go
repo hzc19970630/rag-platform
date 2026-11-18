@@ -102,3 +102,12 @@ func TestVectorRecallRawExpandsKnowledgeBaseSlice(t *testing.T) {
 		t.Fatalf("placeholder count %d does not match %d bound vars: %s", maxPlaceholder, len(tx.Statement.Vars), statement)
 	}
 }
+
+func TestTagFilterUsesAllMatchSubquery(t *testing.T) {
+	if !strings.Contains(vectorTagFilter, "document_tags") || !strings.Contains(vectorTagFilter, "count(*)") {
+		t.Fatalf("tag filter must count matching document tags, got %q", vectorTagFilter)
+	}
+	if strings.Count(vectorTagFilter, "?") != 3 {
+		t.Fatalf("tag filter expects tenant, tag list and count placeholders, got %q", vectorTagFilter)
+	}
+}

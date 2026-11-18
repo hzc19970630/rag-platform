@@ -14,6 +14,9 @@ import type {
   DocumentPreview,
   DocumentStatus,
   DocumentVersionPage,
+  DocumentFilter,
+  FolderList,
+  TagList,
   KnowledgeBase,
   KnowledgeBaseConfigurationV1,
   MeResponse,
@@ -37,7 +40,11 @@ export const queryKeys = {
   me: ["auth", "me"] as const,
   knowledgeBases: ["knowledge-bases"] as const,
   knowledgeBase: (id: string) => ["knowledge-bases", id] as const,
-  documents: (id: string) => ["knowledge-bases", id, "documents"] as const,
+  documents: (id: string, filter?: DocumentFilter) => filter
+    ? ["knowledge-bases", id, "documents", filter.folderId, filter.tagIds.join(",")] as const
+    : ["knowledge-bases", id, "documents"] as const,
+  folders: (id: string) => ["knowledge-bases", id, "folders"] as const,
+  tags: (id: string) => ["knowledge-bases", id, "tags"] as const,
   members: (id: string) => ["knowledge-bases", id, "members"] as const,
   configuration: (id: string) => ["knowledge-bases", id, "configuration"] as const,
   projection: (id: string) => ["knowledge-bases", id, "projection"] as const,
@@ -149,17 +156,42 @@ export function useConnectorRuns(id: string, enabled = true) {
   });
 }
 
-export function useDocuments(knowledgeBaseId: string) {
+export function useDocuments(knowledgeBaseId: string, filter?: DocumentFilter) {
+  const folderId = filter?.folderId ?? "";
+  const tagIds = filter?.tagIds ?? [];
   return useInfiniteQuery({
-    queryKey: queryKeys.documents(knowledgeBaseId),
-    queryFn: ({ pageParam }) =>
-      api<DocumentPage>(`/knowledge-bases/${knowledgeBaseId}/documents?limit=50${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ""}`),
+    queryKey: queryKeys.documents(knowledgeBaseId, filter),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: "50" });
+      if (folderId) params.set("folder_id", folderId);
+      if (tagIds.length > 0) params.set("tag_ids", tagIds.join(","));
+      if (pageParam) params.set("cursor", pageParam);
+      return api<DocumentPage>(`/knowledge-bases/${knowledgeBaseId}/documents?${params.toString()}`);
+    },
     initialPageParam: "",
     getNextPageParam: (last) => (last.hasMore ? last.nextCursor : undefined),
     refetchInterval: (query) => {
       const items = query.state.data?.pages.flatMap((page) => page.items) ?? [];
       return items.some((item) => !terminalVersionStatuses.has(item.version.status)) ? 1500 : false;
     },
+  });
+}
+
+export function useFolders(knowledgeBaseId: string) {
+  return useQuery({
+    queryKey: queryKeys.folders(knowledgeBaseId),
+    queryFn: () => api<FolderList>(`/knowledge-bases/${knowledgeBaseId}/folders`),
+    select: (data) => data.items,
+    enabled: Boolean(knowledgeBaseId),
+  });
+}
+
+export function useTags(knowledgeBaseId: string) {
+  return useQuery({
+    queryKey: queryKeys.tags(knowledgeBaseId),
+    queryFn: () => api<TagList>(`/knowledge-bases/${knowledgeBaseId}/tags`),
+    select: (data) => data.items,
+    enabled: Boolean(knowledgeBaseId),
   });
 }
 

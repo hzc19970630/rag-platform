@@ -206,6 +206,26 @@ var Routes = []Route{
 	{Method: http.MethodPost, Path: "/api/v1/documents/{id}/purge", OperationID: "post_documents_id_purge", Tag: "documents",
 		Success: noContent(), Errors: commonErrors},
 
+	// knowledge space: folders, tags and batch document actions
+	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/folders", OperationID: "get_knowledge_bases_id_folders", Tag: "documents",
+		Success: ok((*FolderList)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/folders", OperationID: "post_knowledge_bases_id_folders", Tag: "documents",
+		Request: jsonBody((*FolderCreateRequest)(nil)), Success: created((*Folder)(nil)), Errors: commonErrors},
+	{Method: http.MethodPatch, Path: "/api/v1/folders/{folderID}", OperationID: "patch_folders_folderID", Tag: "documents",
+		Request: jsonBody((*FolderUpdateRequest)(nil)), Success: ok((*Folder)(nil)), Errors: commonErrors},
+	{Method: http.MethodDelete, Path: "/api/v1/folders/{folderID}", OperationID: "delete_folders_folderID", Tag: "documents",
+		Success: noContent(), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/tags", OperationID: "get_knowledge_bases_id_tags", Tag: "documents",
+		Success: ok((*TagList)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tags", OperationID: "post_knowledge_bases_id_tags", Tag: "documents",
+		Request: jsonBody((*TagCreateRequest)(nil)), Success: created((*Tag)(nil)), Errors: commonErrors},
+	{Method: http.MethodPatch, Path: "/api/v1/tags/{tagID}", OperationID: "patch_tags_tagID", Tag: "documents",
+		Request: jsonBody((*TagUpdateRequest)(nil)), Success: ok((*Tag)(nil)), Errors: commonErrors},
+	{Method: http.MethodDelete, Path: "/api/v1/tags/{tagID}", OperationID: "delete_tags_tagID", Tag: "documents",
+		Success: noContent(), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/documents/batch", OperationID: "post_knowledge_bases_id_documents_batch", Tag: "documents",
+		Request: jsonBody((*BatchDocumentsRequest)(nil)), Success: ok((*BatchDocumentsResult)(nil)), Errors: commonErrors},
+
 	// conversations
 	{Method: http.MethodPost, Path: "/api/v1/search", OperationID: "post_search", Tag: "conversations",
 		Request: jsonBody((*SearchRequest)(nil)), Success: ok((*EvidenceSet)(nil)), Errors: commonErrors},

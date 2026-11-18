@@ -32,6 +32,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 		}
 		evidence, err := deps.Retrieval.Retrieve(c.Request.Context(), scope, retrieval.QueryInput{
 			RequestID: requestIDFor(c), Query: input.Query, KnowledgeBaseID: input.KnowledgeBaseID, SessionOverride: input.SessionOverride,
+			TagIDs: input.TagIDs,
 		})
 		if err != nil {
 			writeError(c, err)

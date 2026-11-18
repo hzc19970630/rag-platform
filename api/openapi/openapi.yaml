@@ -157,6 +157,42 @@ components:
         - sessionCookie
         - sessionTTLHours
       type: object
+    BatchDocumentResult:
+      properties:
+        documentId:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        ok:
+          type: boolean
+      type: object
+    BatchDocumentsRequest:
+      properties:
+        action:
+          type: string
+        documentIds:
+          items:
+            type: string
+          type: array
+        folderId:
+          type: string
+        tagIds:
+          items:
+            type: string
+          type: array
+      required:
+        - action
+        - documentIds
+      type: object
+    BatchDocumentsResult:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/BatchDocumentResult'
+          type: array
+      type: object
     CancelResult:
       properties:
         cancelled:
@@ -720,6 +756,8 @@ components:
           type: string
         filename:
           type: string
+        folderId:
+          type: string
         id:
           type: string
         knowledgeBaseId:
@@ -820,8 +858,19 @@ components:
           $ref: '#/components/schemas/Document'
         previewable:
           type: boolean
+        tags:
+          items:
+            $ref: '#/components/schemas/DocumentTagRef'
+          type: array
         version:
           $ref: '#/components/schemas/DocumentVersionSummary'
+      type: object
+    DocumentTagRef:
+      properties:
+        id:
+          type: string
+        name:
+          type: string
       type: object
     DocumentUploadRequest:
       properties:
@@ -1066,6 +1115,52 @@ components:
           type: string
         tokenEstimate:
           type: integer
+      type: object
+    Folder:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        depth:
+          type: integer
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        name:
+          type: string
+        parentId:
+          type: string
+        path:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    FolderCreateRequest:
+      properties:
+        name:
+          maxLength: 255
+          type: string
+        parentId:
+          type: string
+      required:
+        - name
+      type: object
+    FolderList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Folder'
+          type: array
+      type: object
+    FolderUpdateRequest:
+      properties:
+        name:
+          maxLength: 255
+          type: string
+        parentId:
+          type: string
       type: object
     GraphCounts:
       properties:
@@ -2388,6 +2483,10 @@ components:
           type: string
         sessionOverride:
           type: string
+        tagIds:
+          items:
+            type: string
+          type: array
       type: object
     StageRun:
       properties:
@@ -2445,6 +2544,44 @@ components:
         - request_id
         - sequence
         - type
+      type: object
+    Tag:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        name:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      type: object
+    TagCreateRequest:
+      properties:
+        name:
+          maxLength: 64
+          type: string
+      required:
+        - name
+      type: object
+    TagList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Tag'
+          type: array
+      type: object
+    TagUpdateRequest:
+      properties:
+        name:
+          maxLength: 64
+          type: string
+      required:
+        - name
       type: object
     TaskDeadLetter:
       properties:
@@ -3772,6 +3909,61 @@ paths:
       summary: POST /api/v1/documents/{id}/versions/{versionID}/activate
       tags:
         - documents
+  /api/v1/folders/{folderID}:
+    delete:
+      operationId: delete_folders_folderID
+      parameters:
+        - in: path
+          name: folderID
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: DELETE /api/v1/folders/{folderID}
+      tags:
+        - documents
+    patch:
+      operationId: patch_folders_folderID
+      parameters:
+        - in: path
+          name: folderID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FolderUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/folders/{folderID}
+      tags:
+        - documents
   /api/v1/graph/runs/{runId}:
     get:
       operationId: get_graph_runs_runId
@@ -4155,6 +4347,39 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/documents
       tags:
         - documents
+  /api/v1/knowledge-bases/{id}/documents/batch:
+    post:
+      operationId: post_knowledge_bases_id_documents_batch
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDocumentsRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchDocumentsResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/documents/batch
+      tags:
+        - documents
   /api/v1/knowledge-bases/{id}/embedding-migration:
     get:
       operationId: get_knowledge_bases_id_embedding_migration
@@ -4342,6 +4567,65 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/embedding-migration/{migrationId}/rollback
       tags:
         - embedding-migration
+  /api/v1/knowledge-bases/{id}/folders:
+    get:
+      operationId: get_knowledge_bases_id_folders
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/folders
+      tags:
+        - documents
+    post:
+      operationId: post_knowledge_bases_id_folders
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FolderCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/folders
+      tags:
+        - documents
   /api/v1/knowledge-bases/{id}/graph/query:
     get:
       operationId: get_knowledge_bases_id_graph_query
@@ -4647,6 +4931,65 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/sync/cancel
       tags:
         - connectors
+  /api/v1/knowledge-bases/{id}/tags:
+    get:
+      operationId: get_knowledge_bases_id_tags
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TagList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/tags
+      tags:
+        - documents
+    post:
+      operationId: post_knowledge_bases_id_tags
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/tags
+      tags:
+        - documents
   /api/v1/knowledge-bases/{id}/wiki/pages:
     get:
       operationId: get_knowledge_bases_id_wiki_pages
@@ -5494,6 +5837,61 @@ paths:
       summary: POST /api/v1/sessions/{id}/messages/{messageId}/feedback
       tags:
         - conversations
+  /api/v1/tags/{tagID}:
+    delete:
+      operationId: delete_tags_tagID
+      parameters:
+        - in: path
+          name: tagID
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: DELETE /api/v1/tags/{tagID}
+      tags:
+        - documents
+    patch:
+      operationId: patch_tags_tagID
+      parameters:
+        - in: path
+          name: tagID
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tag'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PATCH /api/v1/tags/{tagID}
+      tags:
+        - documents
   /api/v1/tenant:
     get:
       operationId: get_tenant

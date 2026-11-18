@@ -160,6 +160,7 @@ type Document struct {
 	MimeType        string     `gorm:"size:128;not null" json:"mimeType"`
 	Status          string     `gorm:"size:32;not null" json:"status"`
 	LatestVersionID string     `gorm:"size:64" json:"latestVersionId"`
+	FolderID        string     `gorm:"size:64;default:null" json:"folderId"`
 	DeletedAt       *time.Time `json:"deletedAt,omitempty"`
 	DeletedBy       string     `gorm:"size:64;not null;default:''" json:"deletedBy,omitempty"`
 	PurgeAfter      *time.Time `json:"purgeAfter,omitempty"`
@@ -169,6 +170,46 @@ type Document struct {
 }
 
 func (Document) TableName() string { return "documents" }
+
+// Folder is one node of the knowledge-space folder tree. Path is the
+// materialized chain of folder ids used for subtree queries and future
+// authorization prefixes; depth counts from 1 at the root level.
+type Folder struct {
+	ID              string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID        string    `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string    `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
+	ParentID        *string   `gorm:"size:64" json:"parentId"`
+	Name            string    `gorm:"size:255;not null" json:"name"`
+	Path            string    `gorm:"size:4096;not null" json:"path"`
+	Depth           int       `gorm:"not null" json:"depth"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (Folder) TableName() string { return "folders" }
+
+// Tag is a manual, knowledge-base-scoped label. Tags only narrow lists and
+// retrieval; they never grant access.
+type Tag struct {
+	ID              string    `gorm:"primaryKey;size:64" json:"id"`
+	TenantID        string    `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string    `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
+	Name            string    `gorm:"size:64;not null" json:"name"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"not null" json:"updatedAt"`
+}
+
+func (Tag) TableName() string { return "tags" }
+
+type DocumentTag struct {
+	TenantID        string    `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string    `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
+	DocumentID      string    `gorm:"primaryKey;size:64" json:"documentId"`
+	TagID           string    `gorm:"primaryKey;size:64" json:"tagId"`
+	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
+}
+
+func (DocumentTag) TableName() string { return "document_tags" }
 
 // DocumentVersion is one immutable parse of a document. Its object storage
 // locations stay server side: SourceObjectKey and NormalizedKey are deliberately

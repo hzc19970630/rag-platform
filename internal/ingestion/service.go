@@ -73,6 +73,7 @@ type Quota struct {
 type UploadInput struct {
 	KnowledgeBaseID string
 	DocumentID      string
+	FolderID        string
 	Filename        string
 	MimeType        string
 	Content         []byte
@@ -179,6 +180,11 @@ func (s *Service) Upload(ctx context.Context, principal authz.Principal, input U
 	knowledgeBase, err := s.authorizedKnowledgeBase(ctx, principal, input.KnowledgeBaseID, "write")
 	if err != nil {
 		return UploadResult{}, err
+	}
+	if input.FolderID != "" {
+		if _, err := s.loadFolder(ctx, principal.TenantID, input.KnowledgeBaseID, input.FolderID); err != nil {
+			return UploadResult{}, err
+		}
 	}
 	return s.storeVersion(ctx, principal, knowledgeBase, input, false, false)
 }
@@ -308,7 +314,7 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 		if err != nil {
 			return UploadResult{}, err
 		}
-		document = models.Document{ID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, OwnerID: principal.SubjectID, Filename: input.Filename, MimeType: mimeType, Status: StatusReceived}
+		document = models.Document{ID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, OwnerID: principal.SubjectID, Filename: input.Filename, MimeType: mimeType, Status: StatusReceived, FolderID: input.FolderID}
 	}
 
 	versionID, err := newID("ver")
@@ -360,7 +366,11 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 					return err
 				}
 			}
-			if err := tx.Model(&document).Where("tenant_id = ?", principal.TenantID).Updates(map[string]any{"filename": input.Filename, "mime_type": mimeType, "status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
+			updates := map[string]any{"filename": input.Filename, "mime_type": mimeType, "status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}
+			if input.FolderID != "" {
+				updates["folder_id"] = input.FolderID
+			}
+			if err := tx.Model(&document).Where("tenant_id = ?", principal.TenantID).Updates(updates).Error; err != nil {
 				return err
 			}
 		}

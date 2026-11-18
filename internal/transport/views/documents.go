@@ -16,6 +16,7 @@ func Document(row models.Document) httpapi.Document {
 		MimeType:        row.MimeType,
 		Status:          row.Status,
 		LatestVersionID: row.LatestVersionID,
+		FolderID:        row.FolderID,
 		DeletedAt:       row.DeletedAt,
 		DeletedBy:       row.DeletedBy,
 		PurgeAfter:      row.PurgeAfter,
@@ -126,7 +127,65 @@ func DocumentSummary(view ingestion.DocumentSummary) httpapi.DocumentSummary {
 		Version:      DocumentVersionSummary(view.Version),
 		ContentReady: view.ContentReady,
 		Previewable:  view.Previewable,
+		Tags:         DocumentTagRefs(view.Tags),
 	}
+}
+
+func DocumentTagRefs(refs []ingestion.TagRef) []httpapi.DocumentTagRef {
+	items := make([]httpapi.DocumentTagRef, 0, len(refs))
+	for _, ref := range refs {
+		items = append(items, httpapi.DocumentTagRef{ID: ref.ID, Name: ref.Name})
+	}
+	return items
+}
+
+func Folder(row models.Folder) httpapi.Folder {
+	return httpapi.Folder{
+		ID: row.ID, KnowledgeBaseID: row.KnowledgeBaseID, ParentID: defaultString(row.ParentID),
+		Name: row.Name, Path: row.Path, Depth: row.Depth,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
+func FolderList(rows []models.Folder) httpapi.FolderList {
+	items := make([]httpapi.Folder, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, Folder(row))
+	}
+	return httpapi.FolderList{Items: items}
+}
+
+func Tag(row models.Tag) httpapi.Tag {
+	return httpapi.Tag{
+		ID: row.ID, KnowledgeBaseID: row.KnowledgeBaseID, Name: row.Name,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+	}
+}
+
+func TagList(rows []models.Tag) httpapi.TagList {
+	items := make([]httpapi.Tag, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, Tag(row))
+	}
+	return httpapi.TagList{Items: items}
+}
+
+func BatchResults(results []ingestion.BatchResult) httpapi.BatchDocumentsResult {
+	items := make([]httpapi.BatchDocumentResult, 0, len(results))
+	for _, result := range results {
+		items = append(items, httpapi.BatchDocumentResult{
+			DocumentID: result.DocumentID, OK: result.OK,
+			ErrorCode: result.ErrorCode, ErrorMessage: result.ErrorMessage,
+		})
+	}
+	return httpapi.BatchDocumentsResult{Items: items}
+}
+
+func defaultString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func DocumentPage(view ingestion.DocumentPage) httpapi.DocumentPage {

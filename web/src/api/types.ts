@@ -96,6 +96,7 @@ export type DocumentSummary = {
     mimeType: string;
     status: string;
     latestVersionId: string;
+    folderId: string;
     createdAt: string;
     updatedAt: string;
   };
@@ -109,6 +110,24 @@ export type DocumentSummary = {
   };
   contentReady: boolean;
   previewable: boolean;
+  tags: { id: string; name: string }[];
+};
+
+export type Folder = DeepRequired<Schemas["Folder"]>;
+
+export type FolderList = { items: Folder[] };
+
+export type Tag = DeepRequired<Schemas["Tag"]>;
+
+export type TagList = { items: Tag[] };
+
+export type BatchDocumentResult = DeepRequired<Schemas["BatchDocumentResult"]>;
+
+export type BatchDocumentsResult = { items: BatchDocumentResult[] };
+
+export type DocumentFilter = {
+  folderId: string;
+  tagIds: string[];
 };
 
 export type DocumentPage = {
