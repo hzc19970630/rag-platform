@@ -63,6 +63,8 @@ services:
     build:
       context: ../..
       dockerfile: services/docreader/Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     environment:
       PARSER_VERSION: ${PARSER_VERSION:-docreader-m2-v2}
     expose:
@@ -202,6 +204,8 @@ services:
   web:
     build:
       context: ../../web
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     environment:
       VITE_API_BASE_URL: ${API_PUBLIC_URL:-http://localhost:8082}/api/v1
     depends_on:

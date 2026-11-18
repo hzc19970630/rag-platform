@@ -1,7 +1,8 @@
 FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+RUN npm ci --registry="${NPM_REGISTRY}"
 COPY . .
 EXPOSE 5173
 CMD ["npm", "run", "dev"]
