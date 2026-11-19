@@ -209,6 +209,8 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .folder-search-empty { padding: 0 6px; font-size: 0.8rem; }
 .folder-title { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .folder-title-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-create-row { display: flex; align-items: center; gap: 4px; width: 100%; }
+.folder-create-row .ant-input { flex: 1; min-width: 0; }
 .folder-actions { display: inline-flex; align-items: center; gap: 2px; opacity: 0; transition: opacity 0.12s ease; }
 .ant-tree-treenode:hover .folder-actions, .folder-actions:focus-within { opacity: 1; }
 .batch-bar { padding: 8px 10px; border: 1px solid var(--brand); border-radius: var(--radius); background: var(--brand-soft); }

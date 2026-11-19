@@ -152,7 +152,7 @@ export function KnowledgeBasePage() {
     {
       key: "documents",
       label: t("knowledgeBase.tabs.documents"),
-      children: <DocumentsTab knowledgeBaseId={knowledgeBaseId} canWrite={canWrite} canDelete={canDelete} />,
+      children: <DocumentsTab knowledgeBaseId={knowledgeBaseId} knowledgeBaseName={kb.name} canWrite={canWrite} canDelete={canDelete} />,
     },
     ...(canManage ? [{
       key: "members",
@@ -330,7 +330,7 @@ export function KnowledgeBasePage() {
   );
 }
 
-function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseId: string; canWrite: boolean; canDelete: boolean }) {
+function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete }: { knowledgeBaseId: string; knowledgeBaseName: string; canWrite: boolean; canDelete: boolean }) {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
@@ -339,7 +339,7 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [batchBusy, setBatchBusy] = useState("");
-  const [folderDialog, setFolderDialog] = useState<{ mode: "create"; parentID: string } | { mode: "rename" | "move"; folder: Folder }>();
+  const [folderDialog, setFolderDialog] = useState<{ mode: "rename" | "move"; folder: Folder }>();
   const [folderName, setFolderName] = useState("");
   const [folderParent, setFolderParent] = useState("");
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
@@ -411,10 +411,15 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
     }
   }
 
-  function openCreateFolder(parentID: string) {
-    setFolderName("");
-    setFolderParent(parentID);
-    setFolderDialog({ mode: "create", parentID });
+  async function createFolder(parentID: string, name: string) {
+    try {
+      await api(`/knowledge-bases/${knowledgeBaseId}/folders`, jsonInit({ name, parentId: parentID }));
+      message.success(t("folder.createSuccess"));
+      await refresh();
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : t("folder.saveFailed"));
+      throw cause;
+    }
   }
 
   function openFolderDialog(folder: Folder, mode: "rename" | "move") {
@@ -486,14 +491,12 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
   async function saveFolder() {
     if (!folderDialog) return;
     try {
-      if (folderDialog.mode === "create") {
-        await api(`/knowledge-bases/${knowledgeBaseId}/folders`, jsonInit({ name: folderName, parentId: folderParent }));
-      } else if (folderDialog.mode === "rename") {
+      if (folderDialog.mode === "rename") {
         await api(`/folders/${folderDialog.folder.id}`, jsonInit({ name: folderName, parentId: folderParent }, "PATCH"));
       } else {
         await api(`/folders/${folderDialog.folder.id}`, jsonInit({ parentId: folderParent }, "PATCH"));
       }
-      message.success(folderDialog.mode === "create" ? t("folder.createSuccess") : t("folder.updateSuccess"));
+      message.success(t("folder.updateSuccess"));
       setFolderDialog(undefined);
       await refresh();
     } catch (cause) {
@@ -683,11 +686,12 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
       <div className="kb-documents-layout">
         <FolderTree
           folders={folders}
+          knowledgeBaseName={knowledgeBaseName}
           selectedKey={folderKey}
           canWrite={canWrite}
           canDelete={canDelete}
           onSelect={(key) => { setFolderKey(key); setSelected([]); }}
-          onCreate={openCreateFolder}
+          onCreate={createFolder}
           onRename={(folder) => openFolderDialog(folder, "rename")}
           onMove={(folder) => openFolderDialog(folder, "move")}
           onDelete={removeFolder}
@@ -793,7 +797,7 @@ function DocumentsTab({ knowledgeBaseId, canWrite, canDelete }: { knowledgeBaseI
 
       <Modal
         open={Boolean(folderDialog)}
-        title={folderDialog?.mode === "create" ? t("folder.create") : folderDialog?.mode === "rename" ? t("folder.rename") : t("folder.move")}
+        title={folderDialog?.mode === "rename" ? t("folder.rename") : t("folder.move")}
         onCancel={() => setFolderDialog(undefined)}
         onOk={() => void saveFolder()}
         okText={t("common.save")}

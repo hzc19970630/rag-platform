@@ -1,4 +1,5 @@
 import {
+  CheckOutlined,
   CloseOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -19,11 +20,12 @@ export const FOLDER_ROOT = "root";
 
 type Props = {
   folders: Folder[];
+  knowledgeBaseName: string;
   selectedKey: string;
   canWrite: boolean;
   canDelete: boolean;
   onSelect: (key: string) => void;
-  onCreate: (parentID: string) => void;
+  onCreate: (parentID: string, name: string) => Promise<void>;
   onRename: (folder: Folder) => void;
   onMove: (folder: Folder) => void;
   onDelete: (folder: Folder) => void;
@@ -33,11 +35,44 @@ type Props = {
 
 export function FolderTree(props: Props) {
   const { t } = useTranslation();
-  const { folders, selectedKey, canWrite, canDelete, onSelect, onCreate, onRename, onMove, onDelete, onDownload, onBatchDelete } = props;
-  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const { folders, knowledgeBaseName, selectedKey, canWrite, canDelete, onSelect, onCreate, onRename, onMove, onDelete, onDownload, onBatchDelete } = props;
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([FOLDER_ROOT]);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState(false);
   const [checkedKeys, setCheckedKeys] = useState<string[]>([]);
+  // undefined closes the inline editor; "" creates at the root level.
+  const [createParent, setCreateParent] = useState<string | undefined>(undefined);
+  const [createName, setCreateName] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
+
+  function startCreate(parentID: string) {
+    setQuery("");
+    if (parentID) {
+      setExpandedKeys((current) => (current.includes(parentID) ? current : [...current, parentID]));
+    }
+    setCreateName("");
+    setCreateParent(parentID);
+  }
+
+  function cancelCreate() {
+    setCreateParent(undefined);
+    setCreateName("");
+  }
+
+  async function submitCreate() {
+    const name = createName.trim();
+    if (!name || createBusy || createParent === undefined) return;
+    setCreateBusy(true);
+    try {
+      await props.onCreate(createParent, name);
+      setCreateParent(undefined);
+      setCreateName("");
+    } catch {
+      // The page reports the failure; keep the inline editor open for retry.
+    } finally {
+      setCreateBusy(false);
+    }
+  }
 
   // The folder list arrives asynchronously, so defaultExpandAll would run on an
   // empty tree. Expand every folder whenever the set changes instead.
@@ -76,8 +111,54 @@ export function FolderTree(props: Props) {
       list.push(folder);
       children.set(parent, list);
     }
+    function createRow(parentID: string): DataNode {
+      return {
+        key: `create:${parentID || "root"}`,
+        selectable: false,
+        checkable: false,
+        isLeaf: true,
+        title: (
+          <span className="folder-create-row" onClick={(event) => event.stopPropagation()}>
+            <Input
+              size="small"
+              value={createName}
+              placeholder={t("folder.name")}
+              aria-label={t("folder.create")}
+              onChange={(event) => setCreateName(event.target.value)}
+              onPressEnter={() => void submitCreate()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelCreate();
+                }
+              }}
+            />
+            <Tooltip title={t("common.confirm")}>
+              <Button
+                size="small"
+                type="text"
+                icon={<CheckOutlined />}
+                aria-label={t("common.confirm")}
+                loading={createBusy}
+                disabled={!createName.trim()}
+                onClick={() => void submitCreate()}
+              />
+            </Tooltip>
+            <Tooltip title={t("common.cancel")}>
+              <Button
+                size="small"
+                type="text"
+                icon={<CloseOutlined />}
+                aria-label={t("common.cancel")}
+                onClick={cancelCreate}
+              />
+            </Tooltip>
+          </span>
+        ),
+      };
+    }
     function build(parentID: string): DataNode[] {
-      return (children.get(parentID) ?? [])
+      const nodes: DataNode[] = (children.get(parentID) ?? [])
         .sort((left, right) => left.name.localeCompare(right.name))
         .map((folder) => ({
           key: folder.id,
@@ -92,7 +173,7 @@ export function FolderTree(props: Props) {
                       size="small"
                       icon={<FolderAddOutlined />}
                       aria-label={t("folder.createChild")}
-                      onClick={(event) => { event.stopPropagation(); onCreate(folder.id); }}
+                      onClick={(event) => { event.stopPropagation(); startCreate(folder.id); }}
                     />
                   </Tooltip>
                   <Dropdown
@@ -125,13 +206,41 @@ export function FolderTree(props: Props) {
           ),
           children: build(folder.id),
         }));
+      if (createParent === parentID) nodes.unshift(createRow(parentID));
+      return nodes;
     }
-    return [
-      { key: FOLDER_ALL, title: t("folder.all"), selectable: !editing, disableCheckbox: true },
-      { key: FOLDER_ROOT, title: t("folder.root"), selectable: !editing, disableCheckbox: true },
-      ...build(""),
-    ];
-  }, [folders, query, editing, canWrite, onDelete, onMove, onRename, t]);
+    const allNode: DataNode = {
+      key: FOLDER_ALL,
+      title: t("folder.all"),
+      selectable: !editing,
+      disableCheckbox: true,
+    };
+    const rootNode: DataNode = {
+      key: FOLDER_ROOT,
+      title: (
+        <span className="folder-title">
+          <span className="folder-title-name">{knowledgeBaseName}</span>
+          {canWrite && !editing && (
+            <span className="folder-actions">
+              <Tooltip title={t("folder.createChild")}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<FolderAddOutlined />}
+                  aria-label={t("folder.createChild")}
+                  onClick={(event) => { event.stopPropagation(); startCreate(""); }}
+                />
+              </Tooltip>
+            </span>
+          )}
+        </span>
+      ),
+      selectable: !editing,
+      disableCheckbox: true,
+      children: build(""),
+    };
+    return [allNode, rootNode];
+  }, [folders, knowledgeBaseName, query, editing, canWrite, createParent, createName, createBusy, props.onCreate, onDelete, onMove, onRename, t]);
 
   const parentID = selectedKey === FOLDER_ALL || selectedKey === FOLDER_ROOT ? "" : selectedKey;
   const selectedFolders = folders.filter((folder) => checkedKeys.includes(folder.id));
@@ -201,7 +310,7 @@ export function FolderTree(props: Props) {
                   size="small"
                   icon={<FolderAddOutlined />}
                   aria-label={t("folder.create")}
-                  onClick={() => onCreate(parentID)}
+                  onClick={() => startCreate(parentID)}
                 />
               </Tooltip>
             )}

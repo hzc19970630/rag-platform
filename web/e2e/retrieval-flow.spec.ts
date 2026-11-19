@@ -25,6 +25,9 @@ test("upload, parse, search, answer and delete document", async ({ page, api }) 
     knowledgeBaseId = new URL(page.url()).pathname.split("/").filter(Boolean).pop() ?? "";
     expect(knowledgeBaseId).not.toBe("");
 
+    // The knowledge base itself is the tree root and owns the top-level folders.
+    await expect(page.locator(".folder-tree-scroll").getByText(knowledgeBaseName)).toBeVisible();
+
     await page.getByTestId("document-upload-input").setInputFiles(fixturePath);
     await expect(page.getByText(new RegExp(`已上传 ${filename}`))).toBeVisible({ timeout: 15_000 });
     await waitForDocument(api, knowledgeBaseId, filename);
