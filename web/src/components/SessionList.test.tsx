@@ -64,11 +64,33 @@ describe("SessionList", () => {
     const names = new Map([["kb-1", "First KB"], ["kb-2", "Second KB"]]);
     render(<SessionList items={items} grouped knowledgeBaseNames={names} onSelect={() => undefined} onCreate={() => undefined} />);
 
+    const group = screen.getByText("First KB").closest(".chat-session-group") as HTMLElement;
+    expect(group.querySelector(".anticon-folder-open")).toBeTruthy();
     fireEvent.click(screen.getByText("First KB").closest("button")!);
     expect(screen.queryByText("Alpha")).toBeNull();
     expect(screen.getByText("Beta")).toBeInTheDocument();
+    expect(group.querySelector(".anticon-folder")).toBeTruthy();
 
     fireEvent.click(screen.getByText("First KB").closest("button")!);
     expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(group.querySelector(".anticon-folder-open")).toBeTruthy();
+  });
+
+  it("starts a conversation inside a group from the hover action", () => {
+    const onCreateInGroup = vi.fn();
+    const items = [conversation("a", "2026-11-18T00:00:00Z", "kb-1", "Alpha")];
+    const names = new Map([["kb-1", "First KB"]]);
+    render(
+      <SessionList
+        items={items}
+        grouped
+        knowledgeBaseNames={names}
+        onSelect={() => undefined}
+        onCreate={() => undefined}
+        onCreateInGroup={onCreateInGroup}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("chat.newConversation") }));
+    expect(onCreateInGroup).toHaveBeenCalledWith("kb-1");
   });
 });

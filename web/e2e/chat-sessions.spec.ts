@@ -44,6 +44,13 @@ test("knowledge base chat panel starts a scoped conversation inline", async ({ p
     await expect(groupToggle).toHaveAttribute("aria-expanded", "false");
     await groupToggle.click();
     await expect(groupToggle).toHaveAttribute("aria-expanded", "true");
+
+    const groupRow = sessionList.locator(".chat-session-group").filter({ hasText: knowledgeBase.name });
+    await groupRow.hover();
+    await groupRow.getByRole("button", { name: "新会话" }).click();
+    await expect(page).toHaveURL(/\/chat\/[^/?#]+$/);
+    await expect(page).not.toHaveURL(new RegExp(`/chat/${conversationId}$`));
+    await expect(page.getByTestId("chat-composer")).toBeVisible();
   } finally {
     if (knowledgeBaseId) await deleteKnowledgeBase(api, knowledgeBaseId);
   }

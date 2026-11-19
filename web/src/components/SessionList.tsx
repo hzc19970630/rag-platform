@@ -1,5 +1,5 @@
-import { DownOutlined, FolderOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
-import { Button, Flex, Typography } from "antd";
+import { FolderOpenOutlined, FolderOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Flex, Tooltip, Typography } from "antd";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { Conversation } from "../api/types";
@@ -15,6 +15,7 @@ type Props = {
   activeId?: string;
   onSelect: (conversation: Conversation) => void;
   onCreate: () => void;
+  onCreateInGroup?: (knowledgeBaseId: string) => void;
   loading?: boolean;
   error?: unknown;
   onRetry?: () => void;
@@ -102,16 +103,31 @@ export function SessionList(props: Props) {
             if (row.kind === "group") {
               const groupCollapsed = collapsedGroups.has(row.groupId);
               return (
-                <button
-                  type="button"
-                  className="chat-session-group"
-                  aria-expanded={!groupCollapsed}
-                  onClick={() => toggleGroup(row.groupId)}
-                >
-                  <FolderOutlined />
-                  <span className="chat-session-group-name">{row.name}</span>
-                  {groupCollapsed ? <RightOutlined /> : <DownOutlined />}
-                </button>
+                <div className="chat-session-group">
+                  <button
+                    type="button"
+                    className="chat-session-group-main"
+                    aria-expanded={!groupCollapsed}
+                    onClick={() => toggleGroup(row.groupId)}
+                  >
+                    {groupCollapsed ? <FolderOutlined /> : <FolderOpenOutlined />}
+                    <span className="chat-session-group-name">{row.name}</span>
+                  </button>
+                  {props.onCreateInGroup && (
+                    <span className="chat-session-group-actions">
+                      <Tooltip title={t("chat.newConversation")}>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          aria-label={t("chat.newConversation")}
+                          loading={props.creating}
+                          onClick={() => props.onCreateInGroup?.(row.groupId)}
+                        />
+                      </Tooltip>
+                    </span>
+                  )}
+                </div>
               );
             }
             return (

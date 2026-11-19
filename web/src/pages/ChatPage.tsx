@@ -69,6 +69,21 @@ export function ChatPage() {
     );
   }
 
+  async function createInGroup(knowledgeBaseId: string) {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const created = await createConversation(knowledgeBaseId);
+      setSession(created);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
+      navigate(`/chat/${created.id}`);
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : t("chat.createFailed"));
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function startConversation() {
     if (!newKnowledgeBase) return;
     setCreating(true);
@@ -96,6 +111,7 @@ export function ChatPage() {
           activeId={conversationId}
           onSelect={(conversation) => navigate(`/chat/${conversation.id}`)}
           onCreate={() => setNewOpen(true)}
+          onCreateInGroup={(id) => void createInGroup(id)}
           loading={conversations.isLoading}
           error={conversations.error}
           onRetry={() => void conversations.refetch()}

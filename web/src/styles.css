@@ -389,10 +389,13 @@ html[data-theme="light"] .ant-tag.ant-tag-green.ant-tag-filled {
 .chat-sessions { display: flex; flex-direction: column; min-height: 0; padding: 12px 10px; border: 1px solid var(--border-secondary); border-radius: var(--radius-lg); background: var(--bg-container); box-shadow: var(--shadow-card); overflow: hidden; }
 .chat-conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .chat-session-groups { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 12px; }
-.chat-session-group { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 8px 4px; border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; text-align: left; cursor: pointer; }
+.chat-session-group { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 8px 4px; color: var(--text-secondary); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .chat-session-group:hover { color: var(--text-primary); }
+.chat-session-group-main { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .chat-session-group-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-session-group .anticon { font-size: 0.72rem; }
+.chat-session-group-actions { display: inline-flex; align-items: center; gap: 2px; opacity: 0; transition: opacity 0.12s ease; }
+.chat-session-group:hover .chat-session-group-actions, .chat-session-group-actions:focus-within { opacity: 1; }
 .chat-session { display: block; width: 100%; padding: 9px 10px !important; border-radius: var(--radius); border: 0 !important; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .chat-session:hover { background: var(--bg-subtle); }
 .chat-session.active { background: var(--brand-soft); }
