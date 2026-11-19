@@ -15,4 +15,9 @@ test("tenant administration loads overview, quota, members and audit", async ({ 
   await page.getByRole("tab", { name: "审计" }).click();
   await expect(page.getByText("审计记录", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /导出 CSV/ })).toBeVisible();
+
+  await page.locator(".admin-filter-field").filter({ hasText: "动作" }).locator(".ant-select").click();
+  await page.keyboard.type("删除模型供应商");
+  await expect(page.getByTitle("删除模型供应商")).toBeVisible();
+  await page.keyboard.press("Escape");
 });

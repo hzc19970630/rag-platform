@@ -82,21 +82,23 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
   }
 
   const columns = (kind: RunKind): ColumnsType<ProjectionRun> => [
-    { title: t("projection.runStatus"), dataIndex: "status", key: "status", render: (value: string) => <StatusBadge status={value} /> },
+    { title: t("projection.runStatus"), dataIndex: "status", key: "status", width: 110, render: (value: string) => <StatusBadge status={value} /> },
     {
       title: t("projection.failureReason"),
       key: "failureReason",
+      width: 240,
       render: (_, run) => {
         if (!run.status.startsWith("FAILED_")) return "-";
         const key = PROJECTION_ERROR_KEYS[run.errorCode ?? ""] ?? "projection.errorReason.fallback";
         return <Typography.Text type="secondary">{t(key)}</Typography.Text>;
       },
     },
-    { title: t("projection.runModel"), dataIndex: "model", key: "model", render: (value?: string) => value || "-" },
-    { title: t("common.createdAt"), dataIndex: "createdAt", key: "createdAt", render: (value?: string) => formatTime(value) },
+    { title: t("projection.runModel"), dataIndex: "model", key: "model", width: 180, render: (value?: string) => value || "-" },
+    { title: t("common.createdAt"), dataIndex: "createdAt", key: "createdAt", width: 150, render: (value?: string) => formatTime(value) },
     {
       title: t("common.actions"),
       key: "actions",
+      width: 110,
       render: (_, run) => (
         <Space>
           {canWrite && run.status === "FAILED" && (
@@ -119,7 +121,7 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
       </Flex>
       {runs.length === 0
         ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("projection.noRuns")} />
-        : <Table<ProjectionRun> size="small" rowKey="id" pagination={false} columns={columns(kind)} dataSource={runs} scroll={{ x: true }} />}
+        : <Table<ProjectionRun> size="small" rowKey="id" pagination={false} columns={columns(kind)} dataSource={runs} tableLayout="fixed" scroll={{ x: 790 }} />}
     </div>
   );
 

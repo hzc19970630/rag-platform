@@ -46,8 +46,11 @@ export const API_KEY_STATUS_VALUES = ["active", "expired", "revoked"] as const;
 export const QUEUE_VALUES = ["ingestion", "interactive", "projection", "maintenance"] as const;
 
 export const AUDIT_ACTION_VALUES = [
-  "create", "delete", "discard", "login", "manage_members", "purge", "retry", "revoke",
-  "rollback", "update_tenant_config", "update_tenant_quota", "write",
+  "read", "create", "update", "delete", "discard", "login", "manage_members", "purge", "retry", "revoke",
+  "rollback", "update_tenant_config", "update_tenant_quota", "write", "cancel",
+  "add_member", "update_member", "remove_member",
+  "model_provider_created", "model_provider_updated", "model_provider_deleted", "model_provider_tested",
+  "wiki_retry", "graph_retry",
   "embedding_migration_started", "embedding_migration_cutover",
   "embedding_migration_rolled_back", "embedding_migration_cancelled", "embedding_migration_finalized",
 ] as const;
@@ -55,7 +58,7 @@ export const AUDIT_ACTION_VALUES = [
 export const AUDIT_RESOURCE_VALUES = [
   "api_key", "connector", "dead_letter", "document", "folder", "graph_run", "graph_snapshot",
   "indexing_strategy", "path", "retrieval_config", "session", "tag", "tenant", "tenant_config", "wiki_page",
-  "embedding_migration",
+  "embedding_migration", "membership", "model_binding", "model_provider", "pipeline",
 ] as const;
 
 export const EMBEDDING_MIGRATION_STATUS_VALUES = [

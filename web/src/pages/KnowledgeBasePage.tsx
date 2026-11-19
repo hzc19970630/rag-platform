@@ -158,18 +158,24 @@ export function KnowledgeBasePage() {
       key: "members",
       label: t("knowledgeBase.tabs.members"),
       children: (
-        <MembersSettings
-          knowledgeBaseId={knowledgeBaseId}
-          ownerId={kb.ownerId}
-          canManage={canManage}
-          onChanged={changed}
-        />
+        <div className="tab-panel kb-settings-tab">
+          <MembersSettings
+            knowledgeBaseId={knowledgeBaseId}
+            ownerId={kb.ownerId}
+            canManage={canManage}
+            onChanged={changed}
+          />
+        </div>
       ),
     }] : []),
     ...(projectionEnabled ? [{
       key: "projection",
       label: t("knowledgeBase.tabs.projection"),
-      children: <ProjectionPanel knowledgeBaseId={knowledgeBaseId} canWrite={canWrite} embedded />,
+      children: (
+        <div className="tab-panel kb-settings-tab">
+          <ProjectionPanel knowledgeBaseId={knowledgeBaseId} canWrite={canWrite} embedded />
+        </div>
+      ),
     }] : []),
   ];
 

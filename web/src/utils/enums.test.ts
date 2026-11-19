@@ -65,6 +65,19 @@ describe("enum registry", () => {
     }
   });
 
+  it("registers audit actions and resources written by the backend", () => {
+    for (const action of [
+      "read", "update", "cancel", "add_member", "update_member", "remove_member",
+      "model_provider_created", "model_provider_updated", "model_provider_deleted", "model_provider_tested",
+      "wiki_retry", "graph_retry",
+    ]) {
+      expect(AUDIT_ACTION_VALUES).toContain(action);
+    }
+    for (const resource of ["membership", "model_binding", "model_provider", "pipeline"]) {
+      expect(AUDIT_RESOURCE_VALUES).toContain(resource);
+    }
+  });
+
   it("normalizes capability separators into one key namespace", () => {
     expect(enumLabelKey("capability", "knowledge_base:read")).toBe("enum.capability.knowledge_base_read");
   });
