@@ -2858,6 +2858,8 @@ export interface components {
             /** Format: int64 */
             documentsRepaired?: number;
             /** Format: int64 */
+            inboxesAbandoned?: number;
+            /** Format: int64 */
             inboxesExpired?: number;
             pipelinesCancelled?: number;
             stagesRequeued?: number;
