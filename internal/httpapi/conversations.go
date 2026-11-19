@@ -152,7 +152,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 				logAnswerStream(logger, prepared.RequestID, started)
 				return
 			}
-			tailAnswerStream(c.Request.Context(), deps.Conversation, principal, prepared.RequestID, 0, cfg, stream)
+			tailAnswerStream(c.Request.Context(), deps.Conversation, principal, prepared.RequestID, 0, cfg, stream, deps.Metrics)
 			logAnswerStream(logger, prepared.RequestID, started)
 			return
 		}
@@ -200,7 +200,7 @@ func handleRequestEvents(c *gin.Context, deps ConversationDeps, cfg config.Confi
 		}
 		stream := newSSEStream(c)
 		defer stream.finish()
-		tailAnswerStream(c.Request.Context(), deps.Conversation, principal, c.Param("requestID"), after, cfg, stream)
+		tailAnswerStream(c.Request.Context(), deps.Conversation, principal, c.Param("requestID"), after, cfg, stream, deps.Metrics)
 		return
 	}
 	events, err := deps.Conversation.ReplayEvents(c.Request.Context(), principal, c.Param("requestID"), after)

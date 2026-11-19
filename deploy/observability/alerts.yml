@@ -113,3 +113,44 @@ groups:
         annotations:
           summary: "A retrieval evaluation marked quality regressed"
           description: "An imported eval run dropped a compared metric by more than 0.02. Review /ops quality before saving retrieval changes."
+
+  # Capacity triggers. These flip M13 D6/D7/D9 from "someone noticed" to
+  # "the system reports it"; they are not availability alerts.
+  - name: rag-platform-capacity
+    rules:
+      - alert: RagSSETailConcurrency
+        expr: sse_tails_active > 100
+        for: 10m
+        labels:
+          severity: ticket
+          service: rag-api
+        annotations:
+          summary: "SSE tail concurrency is above 100"
+          description: "D7 trigger reached: more than 100 answer tails are polling every poll interval. Evaluate LISTEN/NOTIFY or Redis Streams before scaling polls further."
+      - alert: RagGraphSnapshotLarge
+        expr: graph_snapshot_entities > 10000 or graph_snapshot_relations > 10000
+        for: 5m
+        labels:
+          severity: ticket
+          service: rag-api
+        annotations:
+          summary: "A graph snapshot exceeds 10k entities or relations"
+          description: "D6 trigger reached: graph queries load the whole snapshot into memory. Move to paged, visibility-filtered SQL before evaluating Neo4j."
+      - alert: RagDBPoolSaturated
+        expr: (db_pool_in_use / clamp_min(db_pool_max_open, 1)) > 0.9
+        for: 10m
+        labels:
+          severity: ticket
+          service: rag-api
+        annotations:
+          summary: "Database connection pool is above 90% in use"
+          description: "D9 trigger candidate: long-lived requests are holding pooled connections. Check SSE/preview concurrency before moving to operation-level transactions."
+      - alert: RagDBPoolWaiters
+        expr: delta(db_pool_wait_count[10m]) > 0
+        for: 5m
+        labels:
+          severity: ticket
+          service: rag-api
+        annotations:
+          summary: "Requests waited for a database connection"
+          description: "The pool handed out no connection immediately. Correlate with db_pool_in_use and sse_tails_active; sustained waits are the D9 trigger."

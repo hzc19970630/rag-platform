@@ -13,6 +13,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
@@ -58,6 +59,32 @@ func tailConfig() config.Config {
 	return config.Config{Answer: config.AnswerConfig{PollIntervalMS: 5, TailTimeoutSec: 2}}
 }
 
+func TestAnswerTailGaugeTracksConcurrency(t *testing.T) {
+	registry := observability.New()
+	read := func() float64 {
+		return registry.Snapshot()["gauges"].(map[string]float64)["sse_tails_active"]
+	}
+
+	release := enterAnswerTail(registry)
+	if got := read(); got < 1 {
+		t.Fatalf("an active tail must be visible: got %v", got)
+	}
+	release()
+	baseline := read()
+	releaseSecond := enterAnswerTail(registry)
+	if got := read(); got != baseline+1 {
+		t.Fatalf("second tail must raise the gauge: got %v want %v", got, baseline+1)
+	}
+	releaseSecond()
+	if got := read(); got != baseline {
+		t.Fatalf("released tail must lower the gauge: got %v want %v", got, baseline)
+	}
+
+	// A nil registry keeps the counter working without panicking.
+	releaseNoop := enterAnswerTail(nil)
+	releaseNoop()
+}
+
 func TestTailAnswerStreamResumesAfterLastSequence(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db, service := tailFixture(t)
@@ -66,7 +93,7 @@ func TestTailAnswerStreamResumesAfterLastSequence(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(recorder)
 	stream := newSSEStream(ctx)
 
-	tailAnswerStream(context.Background(), service, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "req-tail", 1, tailConfig(), stream)
+	tailAnswerStream(context.Background(), service, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "req-tail", 1, tailConfig(), stream, nil)
 	stream.finish()
 
 	body := recorder.String()
@@ -92,7 +119,7 @@ func TestTailAnswerStreamEndsWithExplicitTimeout(t *testing.T) {
 	cfg := config.Config{Answer: config.AnswerConfig{PollIntervalMS: 5, TailTimeoutSec: 1}}
 
 	started := time.Now()
-	tailAnswerStream(context.Background(), service, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "req-tail", 0, cfg, stream)
+	tailAnswerStream(context.Background(), service, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "req-tail", 0, cfg, stream, nil)
 	stream.finish()
 	elapsed := time.Since(started)
 
@@ -119,7 +146,7 @@ func TestTwoConcurrentTailsBothReceiveTerminalEvent(t *testing.T) {
 			recorder := newLockedRecorder()
 			ctx, _ := gin.CreateTestContext(recorder)
 			stream := newSSEStream(ctx)
-			tailAnswerStream(context.Background(), service, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "req-tail", 0, cfg, stream)
+			tailAnswerStream(context.Background(), service, authz.Principal{TenantID: "tenant-a", SubjectID: "user-a"}, "req-tail", 0, cfg, stream, nil)
 			stream.finish()
 			bodies[index] = recorder.String()
 		}(index)

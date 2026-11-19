@@ -49,7 +49,7 @@ jobs:
         run: go test -count=1 -covermode=atomic -coverprofile=coverage.out ./...
       - name: Coverage gate (changed packages)
         env:
-          COVERAGE_GATE_MODE: warn
+          COVERAGE_GATE_MODE: enforce
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base="${{ github.event.pull_request.base.sha }}"
@@ -296,7 +296,7 @@ jobs:
       - name: Compose overlay
         run: docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/observability.compose.yml config --quiet
       - name: Grafana dashboard JSON
-        run: python -m json.tool deploy/observability/grafana/dashboards/rag-platform-overview.json > /dev/null
+        run: python3 -m json.tool deploy/observability/grafana/dashboards/rag-platform-overview.json > /dev/null
 
   security:
     runs-on: ubuntu-latest

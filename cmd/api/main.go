@@ -99,6 +99,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	go watchDBPool(metricsRegistry, application.DB, ctx.Done())
+
 	serveErr := make(chan error, 1)
 	go func() {
 		logger.Info("api_listening", slog.String("address", cfg.APIAddr), slog.String("environment", cfg.AppEnv))

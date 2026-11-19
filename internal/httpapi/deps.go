@@ -45,6 +45,9 @@ type ConversationDeps struct {
 	Conversation  *conversation.Service
 	Retrieval     *retrieval.Service
 	Quality       *quality.Service
+	// Metrics reports live SSE tail concurrency (the D7 trigger). Nil keeps
+	// tests and lightweight routers without a registry.
+	Metrics *observability.Registry
 }
 
 type DataSourceDeps struct {

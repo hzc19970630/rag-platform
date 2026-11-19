@@ -74,6 +74,58 @@ tests:
 
   - interval: 1m
     input_series:
+      - series: 'sse_tails_active'
+        values: '120x12'
+      - series: 'graph_snapshot_entities'
+        values: '12000x12'
+      - series: 'graph_snapshot_relations'
+        values: '500x12'
+      - series: 'db_pool_in_use'
+        values: '19x12'
+      - series: 'db_pool_max_open'
+        values: '20x12'
+      - series: 'db_pool_wait_count'
+        values: '0+1x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RagSSETailConcurrency
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              service: rag-api
+            exp_annotations:
+              summary: "SSE tail concurrency is above 100"
+              description: "D7 trigger reached: more than 100 answer tails are polling every poll interval. Evaluate LISTEN/NOTIFY or Redis Streams before scaling polls further."
+      - eval_time: 5m
+        alertname: RagGraphSnapshotLarge
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              service: rag-api
+            exp_annotations:
+              summary: "A graph snapshot exceeds 10k entities or relations"
+              description: "D6 trigger reached: graph queries load the whole snapshot into memory. Move to paged, visibility-filtered SQL before evaluating Neo4j."
+      - eval_time: 10m
+        alertname: RagDBPoolSaturated
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              service: rag-api
+            exp_annotations:
+              summary: "Database connection pool is above 90% in use"
+              description: "D9 trigger candidate: long-lived requests are holding pooled connections. Check SSE/preview concurrency before moving to operation-level transactions."
+      - eval_time: 10m
+        alertname: RagDBPoolWaiters
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              service: rag-api
+            exp_annotations:
+              summary: "Requests waited for a database connection"
+              description: "The pool handed out no connection immediately. Correlate with db_pool_in_use and sse_tails_active; sustained waits are the D9 trigger."
+
+  - interval: 1m
+    input_series:
       - series: 'ingestion_stage_total{stage="parse",result="failure"}'
         values: '0+2x14'
       - series: 'ingestion_stage_total{stage="parse",result="success"}'

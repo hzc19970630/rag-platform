@@ -76,7 +76,9 @@ lint:
 	cd web && npm run build
 
 # Coverage is intentionally separate from test/lint: the gate only looks at
-# packages touched by the change set and starts in warn mode.
+# packages touched by the change set. CI runs it in enforce mode; locally it
+# defaults to warn, so run COVERAGE_GATE_MODE=enforce make coverage-gate before
+# pushing a change that touches a covered package.
 coverage:
 	$(GO_RUN) go test -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 
@@ -223,7 +225,7 @@ observability-check:
 	docker run --rm --entrypoint promtool -v "$$(pwd)/deploy/observability:/etc/prometheus:ro" $(OBSERVABILITY_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm --entrypoint promtool -v "$$(pwd)/deploy/observability:/etc/prometheus:ro" $(OBSERVABILITY_IMAGE) test rules /etc/prometheus/promtool/alerts_test.yml
 	docker compose --env-file .env.example -f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/observability.compose.yml config --quiet
-	python -m json.tool deploy/observability/grafana/dashboards/rag-platform-overview.json > /dev/null
+	python3 -m json.tool deploy/observability/grafana/dashboards/rag-platform-overview.json > /dev/null
 
 # Compares bounded graph queries with pure Evidence RAG on the fixed M7 QA set
 # and records reachability/path metrics. The keep-or-drop decision for complex

@@ -21,7 +21,7 @@ func RegisterRoutes(router *gin.Engine, cfg config.Config, deps RouteDeps, logge
 	RegisterKnowledgeBaseConfigRoutes(protected, cfg, KnowledgeBaseDeps{KnowledgeBase: deps.KnowledgeBase}, mw, logger)
 	RegisterDocumentRoutes(protected, cfg, IngestionDeps{Ingestion: deps.Ingestion}, mw, logger)
 	RegisterKnowledgeSpaceRoutes(protected, cfg, IngestionDeps{Ingestion: deps.Ingestion}, mw, logger)
-	RegisterConversationRoutes(protected, cfg, ConversationDeps{Authorization: deps.Authorization, Conversation: deps.Conversation, Retrieval: deps.Retrieval, Quality: deps.Quality}, mw, logger)
+	RegisterConversationRoutes(protected, cfg, ConversationDeps{Authorization: deps.Authorization, Conversation: deps.Conversation, Retrieval: deps.Retrieval, Quality: deps.Quality, Metrics: deps.Metrics}, mw, logger)
 	RegisterConnectorRoutes(protected, cfg, DataSourceDeps{DataSources: deps.DataSources}, mw, logger)
 	RegisterWikiProjectionRoutes(protected, cfg, ProjectionDeps{Projection: deps.Projection}, mw, logger)
 	RegisterGraphProjectionRoutes(protected, cfg, ProjectionDeps{Projection: deps.Projection}, mw, logger)

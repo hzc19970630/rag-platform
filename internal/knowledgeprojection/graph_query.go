@@ -8,6 +8,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection/relation"
 	"github.com/hzc19970630/rag-platform/internal/relationstore"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
@@ -227,6 +228,18 @@ func (s *Service) activeSnapshot(ctx context.Context, tenantID, knowledgeBaseID 
 	return s.store.ActiveSnapshot(ctx, tenantID, knowledgeBaseID, aclVersion)
 }
 
+// recordGraphSnapshotSize publishes the loaded snapshot size. D6 (paged,
+// visibility-filtered SQL instead of an in-memory walk) is triggered when one
+// snapshot exceeds 10k entities or relations.
+func (s *Service) recordGraphSnapshotSize(graph *relationstore.Graph) {
+	gauge, ok := s.metrics.(metrics.Gauge)
+	if !ok || graph == nil {
+		return
+	}
+	gauge.SetGauge("graph_snapshot_entities", nil, float64(len(graph.Entities)))
+	gauge.SetGauge("graph_snapshot_relations", nil, float64(len(graph.Relations)))
+}
+
 // loadSnapshotGraph loads entities, aliases and relations from the Relation
 // Store, then evaluates source validity and authorization once for the whole
 // snapshot. With filterSources false the caller gets the reviewer view without
@@ -239,6 +252,7 @@ func (s *Service) loadSnapshotGraph(ctx context.Context, scope authz.Authorizati
 	if err != nil {
 		return nil, err
 	}
+	s.recordGraphSnapshotSize(raw)
 	graph := &snapshotGraph{aliases: raw.Aliases, byID: map[string]graphEntityRecord{}, edgeByID: map[string]graphRelationRecord{}}
 	aliasByEntity := map[string][]aliasRecord{}
 	for _, alias := range raw.Aliases {

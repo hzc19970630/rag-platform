@@ -3,21 +3,42 @@ package httpapi
 import (
 	"context"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/conversation"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 )
 
 // tailTimeoutCode is a transport error, not an answer outcome: the job may
 // still be running and the client can reconnect to the events route.
 const tailTimeoutCode = "tail_timeout"
 
+// activeAnswerTails feeds the sse_tails_active gauge. D7 (replacing the
+// per-connection poll with LISTEN/NOTIFY or Redis Streams) is triggered when
+// this stays above 100.
+var activeAnswerTails atomic.Int64
+
+func enterAnswerTail(registry *observability.Registry) func() {
+	current := activeAnswerTails.Add(1)
+	if registry != nil {
+		registry.SetGauge("sse_tails_active", nil, float64(current))
+	}
+	return func() {
+		current := activeAnswerTails.Add(-1)
+		if registry != nil {
+			registry.SetGauge("sse_tails_active", nil, float64(current))
+		}
+	}
+}
+
 // tailAnswerStream replays persisted events until a terminal event arrives or
 // the tail budget is spent. Every event is already durable, so a reconnect
 // resumes from the last sequence without re-running the answer.
-func tailAnswerStream(ctx context.Context, service *conversation.Service, principal authz.Principal, requestID string, after int, cfg config.Config, stream *sseStream) {
+func tailAnswerStream(ctx context.Context, service *conversation.Service, principal authz.Principal, requestID string, after int, cfg config.Config, stream *sseStream, registry *observability.Registry) {
+	defer enterAnswerTail(registry)()
 	poll := time.Duration(cfg.Answer.PollIntervalMS) * time.Millisecond
 	if poll <= 0 {
 		poll = 250 * time.Millisecond

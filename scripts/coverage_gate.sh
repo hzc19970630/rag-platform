@@ -102,14 +102,20 @@ if [[ -z "$changed_dirs" ]]; then
   exit 0
 fi
 
-declare -A package_thresholds=()
-while IFS=$'\t' read -r tier_dir tier_value; do
-  [[ -n "$tier_dir" ]] || continue
-  package_thresholds["$tier_dir"]="$tier_value"
-done < <(
-  awk -v dirs="$changed_dirs" -v tiers="$tiers_file" -v fallback="$threshold" '
+# Temp files instead of -v lists and associative arrays: bash 3.2 (macOS
+# /bin/bash) has no `declare -A`, and BSD awk rejects a newline inside -v.
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/coverage_gate.XXXXXX")"
+trap 'rm -rf "$work_dir"' EXIT
+dirs_file="$work_dir/dirs"
+thresholds_file="$work_dir/thresholds"
+printf '%s\n' "$changed_dirs" > "$dirs_file"
+awk -v dirsfile="$dirs_file" -v tiers="$tiers_file" -v fallback="$threshold" '
     BEGIN {
-      n = split(dirs, d, "\n")
+      while ((getline entry < dirsfile) > 0) {
+        sub(/\r$/, "", entry)
+        if (entry != "") d[++n] = entry
+      }
+      close(dirsfile)
       if (tiers != "") {
         while ((getline line < tiers) > 0) {
           sub(/\r$/, "", line)
@@ -135,15 +141,23 @@ done < <(
         printf "%s\t%s\n", d[i], best
       }
     }
-  '
-)
+  ' > "$thresholds_file"
+
+threshold_for() {
+  local dir="$1" value
+  value="$(awk -F'\t' -v d="$dir" '$1 == d {print $2; exit}' "$thresholds_file")"
+  printf '%s' "${value:-$threshold}"
+}
 
 module="$(awk '$1 == "module" {print $2; exit}' go.mod)"
 stats="$(
-  awk -v module="$module" -v dirs="$changed_dirs" '
+  awk -v module="$module" -v dirsfile="$dirs_file" '
     BEGIN {
-      n = split(dirs, d, "\n")
-      for (i = 1; i <= n; i++) if (d[i] != "") want[d[i]] = 1
+      while ((getline entry < dirsfile) > 0) {
+        sub(/\r$/, "", entry)
+        if (entry != "") want[entry] = 1
+      }
+      close(dirsfile)
     }
     NR == 1 { next }
     {
@@ -168,7 +182,7 @@ evaluated=0
 skipped=0
 while IFS=$'\t' read -r dir covered total; do
   [[ -n "$dir" ]] || continue
-  package_threshold="${package_thresholds[$dir]:-$threshold}"
+  package_threshold="$(threshold_for "$dir")"
   if [[ "$package_threshold" -eq 0 ]]; then
     printf '%-45s    n/a  (not ratcheted, threshold 0)\n' "$dir"
     skipped=$(( skipped + 1 ))
