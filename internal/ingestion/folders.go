@@ -10,6 +10,7 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
@@ -104,63 +105,69 @@ func (s *Service) UpdateFolder(ctx context.Context, principal authz.Principal, f
 			return models.Folder{}, err
 		}
 	}
-	currentParent := deref(folder.ParentID)
-	newParent := currentParent
+	newParent := deref(folder.ParentID)
 	if input.ParentID != nil {
 		newParent = strings.TrimSpace(*input.ParentID)
 	}
-	var parent *models.Folder
-	if newParent != "" {
-		if newParent == folder.ID {
-			return models.Folder{}, apperror.Invalidf("folder cannot be its own parent")
-		}
-		loaded, err := s.loadFolder(ctx, principal.TenantID, folder.KnowledgeBaseID, newParent)
-		if err != nil {
-			return models.Folder{}, err
-		}
-		if strings.HasPrefix(loaded.Path, folder.Path) {
-			return models.Folder{}, apperror.Invalidf("folder cannot move into its subtree")
-		}
-		parent = &loaded
-	}
-	if err := s.ensureSiblingNameFree(ctx, principal.TenantID, folder.KnowledgeBaseID, newParent, name, folder.ID); err != nil {
-		return models.Folder{}, err
-	}
-	moving := newParent != currentParent
-	newPath := folder.Path
-	newDepth := folder.Depth
-	delta := 0
-	if moving {
-		pathPrefix := "/"
-		if parent != nil {
-			pathPrefix = parent.Path
-		}
-		newPath = pathPrefix + folder.ID + "/"
-		newDepth = 1
-		if parent != nil {
-			newDepth = parent.Depth + 1
-		}
-		delta = newDepth - folder.Depth
-		var deepest int
-		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Folder{}).
-			Where("knowledge_base_id = ? AND path LIKE ?", folder.KnowledgeBaseID, folder.Path+"%").
-			Select("COALESCE(MAX(depth), 0)").Scan(&deepest).Error; err != nil {
-			return models.Folder{}, fmt.Errorf("load folder subtree depth: %w", err)
-		}
-		if deepest+delta > maxFolderDepth {
-			return models.Folder{}, apperror.Invalidf("folder depth exceeds %d", maxFolderDepth)
-		}
-	}
+	// Every validation below re-runs inside the transaction: the KB lock makes
+	// the cycle/depth checks and the subtree rewrite one serial unit.
 	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, folder.KnowledgeBaseID); err != nil {
+			return err
+		}
+		current, err := s.loadFolderByIDOn(ctx, tx, principal.TenantID, folderID)
+		if err != nil {
+			return err
+		}
+		var parent *models.Folder
+		if newParent != "" {
+			if newParent == current.ID {
+				return apperror.Invalidf("folder cannot be its own parent")
+			}
+			loaded, err := s.loadFolderOn(ctx, tx, principal.TenantID, current.KnowledgeBaseID, newParent)
+			if err != nil {
+				return err
+			}
+			if strings.HasPrefix(loaded.Path, current.Path) {
+				return apperror.Invalidf("folder cannot move into its subtree")
+			}
+			parent = &loaded
+		}
+		if err := s.ensureSiblingNameFreeOn(ctx, tx, principal.TenantID, current.KnowledgeBaseID, newParent, name, current.ID); err != nil {
+			return err
+		}
+		moving := newParent != deref(current.ParentID)
+		newPath := current.Path
+		newDepth := current.Depth
+		delta := 0
 		if moving {
+			pathPrefix := "/"
+			if parent != nil {
+				pathPrefix = parent.Path
+			}
+			newPath = pathPrefix + current.ID + "/"
+			newDepth = 1
+			if parent != nil {
+				newDepth = parent.Depth + 1
+			}
+			delta = newDepth - current.Depth
+			var deepest int
+			if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Folder{}).
+				Where("knowledge_base_id = ? AND path LIKE ?", current.KnowledgeBaseID, current.Path+"%").
+				Select("COALESCE(MAX(depth), 0)").Scan(&deepest).Error; err != nil {
+				return fmt.Errorf("load folder subtree depth: %w", err)
+			}
+			if deepest+delta > maxFolderDepth {
+				return apperror.Invalidf("folder depth exceeds %d", maxFolderDepth)
+			}
 			var subtree []models.Folder
 			if err := tenantdb.MustScoped(tx, principal.TenantID).
-				Where("knowledge_base_id = ? AND path LIKE ?", folder.KnowledgeBaseID, folder.Path+"%").
+				Where("knowledge_base_id = ? AND path LIKE ?", current.KnowledgeBaseID, current.Path+"%").
 				Find(&subtree).Error; err != nil {
 				return fmt.Errorf("load folder subtree: %w", err)
 			}
 			for _, node := range subtree {
-				suffix := strings.TrimPrefix(node.Path, folder.Path)
+				suffix := strings.TrimPrefix(node.Path, current.Path)
 				if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Folder{}).
 					Where("id = ?", node.ID).
 					Updates(map[string]any{"path": newPath + suffix, "depth": node.Depth + delta, "updated_at": time.Now().UTC()}).Error; err != nil {
@@ -175,7 +182,7 @@ func (s *Service) UpdateFolder(ctx context.Context, principal authz.Principal, f
 			updates["depth"] = newDepth
 		}
 		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Folder{}).
-			Where("id = ? AND knowledge_base_id = ?", folder.ID, folder.KnowledgeBaseID).
+			Where("id = ? AND knowledge_base_id = ?", current.ID, current.KnowledgeBaseID).
 			Updates(updates).Error; err != nil {
 			if isDuplicateSibling(err) {
 				return apperror.Invalidf("folder name already exists")
@@ -207,29 +214,36 @@ func (s *Service) DeleteFolder(ctx context.Context, principal authz.Principal, f
 	if recursive {
 		return s.deleteFolderTree(ctx, principal, folder)
 	}
-	var children int64
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Folder{}).
-		Where("knowledge_base_id = ? AND parent_id = ?", folder.KnowledgeBaseID, folder.ID).Count(&children).Error; err != nil {
-		return fmt.Errorf("count child folders: %w", err)
-	}
-	var documents int64
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Document{}).
-		Where("knowledge_base_id = ? AND folder_id = ? AND deleted_at IS NULL", folder.KnowledgeBaseID, folder.ID).Count(&documents).Error; err != nil {
-		return fmt.Errorf("count folder documents: %w", err)
-	}
-	if children > 0 || documents > 0 {
-		return apperror.Invalidf("folder is not empty")
-	}
 	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, folder.KnowledgeBaseID); err != nil {
+			return err
+		}
+		current, err := s.loadFolderByIDOn(ctx, tx, principal.TenantID, folder.ID)
+		if err != nil {
+			return err
+		}
+		var children int64
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Folder{}).
+			Where("knowledge_base_id = ? AND parent_id = ?", current.KnowledgeBaseID, current.ID).Count(&children).Error; err != nil {
+			return fmt.Errorf("count child folders: %w", err)
+		}
+		var documents int64
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).
+			Where("knowledge_base_id = ? AND folder_id = ? AND deleted_at IS NULL", current.KnowledgeBaseID, current.ID).Count(&documents).Error; err != nil {
+			return fmt.Errorf("count folder documents: %w", err)
+		}
+		if children > 0 || documents > 0 {
+			return apperror.Invalidf("folder is not empty")
+		}
 		// Soft-deleted documents still point at the folder for restore. They no
 		// longer make it "non-empty"; detach them so restore lands at the root.
 		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).
-			Where("knowledge_base_id = ? AND folder_id = ? AND deleted_at IS NOT NULL", folder.KnowledgeBaseID, folder.ID).
+			Where("knowledge_base_id = ? AND folder_id = ? AND deleted_at IS NOT NULL", current.KnowledgeBaseID, current.ID).
 			Update("folder_id", nil).Error; err != nil {
 			return fmt.Errorf("detach deleted folder documents: %w", err)
 		}
 		if err := tenantdb.MustScoped(tx, principal.TenantID).
-			Where("id = ? AND knowledge_base_id = ?", folder.ID, folder.KnowledgeBaseID).
+			Where("id = ? AND knowledge_base_id = ?", current.ID, current.KnowledgeBaseID).
 			Delete(&models.Folder{}).Error; err != nil {
 			return fmt.Errorf("delete folder: %w", err)
 		}
@@ -245,36 +259,47 @@ func (s *Service) DeleteFolder(ctx context.Context, principal authz.Principal, f
 // document inside it. Folders themselves have no recycle bin; documents keep
 // their retention window and are detached so a restore lands at the root.
 func (s *Service) deleteFolderTree(ctx context.Context, principal authz.Principal, folder models.Folder) error {
-	var subtree []models.Folder
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("knowledge_base_id = ? AND path LIKE ?", folder.KnowledgeBaseID, folder.Path+"%").
-		Order("depth DESC").Find(&subtree).Error; err != nil {
-		return fmt.Errorf("load folder subtree: %w", err)
-	}
-	folderIDs := make([]string, 0, len(subtree))
-	for _, node := range subtree {
-		folderIDs = append(folderIDs, node.ID)
-	}
-	var documents []models.Document
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("knowledge_base_id = ? AND folder_id IN ? AND deleted_at IS NULL", folder.KnowledgeBaseID, folderIDs).
-		Find(&documents).Error; err != nil {
-		return fmt.Errorf("load folder documents: %w", err)
-	}
-	for _, document := range documents {
-		if err := s.Delete(ctx, principal, document.ID); err != nil {
+	// The subtree read, document soft-deletes and folder deletes share one
+	// transaction under the KB lock, so a concurrent move cannot land between
+	// the read and the delete.
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, folder.KnowledgeBaseID); err != nil {
 			return err
 		}
-	}
-	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		current, err := s.loadFolderByIDOn(ctx, tx, principal.TenantID, folder.ID)
+		if err != nil {
+			return err
+		}
+		var subtree []models.Folder
+		if err := tenantdb.MustScoped(tx, principal.TenantID).
+			Where("knowledge_base_id = ? AND path LIKE ?", current.KnowledgeBaseID, current.Path+"%").
+			Order("depth DESC").Find(&subtree).Error; err != nil {
+			return fmt.Errorf("load folder subtree: %w", err)
+		}
+		folderIDs := make([]string, 0, len(subtree))
+		for _, node := range subtree {
+			folderIDs = append(folderIDs, node.ID)
+		}
+		var documents []models.Document
+		if err := tenantdb.MustScoped(tx, principal.TenantID).
+			Where("knowledge_base_id = ? AND folder_id IN ? AND deleted_at IS NULL", current.KnowledgeBaseID, folderIDs).
+			Find(&documents).Error; err != nil {
+			return fmt.Errorf("load folder documents: %w", err)
+		}
+		now := time.Now()
+		for _, document := range documents {
+			if err := s.softDeleteTx(tx, document, principal.SubjectID, now); err != nil {
+				return err
+			}
+		}
 		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).
-			Where("knowledge_base_id = ? AND folder_id IN ?", folder.KnowledgeBaseID, folderIDs).
+			Where("knowledge_base_id = ? AND folder_id IN ?", current.KnowledgeBaseID, folderIDs).
 			Update("folder_id", nil).Error; err != nil {
 			return fmt.Errorf("detach folder documents: %w", err)
 		}
 		for _, node := range subtree {
 			if err := tenantdb.MustScoped(tx, principal.TenantID).
-				Where("id = ? AND knowledge_base_id = ?", node.ID, folder.KnowledgeBaseID).
+				Where("id = ? AND knowledge_base_id = ?", node.ID, current.KnowledgeBaseID).
 				Delete(&models.Folder{}).Error; err != nil {
 				return fmt.Errorf("delete folder subtree: %w", err)
 			}
@@ -288,8 +313,12 @@ func (s *Service) deleteFolderTree(ctx context.Context, principal authz.Principa
 }
 
 func (s *Service) loadFolder(ctx context.Context, tenantID, knowledgeBaseID, folderID string) (models.Folder, error) {
+	return s.loadFolderOn(ctx, s.db, tenantID, knowledgeBaseID, folderID)
+}
+
+func (s *Service) loadFolderOn(ctx context.Context, db *gorm.DB, tenantID, knowledgeBaseID, folderID string) (models.Folder, error) {
 	var folder models.Folder
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).
+	if err := tenantdb.MustScoped(db.WithContext(ctx), tenantID).
 		Where("knowledge_base_id = ? AND id = ?", knowledgeBaseID, folderID).First(&folder).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Folder{}, apperror.ErrNotFound
@@ -300,8 +329,12 @@ func (s *Service) loadFolder(ctx context.Context, tenantID, knowledgeBaseID, fol
 }
 
 func (s *Service) loadFolderByID(ctx context.Context, tenantID, folderID string) (models.Folder, error) {
+	return s.loadFolderByIDOn(ctx, s.db, tenantID, folderID)
+}
+
+func (s *Service) loadFolderByIDOn(ctx context.Context, db *gorm.DB, tenantID, folderID string) (models.Folder, error) {
 	var folder models.Folder
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("id = ?", folderID).First(&folder).Error; err != nil {
+	if err := tenantdb.MustScoped(db.WithContext(ctx), tenantID).Where("id = ?", folderID).First(&folder).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Folder{}, apperror.ErrNotFound
 		}
@@ -311,8 +344,12 @@ func (s *Service) loadFolderByID(ctx context.Context, tenantID, folderID string)
 }
 
 func (s *Service) ensureSiblingNameFree(ctx context.Context, tenantID, knowledgeBaseID, parentID, name, excludeID string) error {
+	return s.ensureSiblingNameFreeOn(ctx, s.db, tenantID, knowledgeBaseID, parentID, name, excludeID)
+}
+
+func (s *Service) ensureSiblingNameFreeOn(ctx context.Context, db *gorm.DB, tenantID, knowledgeBaseID, parentID, name, excludeID string) error {
 	var count int64
-	query := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.Folder{}).
+	query := tenantdb.MustScoped(db.WithContext(ctx), tenantID).Model(&models.Folder{}).
 		Where("knowledge_base_id = ? AND COALESCE(parent_id, '') = ? AND lower(name) = lower(?)", knowledgeBaseID, parentID, name)
 	if excludeID != "" {
 		query = query.Where("id <> ?", excludeID)

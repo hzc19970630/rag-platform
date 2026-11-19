@@ -59,34 +59,43 @@ func (s *Service) softDelete(ctx context.Context, document models.Document, acto
 	if document.DeletedAt != nil {
 		return nil
 	}
-	now := time.Now()
-	purgeAfter := now.Add(s.retention)
 	err := tenantdb.InTx(ctx, s.db, document.TenantID, func(tx *gorm.DB) error {
-		if err := tenantdb.MustScoped(tx, document.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
-			"status": StatusCancelled, "deleted_at": &now, "deleted_by": actorID,
-			"purge_after": &purgeAfter, "restored_at": nil, "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		var versions []models.DocumentVersion
-		if err := tenantdb.MustScoped(tx, document.TenantID).Where("document_id = ?", document.ID).Find(&versions).Error; err != nil {
-			return err
-		}
-		versionIDs := make([]string, 0, len(versions))
-		for _, version := range versions {
-			versionIDs = append(versionIDs, version.ID)
-		}
-		if len(versionIDs) > 0 {
-			if err := cancelPendingOutbox(tx, document.TenantID, versionIDs); err != nil {
-				return err
-			}
-		}
-		return cancelDocumentPipelines(tx, document.TenantID, document.ID)
+		return s.softDeleteTx(tx, document, actorID, time.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("delete document: %w", err)
 	}
 	return nil
+}
+
+// softDeleteTx is the transaction body shared by single-document deletes and
+// the recursive folder delete, which must keep the whole subtree removal in one
+// critical section.
+func (s *Service) softDeleteTx(tx *gorm.DB, document models.Document, actorID string, now time.Time) error {
+	if document.DeletedAt != nil {
+		return nil
+	}
+	purgeAfter := now.Add(s.retention)
+	if err := tenantdb.MustScoped(tx, document.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
+		"status": StatusCancelled, "deleted_at": &now, "deleted_by": actorID,
+		"purge_after": &purgeAfter, "restored_at": nil, "updated_at": now,
+	}).Error; err != nil {
+		return err
+	}
+	var versions []models.DocumentVersion
+	if err := tenantdb.MustScoped(tx, document.TenantID).Where("document_id = ?", document.ID).Find(&versions).Error; err != nil {
+		return err
+	}
+	versionIDs := make([]string, 0, len(versions))
+	for _, version := range versions {
+		versionIDs = append(versionIDs, version.ID)
+	}
+	if len(versionIDs) > 0 {
+		if err := cancelPendingOutbox(tx, document.TenantID, versionIDs); err != nil {
+			return err
+		}
+	}
+	return cancelDocumentPipelines(tx, document.TenantID, document.ID)
 }
 
 // Restore undoes a soft delete while the retention window is still open. A

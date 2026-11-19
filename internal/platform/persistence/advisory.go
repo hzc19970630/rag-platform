@@ -3,10 +3,12 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"gorm.io/gorm"
 )
 
@@ -59,6 +61,49 @@ func (l *SessionLock) Healthy(ctx context.Context) bool {
 		return false
 	}
 	return l.connection.PingContext(ctx) == nil
+}
+
+// DefaultXactLockTimeout bounds how long a resource lock waits before the
+// caller fails with a conflict instead of queueing indefinitely.
+const DefaultXactLockTimeout = 3 * time.Second
+
+// LockResourceXact takes a transaction-scoped PostgreSQL advisory lock on key.
+// SQLite (unit tests) has no advisory locks and is single-writer, so the call
+// is a no-op there. A lock timeout maps to apperror.ErrConflict, which the HTTP
+// layer renders as 409 resource_busy.
+func LockResourceXact(tx *gorm.DB, key string, timeout time.Duration) error {
+	if tx == nil || tx.Dialector.Name() != "postgres" {
+		return nil
+	}
+	if timeout <= 0 {
+		timeout = DefaultXactLockTimeout
+	}
+	// SET does not accept bind parameters; set_config with local=true is the
+	// parameterized equivalent scoped to this transaction.
+	if err := tx.Exec("SELECT set_config('lock_timeout', ?, true)", fmt.Sprintf("%dms", timeout.Milliseconds())).Error; err != nil {
+		return fmt.Errorf("set lock timeout: %w", err)
+	}
+	if err := tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", key).Error; err != nil {
+		var state interface{ SQLState() string }
+		if errors.As(err, &state) && state.SQLState() == "55P03" {
+			return fmt.Errorf("resource_busy: %w", apperror.ErrConflict)
+		}
+		return fmt.Errorf("acquire resource lock: %w", err)
+	}
+	return nil
+}
+
+// LockKnowledgeBaseXact serializes knowledge-base tree mutations and deletes.
+// It is deliberately not taken by uploads: they already serialize on the
+// tenant quota lock, and a KB lock there would throttle ingestion.
+func LockKnowledgeBaseXact(tx *gorm.DB, tenantID, knowledgeBaseID string) error {
+	return LockResourceXact(tx, "kb:"+tenantID+":"+knowledgeBaseID, DefaultXactLockTimeout)
+}
+
+// LockTenantXact uses the same key as the upload quota lock, so a knowledge
+// base delete cannot interleave with an in-flight upload in that tenant.
+func LockTenantXact(tx *gorm.DB, tenantID string) error {
+	return LockResourceXact(tx, tenantID, DefaultXactLockTimeout)
 }
 
 // Release is idempotent and closes the session, so a process exit also

@@ -13,6 +13,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/contracts/model"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/presets"
@@ -493,15 +494,32 @@ func (s *Service) Delete(ctx context.Context, principal authz.Principal, id stri
 	if _, err := s.authorizedScope(ctx, principal, id, "delete"); err != nil {
 		return err
 	}
-	result := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("id = ?", id).Delete(&models.KnowledgeBase{})
-	if result.Error != nil {
-		return fmt.Errorf("delete knowledge base: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return apperror.ErrNotFound
-	}
-	if err := s.db.WithContext(ctx).Where("knowledge_base_id = ?", id).Delete(&models.KnowledgeBaseMember{}).Error; err != nil {
-		return fmt.Errorf("delete knowledge base members: %w", err)
+	// The tenant lock is the same one uploads take, so an in-flight upload
+	// either commits before the delete (and is cascaded) or starts after it and
+	// fails authorization cleanly instead of hitting a foreign-key error.
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := persistence.LockTenantXact(tx, principal.TenantID); err != nil {
+			return err
+		}
+		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, id); err != nil {
+			return err
+		}
+		result := tenantdb.MustScoped(tx, principal.TenantID).Where("id = ?", id).Delete(&models.KnowledgeBase{})
+		if result.Error != nil {
+			return fmt.Errorf("delete knowledge base: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return apperror.ErrNotFound
+		}
+		// knowledge_base_members is a child table without its own tenant_id; the
+		// tenant-scoped transaction and RLS policy provide the isolation.
+		if err := tx.Where("knowledge_base_id = ?", id).Delete(&models.KnowledgeBaseMember{}).Error; err != nil {
+			return fmt.Errorf("delete knowledge base members: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	return s.authz.BumpRevision(ctx, principal.TenantID)
 }

@@ -9,8 +9,10 @@ import (
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -121,15 +123,27 @@ func (s *Service) documentInKnowledgeBase(ctx context.Context, tenantID, knowled
 }
 
 func (s *Service) moveDocument(ctx context.Context, principal authz.Principal, knowledgeBaseID, documentID, folderID string) error {
-	updates := map[string]any{"folder_id": nil, "updated_at": time.Now().UTC()}
-	if folderID != "" {
-		updates["folder_id"] = folderID
-	}
-	result := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Document{}).
-		Where("id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", documentID, knowledgeBaseID).
-		Updates(updates)
-	if result.Error != nil {
-		return fmt.Errorf("move document: %w", result.Error)
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, knowledgeBaseID); err != nil {
+			return err
+		}
+		// The folder can be deleted between the batch pre-check and this update;
+		// re-read it under the lock.
+		if folderID != "" {
+			if _, err := s.loadFolderOn(ctx, tx, principal.TenantID, knowledgeBaseID, folderID); err != nil {
+				return err
+			}
+		}
+		updates := map[string]any{"folder_id": nil, "updated_at": time.Now().UTC()}
+		if folderID != "" {
+			updates["folder_id"] = folderID
+		}
+		return tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).
+			Where("id = ? AND knowledge_base_id = ? AND deleted_at IS NULL", documentID, knowledgeBaseID).
+			Updates(updates).Error
+	})
+	if err != nil {
+		return fmt.Errorf("move document: %w", err)
 	}
 	return s.recordDocumentBatchAudit(ctx, principal, documentID, map[string]any{"action": BatchMove, "folderId": folderID})
 }
