@@ -40,6 +40,7 @@ const (
 
 	SchemaSourceObject = ingestion.SchemaSourceObject
 	StatusEmbedded     = ingestion.StatusEmbedded
+	StatusCancelled    = ingestion.StatusCancelled
 )
 
 func SortCandidates(candidates []Candidate) {

@@ -23,6 +23,10 @@ var (
 	// absent, for example after an incomplete object-store restore. Storage
 	// keys are deliberately not part of this error.
 	ErrContentUnavailable = errors.New("content_unavailable")
+	// ErrVersionSuperseded reports work on a document version that a newer
+	// replacement already cancelled. Callers acknowledge the task instead of
+	// retrying; the version must never be written back to a live status.
+	ErrVersionSuperseded = errors.New("version_superseded")
 )
 
 // ValidationError marks caller-supplied input that violates a documented

@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/vecutil"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Writer struct {
@@ -27,12 +29,30 @@ func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, r
 	if len(records) == 0 {
 		return fmt.Errorf("embedding writer received no records")
 	}
+	for _, record := range records {
+		if len(record.Vector) == 0 {
+			return fmt.Errorf("chunk %s has an empty embedding", record.ChunkID)
+		}
+	}
 	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
-		for _, record := range records {
-			if len(record.Vector) == 0 {
-				return fmt.Errorf("chunk %s has an empty embedding", record.ChunkID)
+		if versionID != "" {
+			// Fence the write: a replacement may have cancelled the version
+			// after the worker read it. Locking the row keeps a concurrent
+			// supersede from committing until this transaction does.
+			query := tx
+			if tx.Dialector.Name() == "postgres" {
+				query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 			}
+			var status string
+			if err := query.Model(&models.DocumentVersion{}).Select("status").Where("id = ?", versionID).Scan(&status).Error; err != nil {
+				return err
+			}
+			if status == "" || status == ports.StatusCancelled {
+				return apperror.ErrVersionSuperseded
+			}
+		}
+		for _, record := range records {
 			query := "UPDATE chunks SET embedding = ?::halfvec, embedding_dimension = ?, embedding_model = ?, updated_at = ?"
 			args := []any{vecutil.Literal(record.Vector), len(record.Vector), model, now}
 			if versionID != "" {
@@ -72,9 +92,16 @@ func (w *Writer) WriteEmbeddings(ctx context.Context, versionID, model string, r
 		if versionID == "" {
 			return nil
 		}
-		return tx.Model(&models.DocumentVersion{}).Where("id = ?", versionID).Updates(map[string]any{
+		result := tx.Model(&models.DocumentVersion{}).Where("id = ? AND status <> ?", versionID, ports.StatusCancelled).Updates(map[string]any{
 			"status": ports.StatusEmbedded, "error_code": "", "error_message": "", "updated_at": now,
-		}).Error
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return apperror.ErrVersionSuperseded
+		}
+		return nil
 	})
 }
 

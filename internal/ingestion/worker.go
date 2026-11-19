@@ -19,6 +19,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -161,6 +162,12 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	if leaseLost() {
 		return fmt.Errorf("inbox lease lost for %s: %w", task.IdempotencyKey, context.Canceled)
 	}
+	if processErr != nil && errors.Is(processErr, apperror.ErrVersionSuperseded) {
+		if err := w.cancelSupersededStage(ctx, task); err != nil {
+			return err
+		}
+		return w.finishInbox(ctx, task.IdempotencyKey, inboxSucceeded, nil)
+	}
 	if processErr != nil {
 		terminal := apperror.IsTerminal(processErr)
 		code, message := splitPipelineError(processErr)
@@ -200,6 +207,9 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
 	}
+	if version.Status == StatusCancelled {
+		return apperror.ErrVersionSuperseded
+	}
 	content, err := w.objects.Get(ctx, version.SourceObjectKey)
 	if err != nil {
 		return fmt.Errorf("load source object: %w", err)
@@ -227,13 +237,25 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if err := w.objects.Put(ctx, key, data, "application/json"); err != nil {
 		return fmt.Errorf("store normalized document: %w", err)
 	}
-	return w.db.WithContext(ctx).Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusParsed, map[string]any{"normalized_key": key, "updated_at": time.Now()})).Error
+	updated := w.db.WithContext(ctx).Model(&models.DocumentVersion{}).
+		Where("id = ? AND status <> ?", version.ID, StatusCancelled).
+		Updates(statusFields(StatusParsed, map[string]any{"normalized_key": key, "updated_at": time.Now()}))
+	if updated.Error != nil {
+		return updated.Error
+	}
+	if updated.RowsAffected == 0 {
+		return apperror.ErrVersionSuperseded
+	}
+	return nil
 }
 
 func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
 	var version models.DocumentVersion
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
+	}
+	if version.Status == StatusCancelled {
+		return apperror.ErrVersionSuperseded
 	}
 	normalized, err := readNormalizedDocument(ctx, w.objects, version.NormalizedKey)
 	if err != nil {
@@ -258,7 +280,16 @@ func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
 	if err := w.objects.Put(ctx, version.NormalizedKey, data, "application/json"); err != nil {
 		return fmt.Errorf("store cleaned document: %w", err)
 	}
-	return w.db.WithContext(ctx).Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusNormalized, map[string]any{"updated_at": time.Now()})).Error
+	result := w.db.WithContext(ctx).Model(&models.DocumentVersion{}).
+		Where("id = ? AND status <> ?", version.ID, StatusCancelled).
+		Updates(statusFields(StatusNormalized, map[string]any{"updated_at": time.Now()}))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return apperror.ErrVersionSuperseded
+	}
+	return nil
 }
 
 type chunkRow struct {
@@ -328,6 +359,9 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
 	}
+	if version.Status == StatusCancelled {
+		return apperror.ErrVersionSuperseded
+	}
 	normalized, err := readNormalizedDocument(ctx, w.objects, version.NormalizedKey)
 	if err != nil {
 		return err
@@ -368,13 +402,27 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		}
 	}
 	if err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if _, writable, err := lockVersionForWrite(tx, version.TenantID, version.ID); err != nil {
+			return err
+		} else if !writable {
+			return apperror.ErrVersionSuperseded
+		}
 		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.Chunk{}).Error; err != nil {
 			return err
 		}
 		if err := insertChunks(tx, version, rows, time.Now()); err != nil {
 			return err
 		}
-		return tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusChunked, nil)).Error
+		result := tx.Model(&models.DocumentVersion{}).
+			Where("id = ? AND status <> ?", version.ID, StatusCancelled).
+			Updates(statusFields(StatusChunked, nil))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return apperror.ErrVersionSuperseded
+		}
+		return nil
 	}); err != nil {
 		return err
 	}
@@ -403,6 +451,9 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 	var version models.DocumentVersion
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
+	}
+	if version.Status == StatusCancelled {
+		return apperror.ErrVersionSuperseded
 	}
 	// A managed migration rewrites this knowledge base's space in batches. New
 	// writes during that window would be missing from the target verification,
@@ -458,7 +509,19 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 		records[index] = EmbeddingRecord{ChunkID: chunk.ID, Vector: vectors[index]}
 	}
 	if err := w.indexWriter.WriteEmbeddings(ctx, version.ID, binding.Model, records); err != nil {
+		if errors.Is(err, apperror.ErrVersionSuperseded) {
+			return apperror.ErrVersionSuperseded
+		}
 		return fmt.Errorf("embedding_error: %w", err)
+	}
+	// The adapter fences its own write, but a replacement may have committed
+	// just after it; never leave a superseded version looking embedded.
+	var status string
+	if err := w.db.WithContext(ctx).Table("document_versions").Select("status").Where("id = ?", version.ID).Scan(&status).Error; err != nil {
+		return err
+	}
+	if status == StatusCancelled {
+		return apperror.ErrVersionSuperseded
 	}
 	return nil
 }
@@ -468,41 +531,52 @@ func (w *PipelineWorker) index(ctx context.Context, task Task) error {
 	if err := w.db.WithContext(ctx).First(&version, "id = ?", task.DocumentVersionID).Error; err != nil {
 		return fmt.Errorf("load version: %w", err)
 	}
-	var chunks []models.Chunk
-	// Indexing is also replayed after a restart, so chunks that a previous
-	// attempt already marked ready still belong in the package.
-	if err := w.db.WithContext(ctx).Where("document_version_id = ? AND parent_id IS NOT NULL AND status IN ?", version.ID, []string{StatusEmbedded, StatusEvidenceReady}).Order("ordinal").Find(&chunks).Error; err != nil {
-		return fmt.Errorf("load embedded chunks: %w", err)
-	}
-	if len(chunks) == 0 {
-		return apperror.Terminalf("empty_document", "no embedded chunks to index")
+	if version.Status == StatusCancelled {
+		return apperror.ErrVersionSuperseded
 	}
 	if w.indexWriter == nil {
 		return fmt.Errorf("evidence index writer is not configured")
 	}
-	if err := w.indexWriter.IndexVersion(ctx, version.ID); err != nil {
-		return fmt.Errorf("keyword_index_error: %w", err)
-	}
 	var knowledgeBase struct{ ACLVersion int64 }
-	if err := w.db.WithContext(ctx).Table("knowledge_bases").Select("acl_version").Where("id = ?", version.KnowledgeBaseID).Scan(&knowledgeBase).Error; err != nil {
-		return fmt.Errorf("load knowledge base acl: %w", err)
-	}
-	var allChunks []models.Chunk
-	if err := w.db.WithContext(ctx).Where("document_version_id = ? AND status IN ?", version.ID, []string{StatusParent, StatusEmbedded, StatusEvidenceReady}).Order("ordinal, id").Find(&allChunks).Error; err != nil {
-		return fmt.Errorf("load package chunks: %w", err)
-	}
-	packageChunks := projectChunks(allChunks)
 	packageID := task.PackageID
-	if packageID == "" {
-		packageID = stableID("pkg", version.ID)
-	}
-	packageValue := EvidencePackage{ID: packageID, SchemaVersion: SchemaEvidencePackage, Envelope: Envelope{SchemaVersion: SchemaEvidencePackage, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, ContentHash: version.ContentHash, ACLVersion: knowledgeBase.ACLVersion, Status: StatusEvidenceReady, Chunks: packageChunks}
-	data, err := json.Marshal(packageValue)
-	if err != nil {
-		return fmt.Errorf("marshal evidence package: %w", err)
-	}
-	now := time.Now()
-	if err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		locked, writable, err := lockVersionForWrite(tx, version.TenantID, version.ID)
+		if err != nil {
+			return err
+		}
+		if !writable {
+			return apperror.ErrVersionSuperseded
+		}
+		version = locked
+		var chunks []models.Chunk
+		// Indexing is also replayed after a restart, so chunks that a previous
+		// attempt already marked ready still belong in the package.
+		if err := tx.Where("document_version_id = ? AND parent_id IS NOT NULL AND status IN ?", version.ID, []string{StatusEmbedded, StatusEvidenceReady}).Order("ordinal").Find(&chunks).Error; err != nil {
+			return fmt.Errorf("load embedded chunks: %w", err)
+		}
+		if len(chunks) == 0 {
+			return apperror.Terminalf("empty_document", "no embedded chunks to index")
+		}
+		if err := w.indexWriter.IndexVersion(ctx, version.ID); err != nil {
+			return fmt.Errorf("keyword_index_error: %w", err)
+		}
+		if err := tx.Table("knowledge_bases").Select("acl_version").Where("id = ?", version.KnowledgeBaseID).Scan(&knowledgeBase).Error; err != nil {
+			return fmt.Errorf("load knowledge base acl: %w", err)
+		}
+		var allChunks []models.Chunk
+		if err := tx.Where("document_version_id = ? AND status IN ?", version.ID, []string{StatusParent, StatusEmbedded, StatusEvidenceReady}).Order("ordinal, id").Find(&allChunks).Error; err != nil {
+			return fmt.Errorf("load package chunks: %w", err)
+		}
+		packageChunks := projectChunks(allChunks)
+		if packageID == "" {
+			packageID = stableID("pkg", version.ID)
+		}
+		packageValue := EvidencePackage{ID: packageID, SchemaVersion: SchemaEvidencePackage, Envelope: Envelope{SchemaVersion: SchemaEvidencePackage, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, ContentHash: version.ContentHash, ACLVersion: knowledgeBase.ACLVersion, Status: StatusEvidenceReady, Chunks: packageChunks}
+		data, err := json.Marshal(packageValue)
+		if err != nil {
+			return fmt.Errorf("marshal evidence package: %w", err)
+		}
+		now := time.Now()
 		for _, chunk := range chunks {
 			if err := tx.Model(&models.Chunk{}).Where("id = ? AND document_version_id = ?", chunk.ID, version.ID).Update("status", StatusEvidenceReady).Error; err != nil {
 				return err
@@ -514,15 +588,63 @@ func (w *PipelineWorker) index(ctx context.Context, task Task) error {
 		if err := tx.Create(&models.EvidencePackage{ID: packageID, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentVersionID: version.ID, ContentHash: version.ContentHash, ACLVersion: knowledgeBase.ACLVersion, Status: StatusEvidenceReady, PackageJSON: string(data), PublishedAt: &now}).Error; err != nil {
 			return err
 		}
-		if err := tx.Model(&models.DocumentVersion{}).Where("id = ?", version.ID).Updates(statusFields(StatusEvidenceReady, nil)).Error; err != nil {
-			return err
+		result := tx.Model(&models.DocumentVersion{}).
+			Where("id = ? AND status <> ?", version.ID, StatusCancelled).
+			Updates(statusFields(StatusEvidenceReady, nil))
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return apperror.ErrVersionSuperseded
 		}
 		return tx.Model(&models.Document{}).Where("id = ? AND latest_version_id = ?", version.DocumentID, version.ID).Update("status", StatusEvidenceReady).Error
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
 	w.triggerProjection(ctx, version.TenantID, version.KnowledgeBaseID, packageID, knowledgeBase.ACLVersion)
 	return nil
+}
+
+// lockVersionForWrite locks the version row (PostgreSQL) and reports whether
+// the stage may still write. A missing row means purge or replacement already
+// removed it; a CANCELLED row means a newer version superseded this one.
+func lockVersionForWrite(tx *gorm.DB, tenantID, versionID string) (models.DocumentVersion, bool, error) {
+	var version models.DocumentVersion
+	query := tx
+	if tx.Dialector.Name() == "postgres" {
+		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+	}
+	err := query.Where("id = ? AND tenant_id = ?", versionID, tenantID).First(&version).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return version, false, nil
+	}
+	if err != nil {
+		return version, false, err
+	}
+	return version, version.Status != StatusCancelled, nil
+}
+
+// cancelSupersededStage closes the pipeline of a version another writer already
+// cancelled, so reconcile does not requeue its stages forever.
+func (w *PipelineWorker) cancelSupersededStage(ctx context.Context, task Task) error {
+	now := time.Now()
+	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.StageRun{}).
+			Where("idempotency_key = ? AND status = ?", task.IdempotencyKey, StageProcessing).
+			Updates(map[string]any{
+				"status": StageCancelled, "error_code": "superseded",
+				"error_message": "superseded by a newer document version", "updated_at": now,
+			}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&models.PipelineRun{}).
+			Where("id = ? AND tenant_id = ? AND status NOT IN ?", task.PipelineRunID, task.TenantID, []string{StatusEvidenceReady, StatusCancelled, StatusFailed}).
+			Updates(map[string]any{
+				"status": StatusCancelled, "error_code": "superseded",
+				"error_message": "superseded by a newer document version", "updated_at": now,
+			}).Error
+	})
 }
 
 // triggerProjection starts both Pipeline B projections after the
