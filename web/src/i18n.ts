@@ -230,7 +230,6 @@ const zhCN = {
   folder: {
     title: "文件夹",
     all: "全部文档",
-    root: "根目录（未归类）",
     create: "新建文件夹",
     createChild: "新建子文件夹",
     rename: "重命名",
@@ -1265,7 +1264,6 @@ const enUS = {
   folder: {
     title: "Folders",
     all: "All documents",
-    root: "Root (unfiled)",
     create: "New folder",
     createChild: "New subfolder",
     rename: "Rename",

@@ -33,6 +33,17 @@ test("creates folders inline at the root and under a folder", async ({ page, api
     const child = body.items.find((item) => item.name === "2026");
     expect(contracts).toBeTruthy();
     expect(child?.parentId).toBe(contracts!.id);
+
+    await folderRow.hover();
+    await folderRow.getByRole("button", { name: "文件夹操作" }).click();
+    await page.getByRole("menuitem", { name: "移动" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("combobox", { name: "上级文件夹" }).click();
+    const nodes = page.locator(".ant-select-tree-title");
+    await expect(nodes.filter({ hasText: knowledgeBase.name })).toBeVisible();
+    await expect(nodes.filter({ hasText: "Contracts" })).toBeVisible();
+    await expect(nodes.filter({ hasText: "2026" })).toBeVisible();
+    await page.keyboard.press("Escape");
   } finally {
     if (knowledgeBaseId) await deleteKnowledgeBase(api, knowledgeBaseId);
     knowledgeBaseId = "";

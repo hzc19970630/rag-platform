@@ -51,6 +51,7 @@ import { ChatConversation } from "../components/ChatConversation";
 import { EmptyState } from "../components/EmptyState";
 import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { FOLDER_ALL, FOLDER_ROOT, FolderTree } from "../components/FolderTree";
+import { FolderTreeSelect } from "../components/FolderTreeSelect";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { SettingsDrawer } from "../features/settings/SettingsDrawer";
@@ -63,6 +64,21 @@ const accept = ".pdf,.docx,.xlsx,.pptx,.md,.txt,.html,.htm";
 const EMPTY_FOLDERS: Folder[] = [];
 const EMPTY_TAGS: TagView[] = [];
 const CHAT_PANEL_QUERY = "(min-width: 1101px)";
+
+function folderSubtreeIds(folders: Folder[], rootId: string): string[] {
+  const ids = new Set([rootId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const folder of folders) {
+      if (folder.parentId && ids.has(folder.parentId) && !ids.has(folder.id)) {
+        ids.add(folder.id);
+        added = true;
+      }
+    }
+  }
+  return [...ids];
+}
 
 function useMinWidth(query: string) {
   const [matches, setMatches] = useState(() => window.matchMedia?.(query).matches ?? true);
@@ -362,24 +378,7 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
   const processing = items.some((item) => !terminalVersionStatuses.has(item.version.status));
   const filtered = folderId !== "" || tagFilter.length > 0;
 
-  const folderOptions = useMemo(() => {
-    const byID = new Map(folders.map((folder) => [folder.id, folder]));
-    function label(folder: Folder): string {
-      const names = [folder.name];
-      let parent = folder.parentId ?? "";
-      while (parent) {
-        const next = byID.get(parent);
-        if (!next) break;
-        names.unshift(next.name);
-        parent = next.parentId ?? "";
-      }
-      return names.join(" / ");
-    }
-    return [
-      { value: FOLDER_ROOT, label: t("folder.root") },
-      ...folders.map((folder) => ({ value: folder.id, label: label(folder) })),
-    ];
-  }, [folders, t]);
+  const disabledFolderIds = folderDialog ? folderSubtreeIds(folders, folderDialog.folder.id) : [];
 
   function refresh() {
     return Promise.all([
@@ -813,11 +812,15 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
         )}
         <div className="modal-field">
           <Typography.Text type="secondary">{t("folder.parent")}</Typography.Text>
-          <Select
-            style={{ width: "100%" }}
+          <FolderTreeSelect
+            folders={folders}
+            knowledgeBaseName={knowledgeBaseName}
             value={folderParent || FOLDER_ROOT}
+            disabledValues={disabledFolderIds}
             onChange={(value) => setFolderParent(value === FOLDER_ROOT ? "" : value)}
-            options={folderOptions}
+            placeholder={t("folder.parent")}
+            ariaLabel={t("folder.parent")}
+            style={{ width: "100%" }}
           />
         </div>
       </Modal>
@@ -857,7 +860,15 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
           void runBatch("move", { folderId: moveTarget === FOLDER_ROOT ? "" : moveTarget });
         }}
       >
-        <Select style={{ width: "100%" }} value={moveTarget} onChange={setMoveTarget} options={folderOptions} />
+        <FolderTreeSelect
+          folders={folders}
+          knowledgeBaseName={knowledgeBaseName}
+          value={moveTarget}
+          onChange={setMoveTarget}
+          placeholder={t("batch.moveTitle")}
+          ariaLabel={t("batch.moveTitle")}
+          style={{ width: "100%" }}
+        />
       </Modal>
 
       <Modal
