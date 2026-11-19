@@ -9,16 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- 容量触发指标与告警：`sse_tails_active`（D7）、`graph_snapshot_entities`/`graph_snapshot_relations`（D6）、`db_pool_in_use`/`db_pool_max_open`/`db_pool_wait_count`/`db_pool_wait_seconds`（D9），并新增 4 条 ticket 级告警规则与 promtool 用例。
 - 知识库详情右侧内嵌问答聊天框：历史会话 Popover、新建会话留在本页，窄屏自动改为抽屉；`/chat` 恢复左侧按知识库分组的会话列表，分组可折叠、悬浮可新建会话、会话不显示时间。
 - 文件夹树以知识库名称为根节点，顶层文件夹挂在根下；新建文件夹改为列表内联输入（输入框 + ✓/✗、Enter/Esc），支持在悬浮文件夹下新建子文件夹；移动文档/文件夹的目录选择改为同一套树形下拉。
 - 审计动作与资源枚举补齐模型供应商、成员变更、整理重试等取值，审计筛选与表格展示中英文案。
 
 ### Changed
 
+- 资源级授权接缝（B6-b）：新增 `authz.ResourceTarget` 与 `AuthorizeResource`，知识库检查统一经单一入口；移除领域包直接调用通用 `Authorize` 与手写策略路径的通道，并新增 `archtest` 授权静态门禁。
+- CI 覆盖率门禁由 warn 改为 enforce；`scripts/coverage_tiers.txt` 按 2026-11-19 实测基线校准（无单测的适配器包归零并注明集成验收覆盖，`httpapi` 69%、`search` 21%、`storage` 20%）。
+- `docs/internal/architecture-review.md` 标注为 2026-11-07 历史快照并列出已被关闭的结论；MILESTONES 现行路由口径改为契约 126 个方法+路径条目 / OpenAPI 100 条路径。
 - 知识库详情工作区：文件夹栏与文档列表等高，成员与知识整理页签占满可视区域并在卡片内滚动。
 
 ### Fixed
 
+- 迟到投递不再在父运行被清理后创建无租户的 `task_inbox` 行：claim 返回 `stale delivery` 并由 worker 直接确认；reconcile 新增无租约 `PROCESSING` 行回收（15 分钟宽限），`/ops/reconcile` 报告新增 `inboxesAbandoned`。
 - 知识整理运行表固定列宽并在窄屏横向滚动，避免列挤压。
 - 窄屏审计筛选不再出现未翻译的裸枚举（如 `model_provider_deleted`）。
 

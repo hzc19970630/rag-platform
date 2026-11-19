@@ -1,3 +1,25 @@
+# 架构评审（历史快照，2026-11-07）
+
+> **本文不再是现状描述。** 它记录 2026-11-07 当时的代码状态与判断，用于追溯当时的取舍；后续里程碑已关闭其中多条结论。判断现状请以 [docs/architecture.md](../architecture.md)、[DESIGN.md](../../DESIGN.md) 与 [MILESTONES.md](../../MILESTONES.md) 为准。
+>
+> 已被后续交付关闭的结论：
+>
+> | 当时结论 | 现状 | 依据 |
+> | --- | --- | --- |
+> | 迁移中没有任何 RLS | 租户表与子表已启用 RLS，production 强制 `enforce` | 迁移 0023–0025；原 M13 A1 / 原 M14 A2 |
+> | 没有 `RelationStore` 端口 | 已有 `internal/relationstore` + PostgreSQL 适配器 | ADR 0001（2026-11-03）；D8（2026-11-14） |
+> | 单列 `chunks.embedding` 无法多模型 | `chunk_embeddings` 变体表 + 迁移状态机 | D3（2026-11-14） |
+> | 三份 outbox publisher | 领域薄包装统一走 `internal/platform/outbox` | C4 后续收敛 |
+> | 格式白名单分散四处 | `contracts/formats` 单一来源，配置由 `formats.Names()` 派生 | D8 |
+> | 状态字符串散落 SQL | 统一到 `internal/status` 并附跨机制转移表 | D2（2026-11-12） |
+> | 错误分类靠 `"terminal:"` 前缀 | 已改为类型化错误；非测试代码 0 处该前缀 | A4 收尾 |
+> | 配额检查 TOCTOU | advisory lock + 写入事务内校验 | 原 M13 A1 后续修复 |
+> | 路由按 `m1.go…m9.go` 命名 | 按资源注册（`register.go`），无里程碑命名文件 | C5 |
+> | 运维快照在 handler 直查多表 | `httpapi` 生产代码不再持有业务 DB 句柄（仅中间件事务） | C8 |
+> | 可观测性仅进程内 registry | Prometheus 独立监听 + OTel trace + 告警包 | B5（2026-11-12） |
+>
+> 仍然有效、按触发条件排期的结论：检索后端工厂（D1）、图查询内存 BFS（D6）、SSE 250ms 轮询（D7）、请求级事务（D9）、`models`/GORM 直连取舍（C8 只覆盖 4 个聚合）、`knowledgeprojection` 仍是单包（已拆 `service_wiki`/`service_relation`，未拆子包）。
+
 一、做得好的部分（作为判断基准）
 能力门控做得比多数 RAG 项目扎实：Wiki/Relation/Evidence 独立就绪，任一投影失败不阻断 Evidence RAG（internal/retrieval/capabilities.go、knowledgeprojection/join.go）。
 可靠性原语完整：Outbox/Inbox、阶段状态机、幂等键、死信、reconcile、SSE 事件重放（conversation.ReplayEvents）。

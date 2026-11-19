@@ -199,7 +199,8 @@ SELECT count(*) FROM task_inbox WHERE idempotency_key LIKE '<pipeline>:%';
 Worker 每个 `RECONCILE_INTERVAL_SECONDS`（默认 60 秒）执行一次，也可通过接口触发：
 
 - 修复 `pipeline_runs`/`document_versions`/`documents` 之间的状态漂移。
-- 回收超过 `staleAfterSeconds` 仍处于 `PENDING`/`PROCESSING` 的 Stage；Inbox 只回收 `lease_until` 已过期的 `PROCESSING` 行，正在心跳续租的任务不会被误判为失败。
+- 回收超过 `staleAfterSeconds` 仍处于 `PENDING`/`PROCESSING` 的 Stage；Inbox 回收两类行：`lease_until` 已过期的 `PROCESSING` 行，以及 `lease_until` 为空且超过 15 分钟未更新的 `PROCESSING` 行（handler 在写终态前退出留下的无主行）；正在心跳续租的任务不会被误判为失败。全平台维护循环还会清理父运行已被 purged 的历史无租户行，报告字段为 `inboxesAbandoned`。
+- 父运行已被删除/清理后迟到的投递不会再创建 Inbox 行：claim 解析不到运行租户时返回 `stale delivery`，worker 记录 `stale_delivery_acked` 后直接确认，不会留下无租户的孤儿行。
 - 对 Inbox 已 `SUCCEEDED` 的死信置为 `RESOLVED`。
 - 重新入队停滞阶段；若文档已删除、版本已被替换则取消，若 `attempts >= 5` 则标记失败并写死信。
 - reconciliation 是幂等的，可在任意时刻重复执行。
@@ -225,7 +226,7 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | 机制 | 持久化位置 | 关键状态 | 运维动作 |
 | --- | --- | --- | --- |
 | Asynq retry | Redis（非任务表） | pending → retry → archived | 看 `/ops/metrics` 队列深度；耗尽后走死信 |
-| Inbox lease | `task_inbox` | `PROCESSING` → `SUCCEEDED`/`FAILED` | 过期租约由 reconcile 接管 |
+| Inbox lease | `task_inbox` | `PROCESSING` → `SUCCEEDED`/`FAILED` | 过期租约与无租约的无主行由 reconcile 接管 |
 | Outbox attempts | `outbox_events` | 未发布 → `PUBLISHED`；`attempts`/`next_attempt_at` 退避 | 检查 Redis 与 outbox publisher |
 | Stage attempts | `stage_runs` / `projection_stage_runs` | `PENDING` → `PROCESSING` → `SUCCEEDED`/`FAILED` | 死信重试、reconcile 重排 |
 | Reconcile | 维护循环 | 修正漂移、回收过期 Stage、重开 outbox | `POST /ops/reconcile` |
@@ -249,6 +250,40 @@ curl -X POST "http://localhost:8082/api/v1/ops/reconcile?staleAfterSeconds=60" \
 | projection_retry | `FAILED → PENDING` | 运营重试，新 attempt id |
 | sync_retry | `RUNNING → PARTIAL` | 部分条目失败但运行结束 |
 | answer_lease | `QUEUED/RUNNING → FAILED` | 维护扫描发现过期租约 |
+
+### 6.2 无主 / 无租户 Inbox 残留清理
+
+新版本不会再产生无租户的 `task_inbox` 行：父运行已被清理时的迟到投递会被 claim 判定为 `stale delivery` 并直接确认。升级前遗留的行仍需一次性清理；`scripts/m13_rls_acceptance.sh` 在 enforce 前要求这批行为 0。
+
+以具备 `BYPASSRLS` 的维护角色执行（`ADMIN_DATABASE_URL` / 维护账号）。enforce 部署下 `rag_app` 看不到 `tenant_id IS NULL` 的行，用应用角色执行会得到“删 0 行”的假结果。先留证：
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml exec -T postgres \
+  psql -U "${POSTGRES_USER:-rag_platform}" -d "${POSTGRES_DB:-rag_platform}" -v ON_ERROR_STOP=1 -Atc "
+SELECT idempotency_key, task_type, status, created_at, updated_at, lease_owner, lease_until
+FROM task_inbox
+WHERE tenant_id IS NULL OR tenant_id = ''
+ORDER BY created_at;
+"
+```
+
+只删除父运行已不存在的行，避免误删仍可追溯的记录：
+
+```sql
+DELETE FROM task_inbox ti
+WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
+  AND ti.updated_at < now() - interval '15 minutes'
+  AND NOT EXISTS (
+    SELECT 1 FROM pipeline_runs pr
+    WHERE pr.id = split_part(ti.idempotency_key, ':', 1)
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM projection_runs prj
+    WHERE prj.id = split_part(ti.idempotency_key, ':', 1)
+  );
+```
+
+删除后复查同一 SELECT 为 0 行，再重跑 `./scripts/m13_rls_acceptance.sh`。若仍有行保留，说明父运行还在，先用 `GET /api/v1/ops/tasks/:key` 查看再决定，不要扩大删除范围。
 
 ## 7. 告警指标
 
@@ -281,15 +316,58 @@ Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge
 | `projection_pending_runs` | 非终态 projection run 数 | 用于排查，不单独告警 |
 | `projection_lag_seconds` | 最老的非终态 projection run 年龄（投影游标滞后的可观测代理） | > 900 秒持续 10 分钟 |
 
+API 进程还会写入两类容量 gauge，用来把 M13 D6/D7/D9 的触发条件从“人判断”变成告警：
+
+| 指标 | 含义 | 告警（`deploy/observability/alerts.yml`） |
+| --- | --- | --- |
+| `sse_tails_active` | 当前处于轮询中的问答 SSE tail 连接数（进入 tail 加一、退出减一） | > 100 持续 10 分钟（D7 触发） |
+| `graph_snapshot_entities` / `graph_snapshot_relations` | 最近一次图查询加载的快照实体/关系数 | 任一 > 10000 持续 5 分钟（D6 触发） |
+| `db_pool_in_use` / `db_pool_max_open` | 连接池占用与上限（每 15 秒采样一次） | 占用 > 90% 持续 10 分钟（D9 候选） |
+| `db_pool_wait_count` / `db_pool_wait_seconds` | 进程启动以来等待连接的次数与总时长 | 10 分钟内有等待（配合占用率判断 D9） |
+
 ### 7.1 告警、面板与 SLO 包
 
 `deploy/observability/` 提供可直接部署的 Prometheus、Alertmanager、Grafana 配置：
 
-- `prometheus.yml`：抓取 `api:9090` 与 `worker:9091`；`alerts.yml`：可用性、5xx、P95、解析失败、队列积压、outbox、inbox 过期租约、投影滞后与模型错误共 10 条规则；`alertmanager.yml`：`severity=page` 走值班 webhook、`severity=ticket` 走工单 webhook（URL 由部署方替换）。
+- `prometheus.yml`：抓取 `api:9090` 与 `worker:9091`；`alerts.yml`：可用性、5xx、P95、解析失败、队列积压、outbox、inbox 过期租约、投影滞后、模型错误与检索质量回归共 11 条规则，另有 4 条容量触发规则（SSE tail 并发、图快照规模、连接池占用、连接池等待），合计 15 条；`alertmanager.yml`：`severity=page` 走值班 webhook、`severity=ticket` 走工单 webhook（URL 由部署方替换）。
 - `grafana/`：数据源、dashboard provider 与 `RAG Platform Overview` 面板（5xx、P95、队列、outbox、inbox、投影滞后、解析失败、模型错误）。
 - 本地或 POC 可叠加 `deploy/docker-compose/observability.compose.yml`：为 api/worker 打开 metrics 监听器，并启动 Prometheus `:9092`、Alertmanager `:9093`、Grafana `:3000`。该 overlay 不是生产清单；生产必须把 `METRICS_ADDR` 绑定到回环/私网地址，并替换 Grafana 默认密码与 webhook。
 - `make observability-check`（CI `observability` job）校验 Prometheus 配置、规则、告警单元测试、Compose overlay 与面板 JSON，不需要运行栈。
 - SLO 建议：API 可用性 99.9%/月、非流式 API P95 < 1s、入库成功率 ≥ 99%、问答终态成功率 ≥ 99%；RTO/RPO 沿用 A1 的 3600s/900s。`severity=page` 立即通知值班，`severity=ticket` 进入下一个工作日工单。
+
+### 7.2 门禁阻断：Inbox 无租户残留
+
+这条不是 Prometheus 指标，而是 RLS 门禁的阻断项：`scripts/m13_rls_acceptance.sh` 报 `task_inbox has N unattributable rows`，或升级/enforce 预检提示存在 `tenant_id IS NULL` 的行。处理步骤与 §6.2 相同，值班可直接执行。
+
+先留证（必须用具备 `BYPASSRLS` 的维护角色；`rag_app` 在 enforce 下看不到这些行）：
+
+```bash
+docker compose --env-file .env -f deploy/docker-compose/docker-compose.yml exec -T postgres \
+  psql -U "${POSTGRES_USER:-rag_platform}" -d "${POSTGRES_DB:-rag_platform}" -v ON_ERROR_STOP=1 -Atc "
+SELECT idempotency_key, task_type, status, created_at, updated_at, lease_owner, lease_until
+FROM task_inbox
+WHERE tenant_id IS NULL OR tenant_id = ''
+ORDER BY created_at;
+"
+```
+
+只删除父运行已不存在的行（超过 15 分钟），避免误删仍可追溯的记录：
+
+```sql
+DELETE FROM task_inbox ti
+WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
+  AND ti.updated_at < now() - interval '15 minutes'
+  AND NOT EXISTS (
+    SELECT 1 FROM pipeline_runs pr
+    WHERE pr.id = split_part(ti.idempotency_key, ':', 1)
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM projection_runs prj
+    WHERE prj.id = split_part(ti.idempotency_key, ':', 1)
+  );
+```
+
+删除后复查同一 SELECT 为 0 行，并重跑 `./scripts/m13_rls_acceptance.sh`。若仍有行保留，说明父运行还在，先用 `GET /api/v1/ops/tasks/:key` 判断再处理，不要扩大删除范围。
 
 ## 8. 模型网关故障演练
 
@@ -351,6 +429,7 @@ Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge
 
 - API、worker、embedctl 共用同一组连接池参数：`DATABASE_MAX_OPEN_CONNS`（默认 20）、`DATABASE_MAX_IDLE_CONNS`（默认 10）、`DATABASE_CONN_MAX_LIFETIME_SECONDS`（默认 1800）。`0` 空闲连接合法，其余非法值会让配置校验失败。
 - 规划容量时按 `副本数 × DATABASE_MAX_OPEN_CONNS < PostgreSQL max_connections` 预留余量；迁移、备份和人工 psql 会话也要计入。
+- API 每 15 秒采样 `db_pool_in_use` / `db_pool_max_open` / `db_pool_wait_count` / `db_pool_wait_seconds`；占用率与等待的告警见 §7。
 - 连接寿命用于在 PostgreSQL 重启或主从切换后回收失效连接；不要设为 0（0 表示永不回收）。
 
 ## 12. Tracing（OTel）

@@ -160,7 +160,9 @@ flowchart LR
 Defense in depth:
 
 1. Authentication establishes a principal and tenant.
-2. Every knowledge-base operation resolves membership and action.
+2. Every knowledge-base operation resolves membership and action through
+   `authz.AuthorizeResource` with a `ResourceTarget`; handlers never build
+   policy paths or call the generic `Authorize` directly.
 3. SQL queries inject `tenant_id` and knowledge-base scope; static checks reject new
    unscoped GORM paths.
 4. Retrieval re-checks that chunks belong to the current version and the caller's
