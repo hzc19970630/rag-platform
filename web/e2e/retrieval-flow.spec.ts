@@ -42,9 +42,10 @@ test("upload, parse, search, answer and delete document", async ({ page, api }) 
     expect(evidence.plan.keywordEnabled).toBe(true);
 
     await page.getByTestId("kb-chat-toggle").click();
-    await expect(page.getByTestId("kb-chat-panel")).toBeVisible();
-    await page.getByTestId("session-new").click();
-    await expect(page).toHaveURL(/\/chat\/[^/?#]+$/);
+    const panel = page.getByTestId("kb-chat-panel");
+    await expect(panel).toBeVisible();
+    await panel.getByTestId("kb-chat-new").click();
+    await expect(panel.getByTestId("chat-composer")).toBeVisible();
 
     await page.getByRole("textbox", { name: "问题" }).fill(
       "how does hybrid recall combine keyword and vector results",

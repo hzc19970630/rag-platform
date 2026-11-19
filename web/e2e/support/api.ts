@@ -118,6 +118,28 @@ export async function listMessages(api: APIRequestContext, conversationId: strin
   return body.items ?? [];
 }
 
+export type SessionSummary = {
+  id: string;
+  knowledgeBaseId: string;
+  title: string;
+  updatedAt: string;
+};
+
+export async function listSessions(api: APIRequestContext): Promise<SessionSummary[]> {
+  const response = await api.get("sessions");
+  if (!response.ok()) throw new Error(`list sessions: ${await readError(response)}`);
+  const body = (await response.json()) as { items?: SessionSummary[] };
+  return body.items ?? [];
+}
+
+export async function latestSessionId(api: APIRequestContext, knowledgeBaseId: string): Promise<string> {
+  const sessions = (await listSessions(api))
+    .filter((item) => item.knowledgeBaseId === knowledgeBaseId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  if (!sessions[0]) throw new Error(`no session for knowledge base ${knowledgeBaseId}`);
+  return sessions[0].id;
+}
+
 export type PresetSummary = {
   name: string;
   version: string;

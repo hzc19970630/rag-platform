@@ -3,8 +3,9 @@ import {
   CloseOutlined,
   DeleteOutlined,
   FolderOutlined,
+  HistoryOutlined,
   MessageOutlined,
-  PushpinOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SettingOutlined,
   SyncOutlined,
@@ -19,6 +20,7 @@ import {
   Flex,
   Input,
   Modal,
+  Popover,
   Select,
   Space,
   Table,
@@ -45,17 +47,16 @@ import {
   useTags,
 } from "../api/hooks";
 import type { BatchDocumentsResult, DocumentPage, DocumentSummary, Folder, Tag as TagView } from "../api/types";
+import { ChatConversation } from "../components/ChatConversation";
 import { EmptyState } from "../components/EmptyState";
 import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { FOLDER_ALL, FOLDER_ROOT, FolderTree } from "../components/FolderTree";
 import { PageHeader } from "../components/PageHeader";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
-import { SessionList } from "../components/SessionList";
 import { SettingsDrawer } from "../features/settings/SettingsDrawer";
 import { MembersSettings } from "../features/settings/MembersSettings";
 import { ProjectionPanel } from "../features/settings/ProjectionPanel";
 import { usePermissions } from "../session";
-import { clampKbChatWidth, usePreferences } from "../store/preferences";
 import { formatSize, formatTime } from "../utils/format";
 
 const accept = ".pdf,.docx,.xlsx,.pptx,.md,.txt,.html,.htm";
@@ -89,55 +90,27 @@ export function KnowledgeBasePage() {
   const { message } = App.useApp();
   const conversations = useConversations();
   const wideChat = useMinWidth(CHAT_PANEL_QUERY);
-  const chatPinned = usePreferences((state) => state.kbChatPinned);
-  const chatWidth = usePreferences((state) => state.kbChatWidth);
-  const setChatPinned = usePreferences((state) => state.setKbChatPinned);
-  const setChatWidth = usePreferences((state) => state.setKbChatWidth);
   const [chatOpen, setChatOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [creatingSession, setCreatingSession] = useState(false);
-  const [dragWidth, setDragWidth] = useState<number>();
-  const dragging = useRef(false);
-  const latestDragWidth = useRef<number | undefined>(undefined);
+  const [activeSessionId, setActiveSessionId] = useState("");
 
   const kbConversations = useMemo(
-    () => (conversations.data ?? []).filter((item) => item.knowledgeBaseId === knowledgeBaseId),
+    () => (conversations.data ?? [])
+      .filter((item) => item.knowledgeBaseId === knowledgeBaseId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
     [conversations.data, knowledgeBaseId],
   );
-
-  useEffect(() => {
-    if (chatPinned) setChatOpen(true);
-  }, [chatPinned]);
-
-  useEffect(() => {
-    const move = (event: PointerEvent) => {
-      if (!dragging.current) return;
-      const next = clampKbChatWidth(window.innerWidth - event.clientX);
-      latestDragWidth.current = next;
-      setDragWidth(next);
-    };
-    const up = () => {
-      if (!dragging.current) return;
-      dragging.current = false;
-      document.body.classList.remove("resizing");
-      if (latestDragWidth.current !== undefined) setChatWidth(latestDragWidth.current);
-      latestDragWidth.current = undefined;
-      setDragWidth(undefined);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [setChatWidth]);
+  const activeConversation = kbConversations.find((item) => item.id === activeSessionId) ?? kbConversations[0];
 
   async function startSession() {
     if (creatingSession) return;
     setCreatingSession(true);
     try {
       const created = await createConversation(knowledgeBaseId);
+      setActiveSessionId(created.id);
+      setHistoryOpen(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.conversations });
-      navigate(`/chat/${created.id}`);
     } catch (cause) {
       message.error(cause instanceof Error ? cause.message : t("chat.createFailed"));
     } finally {
@@ -200,38 +173,90 @@ export function KnowledgeBasePage() {
     }] : []),
   ];
 
-  const chatSessions = (
-    <SessionList
-      items={kbConversations}
-      loading={conversations.isLoading}
-      error={conversations.error}
-      onRetry={() => void conversations.refetch()}
-      onSelect={(conversation) => navigate(`/chat/${conversation.id}`)}
-      onCreate={() => void startSession()}
-      creating={creatingSession}
-      actions={wideChat ? (
-        <>
-          <Tooltip title={chatPinned ? t("chat.unpin") : t("chat.pin")}>
+  const historyContent = (
+    <div className="kb-chat-history" data-testid="kb-chat-history-list">
+      {kbConversations.length === 0 && (
+        <Typography.Text type="secondary">{t("chat.noConversations")}</Typography.Text>
+      )}
+      {kbConversations.map((conversation) => (
+        <button
+          key={conversation.id}
+          type="button"
+          className={conversation.id === activeConversation?.id ? "chat-session kb-chat-history-item active" : "chat-session kb-chat-history-item"}
+          onClick={() => {
+            setActiveSessionId(conversation.id);
+            setHistoryOpen(false);
+          }}
+        >
+          <Typography.Text ellipsis>{conversation.title || t("chat.untitled")}</Typography.Text>
+        </button>
+      ))}
+    </div>
+  );
+
+  const chatBody = (
+    <>
+      <div className="kb-chat-head">
+        <Typography.Text strong ellipsis className="kb-chat-title">
+          {activeConversation ? activeConversation.title || t("chat.untitled") : t("knowledgeBase.chat")}
+        </Typography.Text>
+        <Space size={2}>
+          <Tooltip title={t("chat.newConversation")}>
             <Button
-              type={chatPinned ? "primary" : "text"}
+              type="text"
               size="small"
-              icon={<PushpinOutlined />}
-              aria-label={chatPinned ? t("chat.unpin") : t("chat.pin")}
-              onClick={() => { setChatPinned(!chatPinned); setChatOpen(true); }}
+              icon={<PlusOutlined />}
+              loading={creatingSession}
+              aria-label={t("chat.newConversation")}
+              data-testid="kb-chat-new"
+              onClick={() => void startSession()}
             />
           </Tooltip>
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
+            title={t("chat.history")}
+            content={historyContent}
+          >
+            <Tooltip title={t("chat.history")}>
+              <Button
+                type="text"
+                size="small"
+                icon={<HistoryOutlined />}
+                aria-label={t("chat.history")}
+                data-testid="kb-chat-history"
+              />
+            </Tooltip>
+          </Popover>
           <Tooltip title={t("chat.collapsePanel")}>
             <Button
               type="text"
               size="small"
               icon={<CloseOutlined />}
               aria-label={t("chat.collapsePanel")}
-              onClick={() => { setChatPinned(false); setChatOpen(false); }}
+              onClick={() => setChatOpen(false)}
             />
           </Tooltip>
-        </>
-      ) : undefined}
-    />
+        </Space>
+      </div>
+      <div className="kb-chat-body">
+        {conversations.isLoading ? <LoadingBlock /> : conversations.error ? (
+          <QueryFallback error={conversations.error} retry={() => void conversations.refetch()} />
+        ) : activeConversation ? (
+          <ChatConversation conversation={activeConversation} compact />
+        ) : (
+          <div className="kb-chat-empty">
+            <EmptyState
+              description={t("chat.noConversations")}
+              action={creatingSession ? undefined : () => void startSession()}
+              actionLabel={t("chat.newConversation")}
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 
   return (
@@ -264,20 +289,8 @@ export function KnowledgeBasePage() {
       <div className="kb-detail-body">
         <Tabs activeKey={activeTab} onChange={setTab} items={tabItems} className="kb-tabs" />
         {canChat && wideChat && chatOpen && (
-          <aside className="kb-chat-panel" style={{ width: dragWidth ?? chatWidth }} data-testid="kb-chat-panel" aria-label={t("chat.conversations")}>
-            <div
-              className="kb-chat-resizer"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label={t("chat.resizePanel")}
-              tabIndex={0}
-              onPointerDown={() => { dragging.current = true; document.body.classList.add("resizing"); }}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowLeft") setChatWidth(chatWidth + 16);
-                if (event.key === "ArrowRight") setChatWidth(chatWidth - 16);
-              }}
-            />
-            {chatSessions}
+          <aside className="kb-chat-panel" data-testid="kb-chat-panel" aria-label={t("knowledgeBase.chat")}>
+            {chatBody}
           </aside>
         )}
       </div>
@@ -287,10 +300,11 @@ export function KnowledgeBasePage() {
           onClose={() => setChatOpen(false)}
           placement="right"
           size={360}
-          title={t("chat.conversations")}
+          title={t("knowledgeBase.chat")}
+          className="kb-chat-drawer"
           data-testid="kb-chat-drawer"
         >
-          {chatSessions}
+          {chatBody}
         </Drawer>
       )}
       {configuration.data && (

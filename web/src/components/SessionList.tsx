@@ -1,14 +1,13 @@
-import { PlusOutlined } from "@ant-design/icons";
+import { DownOutlined, FolderOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import { Button, Flex, Typography } from "antd";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { Conversation } from "../api/types";
-import { formatTime } from "../utils/format";
 import { LoadingBlock, QueryFallback } from "./QueryFallback";
 import { VirtualSessionList } from "./VirtualSessionList";
 
 export type SessionRow =
-  | { key: string; kind: "group"; name: string }
+  | { key: string; kind: "group"; name: string; groupId: string }
   | { key: string; kind: "conversation"; conversation: Conversation };
 
 type Props = {
@@ -29,6 +28,16 @@ type Props = {
 export function SessionList(props: Props) {
   const { t } = useTranslation();
   const { items, grouped, knowledgeBaseNames } = props;
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+
+  function toggleGroup(groupId: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }
 
   const rows = useMemo<SessionRow[]>(() => {
     const sorted = [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -37,23 +46,25 @@ export function SessionList(props: Props) {
     }
     const groups = new Map<string, Conversation[]>();
     for (const conversation of sorted) {
-      const list = groups.get(conversation.knowledgeBaseId) ?? [];
-      list.push(conversation);
-      groups.set(conversation.knowledgeBaseId, list);
+      const group = groups.get(conversation.knowledgeBaseId) ?? [];
+      group.push(conversation);
+      groups.set(conversation.knowledgeBaseId, group);
     }
     const next: SessionRow[] = [];
     for (const [knowledgeBaseId, conversations] of groups) {
       next.push({
         key: `group:${knowledgeBaseId}`,
         kind: "group",
+        groupId: knowledgeBaseId,
         name: knowledgeBaseNames?.get(knowledgeBaseId) ?? knowledgeBaseId,
       });
+      if (collapsedGroups.has(knowledgeBaseId)) continue;
       for (const conversation of conversations) {
         next.push({ key: `conversation:${conversation.id}`, kind: "conversation", conversation });
       }
     }
     return next;
-  }, [items, grouped, knowledgeBaseNames]);
+  }, [items, grouped, knowledgeBaseNames, collapsedGroups]);
 
   return (
     <div className="session-list">
@@ -86,23 +97,33 @@ export function SessionList(props: Props) {
       {!props.loading && !props.error && items.length > 0 && (
         <VirtualSessionList
           rows={rows}
-          estimateSize={(index) => (rows[index]?.kind === "group" ? 38 : 56)}
-          renderRow={(row) => row.kind === "group" ? (
-            <Typography.Text type="secondary" className="chat-session-group">
-              {row.name}
-            </Typography.Text>
-          ) : (
-            <button
-              type="button"
-              className={row.conversation.id === props.activeId ? "chat-session active" : "chat-session"}
-              onClick={() => props.onSelect(row.conversation)}
-            >
-              <Flex vertical gap={2} className="chat-session-body">
+          estimateSize={(index) => (rows[index]?.kind === "group" ? 40 : 44)}
+          renderRow={(row) => {
+            if (row.kind === "group") {
+              const groupCollapsed = collapsedGroups.has(row.groupId);
+              return (
+                <button
+                  type="button"
+                  className="chat-session-group"
+                  aria-expanded={!groupCollapsed}
+                  onClick={() => toggleGroup(row.groupId)}
+                >
+                  <FolderOutlined />
+                  <span className="chat-session-group-name">{row.name}</span>
+                  {groupCollapsed ? <RightOutlined /> : <DownOutlined />}
+                </button>
+              );
+            }
+            return (
+              <button
+                type="button"
+                className={row.conversation.id === props.activeId ? "chat-session active" : "chat-session"}
+                onClick={() => props.onSelect(row.conversation)}
+              >
                 <Typography.Text ellipsis>{row.conversation.title || t("chat.untitled")}</Typography.Text>
-                <Typography.Text type="secondary" className="chat-session-time">{formatTime(row.conversation.updatedAt)}</Typography.Text>
-              </Flex>
-            </button>
-          )}
+              </button>
+            );
+          }}
         />
       )}
     </div>

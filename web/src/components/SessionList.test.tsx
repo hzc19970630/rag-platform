@@ -55,4 +55,20 @@ describe("SessionList", () => {
     expect(screen.getByText("First KB")).toBeInTheDocument();
     expect(screen.getByText("Second KB")).toBeInTheDocument();
   });
+
+  it("collapses and expands a knowledge base group", () => {
+    const items = [
+      conversation("a", "2026-11-18T00:00:00Z", "kb-1", "Alpha"),
+      conversation("b", "2026-11-17T00:00:00Z", "kb-2", "Beta"),
+    ];
+    const names = new Map([["kb-1", "First KB"], ["kb-2", "Second KB"]]);
+    render(<SessionList items={items} grouped knowledgeBaseNames={names} onSelect={() => undefined} onCreate={() => undefined} />);
+
+    fireEvent.click(screen.getByText("First KB").closest("button")!);
+    expect(screen.queryByText("Alpha")).toBeNull();
+    expect(screen.getByText("Beta")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("First KB").closest("button")!);
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+  });
 });

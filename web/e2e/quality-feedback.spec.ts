@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { test, expect } from "./support/fixtures";
-import { createKnowledgeBase, deleteKnowledgeBase, listMessages, readQuality, waitForDocument } from "./support/api";
+import { createKnowledgeBase, deleteKnowledgeBase, latestSessionId, listMessages, readQuality, waitForDocument } from "./support/api";
 
 test("answer feedback updates the retrieval quality view", async ({ page, api }, testInfo) => {
   test.setTimeout(240_000);
@@ -19,10 +19,11 @@ test("answer feedback updates the retrieval quality view", async ({ page, api },
     await waitForDocument(api, knowledgeBaseId, "retrieval-handbook.md");
 
     await page.getByTestId("kb-chat-toggle").click();
-    await expect(page.getByTestId("kb-chat-panel")).toBeVisible();
-    await page.getByTestId("session-new").click();
-    await expect(page).toHaveURL(/\/chat\/[^/?#]+$/);
-    const conversationId = new URL(page.url()).pathname.split("/").filter(Boolean).pop() ?? "";
+    const panel = page.getByTestId("kb-chat-panel");
+    await expect(panel).toBeVisible();
+    await panel.getByTestId("kb-chat-new").click();
+    await expect(panel.getByTestId("chat-composer")).toBeVisible();
+    const conversationId = await latestSessionId(api, knowledgeBaseId);
     expect(conversationId).not.toBe("");
 
     await page.getByRole("textbox", { name: "问题" }).fill("how are keyword and vector results combined");

@@ -119,6 +119,15 @@ describe("page smoke tests", () => {
     await waitFor(() => expect(page.container.textContent).toContain("Test KB"));
   });
 
+  it("opens the knowledge base chat with a history entry", async () => {
+    stubFetch();
+    const page = renderPage(<KnowledgeBasePage />, "/knowledge-bases/kb-1");
+    await waitFor(() => expect(page.container.textContent).toContain("Test KB"));
+    fireEvent.click(screen.getByTestId("kb-chat-toggle"));
+    expect(await screen.findByTestId("kb-chat-history")).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t("chat.noConversations"))).toBeInTheDocument();
+  });
+
   it("filters documents by folder and shows tags", async () => {
     const calls: string[] = [];
     stubFetch((url) => {

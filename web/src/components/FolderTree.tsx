@@ -214,18 +214,20 @@ export function FolderTree(props: Props) {
       {query.trim() !== "" && treeData.length <= 2 && (
         <Typography.Paragraph type="secondary" className="folder-search-empty">{t("folder.noMatch")}</Typography.Paragraph>
       )}
-      <Tree
-        blockNode
-        treeData={treeData}
-        expandedKeys={expandedKeys}
-        onExpand={(keys) => setExpandedKeys(keys.map(String))}
-        checkable={editing}
-        checkedKeys={checkedKeys}
-        onCheck={(keys) => setCheckedKeys((Array.isArray(keys) ? keys : keys.checked).map(String))}
-        selectable={!editing}
-        selectedKeys={editing ? [] : [selectedKey]}
-        onSelect={(keys) => onSelect(String(keys[0] ?? FOLDER_ALL))}
-      />
+      <div className="folder-tree-scroll">
+        <Tree
+          blockNode
+          treeData={treeData}
+          expandedKeys={expandedKeys}
+          onExpand={(keys) => setExpandedKeys(keys.map(String))}
+          checkable={editing}
+          checkedKeys={checkedKeys}
+          onCheck={(keys) => setCheckedKeys((Array.isArray(keys) ? keys : keys.checked).map(String))}
+          selectable={!editing}
+          selectedKeys={editing ? [] : [selectedKey]}
+          onSelect={(keys) => onSelect(String(keys[0] ?? FOLDER_ALL))}
+        />
+      </div>
     </div>
   );
 }
