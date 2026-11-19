@@ -2,6 +2,7 @@ package inboxlease
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -78,12 +79,30 @@ func TestClaimCopiesOwningRunTenant(t *testing.T) {
 	}
 
 	unknownKey := "orphan:parse"
-	if claimed, err := Claim(ctx, db, unknownKey, "document.ingestion.v1", 0, New("owner-a", time.Minute)); err != nil || !claimed {
-		t.Fatalf("orphan claim = %v, %v", claimed, err)
+	if claimed, err := Claim(ctx, db, unknownKey, "document.ingestion.v1", 0, New("owner-a", time.Minute)); !errors.Is(err, ErrStaleDelivery) || claimed {
+		t.Fatalf("claim for a missing run = %v, %v; want ErrStaleDelivery", claimed, err)
 	}
-	row = loadLeaseRow(t, db, unknownKey)
+	var orphans int64
+	if err := db.Model(&models.TaskInbox{}).Where("idempotency_key = ?", unknownKey).Count(&orphans).Error; err != nil {
+		t.Fatalf("count inbox: %v", err)
+	}
+	if orphans != 0 {
+		t.Fatal("a stale delivery must not create an inbox row")
+	}
+}
+
+// Tools and lightweight test databases only migrate task_inbox. Without a
+// parent table there is nothing to verify, so the historical NULL-tenant row
+// stays allowed.
+func TestClaimWithoutParentTablesKeepsNullTenant(t *testing.T) {
+	db := newLeaseDB(t)
+	key := "run:parse"
+	if claimed, err := Claim(context.Background(), db, key, "document.ingestion.v1", 0, New("owner-a", time.Minute)); err != nil || !claimed {
+		t.Fatalf("claim = %v, %v", claimed, err)
+	}
+	row := loadLeaseRow(t, db, key)
 	if row.TenantID != nil {
-		t.Fatalf("unresolvable key must keep tenant_id NULL, got %q", *row.TenantID)
+		t.Fatalf("no parent table means no attribution, got %q", *row.TenantID)
 	}
 }
 

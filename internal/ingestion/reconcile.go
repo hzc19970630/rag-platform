@@ -21,6 +21,7 @@ type ReconcileReport struct {
 	StagesRequeued      int   `json:"stagesRequeued"`
 	PipelinesCancelled  int   `json:"pipelinesCancelled"`
 	InboxesExpired      int64 `json:"inboxesExpired"`
+	InboxesAbandoned    int64 `json:"inboxesAbandoned"`
 	DeadLettersResolved int64 `json:"deadLettersResolved"`
 }
 
@@ -68,6 +69,11 @@ func (s *Service) reconcile(ctx context.Context, tenantID string, staleAfter tim
 		return report, err
 	}
 	report.InboxesExpired = inboxes
+	abandoned, err := s.abandonLeaseLessInbox(ctx, s.reconcileBase(ctx, tenantID), tenantID, now)
+	if err != nil {
+		return report, err
+	}
+	report.InboxesAbandoned = abandoned
 	deadLetters, err := s.resolveRecoveredDeadLetters(ctx, s.reconcileBase(ctx, tenantID), tenantID, now)
 	if err != nil {
 		return report, err
@@ -165,6 +171,40 @@ func (s *Service) expireInboxLeases(ctx context.Context, base *gorm.DB, tenantID
 	})
 	if result.Error != nil {
 		return 0, fmt.Errorf("expire inbox leases: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
+// inboxLeaseLessGrace keeps the sweep away from an attempt that has just
+// released its lease on the way out of a successful finish.
+const inboxLeaseLessGrace = 15 * time.Minute
+
+// abandonLeaseLessInbox fails PROCESSING rows that no worker owns. Release
+// clears the lease without changing the status, so an attempt that exited
+// before writing a terminal outcome leaves such a row behind; lease expiry
+// never sees it because lease_until is NULL. The tenant-scoped pass only
+// touches rows whose owning run it can attribute; the all-tenant pass also
+// reaches legacy rows whose run was purged.
+func (s *Service) abandonLeaseLessInbox(ctx context.Context, base *gorm.DB, tenantID string, now time.Time) (int64, error) {
+	query := base.WithContext(ctx).Model(&models.TaskInbox{}).
+		Where("status = ? AND lease_until IS NULL AND updated_at < ?", inboxProcessing, now.Add(-inboxLeaseLessGrace))
+	if tenantID != "" {
+		query = query.Where(`(EXISTS (
+    SELECT 1 FROM stage_runs sr
+    JOIN pipeline_runs pr ON pr.id = sr.pipeline_run_id
+    WHERE sr.idempotency_key = task_inbox.idempotency_key AND pr.tenant_id = ?
+) OR EXISTS (
+    SELECT 1 FROM projection_stage_runs psr
+    JOIN projection_runs prj ON prj.id = psr.projection_run_id
+    WHERE psr.idempotency_key = task_inbox.idempotency_key AND prj.tenant_id = ?
+))`, tenantID, tenantID)
+	}
+	result := query.Updates(map[string]any{
+		"status": inboxFailed, "lease_owner": "", "lease_until": nil,
+		"last_error": "reconcile: processing row has no lease owner", "updated_at": now,
+	})
+	if result.Error != nil {
+		return 0, fmt.Errorf("abandon inbox rows without a lease: %w", result.Error)
 	}
 	return result.RowsAffected, nil
 }

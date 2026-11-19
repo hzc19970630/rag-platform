@@ -110,6 +110,10 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 		return fmt.Errorf("invalid ingestion task envelope")
 	}
 	claimed, err := w.claimInbox(ctx, task)
+	if errors.Is(err, inboxlease.ErrStaleDelivery) {
+		slog.Info("stale_delivery_acked", "idempotency_key", task.IdempotencyKey)
+		return nil
+	}
 	if err != nil || !claimed {
 		return err
 	}

@@ -55,6 +55,25 @@ func wikiTaskFor(t *testing.T, db *gorm.DB, runID, stage string) Task {
 	}
 }
 
+func TestWikiProcessAcknowledgesStaleDelivery(t *testing.T) {
+	service, db := newTriggerFixture(t)
+	key := "run-gone:" + StageCollect
+	task := Task{
+		SchemaVersion: SchemaWikiTask, TenantID: "t1", KnowledgeBaseID: "kb1",
+		ProjectionRunID: "run-gone", ProjectionType: ProjectionTypeWiki, Stage: StageCollect, IdempotencyKey: key,
+	}
+	if err := service.Process(context.Background(), task); err != nil {
+		t.Fatalf("stale delivery must be acknowledged, got %v", err)
+	}
+	var rows int64
+	if err := db.Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Count(&rows).Error; err != nil {
+		t.Fatalf("count inbox: %v", err)
+	}
+	if rows != 0 {
+		t.Fatal("stale delivery must not create an inbox row")
+	}
+}
+
 func TestWikiWorkerRunsEveryStage(t *testing.T) {
 	service, db := newTriggerFixture(t)
 	ctx := context.Background()

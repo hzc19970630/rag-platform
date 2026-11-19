@@ -122,6 +122,7 @@ func ReconcileReport(view ingestion.ReconcileReport) httpapi.ReconcileReport {
 		StagesRequeued:      view.StagesRequeued,
 		PipelinesCancelled:  view.PipelinesCancelled,
 		InboxesExpired:      view.InboxesExpired,
+		InboxesAbandoned:    view.InboxesAbandoned,
 		DeadLettersResolved: view.DeadLettersResolved,
 	}
 }

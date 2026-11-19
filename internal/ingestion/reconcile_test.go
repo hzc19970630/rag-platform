@@ -176,6 +176,45 @@ func TestReconcileTenantExpiresOnlyItsInboxLeases(t *testing.T) {
 	}
 }
 
+// A PROCESSING row whose lease was cleared without a terminal status is
+// abandoned: lease expiry never sees it because lease_until is NULL.
+func TestReconcileAbandonsLeaseLessProcessingInbox(t *testing.T) {
+	db := newTestDB(t)
+	old := time.Now().Add(-time.Hour)
+	now := time.Now()
+	for _, row := range []models.TaskInbox{
+		{IdempotencyKey: "orphan:parse", TaskType: "document.ingestion.v1", Status: inboxProcessing, CreatedAt: old, UpdatedAt: old},
+		{IdempotencyKey: "fresh:parse", TaskType: "document.ingestion.v1", Status: inboxProcessing, CreatedAt: now, UpdatedAt: now},
+	} {
+		if err := db.Create(&row).Error; err != nil {
+			t.Fatalf("seed inbox %s: %v", row.IdempotencyKey, err)
+		}
+	}
+
+	report, err := (&Service{db: db}).Reconcile(context.Background(), time.Minute)
+	if err != nil {
+		t.Fatalf("reconcile: %v", err)
+	}
+	if report.InboxesAbandoned != 1 {
+		t.Fatalf("expected one abandoned inbox, got %+v", report)
+	}
+
+	var orphan models.TaskInbox
+	if err := db.First(&orphan, "idempotency_key = ?", "orphan:parse").Error; err != nil {
+		t.Fatalf("load orphan: %v", err)
+	}
+	if orphan.Status != inboxFailed || orphan.LastError != "reconcile: processing row has no lease owner" {
+		t.Fatalf("orphan was not abandoned: status=%q error=%q", orphan.Status, orphan.LastError)
+	}
+	var fresh models.TaskInbox
+	if err := db.First(&fresh, "idempotency_key = ?", "fresh:parse").Error; err != nil {
+		t.Fatalf("load fresh: %v", err)
+	}
+	if fresh.Status != inboxProcessing {
+		t.Fatalf("a row inside the grace window must be untouched, got %q", fresh.Status)
+	}
+}
+
 // A worker heartbeat keeps lease_until in the future even though updated_at is
 // old. Reconcile must trust the lease, not the row age, or it kills live work.
 func TestReconcileKeepsInboxWithLiveLease(t *testing.T) {

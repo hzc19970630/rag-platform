@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
@@ -54,6 +56,10 @@ func (s *Service) processWiki(ctx context.Context, task Task) error {
 		return apperror.Terminalf("invalid_projection_task_envelope", "invalid wiki projection task envelope")
 	}
 	claimed, err := s.claimInbox(ctx, task)
+	if errors.Is(err, inboxlease.ErrStaleDelivery) {
+		slog.Info("stale_delivery_acked", "idempotency_key", task.IdempotencyKey)
+		return nil
+	}
 	if err != nil || !claimed {
 		return err
 	}

@@ -7,12 +7,49 @@ import (
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"gorm.io/gorm"
 )
 
 func leaseTask(key string) Task {
 	return Task{
 		Envelope: Envelope{StageRunID: "1", IdempotencyKey: key},
 		TaskType: TypeTask, Stage: StageParse,
+	}
+}
+
+// seedLeaseRun gives the inbox key an owning run: Claim refuses to create a
+// row for a delivery whose parent was already purged.
+func seedLeaseRun(t *testing.T, db *gorm.DB, runID string) {
+	t.Helper()
+	now := time.Now()
+	if err := db.Create(&models.PipelineRun{
+		ID: runID, PipelineType: PipelineTypeEvidence, TenantID: "tenant-a", KnowledgeBaseID: "kb-a",
+		DocumentID: "doc-a", DocumentVersionID: "ver-a", RequestID: "req-1", TraceID: "trace-1",
+		IdempotencyKey: runID, Status: "QUEUED", CreatedAt: now, UpdatedAt: now,
+	}).Error; err != nil {
+		t.Fatalf("seed pipeline run: %v", err)
+	}
+}
+
+func TestProcessAcknowledgesStaleDelivery(t *testing.T) {
+	db := newTestDB(t)
+	task := Task{
+		Envelope: Envelope{
+			SchemaVersion: SchemaTask, TenantID: "tenant-a", KnowledgeBaseID: "kb-a",
+			DocumentID: "doc-a", DocumentVersionID: "ver-a", PipelineRunID: "run-gone",
+			StageRunID: "1", IdempotencyKey: "run-gone:parse",
+		},
+		TaskType: TypeTask, Stage: StageParse,
+	}
+	if err := (&PipelineWorker{db: db}).Process(context.Background(), task); err != nil {
+		t.Fatalf("stale delivery must be acknowledged, got %v", err)
+	}
+	var rows int64
+	if err := db.Model(&models.TaskInbox{}).Where("idempotency_key = ?", task.IdempotencyKey).Count(&rows).Error; err != nil {
+		t.Fatalf("count inbox: %v", err)
+	}
+	if rows != 0 {
+		t.Fatal("stale delivery must not create an inbox row")
 	}
 }
 
@@ -27,6 +64,7 @@ func loadInbox(t *testing.T, worker *PipelineWorker, key string) models.TaskInbo
 
 func TestClaimInboxRejectsLiveLease(t *testing.T) {
 	db := newTestDB(t)
+	seedLeaseRun(t, db, "run")
 	task := leaseTask("run:parse")
 	first := &PipelineWorker{db: db}
 	claimed, err := first.claimInbox(context.Background(), task)
@@ -54,6 +92,7 @@ func TestClaimInboxRejectsLiveLease(t *testing.T) {
 
 func TestClaimInboxTakesOverExpiredLease(t *testing.T) {
 	db := newTestDB(t)
+	seedLeaseRun(t, db, "run")
 	task := leaseTask("run:parse")
 	first := &PipelineWorker{db: db}
 	if claimed, err := first.claimInbox(context.Background(), task); err != nil || !claimed {
@@ -140,6 +179,7 @@ func TestClaimInboxClaimsReopenedRow(t *testing.T) {
 // owner; otherwise the stage work runs twice.
 func TestClaimInboxElectsSingleOwner(t *testing.T) {
 	db := newTestDB(t)
+	seedLeaseRun(t, db, "run")
 	task := leaseTask("run:parse")
 	workers := 8
 	var wait sync.WaitGroup

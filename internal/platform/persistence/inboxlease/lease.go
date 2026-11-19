@@ -74,17 +74,27 @@ func (l Lease) HeartbeatInterval() time.Duration {
 	return interval
 }
 
+// ErrStaleDelivery reports a delivery whose owning run no longer exists. The
+// row is deliberately not created: after a purge, accepting the delivery would
+// resurrect an inbox row with no tenant, and neither lease expiry nor the
+// tenant-scoped reconcile pass would ever sweep it.
+var ErrStaleDelivery = errors.New("stale delivery: owning run no longer exists")
+
 // Claim takes the inbox row for lease.Owner. It succeeds only when the row is
 // idle (never started, failed, reopened) or when its previous lease expired.
 // SUCCEEDED rows are never reclaimed, and a live PROCESSING lease is left
-// untouched. A missing row is created already leased.
+// untouched. A missing row is created already leased unless its owning run is
+// gone; that case returns ErrStaleDelivery so the handler can acknowledge it.
 func Claim(ctx context.Context, db *gorm.DB, key, taskType string, stageRunID uint64, lease Lease) (bool, error) {
 	if lease.Owner == "" {
 		return false, errors.New("inbox lease owner is required")
 	}
 	now := time.Now()
 	until := now.Add(lease.ttl())
-	tenantID := resolveTenant(ctx, db, key)
+	tenantID, checked, err := resolveTenant(ctx, db, key)
+	if err != nil {
+		return false, err
+	}
 	claimed, err := take(ctx, db, key, tenantID, lease, now, until)
 	if err != nil || claimed {
 		return claimed, err
@@ -96,6 +106,12 @@ func Claim(ctx context.Context, db *gorm.DB, key, taskType string, stageRunID ui
 	}
 	if count > 0 {
 		return false, nil
+	}
+	// No parent table means a lightweight caller (tooling, SQLite tests); keep
+	// the historical NULL-tenant row there. With a real schema, a missing run
+	// means the delivery outlived its pipeline/projection run.
+	if checked && tenantID == nil {
+		return false, ErrStaleDelivery
 	}
 
 	row := models.TaskInbox{
@@ -132,13 +148,13 @@ func inboxDB(db *gorm.DB) *gorm.DB {
 
 // resolveTenant maps an idempotency key back to the tenant of its owning run.
 // Claim runs outside any request scope, so the value is copied onto the inbox
-// row instead of being read from app.tenant_id. An unresolvable key is left
-// NULL rather than failing the claim: attribution is an audit concern and RLS
-// enforcement reports these rows separately.
-func resolveTenant(ctx context.Context, db *gorm.DB, key string) *string {
+// row instead of being read from app.tenant_id. checked reports whether the
+// lookup actually consulted a parent table; a nil tenant with checked=true
+// means the owning run is gone.
+func resolveTenant(ctx context.Context, db *gorm.DB, key string) (tenantID *string, checked bool, err error) {
 	runID, _, ok := strings.Cut(key, ":")
 	if !ok || runID == "" {
-		return nil
+		return nil, false, nil
 	}
 	// pipeline_runs and projection_runs are tenant tables, but resolution is
 	// the deliberate cross-tenant lookup that precedes knowing the tenant.
@@ -147,17 +163,17 @@ func resolveTenant(ctx context.Context, db *gorm.DB, key string) *string {
 		if !owner.Migrator().HasTable(table) {
 			continue
 		}
+		checked = true
 		var row struct{ TenantID string }
 		if err := owner.WithContext(ctx).Table(table).Select("tenant_id").Where("id = ?", runID).Limit(1).Scan(&row).Error; err != nil {
-			slog.Warn("inbox_tenant_resolve_failed", "idempotency_key", key, "table", table, "error", err)
-			return nil
+			return nil, true, fmt.Errorf("resolve inbox tenant from %s: %w", table, err)
 		}
 		if row.TenantID != "" {
 			tenantID := row.TenantID
-			return &tenantID
+			return &tenantID, true, nil
 		}
 	}
-	return nil
+	return nil, checked, nil
 }
 
 func take(ctx context.Context, db *gorm.DB, key string, tenantID *string, lease Lease, now, until time.Time) (bool, error) {

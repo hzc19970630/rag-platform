@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/knowledgeprojection/relation"
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/relationstore"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
@@ -46,6 +48,10 @@ func (s *Service) processRelation(ctx context.Context, task Task) error {
 		return apperror.Terminalf("relation_extractor_missing", "relation projection is not configured")
 	}
 	claimed, err := s.claimInbox(ctx, task)
+	if errors.Is(err, inboxlease.ErrStaleDelivery) {
+		slog.Info("stale_delivery_acked", "idempotency_key", task.IdempotencyKey)
+		return nil
+	}
 	if err != nil || !claimed {
 		return err
 	}

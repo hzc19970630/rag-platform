@@ -2245,6 +2245,9 @@ components:
         documentsRepaired:
           format: int64
           type: integer
+        inboxesAbandoned:
+          format: int64
+          type: integer
         inboxesExpired:
           format: int64
           type: integer

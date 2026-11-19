@@ -1402,6 +1402,7 @@ type ReconcileReport struct {
 	StagesRequeued      int   `json:"stagesRequeued"`
 	PipelinesCancelled  int   `json:"pipelinesCancelled"`
 	InboxesExpired      int64 `json:"inboxesExpired"`
+	InboxesAbandoned    int64 `json:"inboxesAbandoned"`
 	DeadLettersResolved int64 `json:"deadLettersResolved"`
 }
 
