@@ -43,7 +43,7 @@ var chunkStatuses = []string{status.Embedded, status.EvidenceReady}
 // Authorizer is the slice of authorization the migration needs: knowledge-base
 // read for status and write for every state change.
 type Authorizer interface {
-	AuthorizeKnowledgeBase(ctx context.Context, principal authz.Principal, knowledgeBaseID, action string) (bool, error)
+	AuthorizeResource(ctx context.Context, principal authz.Principal, target authz.ResourceTarget, action string) (bool, error)
 }
 
 // ModelCatalog resolves the target model to the vector space it serves.
@@ -501,7 +501,7 @@ func (s *Service) load(ctx context.Context, id string) (models.EmbeddingMigratio
 }
 
 func (s *Service) authorizeWrite(ctx context.Context, principal authz.Principal, knowledgeBaseID string) error {
-	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, knowledgeBaseID, "write")
+	allowed, err := s.authz.AuthorizeResource(ctx, principal, authz.ResourceTarget{KnowledgeBaseID: knowledgeBaseID}, "write")
 	if err != nil {
 		return err
 	}
@@ -512,7 +512,7 @@ func (s *Service) authorizeWrite(ctx context.Context, principal authz.Principal,
 }
 
 func (s *Service) authorizeRead(ctx context.Context, principal authz.Principal, knowledgeBaseID string) error {
-	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, knowledgeBaseID, "read")
+	allowed, err := s.authz.AuthorizeResource(ctx, principal, authz.ResourceTarget{KnowledgeBaseID: knowledgeBaseID}, "read")
 	if err != nil {
 		return err
 	}

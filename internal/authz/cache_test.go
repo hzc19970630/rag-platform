@@ -49,7 +49,7 @@ func seedAuthz(t *testing.T, db *gorm.DB) {
 	}
 }
 
-func TestAuthorizeKnowledgeBaseHelpersMatchAuthorize(t *testing.T) {
+func TestAuthorizeResourceHelpersMatchAuthorize(t *testing.T) {
 	db := openAuthzDB(t)
 	seedAuthz(t, db)
 	service, err := NewService(NewPostgresStores(db))
@@ -60,10 +60,10 @@ func TestAuthorizeKnowledgeBaseHelpersMatchAuthorize(t *testing.T) {
 	owner := Principal{SubjectID: "owner-a", TenantID: "tenant-a"}
 
 	for _, action := range []string{"read", "write", "delete"} {
-		got, gotErr := service.AuthorizeKnowledgeBase(ctx, owner, "kb-a", action)
+		got, gotErr := service.AuthorizeResource(ctx, owner, ResourceTarget{KnowledgeBaseID: "kb-a"}, action)
 		want, wantErr := service.Authorize(ctx, owner, action, "/knowledge-bases/kb-a")
 		if got != want || (gotErr == nil) != (wantErr == nil) {
-			t.Fatalf("AuthorizeKnowledgeBase(%s) = %v,%v; Authorize = %v,%v", action, got, gotErr, want, wantErr)
+			t.Fatalf("AuthorizeResource(%s) = %v,%v; Authorize = %v,%v", action, got, gotErr, want, wantErr)
 		}
 	}
 	got, err := service.AuthorizeKnowledgeBases(ctx, owner, "write")

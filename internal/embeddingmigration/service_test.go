@@ -16,7 +16,7 @@ import (
 
 type allowAuthz struct{ allowed bool }
 
-func (a allowAuthz) AuthorizeKnowledgeBase(context.Context, authz.Principal, string, string) (bool, error) {
+func (a allowAuthz) AuthorizeResource(context.Context, authz.Principal, authz.ResourceTarget, string) (bool, error) {
 	return a.allowed, nil
 }
 

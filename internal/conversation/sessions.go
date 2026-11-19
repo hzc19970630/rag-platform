@@ -82,7 +82,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}
-	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, knowledgeBaseID, "read")
+	allowed, err := s.authz.AuthorizeResource(ctx, principal, authz.ResourceTarget{KnowledgeBaseID: knowledgeBaseID}, "read")
 	if err != nil {
 		return authz.AuthorizationScope{}, err
 	}

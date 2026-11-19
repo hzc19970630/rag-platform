@@ -39,7 +39,7 @@ type httpProjectionAuthorizer struct{}
 func (httpProjectionAuthorizer) Authorize(context.Context, authz.Principal, string, string) (bool, error) {
 	return true, nil
 }
-func (httpProjectionAuthorizer) AuthorizeKnowledgeBase(context.Context, authz.Principal, string, string) (bool, error) {
+func (httpProjectionAuthorizer) AuthorizeResource(context.Context, authz.Principal, authz.ResourceTarget, string) (bool, error) {
 	return true, nil
 }
 func (httpProjectionAuthorizer) BuildScope(_ context.Context, principal authz.Principal, target authz.QueryTarget) (authz.AuthorizationScope, error) {

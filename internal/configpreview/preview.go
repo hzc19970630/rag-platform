@@ -100,7 +100,7 @@ type Preview struct {
 // Authorizer gates the two scopes.
 type Authorizer interface {
 	RequireTenantOperator(ctx context.Context, principal authz.Principal) error
-	AuthorizeKnowledgeBase(ctx context.Context, principal authz.Principal, knowledgeBaseID, action string) (bool, error)
+	AuthorizeResource(ctx context.Context, principal authz.Principal, target authz.ResourceTarget, action string) (bool, error)
 }
 
 type Options struct {
@@ -225,7 +225,7 @@ func (s *Service) previewKnowledgeBase(ctx context.Context, principal authz.Prin
 	if strings.TrimSpace(input.KnowledgeBaseID) == "" {
 		return Preview{}, apperror.Invalidf("knowledgeBaseId is required")
 	}
-	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, input.KnowledgeBaseID, "write")
+	allowed, err := s.authz.AuthorizeResource(ctx, principal, authz.ResourceTarget{KnowledgeBaseID: input.KnowledgeBaseID}, "write")
 	if err != nil {
 		return Preview{}, err
 	}

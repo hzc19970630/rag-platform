@@ -476,7 +476,7 @@ func (s *Service) authorizedKnowledgeBase(ctx context.Context, principal authz.P
 	if _, err := s.authz.BuildScope(ctx, principal, authz.QueryTarget{KnowledgeBaseID: id}); err != nil {
 		return models.KnowledgeBase{}, err
 	}
-	allowed, err := s.authz.AuthorizeKnowledgeBase(ctx, principal, id, action)
+	allowed, err := s.authz.AuthorizeResource(ctx, principal, authz.ResourceTarget{KnowledgeBaseID: id}, action)
 	if err != nil {
 		return models.KnowledgeBase{}, err
 	}

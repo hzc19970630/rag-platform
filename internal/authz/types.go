@@ -31,6 +31,13 @@ type QueryTarget struct {
 	KnowledgeBaseID string
 }
 
+// ResourceTarget names the object a resource action applies to. Today only the
+// knowledge base is filled in; B6-c adds FolderID (and any future document
+// scope) without changing AuthorizeResource call sites.
+type ResourceTarget struct {
+	KnowledgeBaseID string
+}
+
 type AuthorizationScope struct {
 	SubjectID        string   `json:"subjectId"`
 	TenantID         string   `json:"tenantId"`

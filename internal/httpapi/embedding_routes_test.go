@@ -25,7 +25,7 @@ import (
 
 type embHTTPAuthorizer struct{}
 
-func (embHTTPAuthorizer) AuthorizeKnowledgeBase(context.Context, authz.Principal, string, string) (bool, error) {
+func (embHTTPAuthorizer) AuthorizeResource(context.Context, authz.Principal, authz.ResourceTarget, string) (bool, error) {
 	return true, nil
 }
 

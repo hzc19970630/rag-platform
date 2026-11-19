@@ -75,11 +75,12 @@ func (s *Service) Authorize(ctx context.Context, principal Principal, action, ob
 	return allowed, err
 }
 
-// AuthorizeKnowledgeBase is the single entry point for resource-level checks
-// on a knowledge base. Callers pass the id and action, so the object path is
-// built in one place instead of being duplicated across services.
-func (s *Service) AuthorizeKnowledgeBase(ctx context.Context, principal Principal, knowledgeBaseID, action string) (bool, error) {
-	return s.Authorize(ctx, principal, action, "/knowledge-bases/"+knowledgeBaseID)
+// AuthorizeResource is the single entry point for resource-level checks. It
+// resolves the target to one policy object path, so the mapping lives here
+// instead of being duplicated across services. Today it is equivalent to the
+// knowledge-base check; B6-c grows ResourceTarget, not every call site.
+func (s *Service) AuthorizeResource(ctx context.Context, principal Principal, target ResourceTarget, action string) (bool, error) {
+	return s.Authorize(ctx, principal, action, resourcePath(target.KnowledgeBaseID))
 }
 
 // AuthorizeKnowledgeBases checks the collection-level action used when

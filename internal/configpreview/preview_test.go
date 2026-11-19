@@ -26,7 +26,7 @@ func (f fakeAuthz) RequireTenantOperator(context.Context, authz.Principal) error
 	return nil
 }
 
-func (f fakeAuthz) AuthorizeKnowledgeBase(context.Context, authz.Principal, string, string) (bool, error) {
+func (f fakeAuthz) AuthorizeResource(context.Context, authz.Principal, authz.ResourceTarget, string) (bool, error) {
 	return f.allow, nil
 }
 
