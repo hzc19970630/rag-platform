@@ -51,19 +51,21 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
 
   async function rebuild(kind: RunKind) {
     if (!canWrite || busy) return;
-    const confirmed = await new Promise<boolean>((resolve) => {
-      modal.confirm({
-        title: kind === "wiki" ? t("projection.rebuildWiki") : t("projection.rebuildGraph"),
-        content: t("projection.rebuildConfirm"),
-        okText: t("common.confirm"),
-        cancelText: t("common.cancel"),
-        onOk: () => resolve(true),
-        onCancel: () => resolve(false),
-      });
-    });
-    if (!confirmed) return;
+    // Reserve the action before the confirm dialog so a second click cannot open
+    // a second modal (or a second request) while this one is pending.
     setBusy(kind);
     try {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        modal.confirm({
+          title: kind === "wiki" ? t("projection.rebuildWiki") : t("projection.rebuildGraph"),
+          content: t("projection.rebuildConfirm"),
+          okText: t("common.confirm"),
+          cancelText: t("common.cancel"),
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+      if (!confirmed) return;
       const result = await api<{ started: number }>(`/knowledge-bases/${knowledgeBaseId}/${kind}/rebuild`, { method: "POST" });
       if (result.started > 0) {
         message.success(t("projection.rebuildStarted"));
@@ -94,20 +96,20 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
 
   async function cancel(kind: RunKind, run: ProjectionRun) {
     if (!canWrite || busy) return;
-    const confirmed = await new Promise<boolean>((resolve) => {
-      modal.confirm({
-        title: t("projection.cancel"),
-        content: t("projection.cancelConfirm"),
-        okText: t("common.confirm"),
-        cancelText: t("common.cancel"),
-        okButtonProps: { danger: true },
-        onOk: () => resolve(true),
-        onCancel: () => resolve(false),
-      });
-    });
-    if (!confirmed) return;
     setBusy(run.id);
     try {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        modal.confirm({
+          title: t("projection.cancel"),
+          content: t("projection.cancelConfirm"),
+          okText: t("common.confirm"),
+          cancelText: t("common.cancel"),
+          okButtonProps: { danger: true },
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+      if (!confirmed) return;
       await api(`/${kind}/runs/${run.id}/cancel`, { method: "POST" });
       message.success(t("projection.cancelStarted"));
       await queryClient.invalidateQueries({ queryKey: queryKeys.projection(knowledgeBaseId) });
@@ -190,7 +192,7 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
           <Tag color={data.wikiEnabled ? "green" : "default"}>wiki {data.wikiEnabled ? t("common.enabled") : t("common.disabled")}</Tag>
           <Tag color={data.graphEnabled ? "green" : "default"}>graph {data.graphEnabled ? t("common.enabled") : t("common.disabled")}</Tag>
         </Space>
-        <Button size="small" onClick={() => void status.refetch()}>{t("common.refresh")}</Button>
+        <Button size="small" loading={status.isFetching} onClick={() => void status.refetch()}>{t("common.refresh")}</Button>
       </Flex>
 
       <Row gutter={[12, 12]}>

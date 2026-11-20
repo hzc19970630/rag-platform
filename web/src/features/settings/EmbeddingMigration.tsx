@@ -87,10 +87,24 @@ export function EmbeddingMigration({ knowledgeBaseId, configuration, catalog, ca
     return () => window.clearInterval(timer);
   }, [migration, load]);
 
-  async function run(action: () => Promise<Migration>) {
+  async function run(action: () => Promise<Migration>, confirm?: { title: string; content: string }) {
+    if (busy) return;
+    // Reserve the action before the confirm dialog so a second click cannot open
+    // a second modal (or a second request) while this one is pending.
     setBusy(true);
     setError("");
     try {
+      if (confirm) {
+        const confirmed = await new Promise<boolean>((resolve) => {
+          modal.confirm({
+            title: confirm.title,
+            content: confirm.content,
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+        if (!confirmed) return;
+      }
       const next = await action();
       setMigration(next);
       if (!activeStatuses.includes(next.status)) onSaved();
@@ -180,37 +194,52 @@ export function EmbeddingMigration({ knowledgeBaseId, configuration, catalog, ca
                 ) : null}
                 <Space wrap>
                   {activeStatuses.includes(migration.status) ? (
-                    <Button danger disabled={!canWrite || busy} onClick={() => modal.confirm({
-                      title: t("models.migrationCancel"),
-                      content: t("models.migrationConfirmCancel"),
-                      onOk: () => run(() => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/cancel`, jsonInit({}))),
-                    })}>
+                    <Button
+                      danger
+                      loading={busy}
+                      disabled={!canWrite || busy}
+                      onClick={() => void run(
+                        () => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/cancel`, jsonInit({})),
+                        { title: t("models.migrationCancel"), content: t("models.migrationConfirmCancel") },
+                      )}
+                    >
                       {t("models.migrationCancel")}
                     </Button>
                   ) : null}
                   {migration.status === "ready" ? (
-                    <Button type="primary" disabled={!canWrite || busy} onClick={() => modal.confirm({
-                      title: t("models.migrationCutover"),
-                      content: t("models.migrationConfirmCutover"),
-                      onOk: () => run(() => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/cutover`, jsonInit({}))),
-                    })}>
+                    <Button
+                      type="primary"
+                      loading={busy}
+                      disabled={!canWrite || busy}
+                      onClick={() => void run(
+                        () => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/cutover`, jsonInit({})),
+                        { title: t("models.migrationCutover"), content: t("models.migrationConfirmCutover") },
+                      )}
+                    >
                       {t("models.migrationCutover")}
                     </Button>
                   ) : null}
                   {migration.status === "cutover" ? (
                     <>
-                      <Button disabled={!canWrite || busy} onClick={() => modal.confirm({
-                        title: t("models.migrationRollback"),
-                        content: t("models.migrationConfirmRollback"),
-                        onOk: () => run(() => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/rollback`, jsonInit({}))),
-                      })}>
+                      <Button
+                        loading={busy}
+                        disabled={!canWrite || busy}
+                        onClick={() => void run(
+                          () => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/rollback`, jsonInit({})),
+                          { title: t("models.migrationRollback"), content: t("models.migrationConfirmRollback") },
+                        )}
+                      >
                         {t("models.migrationRollback")}
                       </Button>
-                      <Button danger disabled={!canWrite || busy} onClick={() => modal.confirm({
-                        title: t("models.migrationFinalize"),
-                        content: t("models.migrationConfirmFinalize"),
-                        onOk: () => run(() => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/finalize`, jsonInit({}))),
-                      })}>
+                      <Button
+                        danger
+                        loading={busy}
+                        disabled={!canWrite || busy}
+                        onClick={() => void run(
+                          () => api(`/knowledge-bases/${knowledgeBaseId}/embedding-migration/${migration.id}/finalize`, jsonInit({})),
+                          { title: t("models.migrationFinalize"), content: t("models.migrationConfirmFinalize") },
+                        )}
+                      >
                         {t("models.migrationFinalize")}
                       </Button>
                     </>

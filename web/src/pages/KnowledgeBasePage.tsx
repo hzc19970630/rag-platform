@@ -360,6 +360,7 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
   const [folderParent, setFolderParent] = useState("");
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [tagName, setTagName] = useState("");
+  const [tagBusy, setTagBusy] = useState("");
   const [editingTag, setEditingTag] = useState<{ id: string; name: string }>();
   const [tagDialog, setTagDialog] = useState<"tag" | "untag">();
   const [tagSelection, setTagSelection] = useState<string[]>([]);
@@ -524,7 +525,8 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
   }
 
   async function createTag() {
-    if (!tagName.trim()) return;
+    if (!tagName.trim() || tagBusy) return;
+    setTagBusy("create");
     try {
       await api(`/knowledge-bases/${knowledgeBaseId}/tags`, jsonInit({ name: tagName }));
       setTagName("");
@@ -532,11 +534,14 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
       await refresh();
     } catch (cause) {
       message.error(cause instanceof Error ? cause.message : t("tag.saveFailed"));
+    } finally {
+      setTagBusy("");
     }
   }
 
   async function renameTag() {
-    if (!editingTag) return;
+    if (!editingTag || tagBusy) return;
+    setTagBusy("rename");
     try {
       await api(`/tags/${editingTag.id}`, jsonInit({ name: editingTag.name }, "PATCH"));
       setEditingTag(undefined);
@@ -544,6 +549,8 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
       await refresh();
     } catch (cause) {
       message.error(cause instanceof Error ? cause.message : t("tag.saveFailed"));
+    } finally {
+      setTagBusy("");
     }
   }
 
@@ -828,7 +835,7 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
       <Modal open={tagManagerOpen} title={t("tag.manage")} onCancel={() => setTagManagerOpen(false)} footer={null}>
         <Space.Compact style={{ width: "100%" }}>
           <Input value={tagName} onChange={(event) => setTagName(event.target.value)} placeholder={t("tag.name")} onPressEnter={() => void createTag()} />
-          <Button type="primary" onClick={() => void createTag()}>{t("tag.create")}</Button>
+          <Button type="primary" loading={tagBusy === "create"} disabled={tagBusy !== ""} onClick={() => void createTag()}>{t("tag.create")}</Button>
         </Space.Compact>
         <div className="tag-manager-list">
           {tags.length === 0 && <Typography.Text type="secondary">{t("tag.empty")}</Typography.Text>}
@@ -837,7 +844,7 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
               {editingTag?.id === tag.id ? (
                 <Space.Compact style={{ flex: 1 }}>
                   <Input value={editingTag.name} onChange={(event) => setEditingTag({ id: tag.id, name: event.target.value })} />
-                  <Button onClick={() => void renameTag()}>{t("common.save")}</Button>
+                  <Button loading={tagBusy === "rename"} disabled={tagBusy !== ""} onClick={() => void renameTag()}>{t("common.save")}</Button>
                 </Space.Compact>
               ) : <Tag color="blue">{tag.name}</Tag>}
               <Space size={4}>

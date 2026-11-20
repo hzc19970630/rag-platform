@@ -1,5 +1,6 @@
 import { Alert, App, Button, Card, Empty, Flex, List, Space, Tag, Typography } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../api/client";
 import { queryKeys, useConnectorRuns, useConnectors } from "../../api/hooks";
@@ -19,12 +20,15 @@ export function DataSourceSettings({ knowledgeBaseId, canOperate }: Props) {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const connectors = useConnectors(knowledgeBaseId);
+  const [syncing, setSyncing] = useState("");
 
   if (connectors.isLoading) return <LoadingBlock />;
   if (connectors.error) return <QueryFallback error={connectors.error} retry={() => void connectors.refetch()} />;
   const rows = connectors.data ?? [];
 
   async function sync(connector: Connector) {
+    if (syncing) return;
+    setSyncing(connector.id);
     try {
       await api(`/connectors/${connector.id}/sync`, { method: "POST" });
       message.success(t("dataSource.syncStarted"));
@@ -34,6 +38,8 @@ export function DataSourceSettings({ knowledgeBaseId, canOperate }: Props) {
       ]);
     } catch (cause) {
       message.error(cause instanceof Error ? cause.message : t("dataSource.syncFailed"));
+    } finally {
+      setSyncing("");
     }
   }
 
@@ -46,7 +52,7 @@ export function DataSourceSettings({ knowledgeBaseId, canOperate }: Props) {
             <Typography.Title level={4}>{t("dataSource.title")}</Typography.Title>
             <Typography.Text type="secondary">{t("dataSource.hint")}</Typography.Text>
           </div>
-          <Button size="small" onClick={() => void connectors.refetch()}>{t("common.refresh")}</Button>
+          <Button size="small" loading={connectors.isFetching} onClick={() => void connectors.refetch()}>{t("common.refresh")}</Button>
         </header>
         {rows.length === 0
           ? <Empty description={t("dataSource.empty")} />
@@ -57,6 +63,7 @@ export function DataSourceSettings({ knowledgeBaseId, canOperate }: Props) {
                   key={connector.id}
                   connector={connector}
                   canOperate={canOperate}
+                  syncing={syncing === connector.id}
                   onSync={() => void sync(connector)}
                 />
               ))}
@@ -67,7 +74,7 @@ export function DataSourceSettings({ knowledgeBaseId, canOperate }: Props) {
   );
 }
 
-function ConnectorCard({ connector, canOperate, onSync }: { connector: Connector; canOperate: boolean; onSync: () => void }) {
+function ConnectorCard({ connector, canOperate, syncing, onSync }: { connector: Connector; canOperate: boolean; syncing: boolean; onSync: () => void }) {
   const { t } = useTranslation();
   const runs = useConnectorRuns(connector.id);
   const connectorRuns = runs.data ?? [];
@@ -88,7 +95,7 @@ function ConnectorCard({ connector, canOperate, onSync }: { connector: Connector
           </div>
         </div>
         <Space>
-          {canOperate && <Button size="small" onClick={onSync} disabled={!connector.enabled}>{t("dataSource.sync")}</Button>}
+          {canOperate && <Button size="small" onClick={onSync} loading={syncing} disabled={!connector.enabled || syncing}>{t("dataSource.sync")}</Button>}
         </Space>
       </Flex>
       {runs.error && <Typography.Text type="danger">{runs.error instanceof Error ? runs.error.message : t("common.networkError")}</Typography.Text>}

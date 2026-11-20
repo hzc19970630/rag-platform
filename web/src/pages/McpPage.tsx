@@ -159,6 +159,7 @@ export function McpPage() {
   });
 
   async function createKey() {
+    if (creating) return;
     const expiresAt = mcpExpiry(expiryDays);
     setCreating(true);
     try {
