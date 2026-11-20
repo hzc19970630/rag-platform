@@ -6,19 +6,30 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
+	"github.com/hzc19970630/rag-platform/internal/contracts/ports"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 type S3Store struct {
-	client         *minio.Client
+	client *minio.Client
+	// core owns multipart calls; the high-level Client does not expose them.
+	core *minio.Core
+	// signer uses the browser-reachable endpoint. Nil means direct uploads are
+	// disabled and the API proxies parts instead.
+	signer         *minio.Client
 	bucket         string
 	maxObjectBytes int64
 }
 
-func NewS3(endpoint, accessKey, secretKey, region, bucket string, useTLS, forcePathStyle bool, maxObjectBytes int64) (*S3Store, error) {
+func NewS3(endpoint, publicEndpoint, accessKey, secretKey, region, bucket string, useTLS, forcePathStyle bool, maxObjectBytes int64) (*S3Store, error) {
 	options := &minio.Options{Creds: credentials.NewStaticV4(accessKey, secretKey, ""), Secure: useTLS, Region: region}
 	if forcePathStyle {
 		// S3-compatible endpoints such as MinIO cannot be addressed as
@@ -30,7 +41,28 @@ func NewS3(endpoint, accessKey, secretKey, region, bucket string, useTLS, forceP
 	if err != nil {
 		return nil, fmt.Errorf("create object storage client: %w", err)
 	}
-	return &S3Store{client: client, bucket: bucket, maxObjectBytes: maxObjectBytes}, nil
+	core, err := minio.NewCore(endpoint, options)
+	if err != nil {
+		return nil, fmt.Errorf("create object storage core client: %w", err)
+	}
+	var signer *minio.Client
+	if public := strings.TrimSpace(publicEndpoint); public != "" {
+		parsed, parseErr := url.Parse(public)
+		if parseErr != nil || parsed.Host == "" {
+			return nil, fmt.Errorf("S3_PUBLIC_ENDPOINT must be an absolute URL")
+		}
+		publicOptions := &minio.Options{
+			Creds:        options.Creds,
+			Secure:       parsed.Scheme == "https",
+			Region:       region,
+			BucketLookup: options.BucketLookup,
+		}
+		signer, err = minio.New(parsed.Host, publicOptions)
+		if err != nil {
+			return nil, fmt.Errorf("create public object storage client: %w", err)
+		}
+	}
+	return &S3Store{client: client, core: core, signer: signer, bucket: bucket, maxObjectBytes: maxObjectBytes}, nil
 }
 
 // Ready reports whether the configured bucket is reachable. A TCP check on the
@@ -69,6 +101,92 @@ func (s *S3Store) Put(ctx context.Context, key string, content []byte, contentTy
 		return fmt.Errorf("put object %s: %w", key, err)
 	}
 	return nil
+}
+
+// NewMultipart starts a resumable upload. The content type is fixed on the
+// upload so the completed object carries it without a second metadata write.
+func (s *S3Store) NewMultipart(ctx context.Context, key, contentType string) (string, error) {
+	uploadID, err := s.core.NewMultipartUpload(ctx, s.bucket, key, minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		return "", fmt.Errorf("start multipart upload %s: %w", key, err)
+	}
+	return uploadID, nil
+}
+
+func (s *S3Store) PutPart(ctx context.Context, key, uploadID string, part int, body io.Reader, size int64) (ports.MultipartPart, error) {
+	stored, err := s.core.PutObjectPart(ctx, s.bucket, key, uploadID, part, body, size, minio.PutObjectPartOptions{})
+	if err != nil {
+		return ports.MultipartPart{}, fmt.Errorf("put part %d of %s: %w", part, key, err)
+	}
+	return ports.MultipartPart{Number: stored.PartNumber, Size: stored.Size, ETag: stored.ETag}, nil
+}
+
+func (s *S3Store) PresignPart(ctx context.Context, key, uploadID string, part int, ttl time.Duration) (string, error) {
+	if s.signer == nil {
+		return "", fmt.Errorf("direct uploads are not configured")
+	}
+	params := url.Values{"partNumber": {strconv.Itoa(part)}, "uploadId": {uploadID}}
+	signed, err := s.signer.PresignHeader(ctx, http.MethodPut, s.bucket, key, ttl, params, nil)
+	if err != nil {
+		return "", fmt.Errorf("presign part %d of %s: %w", part, key, err)
+	}
+	return signed.String(), nil
+}
+
+func (s *S3Store) ListParts(ctx context.Context, key, uploadID string) ([]ports.MultipartPart, error) {
+	var parts []ports.MultipartPart
+	marker := 0
+	for {
+		result, err := s.core.ListObjectParts(ctx, s.bucket, key, uploadID, marker, 1000)
+		if err != nil {
+			if missingMultipart(err) {
+				return nil, apperror.ErrNotFound
+			}
+			return nil, fmt.Errorf("list parts of %s: %w", key, err)
+		}
+		for _, part := range result.ObjectParts {
+			parts = append(parts, ports.MultipartPart{Number: part.PartNumber, Size: part.Size, ETag: part.ETag})
+		}
+		if !result.IsTruncated || result.NextPartNumberMarker <= marker {
+			return parts, nil
+		}
+		marker = result.NextPartNumberMarker
+	}
+}
+
+func (s *S3Store) CompleteMultipart(ctx context.Context, key, uploadID string, parts []ports.MultipartPart) (int64, error) {
+	completed := make([]minio.CompletePart, 0, len(parts))
+	for _, part := range parts {
+		completed = append(completed, minio.CompletePart{PartNumber: part.Number, ETag: part.ETag})
+	}
+	info, err := s.core.CompleteMultipartUpload(ctx, s.bucket, key, uploadID, completed, minio.PutObjectOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("complete multipart upload %s: %w", key, err)
+	}
+	return info.Size, nil
+}
+
+// AbortMultipart is idempotent: a missing upload is already in the state the
+// caller wants, which is what an expiry sweeper needs on a second pass.
+func (s *S3Store) AbortMultipart(ctx context.Context, key, uploadID string) error {
+	if strings.TrimSpace(uploadID) == "" {
+		return nil
+	}
+	if err := s.core.AbortMultipartUpload(ctx, s.bucket, key, uploadID); err != nil {
+		if missingMultipart(err) {
+			return nil
+		}
+		return fmt.Errorf("abort multipart upload %s: %w", key, err)
+	}
+	return nil
+}
+
+func missingMultipart(err error) bool {
+	switch minio.ToErrorResponse(err).Code {
+	case "NoSuchUpload", "NoSuchKey", "NotFound":
+		return true
+	}
+	return false
 }
 
 func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {

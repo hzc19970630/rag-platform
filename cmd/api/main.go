@@ -65,14 +65,15 @@ func main() {
 
 	// ReadHeaderTimeout blocks slowloris-style header trickling; ReadTimeout
 	// bounds body reads without touching response writes, so it is compatible
-	// with SSE; the five-minute window leaves room for a 100 MiB upload on a
-	// slow link. IdleTimeout reclaims keep-alive connections. WriteTimeout stays
-	// unset because SSE answers stream for the duration of generation.
+	// with SSE. Upload parts are the slowest caller, so the window is
+	// configurable (HTTP_READ_TIMEOUT_SECONDS) rather than tied to file size.
+	// IdleTimeout reclaims keep-alive connections. WriteTimeout stays unset
+	// because SSE answers stream for the duration of generation.
 	server := &http.Server{
 		Addr:              cfg.APIAddr,
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       5 * time.Minute,
+		ReadTimeout:       time.Duration(cfg.HTTPReadTimeoutSeconds) * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}

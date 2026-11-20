@@ -50,14 +50,26 @@ type Config struct {
 	RedisPassword                  string
 	DocreaderAddr                  string
 	S3Endpoint                     string
-	S3Region                       string
-	S3Bucket                       string
-	S3AccessKey                    string
-	S3SecretKey                    string
-	S3UseTLS                       bool
-	S3ForcePathStyle               bool
-	MaxFileBytes                   int64
-	TaskTimeoutSeconds             int
+	// S3PublicEndpoint is the browser-reachable storage host used only to sign
+	// upload part URLs. Empty means uploads flow through the API (proxy mode).
+	S3PublicEndpoint         string
+	S3Region                 string
+	S3Bucket                 string
+	S3AccessKey              string
+	S3SecretKey              string
+	S3UseTLS                 bool
+	S3ForcePathStyle         bool
+	MaxFileBytes             int64
+	UploadPartSizeBytes      int64
+	UploadPresignTTLSeconds  int
+	UploadSessionTTLSeconds  int
+	UploadMaxActivePerTenant int
+	UploadMaxActivePerKB     int
+	TaskTimeoutSeconds       int
+	// HTTPReadTimeoutSeconds bounds request body reads. Upload parts are the
+	// slowest caller; SSE responses are unaffected because the value only
+	// applies while reading a request.
+	HTTPReadTimeoutSeconds int
 	// RequestTimeoutSeconds bounds one API handler's context so a stalled dependency cannot pin a request and its tenant transaction; SSE answers, uploads and file transfers keep their own budgets.
 	RequestTimeoutSeconds int
 	ParserSandbox         bool
@@ -251,6 +263,7 @@ func LoadFrom(lookup Lookup) Config {
 		RedisPassword:                  value(lookup, "REDIS_PASSWORD", ""),
 		DocreaderAddr:                  value(lookup, "DOCREADER_GRPC_ADDR", "docreader:50051"),
 		S3Endpoint:                     value(lookup, "S3_ENDPOINT", "minio:9000"),
+		S3PublicEndpoint:               strings.TrimSpace(value(lookup, "S3_PUBLIC_ENDPOINT", "")),
 		S3Region:                       value(lookup, "S3_REGION", "us-east-1"),
 		S3Bucket:                       value(lookup, "S3_BUCKET", "rag-platform-local"),
 		S3AccessKey:                    value(lookup, "S3_ACCESS_KEY", value(lookup, "MINIO_ROOT_USER", "rag-local")),
@@ -258,6 +271,12 @@ func LoadFrom(lookup Lookup) Config {
 		S3UseTLS:                       reader.boolean("S3_USE_TLS", false),
 		S3ForcePathStyle:               reader.boolean("S3_FORCE_PATH_STYLE", false),
 		MaxFileBytes:                   reader.positive("DOCREADER_MAX_FILE_MB", 100) * 1024 * 1024,
+		UploadPartSizeBytes:            reader.positive("UPLOAD_PART_SIZE_MB", 16) * 1024 * 1024,
+		UploadPresignTTLSeconds:        int(reader.positive("UPLOAD_PRESIGN_TTL_SECONDS", 3600)),
+		UploadSessionTTLSeconds:        int(reader.positive("UPLOAD_SESSION_TTL_SECONDS", 86400)),
+		UploadMaxActivePerTenant:       int(reader.positive("UPLOAD_MAX_ACTIVE_PER_TENANT", 20)),
+		UploadMaxActivePerKB:           int(reader.positive("UPLOAD_MAX_ACTIVE_PER_KB", 10)),
+		HTTPReadTimeoutSeconds:         int(reader.positive("HTTP_READ_TIMEOUT_SECONDS", 900)),
 		TaskTimeoutSeconds:             int(reader.positive("DOCREADER_TASK_TIMEOUT_SECONDS", 120)),
 		RequestTimeoutSeconds:          int(reader.positive("HTTP_REQUEST_TIMEOUT_SECONDS", 60)),
 		ParserSandbox:                  reader.boolean("PARSER_SANDBOX_ENABLED", true),
@@ -350,6 +369,15 @@ func (c Config) Validate(component string) error {
 		parsed, err := url.Parse(endpoint)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("OTEL_EXPORTER_OTLP_ENDPOINT must be a valid URL")
+		}
+	}
+	if c.UploadPartSizeBytes < 5*1024*1024 {
+		return fmt.Errorf("UPLOAD_PART_SIZE_MB must be at least 5")
+	}
+	if endpoint := strings.TrimSpace(c.S3PublicEndpoint); endpoint != "" {
+		parsed, err := url.Parse(endpoint)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return fmt.Errorf("S3_PUBLIC_ENDPOINT must be an absolute http(s) URL")
 		}
 	}
 	if (component == "api" || component == "worker") && strings.TrimSpace(c.OTELServiceName) == "" {

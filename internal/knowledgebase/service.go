@@ -30,6 +30,17 @@ type Service struct {
 	tenantParams TenantParamsResolver
 	quality      QualityGate
 	presets      PresetCatalog
+	uploads      UploadAborter
+}
+
+// UploadAborter removes storage-side multipart uploads before the knowledge
+// base row (and its upload sessions) is deleted.
+type UploadAborter interface {
+	AbortKnowledgeBaseUploadsTx(ctx context.Context, tx *gorm.DB, tenantID, knowledgeBaseID string) error
+}
+
+func (s *Service) SetUploadAborter(aborter UploadAborter) {
+	s.uploads = aborter
 }
 
 // PresetCatalog resolves B23 preset packs.
@@ -503,6 +514,11 @@ func (s *Service) Delete(ctx context.Context, principal authz.Principal, id stri
 		}
 		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, id); err != nil {
 			return err
+		}
+		if s.uploads != nil {
+			if err := s.uploads.AbortKnowledgeBaseUploadsTx(ctx, tx, principal.TenantID, id); err != nil {
+				return fmt.Errorf("abort knowledge base uploads: %w", err)
+			}
 		}
 		result := tenantdb.MustScoped(tx, principal.TenantID).Where("id = ?", id).Delete(&models.KnowledgeBase{})
 		if result.Error != nil {

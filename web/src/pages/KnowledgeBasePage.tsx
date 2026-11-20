@@ -35,6 +35,8 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, downloadDocument, jsonInit, uploadDocument } from "../api/client";
+import { UploadQueueModal } from "../features/upload/UploadQueueModal";
+import { useUploadQueue } from "../features/upload/useUploadQueue";
 import { createConversation } from "../api/conversations";
 import {
   queryKeys,
@@ -366,7 +368,6 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
   const [tagSelection, setTagSelection] = useState<string[]>([]);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveTarget, setMoveTarget] = useState(FOLDER_ROOT);
-  const [uploading, setUploading] = useState(false);
   const [replacing, setReplacing] = useState("");
   const uploadRef = useRef<HTMLInputElement>(null);
   const replaceRef = useRef<HTMLInputElement>(null);
@@ -374,6 +375,14 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
   const folders = useFolders(knowledgeBaseId).data ?? EMPTY_FOLDERS;
   const tags = useTags(knowledgeBaseId).data ?? EMPTY_TAGS;
   const folderId = folderKey === FOLDER_ALL ? "" : folderKey === FOLDER_ROOT ? "root" : folderKey;
+  const uploadQueue = useUploadQueue({
+    knowledgeBaseId,
+    folderId: folderId && folderId !== "root" ? folderId : "",
+    onUploaded: async () => {
+      await refresh();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBase(knowledgeBaseId) });
+    },
+  });
   const documents = useDocuments(knowledgeBaseId, { folderId, tagIds: tagFilter });
   const items = documents.data?.pages.flatMap((page) => page.items) ?? [];
   const processing = items.some((item) => !terminalVersionStatuses.has(item.version.status));
@@ -574,20 +583,10 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
     });
   }
 
-  async function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+  function upload(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) return;
-    setUploading(true);
-    try {
-      await uploadDocument(knowledgeBaseId, file, undefined, folderId && folderId !== "root" ? folderId : undefined);
-      message.success(t("document.uploaded", { name: file.name }));
-      await refresh();
-    } catch (cause) {
-      message.error(cause instanceof Error ? cause.message : t("document.uploadFailed"));
-    } finally {
-      setUploading(false);
-    }
+    if (files.length > 0) uploadQueue.enqueue(files);
   }
 
   async function replace(event: ChangeEvent<HTMLInputElement>) {
@@ -727,10 +726,13 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
               <Button size="small" icon={<ReloadOutlined />} onClick={() => void refresh()}>{t("common.refresh")}</Button>
               {canWrite && (
                 <>
-                  <Button size="small" type="primary" icon={<UploadOutlined />} loading={uploading} onClick={() => uploadRef.current?.click()}>
+                  <Button size="small" type="primary" icon={<UploadOutlined />} onClick={() => uploadRef.current?.click()}>
                     {t("knowledgeBase.upload")}
                   </Button>
-                  <input ref={uploadRef} data-testid="document-upload-input" type="file" accept={accept} hidden onChange={(event) => void upload(event)} />
+                  {uploadQueue.jobs.length > 0 && (
+                    <Button size="small" onClick={() => uploadQueue.setOpen(true)}>{t("upload.title")}</Button>
+                  )}
+                  <input ref={uploadRef} data-testid="document-upload-input" type="file" accept={accept} multiple hidden onChange={(event) => void upload(event)} />
                   <input ref={replaceRef} data-testid="document-replace-input" type="file" accept={accept} hidden onChange={(event) => void replace(event)} />
                 </>
               )}
@@ -800,6 +802,8 @@ function DocumentsTab({ knowledgeBaseId, knowledgeBaseName, canWrite, canDelete 
           )}
         </div>
       </div>
+
+      <UploadQueueModal queue={uploadQueue} />
 
       <Modal
         open={Boolean(folderDialog)}

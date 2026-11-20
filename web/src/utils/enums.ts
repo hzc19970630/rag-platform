@@ -58,7 +58,7 @@ export const AUDIT_ACTION_VALUES = [
 export const AUDIT_RESOURCE_VALUES = [
   "api_key", "connector", "dead_letter", "document", "folder", "graph_run", "graph_snapshot",
   "indexing_strategy", "path", "retrieval_config", "session", "tag", "tenant", "tenant_config", "wiki_page",
-  "embedding_migration", "membership", "model_binding", "model_provider", "pipeline",
+  "embedding_migration", "membership", "model_binding", "model_provider", "pipeline", "upload_session",
 ] as const;
 
 export const EMBEDDING_MIGRATION_STATUS_VALUES = [

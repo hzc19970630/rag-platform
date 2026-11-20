@@ -267,6 +267,12 @@ func (m *maintenanceRunner) collectGauges(ctx context.Context) {
 	m.gauges.SetGauge("inbox_expired_leases", nil, float64(snapshot.InboxExpiredLeases))
 	m.gauges.SetGauge("projection_pending_runs", nil, float64(snapshot.ProjectionPendingRuns))
 	m.gauges.SetGauge("projection_lag_seconds", nil, snapshot.ProjectionOldestPendingSeconds)
+	if activeSessions, reservedBytes, err := m.application.Ingestion.UploadSessionStats(ctx); err != nil {
+		m.logger.Warn("metrics_upload_sessions_failed", "error", err)
+	} else {
+		m.gauges.SetGauge("upload_sessions_active", nil, float64(activeSessions))
+		m.gauges.SetGauge("upload_sessions_reserved_bytes", nil, float64(reservedBytes))
+	}
 }
 
 func (m *maintenanceRunner) tick(ctx context.Context) {
@@ -276,6 +282,14 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 		logger.Error("maintenance_purge_failed", "error", err)
 	} else if purged > 0 {
 		logger.Info("maintenance_purge_complete", "purged", purged)
+	}
+	if expiredSessions, err := application.Ingestion.ExpireUploadSessions(ctx, time.Now(), 50); err != nil {
+		logger.Error("upload_session_expiry_failed", "error", err)
+	} else if expiredSessions > 0 {
+		logger.Warn("upload_sessions_expired", "sessions", expiredSessions)
+		if m.gauges != nil {
+			m.gauges.SetGauge("upload_sessions_expired_last", nil, float64(expiredSessions))
+		}
 	}
 	if cfg.Limits.AuditRetentionDays > 0 && time.Since(m.lastAuditPurge) >= retentionPurgeInterval {
 		m.lastAuditPurge = time.Now()

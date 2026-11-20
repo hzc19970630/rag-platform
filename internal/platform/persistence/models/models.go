@@ -188,6 +188,41 @@ type Folder struct {
 
 func (Folder) TableName() string { return "folders" }
 
+// UploadSession is one resumable upload: bytes live in object storage while
+// this row tracks the multipart upload, quota reservation and completion
+// result. A batch upload is N rows; there is no batch parent row.
+type UploadSession struct {
+	ID                string     `gorm:"primaryKey;size:64" json:"id"`
+	TenantID          string     `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID   string     `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
+	DocumentID        string     `gorm:"size:64;not null" json:"documentId"`
+	VersionID         string     `gorm:"size:64;not null" json:"versionId"`
+	FolderID          string     `gorm:"size:64" json:"folderId,omitempty"`
+	Filename          string     `gorm:"size:512;not null" json:"filename"`
+	MimeType          string     `gorm:"size:128;not null" json:"mimeType"`
+	SizeBytes         int64      `gorm:"not null" json:"sizeBytes"`
+	PartSize          int64      `gorm:"not null" json:"partSize"`
+	PartCount         int        `gorm:"not null" json:"partCount"`
+	ObjectKey         string     `gorm:"size:1024;not null" json:"objectKey"`
+	MultipartUploadID string     `gorm:"size:512;not null;default:''" json:"multipartUploadId"`
+	Transport         string     `gorm:"size:16;not null" json:"transport"`
+	Status            string     `gorm:"size:16;not null" json:"status"`
+	ReservedBytes     int64      `gorm:"not null;default:0" json:"reservedBytes"`
+	IdempotencyKey    string     `gorm:"size:255;not null" json:"idempotencyKey"`
+	CreatedBy         string     `gorm:"size:64;not null" json:"createdBy"`
+	ResultDocumentID  string     `gorm:"size:64;not null;default:''" json:"resultDocumentId,omitempty"`
+	ResultVersionID   string     `gorm:"size:64;not null;default:''" json:"resultVersionId,omitempty"`
+	ResultPipelineID  string     `gorm:"size:64;not null;default:''" json:"resultPipelineId,omitempty"`
+	ErrorCode         string     `gorm:"size:128;not null;default:''" json:"errorCode,omitempty"`
+	ErrorMessage      string     `gorm:"type:text;not null;default:''" json:"errorMessage,omitempty"`
+	ExpiresAt         time.Time  `gorm:"not null" json:"expiresAt"`
+	CompletedAt       *time.Time `json:"completedAt,omitempty"`
+	CreatedAt         time.Time  `gorm:"not null" json:"createdAt"`
+	UpdatedAt         time.Time  `gorm:"not null" json:"updatedAt"`
+}
+
+func (UploadSession) TableName() string { return "upload_sessions" }
+
 // Tag is a manual, knowledge-base-scoped label. Tags only narrow lists and
 // retrieval; they never grant access.
 type Tag struct {

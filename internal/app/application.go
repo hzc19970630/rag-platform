@@ -221,7 +221,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		EmbeddingModel: embedder.Name(), EmbeddingDimension: embedder.Dimension(),
 	})
 	knowledgeBaseService.SetTenantParamsResolver(tenantConfigService)
-	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle, cfg.MaxFileBytes)
+	objects, err := storage.NewS3(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey, cfg.S3SecretKey, cfg.S3Region, cfg.S3Bucket, cfg.S3UseTLS, cfg.S3ForcePathStyle, cfg.MaxFileBytes)
 	if err != nil {
 		closeAll()
 		return nil, err
@@ -246,6 +246,16 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	ingestionService := ingestion.NewService(database, authorization, objects, publisher, cfg.MaxFileBytes, cfg.Limits.DocumentRetentionDays, ingestion.Quota{MaxDocuments: int64(cfg.Limits.TenantMaxDocuments), MaxStorageBytes: cfg.Limits.TenantMaxStorageBytes})
 	ingestionService.SetIndexWriter(indexWriter)
 	ingestionService.SetQuotaResolver(quotaResolver)
+	knowledgeBaseService.SetUploadAborter(ingestionService)
+	ingestionService.SetUploadSupport(ingestion.UploadSupport{
+		Multipart:          objects,
+		Direct:             cfg.S3PublicEndpoint != "",
+		PartSize:           cfg.UploadPartSizeBytes,
+		PresignTTL:         time.Duration(cfg.UploadPresignTTLSeconds) * time.Second,
+		SessionTTL:         time.Duration(cfg.UploadSessionTTLSeconds) * time.Second,
+		MaxActivePerTenant: cfg.UploadMaxActivePerTenant,
+		MaxActivePerKB:     cfg.UploadMaxActivePerKB,
+	})
 	credentialCipher, err := secrets.NewKeyring(cfg.Connector.EncryptionKeys, cfg.Connector.EncryptionKey, cfg.Connector.ActiveKeyID)
 	if err != nil {
 		_ = reader.Close()

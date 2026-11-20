@@ -136,13 +136,18 @@ const maxMultipartEnvelopeBytes = 1 << 20
 // global JSON cap skips it by matched route, not by Content-Type: the header is
 // caller-controlled, so trusting it would let a forged multipart request bypass
 // the cap on any JSON endpoint.
-const documentUploadPath = "/knowledge-bases/:id/documents"
+const (
+	documentUploadPath = "/knowledge-bases/:id/documents"
+	uploadPartPath     = "/uploads/:id/parts/:part"
+)
 
 // requestBodyLimit replaces the body with a MaxBytesReader so over-limit reads
 // fail with *http.MaxBytesError, which writeError maps to 413.
 func requestBodyLimit(limit int64) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.Request.Body == nil || (c.Request.Method == http.MethodPost && c.FullPath() == "/api/v1"+documentUploadPath) {
+		if c.Request.Body == nil ||
+			(c.Request.Method == http.MethodPost && c.FullPath() == "/api/v1"+documentUploadPath) ||
+			(c.Request.Method == http.MethodPut && c.FullPath() == "/api/v1"+uploadPartPath) {
 			c.Next()
 			return
 		}
@@ -169,6 +174,14 @@ func requestDeadline(cfg config.Config) gin.HandlerFunc {
 		if !ok {
 			budget = defaultBudget
 		}
+		// A proxy part is bounded by the body-read window: it can be a large
+		// file on a slow link, and the next part retries independently.
+		if c.Request.Method == http.MethodPut && c.FullPath() == "/api/v1"+uploadPartPath {
+			budget = time.Duration(cfg.HTTPReadTimeoutSeconds) * time.Second
+			if budget <= 0 {
+				budget = uploadDeadline
+			}
+		}
 		if budget <= 0 {
 			c.Next()
 			return
@@ -189,6 +202,7 @@ const (
 
 var routeDeadlines = map[string]time.Duration{
 	"POST /api/v1" + documentUploadPath: uploadDeadline,
+	"POST /api/v1/uploads/:id/complete": transferDeadline,
 	"GET /api/v1/documents/:id/preview": transferDeadline,
 	"GET /api/v1/audit":                 transferDeadline,
 	"POST /api/v1/ops/reconcile":        transferDeadline,

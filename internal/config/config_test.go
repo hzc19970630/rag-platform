@@ -55,6 +55,46 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadFromUploadSessionDefaultsAndValidation(t *testing.T) {
+	cfg := LoadFrom(lookupFrom(map[string]string{}))
+	if cfg.S3PublicEndpoint != "" {
+		t.Fatalf("S3PublicEndpoint must default to proxy mode, got %q", cfg.S3PublicEndpoint)
+	}
+	if cfg.UploadPartSizeBytes != 16*1024*1024 {
+		t.Fatalf("UploadPartSizeBytes default: %d", cfg.UploadPartSizeBytes)
+	}
+	if cfg.UploadPresignTTLSeconds != 3600 || cfg.UploadSessionTTLSeconds != 86400 {
+		t.Fatalf("upload TTL defaults: %d/%d", cfg.UploadPresignTTLSeconds, cfg.UploadSessionTTLSeconds)
+	}
+	if cfg.UploadMaxActivePerTenant != 20 || cfg.UploadMaxActivePerKB != 10 {
+		t.Fatalf("active session defaults: %d/%d", cfg.UploadMaxActivePerTenant, cfg.UploadMaxActivePerKB)
+	}
+	if cfg.HTTPReadTimeoutSeconds != 900 {
+		t.Fatalf("HTTPReadTimeoutSeconds default: %d", cfg.HTTPReadTimeoutSeconds)
+	}
+
+	overridden := LoadFrom(lookupFrom(map[string]string{
+		"S3_PUBLIC_ENDPOINT":         "http://localhost:9000",
+		"UPLOAD_PART_SIZE_MB":        "8",
+		"UPLOAD_SESSION_TTL_SECONDS": "7200",
+		"UPLOAD_MAX_ACTIVE_PER_KB":   "3",
+		"HTTP_READ_TIMEOUT_SECONDS":  "1200",
+	}))
+	if overridden.S3PublicEndpoint != "http://localhost:9000" || overridden.UploadPartSizeBytes != 8*1024*1024 ||
+		overridden.UploadSessionTTLSeconds != 7200 || overridden.UploadMaxActivePerKB != 3 || overridden.HTTPReadTimeoutSeconds != 1200 {
+		t.Fatalf("upload overrides = %+v", overridden)
+	}
+
+	tooSmall := LoadFrom(lookupFrom(map[string]string{"UPLOAD_PART_SIZE_MB": "4"}))
+	if err := tooSmall.Validate("api"); err == nil || !strings.Contains(err.Error(), "UPLOAD_PART_SIZE_MB") {
+		t.Fatalf("expected UPLOAD_PART_SIZE_MB validation error, got %v", err)
+	}
+	badEndpoint := LoadFrom(lookupFrom(map[string]string{"S3_PUBLIC_ENDPOINT": "minio:9000"}))
+	if err := badEndpoint.Validate("api"); err == nil || !strings.Contains(err.Error(), "S3_PUBLIC_ENDPOINT") {
+		t.Fatalf("expected S3_PUBLIC_ENDPOINT validation error, got %v", err)
+	}
+}
+
 func TestLoadFromReadsOverridesAndIgnoresEmpty(t *testing.T) {
 	env := map[string]string{
 		"API_ADDR":                       ":9090",

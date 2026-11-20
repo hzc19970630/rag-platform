@@ -29,6 +29,8 @@ type (
 	EvidenceIndexWriter = ingestion.EvidenceIndexWriter
 	EmbeddingRecord     = ingestion.EmbeddingRecord
 	ChunkDocument       = ingestion.ChunkDocument
+	MultipartPart       = ingestion.MultipartPart
+	MultipartStore      = ingestion.MultipartStore
 )
 
 const (

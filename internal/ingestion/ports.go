@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 )
@@ -17,6 +18,29 @@ type ObjectStore interface {
 	// documents use this so a large object is not read whole into memory.
 	Open(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
+}
+
+// MultipartPart is one uploaded part of an incomplete object.
+type MultipartPart struct {
+	Number int
+	Size   int64
+	ETag   string
+}
+
+// MultipartStore is the resumable-upload port. Both transports share it:
+// direct uploads presign a URL, proxy uploads stream the part through the API.
+type MultipartStore interface {
+	// NewMultipart starts an upload and returns the storage upload id.
+	NewMultipart(ctx context.Context, key, contentType string) (string, error)
+	// PutPart streams one part; the caller already validated its size.
+	PutPart(ctx context.Context, key, uploadID string, part int, body io.Reader, size int64) (MultipartPart, error)
+	// PresignPart returns a browser-reachable PUT URL for one part.
+	PresignPart(ctx context.Context, key, uploadID string, part int, ttl time.Duration) (string, error)
+	// ListParts returns every stored part, following pagination.
+	ListParts(ctx context.Context, key, uploadID string) ([]MultipartPart, error)
+	// CompleteMultipart concatenates the parts and returns the object size.
+	CompleteMultipart(ctx context.Context, key, uploadID string, parts []MultipartPart) (int64, error)
+	AbortMultipart(ctx context.Context, key, uploadID string) error
 }
 
 type DocumentReader interface {

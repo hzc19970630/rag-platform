@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- 可续传与批量上传（B30）：新增上传会话 API（`POST /knowledge-bases/:id/uploads`、`GET/DELETE /uploads/:id`、`POST /uploads/:id/urls`、`PUT /uploads/:id/parts/:part`、`POST /uploads/:id/complete`）。分片协议在 direct（`S3_PUBLIC_ENDPOINT` 预签名直传）与 proxy（API 流式转发）两种 transport 下一致，均支持断线只补缺失分片；前端上传队列支持多选批量、并发 2、单文件进度/取消/重试，刷新后重选同名文件按会话续传。配额在会话创建时预占、complete 时在注册事务内结算；活跃会话上限（默认租户 20 / 知识库 10）、过期 sweeper 与 `upload_sessions_active`/`upload_sessions_reserved_bytes` 指标已接入 worker；审计新增 `upload_session` 资源。旧单文件上传端点保留给 CLI/MCP 与兼容调用。新增配置 `S3_PUBLIC_ENDPOINT`、`MINIO_API_CORS_ALLOW_ORIGIN`、`UPLOAD_PART_SIZE_MB`、`UPLOAD_PRESIGN_TTL_SECONDS`、`UPLOAD_SESSION_TTL_SECONDS`、`UPLOAD_MAX_ACTIVE_PER_TENANT`、`UPLOAD_MAX_ACTIVE_PER_KB`、`HTTP_READ_TIMEOUT_SECONDS`。
+
 ### Fixed
 
 - 图谱快照审核通过时补写 `activated_at`，并在审核响应中返回；此前 ACTIVE 快照的激活时间为空。

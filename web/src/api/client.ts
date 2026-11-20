@@ -155,6 +155,110 @@ export function uploadDocument(knowledgeBaseId: string, file: File, documentId?:
   });
 }
 
+export type UploadPart = {
+  number: number;
+  sizeBytes: number;
+  uploaded: boolean;
+  url?: string;
+};
+
+export type UploadSession = {
+  id: string;
+  knowledgeBaseId: string;
+  documentId: string;
+  filename: string;
+  sizeBytes: number;
+  partSize: number;
+  partCount: number;
+  transport: "direct" | "proxy";
+  status: string;
+  parts?: UploadPart[];
+  expiresAt: string;
+  completedAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
+};
+
+export type UploadSessionInput = {
+  filename: string;
+  sizeBytes: number;
+  mimeType?: string;
+  documentId?: string;
+  folderId?: string;
+};
+
+export function createUploadSession(knowledgeBaseId: string, input: UploadSessionInput, idempotencyKey: string): Promise<UploadSession> {
+  return api<UploadSession>(`/knowledge-bases/${knowledgeBaseId}/uploads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify(input),
+    timeoutMs: LONG_REQUEST_TIMEOUT_MS,
+  });
+}
+
+export function getUploadSession(uploadId: string): Promise<UploadSession> {
+  return api<UploadSession>(`/uploads/${uploadId}`, { timeoutMs: LONG_REQUEST_TIMEOUT_MS });
+}
+
+export function refreshUploadPartURLs(uploadId: string): Promise<UploadSession> {
+  return api<UploadSession>(`/uploads/${uploadId}/urls`, { method: "POST", timeoutMs: LONG_REQUEST_TIMEOUT_MS });
+}
+
+export function completeUploadSession(uploadId: string): Promise<DocumentView> {
+  return api<DocumentView>(`/uploads/${uploadId}/complete`, { method: "POST", timeoutMs: UPLOAD_TIMEOUT_MS });
+}
+
+export function abortUploadSession(uploadId: string): Promise<void> {
+  return api<void>(`/uploads/${uploadId}`, { method: "DELETE" });
+}
+
+function xhrPut(url: string, blob: Blob, headers: Record<string, string>, onProgress?: (loaded: number, total: number) => void, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    for (const [key, value] of Object.entries(headers)) xhr.setRequestHeader(key, value);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(new ApiError(xhr.status, friendlyStatusMessage(xhr.status)));
+    };
+    xhr.onerror = () => reject(new ApiError(0, friendlyStatusMessage(0)));
+    xhr.onabort = () => reject(new DOMException("upload aborted", "AbortError"));
+    if (signal) {
+      if (signal.aborted) {
+        xhr.abort();
+        return;
+      }
+      signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+    xhr.send(blob);
+  });
+}
+
+// uploadSessionPart sends one part through the transport the session selected.
+// Direct parts go to the presigned storage URL with no application headers;
+// proxy parts go to the API with the development identity headers.
+export function uploadSessionPart(
+  session: UploadSession,
+  part: UploadPart,
+  url: string | undefined,
+  blob: Blob,
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (session.transport === "direct") {
+    if (!url) return Promise.reject(new ApiError(0, "upload part URL is missing"));
+    return xhrPut(url, blob, {}, onProgress, signal);
+  }
+  return xhrPut(`${apiBase}/uploads/${session.id}/parts/${part.number}`, blob, devHeaders(), onProgress, signal);
+}
+
 export function openDocumentPreview(documentId: string): Promise<void> {
   return withDeadline({ timeoutMs: LONG_REQUEST_TIMEOUT_MS }, async (timedInit) => {
     const response = await request(`/documents/${documentId}/preview`, timedInit);

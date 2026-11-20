@@ -783,6 +783,45 @@ type DocumentUploadRequest struct {
 	DocumentID string `json:"document_id"`
 }
 
+// UploadSessionCreateRequest opens one resumable upload. A batch upload creates
+// one session per file; there is deliberately no server-side batch transaction
+// endpoint, so a single file failing cannot roll back the others.
+type UploadSessionCreateRequest struct {
+	Filename  string `json:"filename" binding:"required"`
+	SizeBytes int64  `json:"sizeBytes" binding:"required"`
+	MimeType  string `json:"mimeType"`
+	// DocumentID is set only when replacing the content of an existing document.
+	DocumentID string `json:"documentId"`
+	FolderID   string `json:"folderId"`
+}
+
+// UploadPartView is one byte range of the session. URL is present for direct
+// transport and absent for proxy transport, where the part is PUT to the API.
+type UploadPartView struct {
+	Number    int    `json:"number"`
+	SizeBytes int64  `json:"sizeBytes"`
+	Uploaded  bool   `json:"uploaded"`
+	URL       string `json:"url,omitempty"`
+}
+
+type UploadSessionView struct {
+	ID              string           `json:"id"`
+	KnowledgeBaseID string           `json:"knowledgeBaseId"`
+	DocumentID      string           `json:"documentId"`
+	Filename        string           `json:"filename"`
+	SizeBytes       int64            `json:"sizeBytes"`
+	PartSize        int64            `json:"partSize"`
+	PartCount       int              `json:"partCount"`
+	Transport       string           `json:"transport"`
+	Status          string           `json:"status"`
+	Parts           []UploadPartView `json:"parts,omitempty"`
+	ExpiresAt       time.Time        `json:"expiresAt"`
+	CreatedAt       time.Time        `json:"createdAt"`
+	CompletedAt     *time.Time       `json:"completedAt,omitempty"`
+	ErrorCode       string           `json:"errorCode,omitempty"`
+	ErrorMessage    string           `json:"errorMessage,omitempty"`
+}
+
 // QueryPlanParams is the resolved parameter block embedded in a query plan.
 // The retrieval domain intentionally has no JSON tags on Params, so the wire
 // names are exported Go field names; this contract preserves that shape.

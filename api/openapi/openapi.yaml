@@ -2826,6 +2826,75 @@ components:
           minimum: 0
           type: integer
       type: object
+    UploadPartView:
+      properties:
+        number:
+          type: integer
+        sizeBytes:
+          format: int64
+          type: integer
+        uploaded:
+          type: boolean
+        url:
+          type: string
+      type: object
+    UploadSessionCreateRequest:
+      properties:
+        documentId:
+          type: string
+        filename:
+          type: string
+        folderId:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          format: int64
+          type: integer
+      required:
+        - filename
+        - sizeBytes
+      type: object
+    UploadSessionView:
+      properties:
+        completedAt:
+          format: date-time
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        documentId:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        expiresAt:
+          format: date-time
+          type: string
+        filename:
+          type: string
+        id:
+          type: string
+        knowledgeBaseId:
+          type: string
+        partCount:
+          type: integer
+        partSize:
+          format: int64
+          type: integer
+        parts:
+          items:
+            $ref: '#/components/schemas/UploadPartView'
+          type: array
+        sizeBytes:
+          format: int64
+          type: integer
+        status:
+          type: string
+        transport:
+          type: string
+      type: object
     User:
       properties:
         createdAt:
@@ -5034,6 +5103,39 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/tags
       tags:
         - documents
+  /api/v1/knowledge-bases/{id}/uploads:
+    post:
+      operationId: post_knowledge_bases_id_uploads
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadSessionCreateRequest'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSessionView'
+          description: Created
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/uploads
+      tags:
+        - documents
   /api/v1/knowledge-bases/{id}/wiki/pages:
     get:
       operationId: get_knowledge_bases_id_wiki_pages
@@ -6193,6 +6295,142 @@ paths:
       summary: PATCH /api/v1/tenant/quota
       tags:
         - tenant
+  /api/v1/uploads/{id}:
+    delete:
+      operationId: delete_uploads_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+      summary: DELETE /api/v1/uploads/{id}
+      tags:
+        - documents
+    get:
+      operationId: get_uploads_id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSessionView'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/uploads/{id}
+      tags:
+        - documents
+  /api/v1/uploads/{id}/complete:
+    post:
+      operationId: post_uploads_id_complete
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/uploads/{id}/complete
+      tags:
+        - documents
+  /api/v1/uploads/{id}/parts/{part}:
+    put:
+      operationId: put_uploads_id_parts_part
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: part
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema: {}
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSessionView'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: PUT /api/v1/uploads/{id}/parts/{part}
+      tags:
+        - documents
+  /api/v1/uploads/{id}/urls:
+    post:
+      operationId: post_uploads_id_urls
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSessionView'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/uploads/{id}/urls
+      tags:
+        - documents
   /api/v1/wiki/pages/{pageId}:
     get:
       operationId: get_wiki_pages_pageId

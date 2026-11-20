@@ -425,6 +425,14 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - 硬清理（`POST /documents/:id/purge`）只允许针对已软删除文档，立即删除全部派生数据与 S3 对象，不可恢复。
 - 版本回滚（`POST /documents/:id/versions/:versionID/activate`）会复用被替换版本的 STALE 证据包与 Chunk，不重新 Embedding；前一版本标记 `CANCELLED`。
 
+### 10.1 可续传与批量上传（B30）
+
+- 上传会话把文件切成固定大小分片（`UPLOAD_PART_SIZE_MB`，默认 16、最小 5），会话有效期 `UPLOAD_SESSION_TTL_SECONDS`（默认 24h）。分片写入对象存储，API 不缓冲整文件。
+- `transport=direct`：浏览器直接 PUT 预签名 URL，需配置浏览器可达的 `S3_PUBLIC_ENDPOINT`，并允许 Web 源访问对象存储（本地 MinIO 用 `MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:5173`）。`transport=proxy`：分片走 `PUT /api/v1/uploads/:id/parts/:n`，API 流式转给对象存储，不需要 CORS；两种模式都支持断线续传。
+- 分片请求按 `HTTP_READ_TIMEOUT_SECONDS`（默认 900s）计时，失败只重传该分片；批量上传在前端队列中串行/小并发执行，单文件失败不影响其余文件。
+- 配额在创建会话时预占，`complete` 在注册事务内结算；活跃会话上限为 `UPLOAD_MAX_ACTIVE_PER_TENANT`（默认 20）与 `UPLOAD_MAX_ACTIVE_PER_KB`（默认 10）。过期会话由 Worker 维护循环 abort multipart 并标记 `expired`，`upload_sessions_active` 与 `upload_sessions_reserved_bytes` 指标可在 `/ops/metrics` 与 Prometheus 抓取。
+- 运维重试：`complete` 幂等；会话在 `completing` 状态中断后，再次调用会先查已注册流水线或已合成对象并继续，不会产生第二个版本。中止用 `DELETE /api/v1/uploads/:id`。
+
 ## 11. 数据库连接池
 
 - API、worker、embedctl 共用同一组连接池参数：`DATABASE_MAX_OPEN_CONNS`（默认 20）、`DATABASE_MAX_IDLE_CONNS`（默认 10）、`DATABASE_CONN_MAX_LIFETIME_SECONDS`（默认 1800）。`0` 空闲连接合法，其余非法值会让配置校验失败。

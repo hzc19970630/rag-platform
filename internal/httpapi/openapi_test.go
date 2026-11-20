@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 128
+const businessRouteCount = 134
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -103,6 +103,12 @@ func TestOpenAPIDeclaresRequestAndResponseSchemas(t *testing.T) {
 				media, ok := operation.RequestBody.Content["application/json"]
 				if !ok {
 					media, ok = operation.RequestBody.Content["multipart/form-data"]
+				}
+				if !ok {
+					// Raw octet-stream bodies (upload parts) are bytes, not DTOs.
+					if _, raw := operation.RequestBody.Content["application/octet-stream"]; raw {
+						continue
+					}
 				}
 				if !ok || len(media.Schema) == 0 {
 					t.Errorf("%s %s: request body has no JSON or multipart schema", strings.ToUpper(method), path)

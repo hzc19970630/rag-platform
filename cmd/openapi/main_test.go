@@ -112,7 +112,7 @@ func TestGeneratedSchemasMatchContractTypes(t *testing.T) {
 	document := generatedDocument(t)
 	schemas := objectAt(t, objectAt(t, document, "components"), "schemas")
 	for _, route := range contract.Routes {
-		if route.Request != nil {
+		if route.Request != nil && route.Request.Schema != nil {
 			assertComponentMatches(t, schemas, route.Request.Schema)
 		}
 		if route.Success.Schema == nil || route.Success.Binary {

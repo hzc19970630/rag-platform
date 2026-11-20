@@ -42,7 +42,7 @@ DECLARE
         'task_inbox', 'wiki_page_sources', 'wiki_page_versions', 'wiki_pages',
         'stage_runs', 'projection_stage_runs', 'projection_units', 'knowledge_base_members',
         'chunk_embeddings', 'embedding_migrations', 'retrieval_feedback',
-        'retrieval_eval_runs', 'tags', 'tenant_presets'
+        'retrieval_eval_runs', 'tags', 'tenant_presets', 'upload_sessions'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tenant_tables LOOP

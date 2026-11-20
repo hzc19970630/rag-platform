@@ -26,16 +26,18 @@ import (
 var filenamePattern = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 type Service struct {
-	db        *gorm.DB
-	authz     *authz.Service
-	objects   ObjectStore
-	publisher TaskPublisher
-	maxBytes  int64
-	retention time.Duration
-	quota     Quota
-	quotas    QuotaResolver
-	index     EvidenceIndexWriter
-	formats   formats.Registry
+	db         *gorm.DB
+	authz      *authz.Service
+	objects    ObjectStore
+	publisher  TaskPublisher
+	maxBytes   int64
+	retention  time.Duration
+	quota      Quota
+	quotas     QuotaResolver
+	index      EvidenceIndexWriter
+	formats    formats.Registry
+	uploads    UploadSupport
+	uploadGate *uploadGate
 }
 
 // QuotaResolver reads the tenant's current limits. The service keeps the
@@ -70,6 +72,15 @@ type Quota struct {
 	MaxStorageBytes int64
 }
 
+// StoredObject describes bytes that already exist in object storage, as with a
+// completed resumable upload. When set, storeVersion skips the object write and
+// registration becomes the only side effect.
+type StoredObject struct {
+	Key         string
+	SizeBytes   int64
+	ContentHash string
+}
+
 type UploadInput struct {
 	KnowledgeBaseID string
 	DocumentID      string
@@ -77,10 +88,21 @@ type UploadInput struct {
 	Filename        string
 	MimeType        string
 	Content         []byte
-	IdempotencyKey  string
-	RequestID       string
-	TraceID         string
-	ActorID         string
+	// StoredObject switches the write path to "object already stored".
+	StoredObject *StoredObject
+	// VersionID lets a resumable session keep the id embedded in its object key.
+	VersionID string
+	// PipelineID lets a resumable session persist its result ids before insert.
+	PipelineID string
+	// CreateDocument creates the document row instead of requiring it to exist.
+	CreateDocument bool
+	// RegisterStart runs inside the registration transaction before the quota
+	// re-check. A resumable upload uses it to settle the session reservation.
+	RegisterStart  func(tx *gorm.DB) error
+	IdempotencyKey string
+	RequestID      string
+	TraceID        string
+	ActorID        string
 }
 
 type UploadResult struct {
@@ -260,14 +282,26 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return UploadResult{}, fmt.Errorf("check upload idempotency: %w", err)
 	}
-	if err := s.checkQuota(ctx, s.db, principal.TenantID, int64(len(input.Content))); err != nil {
+	sizeBytes := int64(len(input.Content))
+	hash := contentHash(input.Content)
+	if input.StoredObject != nil {
+		sizeBytes = input.StoredObject.SizeBytes
+		hash = input.StoredObject.ContentHash
+	} else if err := s.checkQuota(ctx, s.db, principal.TenantID, sizeBytes); err != nil {
+		// A resumable upload already holds a quota reservation; its settlement
+		// check runs inside the registration transaction instead.
 		return UploadResult{}, err
 	}
 
-	hash := contentHash(input.Content)
 	documentID := input.DocumentID
 	var document models.Document
-	isNewDocument := documentID == ""
+	isNewDocument := documentID == "" || input.CreateDocument
+	if input.CreateDocument {
+		document = models.Document{
+			ID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID,
+			OwnerID: principal.SubjectID, Filename: input.Filename, MimeType: mimeType, Status: StatusReceived, FolderID: input.FolderID,
+		}
+	}
 	if !isNewDocument {
 		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Where("knowledge_base_id = ? AND id = ?", input.KnowledgeBaseID, documentID).First(&document).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) && createMissing {
@@ -304,6 +338,11 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 					return UploadResult{}, err
 				}
 			}
+			if input.StoredObject != nil {
+				// The identical content already exists; the composed object is
+				// redundant, so drop it instead of leaving an orphan.
+				_ = s.objects.Delete(ctx, input.StoredObject.Key)
+			}
 			return s.loadResult(ctx, principal.TenantID, duplicate.DocumentID, duplicate.ID, pipeline.ID)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return UploadResult{}, fmt.Errorf("check document duplicate: %w", err)
@@ -317,36 +356,52 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 		document = models.Document{ID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, OwnerID: principal.SubjectID, Filename: input.Filename, MimeType: mimeType, Status: StatusReceived, FolderID: input.FolderID}
 	}
 
-	versionID, err := newID("ver")
-	if err != nil {
-		return UploadResult{}, err
+	versionID := input.VersionID
+	if versionID == "" {
+		var err error
+		if versionID, err = newID("ver"); err != nil {
+			return UploadResult{}, err
+		}
 	}
-	pipelineID, err := newID("pipe")
-	if err != nil {
-		return UploadResult{}, err
+	pipelineID := input.PipelineID
+	if pipelineID == "" {
+		var err error
+		if pipelineID, err = newID("pipe"); err != nil {
+			return UploadResult{}, err
+		}
 	}
 	stageKey := pipelineID + ":" + StageParse
-	objectKey := objectKeyFor(principal.TenantID, input.KnowledgeBaseID, documentID, versionID, input.Filename)
-	if err := s.objects.Put(ctx, objectKey, input.Content, mimeType); err != nil {
-		return UploadResult{}, err
+	objectKey := ""
+	if input.StoredObject != nil {
+		objectKey = input.StoredObject.Key
+	} else {
+		objectKey = objectKeyFor(principal.TenantID, input.KnowledgeBaseID, documentID, versionID, input.Filename)
+		if err := s.objects.Put(ctx, objectKey, input.Content, mimeType); err != nil {
+			return UploadResult{}, err
+		}
 	}
-	cleanupObject := true
+	cleanupObject := input.StoredObject == nil
 	defer func() {
 		if cleanupObject {
 			_ = s.objects.Delete(context.Background(), objectKey)
 		}
 	}()
 
-	version := models.DocumentVersion{ID: versionID, DocumentID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, Version: 1, ContentHash: hash, SizeBytes: int64(len(input.Content)), SourceObjectKey: objectKey, Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion}
+	version := models.DocumentVersion{ID: versionID, DocumentID: documentID, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, Version: 1, ContentHash: hash, SizeBytes: sizeBytes, SourceObjectKey: objectKey, Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion}
 	pipeline := models.PipelineRun{ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, DocumentID: documentID, DocumentVersionID: versionID, RequestID: input.RequestID, TraceID: input.TraceID, IdempotencyKey: input.IdempotencyKey, Status: StatusStored}
 	stage := models.StageRun{PipelineRunID: pipelineID, Stage: StageParse, Status: StagePending, IdempotencyKey: stageKey}
-	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		// The pre-transaction check can race with another upload. Re-check under
 		// a tenant-scoped lock so the count and the insert are one serial unit.
 		if err := lockTenantQuota(tx, principal.TenantID); err != nil {
 			return err
 		}
-		if err := s.checkQuota(ctx, tx, principal.TenantID, int64(len(input.Content))); err != nil {
+		if input.RegisterStart != nil {
+			if err := input.RegisterStart(tx); err != nil {
+				return err
+			}
+		}
+		if err := s.checkQuota(ctx, tx, principal.TenantID, sizeBytes); err != nil {
 			return err
 		}
 		if isNewDocument {
