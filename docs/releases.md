@@ -33,9 +33,10 @@
 3. 在 `main` 的最新提交上创建带注释的 tag 并推送（需要发布权限，属于对共享状态的写操作，须经确认）：
 
 ```bash
+VERSION=v0.3.0   # 本次发布版本，须与 CHANGELOG 一致
 git checkout main && git pull --ff-only
-git tag -a v0.1.0 -m "rag-platform v0.1.0"
-git push origin v0.1.0
+git tag -a "$VERSION" -m "rag-platform $VERSION"
+git push origin "$VERSION"
 ```
 
 4. tag 推送触发 [release.yml](https://github.com/hzc19970630/rag-platform/blob/main/.github/workflows/release.yml)：
@@ -56,7 +57,7 @@ gh run watch
 从 Release 下载全部产物：
 
 ```bash
-VERSION=v0.1.0
+VERSION=v0.3.0
 gh release download "$VERSION"
 sha256sum -c SHA256SUMS
 ```
@@ -108,7 +109,7 @@ docker image inspect --format '{{index .RepoDigests 0}}' ghcr.io/hzc19970630/rag
 4. 只读检查迁移兼容性（不会修改数据库），预期日志含 `migrations_compatible`：
 
 ```bash
-export RAG_VERSION=v0.1.0
+export RAG_VERSION=v0.3.0
 BASE_ARGS=(-f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/release.compose.yml)
 docker compose --env-file .env "${BASE_ARGS[@]}" run --rm --no-deps migrate -check
 ```
@@ -118,7 +119,7 @@ docker compose --env-file .env "${BASE_ARGS[@]}" run --rm --no-deps migrate -che
 `release.compose.yml` 用发布镜像替换本地构建，支持 tag 或 digest 两种固定方式。覆盖文件使用 Compose 的 `!reset` 语法（Docker Compose 2.24+）；基础文件里的 `web` 服务仍是开发服务器，生产前端按上面的静态包方式部署。
 
 ```bash
-export RAG_VERSION=v0.1.0
+export RAG_VERSION=v0.3.0
 # 或者硬固定 digest：
 # export RAG_API_IMAGE=ghcr.io/hzc19970630/rag-platform/api@sha256:...
 # export RAG_DOCREADER_IMAGE=ghcr.io/hzc19970630/rag-platform/docreader@sha256:...
