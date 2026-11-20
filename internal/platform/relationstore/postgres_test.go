@@ -103,6 +103,9 @@ func TestReplaceRunSnapshotAndActivate(t *testing.T) {
 	if active == nil || active.ID != snapshot.ID {
 		t.Fatalf("approved snapshot must be active, got %+v", active)
 	}
+	if active.ActivatedAt == nil || !active.ActivatedAt.Equal(now) {
+		t.Fatalf("approval must stamp activated_at, got %+v", active.ActivatedAt)
+	}
 	counts, err := store.Counts(ctx, "t1", "kb1")
 	if err != nil {
 		t.Fatalf("counts: %v", err)

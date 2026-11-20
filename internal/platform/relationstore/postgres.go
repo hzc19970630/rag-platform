@@ -397,10 +397,17 @@ func (s *Store) Approve(ctx context.Context, tenantID, snapshotID, knowledgeBase
 			Updates(map[string]any{"status": models.GraphSnapshotSuperseded, "updated_at": now}).Error; err != nil {
 			return err
 		}
-		return tenantdb.MustScoped(tx, tenantID).Model(&models.GraphSnapshot{}).Where("id = ?", snapshotID).Updates(map[string]any{
+		values := map[string]any{
 			"status": update.Status, "review_note": update.Note, "reviewed_by": update.Reviewer,
 			"reviewed_at": &now, "updated_at": now,
-		}).Error
+		}
+		// Approval is the only path to ACTIVE; record when it happened so the
+		// snapshot view and audits do not show an active row with no activation
+		// time.
+		if update.Status == models.GraphSnapshotActive {
+			values["activated_at"] = &now
+		}
+		return tenantdb.MustScoped(tx, tenantID).Model(&models.GraphSnapshot{}).Where("id = ?", snapshotID).Updates(values).Error
 	})
 }
 

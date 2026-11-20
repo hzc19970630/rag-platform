@@ -147,6 +147,9 @@ func (s *Service) ReviewGraphSnapshot(ctx context.Context, principal authz.Princ
 	result.ReviewNote = input.Note
 	result.ReviewedBy = principal.SubjectID
 	result.ReviewedAt = &now
+	if status == models.GraphSnapshotActive {
+		result.ActivatedAt = &now
+	}
 	s.recordAuditResource(ctx, principal, snapshot.KnowledgeBaseID, "graph_snapshot", snapshot.ID, "graph_review_"+status)
 	return result, nil
 }
