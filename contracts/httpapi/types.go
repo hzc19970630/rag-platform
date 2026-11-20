@@ -1059,6 +1059,9 @@ type ProjectionRun struct {
 	RetryOfRunID      *string    `json:"retryOfRunId,omitempty"`
 	ErrorCode         string     `json:"errorCode,omitempty"`
 	ErrorMessage      string     `json:"errorMessage,omitempty"`
+	UnitTotal         int        `json:"unitTotal"`
+	UnitSucceeded     int        `json:"unitSucceeded"`
+	UnitFailed        int        `json:"unitFailed"`
 	CompletedAt       *time.Time `json:"completedAt,omitempty"`
 	CreatedAt         time.Time  `json:"createdAt"`
 	UpdatedAt         time.Time  `json:"updatedAt"`

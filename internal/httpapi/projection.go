@@ -73,6 +73,14 @@ func RegisterWikiProjectionRoutes(protected *gin.RouterGroup, cfg config.Config,
 		}
 		c.JSON(http.StatusAccepted, views.ProjectionRun(run))
 	})
+	runs.POST("/cancel", func(c *gin.Context) {
+		run, err := deps.Projection.Cancel(c.Request.Context(), accessContext(c).Principal, c.Param("runId"))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusAccepted, views.ProjectionRun(run))
+	})
 
 	pages := protected.Group("/wiki/pages/:pageId")
 	pages.GET("", func(c *gin.Context) {
@@ -199,6 +207,14 @@ func RegisterGraphProjectionRoutes(protected *gin.RouterGroup, cfg config.Config
 	})
 	runs.POST("/retry", func(c *gin.Context) {
 		run, err := deps.Projection.Retry(c.Request.Context(), accessContext(c).Principal, c.Param("runId"))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusAccepted, views.ProjectionRun(run))
+	})
+	runs.POST("/cancel", func(c *gin.Context) {
+		run, err := deps.Projection.Cancel(c.Request.Context(), accessContext(c).Principal, c.Param("runId"))
 		if err != nil {
 			writeError(c, err)
 			return

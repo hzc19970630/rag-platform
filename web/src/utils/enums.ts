@@ -50,7 +50,7 @@ export const AUDIT_ACTION_VALUES = [
   "rollback", "update_tenant_config", "update_tenant_quota", "write", "cancel",
   "add_member", "update_member", "remove_member",
   "model_provider_created", "model_provider_updated", "model_provider_deleted", "model_provider_tested",
-  "wiki_retry", "graph_retry",
+  "wiki_retry", "graph_retry", "wiki_cancel", "graph_cancel",
   "embedding_migration_started", "embedding_migration_cutover",
   "embedding_migration_rolled_back", "embedding_migration_cancelled", "embedding_migration_finalized",
 ] as const;

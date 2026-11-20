@@ -69,7 +69,7 @@ describe("enum registry", () => {
     for (const action of [
       "read", "update", "cancel", "add_member", "update_member", "remove_member",
       "model_provider_created", "model_provider_updated", "model_provider_deleted", "model_provider_tested",
-      "wiki_retry", "graph_retry",
+      "wiki_retry", "graph_retry", "wiki_cancel", "graph_cancel",
     ]) {
       expect(AUDIT_ACTION_VALUES).toContain(action);
     }

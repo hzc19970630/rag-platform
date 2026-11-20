@@ -132,7 +132,9 @@ export function useProjectionStatus(id: string, enabled = true) {
     refetchInterval: (query) => {
       const status = query.state.data;
       if (!status) return false;
-      const running = [...status.runs, ...status.relationRuns].some((run) => run.status.includes("RUNNING") || run.status.includes("PENDING") || run.status.includes("BUILDING"));
+      const running = [...status.runs, ...status.relationRuns].some((run) =>
+        ["RUNNING", "PENDING", "BUILDING", "EXTRACTING", "GENERATING", "RETRY"].some((marker) => run.status.includes(marker)),
+      );
       return running ? 2500 : false;
     },
   });

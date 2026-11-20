@@ -2042,6 +2042,12 @@ components:
           type: string
         tenantId:
           type: string
+        unitFailed:
+          type: integer
+        unitSucceeded:
+          type: integer
+        unitTotal:
+          type: integer
         updatedAt:
           format: date-time
           type: string
@@ -4000,6 +4006,33 @@ paths:
         "500":
           $ref: '#/components/responses/InternalError'
       summary: GET /api/v1/graph/runs/{runId}
+      tags:
+        - projections
+  /api/v1/graph/runs/{runId}/cancel:
+    post:
+      operationId: post_graph_runs_runId_cancel
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectionRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/graph/runs/{runId}/cancel
       tags:
         - projections
   /api/v1/graph/runs/{runId}/retry:
@@ -6342,6 +6375,33 @@ paths:
         "500":
           $ref: '#/components/responses/InternalError'
       summary: GET /api/v1/wiki/runs/{runId}
+      tags:
+        - projections
+  /api/v1/wiki/runs/{runId}/cancel:
+    post:
+      operationId: post_wiki_runs_runId_cancel
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectionRun'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/wiki/runs/{runId}/cancel
       tags:
         - projections
   /api/v1/wiki/runs/{runId}/retry:

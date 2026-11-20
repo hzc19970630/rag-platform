@@ -472,6 +472,9 @@ export type ProjectionRun = {
   errorCode?: string;
   errorMessage?: string;
   attempts?: number;
+  unitTotal?: number;
+  unitSucceeded?: number;
+  unitFailed?: number;
   createdAt: string;
   updatedAt: string;
 };

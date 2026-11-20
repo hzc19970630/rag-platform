@@ -18,6 +18,13 @@ type Props = {
 
 type RunKind = "wiki" | "graph";
 
+// Runs in these states still have queued work; cancellation is the operator's
+// way to stop them without waiting for the retry budget.
+const ACTIVE_RUN_STATUSES = new Set([
+  "WIKI_PENDING", "WIKI_GENERATING", "RETRY_WIKI",
+  "RELATION_PENDING", "RELATION_EXTRACTING", "RETRY_RELATION",
+]);
+
 // Backend run errors carry a stable code; users see a localized reason instead
 // of the developer-facing English message.
 const PROJECTION_ERROR_KEYS: Record<string, string> = {
@@ -81,8 +88,49 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
     }
   }
 
-  const columns = (kind: RunKind): ColumnsType<ProjectionRun> => [
+  async function cancel(kind: RunKind, run: ProjectionRun) {
+    if (!canWrite || busy) return;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      modal.confirm({
+        title: t("projection.cancel"),
+        content: t("projection.cancelConfirm"),
+        okText: t("common.confirm"),
+        cancelText: t("common.cancel"),
+        okButtonProps: { danger: true },
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+    setBusy(run.id);
+    try {
+      await api(`/${kind}/runs/${run.id}/cancel`, { method: "POST" });
+      message.success(t("projection.cancelStarted"));
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projection(knowledgeBaseId) });
+    } catch (cause) {
+      message.error(cause instanceof Error ? cause.message : t("projection.cancelFailed"));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const columns = (kind: RunKind): ColumnsType<ProjectionRun> => {
+    const progress: ColumnsType<ProjectionRun> = kind === "graph"
+      ? [{
+        title: t("projection.unitProgress"),
+        key: "unitProgress",
+        width: 120,
+        render: (_, run) => {
+          if (!run.unitTotal) return "-";
+          const text = `${run.unitSucceeded ?? 0} / ${run.unitTotal}`;
+          if (!run.unitFailed) return text;
+          return <Typography.Text type="warning">{text} · {t("projection.unitFailed", { count: run.unitFailed })}</Typography.Text>;
+        },
+      }]
+      : [];
+    return [
     { title: t("projection.runStatus"), dataIndex: "status", key: "status", width: 110, render: (value: string) => <StatusBadge status={value} /> },
+    ...progress,
     {
       title: t("projection.failureReason"),
       key: "failureReason",
@@ -98,16 +146,20 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
     {
       title: t("common.actions"),
       key: "actions",
-      width: 110,
+      width: 170,
       render: (_, run) => (
         <Space>
-          {canWrite && run.status === "FAILED" && (
+          {canWrite && ACTIVE_RUN_STATUSES.has(run.status) && (
+            <Button size="small" danger loading={busy === run.id} onClick={() => void cancel(kind, run)}>{t("projection.cancel")}</Button>
+          )}
+          {canWrite && run.status.startsWith("FAILED") && (
             <Button size="small" loading={busy === run.id} onClick={() => void retry(kind, run)}>{t("projection.retry")}</Button>
           )}
         </Space>
       ),
     },
-  ];
+    ];
+  };
 
   const runTable = (kind: RunKind, runs: ProjectionRun[]) => (
     <div className="projection-runs">
@@ -121,7 +173,7 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
       </Flex>
       {runs.length === 0
         ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("projection.noRuns")} />
-        : <Table<ProjectionRun> size="small" rowKey="id" pagination={false} columns={columns(kind)} dataSource={runs} tableLayout="fixed" scroll={{ x: 790 }} />}
+        : <Table<ProjectionRun> size="small" rowKey="id" pagination={false} columns={columns(kind)} dataSource={runs} tableLayout="fixed" scroll={{ x: kind === "graph" ? 970 : 850 }} />}
     </div>
   );
 

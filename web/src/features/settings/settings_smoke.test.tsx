@@ -166,6 +166,67 @@ describe("settings panels", () => {
     expect(projection.container.textContent).not.toContain("extraction produced no sourced relation");
   });
 
+  it("shows relation unit progress while a graph build runs", async () => {
+    stubFetch((url) => {
+      if (url.endsWith("/projection")) return {
+        joinStatus: "KNOWLEDGE_PARTIAL",
+        wikiEnabled: true,
+        graphEnabled: true,
+        runs: [],
+        relationRuns: [{
+          id: "prj-2",
+          projectionType: "relation",
+          status: "RELATION_EXTRACTING",
+          unitTotal: 34,
+          unitSucceeded: 3,
+          unitFailed: 1,
+          createdAt: "2026-11-20T00:00:00Z",
+          updatedAt: "2026-11-20T00:00:00Z",
+        }],
+        pages: { total: 0, published: 0, pendingReview: 0, stale: 0, indexed: 0 },
+        graph: { snapshots: 0, activeSnapshot: "", entities: 0, relations: 0, pendingReview: 0 },
+      };
+      return {};
+    });
+    const projection = renderPanel(<ProjectionPanel knowledgeBaseId="kb-1" canWrite={false} />);
+    await waitFor(() => expect(projection.container.textContent).toContain("3 / 34"));
+    expect(projection.container.textContent).toContain(i18n.t("projection.unitFailed", { count: 1 }));
+  });
+
+  it("offers cancel on active runs and retry on failed runs", async () => {
+    stubFetch((url) => {
+      if (url.endsWith("/projection")) return {
+        joinStatus: "KNOWLEDGE_PARTIAL",
+        wikiEnabled: true,
+        graphEnabled: true,
+        runs: [],
+        relationRuns: [
+          {
+            id: "prj-active", projectionType: "relation", status: "RELATION_EXTRACTING",
+            unitTotal: 34, unitSucceeded: 3, unitFailed: 0,
+            createdAt: "2026-11-20T00:00:00Z", updatedAt: "2026-11-20T00:00:00Z",
+          },
+          {
+            id: "prj-failed", projectionType: "relation", status: "FAILED_RELATION",
+            errorCode: "empty_relation_projection", unitTotal: 34, unitSucceeded: 22, unitFailed: 12,
+            createdAt: "2026-11-19T00:00:00Z", updatedAt: "2026-11-19T00:00:00Z",
+          },
+        ],
+        pages: { total: 0, published: 0, pendingReview: 0, stale: 0, indexed: 0 },
+        graph: { snapshots: 0, activeSnapshot: "", entities: 0, relations: 0, pendingReview: 0 },
+      };
+      return {};
+    });
+    const projection = renderPanel(<ProjectionPanel knowledgeBaseId="kb-1" canWrite />);
+    await waitFor(() => expect(projection.container.textContent).toContain(i18n.t("projection.cancel")));
+    // antd inserts a space between two CJK button characters, so compare
+    // whitespace-stripped labels.
+    const labels = Array.from(projection.container.querySelectorAll("button"))
+      .map((button) => button.textContent?.replace(/\s/g, "") ?? "");
+    expect(labels).toContain(i18n.t("projection.retry"));
+    expect(labels).toContain(i18n.t("projection.cancel"));
+  });
+
   it("renders the embedding migration panel and settings drawer", async () => {
     stubFetch(() => ({}));
     const migration = renderPanel(

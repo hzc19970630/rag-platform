@@ -48,9 +48,9 @@ describe("ProjectionPanel", () => {
 
     await waitFor(() => expect(container.querySelector(".projection-runs .ant-table-content table")).toBeTruthy());
     const table = container.querySelector(".projection-runs .ant-table-content table") as HTMLTableElement;
-    expect(table.style.width).toBe("790px");
+    expect(table.style.width).toBe("850px");
     expect(table.style.tableLayout).toBe("fixed");
     const widths = [...table.querySelectorAll("colgroup col")].map((col) => (col as HTMLElement).style.width);
-    expect(widths).toEqual(["110px", "240px", "180px", "150px", "110px"]);
+    expect(widths).toEqual(["110px", "240px", "180px", "150px", "170px"]);
   });
 });

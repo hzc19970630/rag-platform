@@ -285,6 +285,8 @@ var Routes = []Route{
 		Success: ok((*WikiRunDetail)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/wiki/runs/{runId}/retry", OperationID: "post_wiki_runs_runId_retry", Tag: "projections",
 		Success: accepted((*ProjectionRun)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/wiki/runs/{runId}/cancel", OperationID: "post_wiki_runs_runId_cancel", Tag: "projections",
+		Success: accepted((*ProjectionRun)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/wiki/pages/{pageId}", OperationID: "get_wiki_pages_pageId", Tag: "projections",
 		Success: ok((*WikiPageDetail)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/wiki/pages/{pageId}/versions", OperationID: "get_wiki_pages_pageId_versions", Tag: "projections",
@@ -310,6 +312,8 @@ var Routes = []Route{
 	{Method: http.MethodGet, Path: "/api/v1/graph/runs/{runId}", OperationID: "get_graph_runs_runId", Tag: "projections",
 		Success: ok((*GraphRunDetail)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/graph/runs/{runId}/retry", OperationID: "post_graph_runs_runId_retry", Tag: "projections",
+		Success: accepted((*ProjectionRun)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/graph/runs/{runId}/cancel", OperationID: "post_graph_runs_runId_cancel", Tag: "projections",
 		Success: accepted((*ProjectionRun)(nil)), Errors: commonErrors},
 
 	// operations

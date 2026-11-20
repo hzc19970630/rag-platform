@@ -570,6 +570,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/graph/runs/{runId}/cancel */
+        post: operations["post_graph_runs_runId_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/graph/runs/{runId}/retry": {
         parameters: {
             query?: never;
@@ -1713,6 +1730,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wiki/runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/wiki/runs/{runId}/cancel */
+        post: operations["post_wiki_runs_runId_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wiki/runs/{runId}/retry": {
         parameters: {
             query?: never;
@@ -2752,6 +2786,9 @@ export interface components {
             sourceHash?: string;
             status?: string;
             tenantId?: string;
+            unitFailed?: number;
+            unitSucceeded?: number;
+            unitTotal?: number;
             /** Format: date-time */
             updatedAt?: string;
         };
@@ -4266,6 +4303,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphRunDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_graph_runs_runId_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectionRun"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -6572,6 +6635,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WikiRunDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_wiki_runs_runId_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectionRun"];
                 };
             };
             400: components["responses"]["BadRequest"];
