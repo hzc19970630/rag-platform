@@ -190,6 +190,24 @@ dimension with `EMBEDDING_DIMENSION`.
 The API container must see `BACKUP_DIR` for the backup check to be meaningful.
 Mount it read-only; the check never writes.
 
+### Relation projection work units
+
+Relation extraction runs one durable task per evidence-package batch
+(`PROJECTION_UNIT_MAX_CHUNKS`, default 32, clamped 8–64). Each unit has its own
+deadline (`PROJECTION_UNIT_TIMEOUT_SECONDS`, default 600) and cached result, so a
+failed unit is retried alone instead of restarting the knowledge base.
+`DOCREADER_TASK_TIMEOUT_SECONDS` continues to bound document parsing only. While a
+graph builds, the run row reports `unitSucceeded / unitTotal` and the graph panel
+shows that progress.
+
+Two bounds keep the model calls small enough for slow gateways:
+
+- identical chunk text inside one evidence package is collapsed before units are
+  built (a PDF that repeats the same pages 43 times becomes 8 chunks, not 344);
+- one extraction call carries at most 8 chunks and
+  `PROJECTION_RELATION_CHARS_PER_CALL` runes (default 1500, clamped 500–6000).
+  A single oversized chunk still gets its own call.
+
 ## Workbench
 
 - **Administration → Business configuration**: tenant retrieval/chunking

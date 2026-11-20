@@ -144,7 +144,7 @@ DOCREADER_TASK_TIMEOUT_SECONDS=1800
 
 - `LLM_CHAT_MODEL`/`LLM_EMBEDDING_MODEL` 是配置读取的变量名；只设置 `CHAT_MODEL`/`EMBEDDING_MODEL` 不会生效。
 - 修改后重启 api/worker。quickstart overlay 强制 `CHAT_SOURCE=local`/`EMBEDDING_SOURCE=local`，需要改用基座 compose 或自行覆盖。
-- `DOCREADER_TASK_TIMEOUT_SECONDS` 同时是关系投影任务的超时（默认 120s）。远程模型抽取 M7 的 135 个 chunk 可能超过它，表现为 `FAILED_RELATION: context deadline exceeded`；本地实测 1800s 可通过。M7 客户端最多等待 20 分钟。
+- 关系抽取按证据包批次拆成工作单元，每个单元独立计时（`PROJECTION_UNIT_TIMEOUT_SECONDS`，默认 600s），`DOCREADER_TASK_TIMEOUT_SECONDS` 只约束文档解析。单元失败只重跑该单元，不再整库从头重试；构建中的 `unitSucceeded/unitTotal` 可在图谱面板查看。
 - 只复现 M7 且不关心模型口径时，quickstart 的本地模型可以跑通；报告会记录 `local-extractive`，不要与远程模型结果直接比较。
 
 ### 4.2 CI 接入

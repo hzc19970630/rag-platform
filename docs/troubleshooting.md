@@ -101,8 +101,12 @@ a deterministic parser or model error.
 
 Local deterministic models are fast; remote providers may be slow or rate-limited.
 Check the model health snapshot in the operations view and the worker logs for
-timeouts. `DOCREADER_TASK_TIMEOUT_SECONDS` and `EMBEDDING_TIMEOUT_SECONDS` bound
-individual stages.
+timeouts. `DOCREADER_TASK_TIMEOUT_SECONDS` bounds document parsing and
+`EMBEDDING_TIMEOUT_SECONDS` bounds embedding batches. Relation extraction is
+split into work units: `PROJECTION_UNIT_TIMEOUT_SECONDS` (default 600) bounds one
+unit, and a failed unit is retried alone. The graph run row reports
+`unitSucceeded/unitTotal`; a run stuck in `RELATION_EXTRACTING` without progress
+means its queued unit tasks were lost, so cancel it and rebuild.
 
 ## Retrieval and answers
 

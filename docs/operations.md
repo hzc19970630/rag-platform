@@ -443,12 +443,22 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 
 ## 13. 投影生成缓存
 
-- Pipeline B 的 Wiki 文档页、概览块和关系抽取结果按 EvidencePackage 缓存在 `projection_generation_cache`。主键为 `(tenant_id, knowledge_base_id, projection_type, artifact, package_id)`；`artifact` 区分 `document`、`overview-block`、`extraction`，同一 package 的多个产物不会互相覆盖。
+- Pipeline B 的 Wiki 文档页、概览块和关系抽取结果按 EvidencePackage 缓存在 `projection_generation_cache`。主键为 `(tenant_id, knowledge_base_id, projection_type, artifact, package_id)`；`artifact` 区分 `document`、`overview-block` 与按批次拆分的 `extraction:<hash>`，同一 package 的多个产物不会互相覆盖。
 - 缓存键包含 package 内容摘要（chunk 级）、ACL、模型和 Prompt 版本；任一项变化都会 miss 并重算。package 内容未变时，运行日志出现 `projection_generation` 且 `reused` 增加、模型调用数下降。
 - 手动 `POST /knowledge-bases/:id/wiki/rebuild` 与 `POST /knowledge-bases/:id/graph/rebuild` 会先清空该知识库对应类型的缓存，保证“重建”是全量重算，不复用旧结果。
 - Worker 维护周期调用 `PurgeGenerationCache`，删除 `evidence_packages` 已不存在的缓存行；当前 package 的缓存长期保留，因此很久未改的文档不会因为缓存过期而在下一次变更时被迫全量重算。
 - 回滚开关：`PROJECTION_INCREMENTAL_ENABLED=false` 并重启 api/worker，投影恢复为每次全量生成；缓存表可保留或直接 `TRUNCATE`，二者都不影响业务事实。
 - 观测：`projection_cache_hits_total{type="wiki|relation"}` 与 `projection_cache_misses_total{type="wiki|relation"}` 记录每次运行的 package 数；`projection_generation` 日志给出同一组计数。
+
+### 13.1 关系投影工作单元
+
+- COLLECT 把当前证据包按 `PROJECTION_UNIT_MAX_CHUNKS`（默认 32，8–64）切成批次，写入 `projection_units`，每批一个 outbox 事件；EXTRACT 阶段行只作聚合状态，不再有整库抽取任务。
+- 单元任务走 projection 队列，复用 worker 并发与租约；单个单元超时 `PROJECTION_UNIT_TIMEOUT_SECONDS`（默认 600s）。单元失败只标记自身 `FAILED`，其余单元继续，运行进入 `RETRY_RELATION`；队列重试预算耗尽后由 worker 终态钩子把运行转为 `FAILED_RELATION` 并释放该单元 inbox，之后运维重试只重跑未成功的单元，成功单元的 payload 与缓存保留。
+- 组批与去重：同一证据包内 `content_hash` 相同的 chunk 在生成单元前折叠（重复页 PDF 不会按 43 倍重复抽取）；单次模型调用最多 8 个 chunk 且不超过 `PROJECTION_RELATION_CHARS_PER_CALL` 个字符（默认 1500，500–6000），单个超长 chunk 仍单独成批。两者共同避免大页面把单次请求拖过 60s 网关超时。
+- FINALIZE 只读取 `payload` 合并并落快照，不再调用模型；全部单元成功时由最后一个单元在同一事务内触发，且只产生一条 FINALIZE 事件。
+- 进度：`projection_runs.unit_total/unit_succeeded/unit_failed` 由单元完成时按运行行锁重算，图谱面板显示 `已完成/总数`。`RELATION_EXTRACTING` 长期不前进且单元全为 `PENDING`，说明队列事件丢失：取消该 run 后重新构建。
+- 取消：`POST /api/v1/graph/runs/:runId/cancel`（知识页为 `/api/v1/wiki/runs/:runId/cancel`）把活跃 run 置为 `CANCELLED`，未完成单元/阶段一并取消，已完成的单元与页面保留；之后可对同一知识库重新构建。运行表的操作栏对活跃 run 显示“取消运行”，对 `FAILED_*` 显示“重试”。
+- 缓存：单元结果按 `artifact=extraction:<hash>` 落盘，重试与下一次自动触发可直接复用；手动重建仍先清空该知识库的 relation 缓存。
 
 ## 14. 向量召回调参与探针
 

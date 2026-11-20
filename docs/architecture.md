@@ -190,7 +190,10 @@ Defense in depth:
 
 Wiki and relation projections are optional. They reuse the evidence pipeline and
 authorization ports, run on a separate queue, and never block evidence RAG when they
-fail. See [DESIGN.md](https://github.com/hzc19970630/rag-platform/blob/main/DESIGN.md) for the projection join semantics.
+fail. Relation extraction is split into durable work units (one evidence-package
+batch each) so a large knowledge base builds concurrently and a failed batch is
+retried alone; the join stage merges cached unit results without calling the model.
+See [DESIGN.md](https://github.com/hzc19970630/rag-platform/blob/main/DESIGN.md) for the projection join semantics.
 
 ## Deployment
 
