@@ -305,12 +305,12 @@ func (s *Store) ReplaceRunSnapshot(ctx context.Context, write relationstore.Snap
 			})
 		}
 		if len(entityRows) > 0 {
-			if err := tx.Create(&entityRows).Error; err != nil {
+			if err := tx.CreateInBatches(&entityRows, 500).Error; err != nil {
 				return err
 			}
 		}
 		if len(aliasRows) > 0 {
-			if err := tx.Create(&aliasRows).Error; err != nil {
+			if err := tx.CreateInBatches(&aliasRows, 500).Error; err != nil {
 				return err
 			}
 		}
@@ -343,12 +343,12 @@ func (s *Store) ReplaceRunSnapshot(ctx context.Context, write relationstore.Snap
 			})
 		}
 		if len(relationRows) > 0 {
-			if err := tx.Create(&relationRows).Error; err != nil {
+			if err := tx.CreateInBatches(&relationRows, 500).Error; err != nil {
 				return err
 			}
 		}
 		if len(sourceRows) > 0 {
-			if err := tx.Create(&sourceRows).Error; err != nil {
+			if err := tx.CreateInBatches(&sourceRows, 500).Error; err != nil {
 				return err
 			}
 		}
