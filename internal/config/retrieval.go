@@ -35,6 +35,9 @@ type RetrievalConfig struct {
 	ContextTokenLimit   int  `yaml:"context_token_limit"`
 	AdjacentExpansion   int  `yaml:"adjacent_expansion"`
 	MaxAdjacentChunks   int  `yaml:"max_adjacent_chunks"`
+	// MaxPerDocument caps one document's contribution to the evidence set.
+	// Zero disables the quota.
+	MaxPerDocument int `yaml:"max_per_document"`
 	// RRFK is the reciprocal rank fusion constant. It damps the influence of the
 	// top ranks so neither recall channel dominates purely because its score
 	// scale differs, which also fixes the band the fused score can land in.
@@ -73,6 +76,7 @@ func (r RetrievalConfig) Validate() error {
 		"context_token_limit":    r.ContextTokenLimit,
 		"adjacent_expansion":     r.AdjacentExpansion,
 		"max_adjacent_chunks":    r.MaxAdjacentChunks,
+		"max_per_document":       r.MaxPerDocument,
 		"rrf_k":                  r.RRFK,
 		"expansion_score_factor": r.ExpansionScoreFactor,
 	})
@@ -101,6 +105,7 @@ func defaultRetrievalConfig() RetrievalConfig {
 		ContextTokenLimit:   configschema.IntDefault("context_token_limit"),
 		AdjacentExpansion:   configschema.IntDefault("adjacent_expansion"),
 		MaxAdjacentChunks:   configschema.IntDefault("max_adjacent_chunks"),
+		MaxPerDocument:      configschema.IntDefault("max_per_document"),
 		// With rrf_k = 60 a chunk ranked first by both channels fuses to
 		// 2/(60+1) ~ 0.033, which is the band the API reports as `score`.
 		RRFK:                 configschema.IntDefault("rrf_k"),

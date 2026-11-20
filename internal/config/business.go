@@ -23,6 +23,7 @@ func RetrievalValues(cfg RetrievalConfig) map[string]any {
 		"context_token_limit":    cfg.ContextTokenLimit,
 		"adjacent_expansion":     cfg.AdjacentExpansion,
 		"max_adjacent_chunks":    cfg.MaxAdjacentChunks,
+		"max_per_document":       cfg.MaxPerDocument,
 		"rrf_k":                  cfg.RRFK,
 		"expansion_score_factor": cfg.ExpansionScoreFactor,
 	}

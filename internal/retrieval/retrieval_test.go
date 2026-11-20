@@ -10,7 +10,8 @@ func baseParams() Params {
 		TopK: 8, EmbeddingTopK: 20, KeywordTopK: 20,
 		VectorThreshold: 0.2, KeywordThreshold: 0, RerankThreshold: -10,
 		ContextTokenLimit: 3000, AdjacentExpansion: 1, MaxAdjacentChunks: 2,
-		RRFK: 60, ExpansionScoreFactor: 0.5,
+		MaxPerDocument: 3,
+		RRFK:           60, ExpansionScoreFactor: 0.5,
 	}
 }
 
@@ -59,6 +60,19 @@ func TestResolveParamsAppliesFusionAndExpansionOverrides(t *testing.T) {
 	}
 	if params.ExpansionScoreFactor != 0.25 {
 		t.Fatalf("the session tier must set expansion_score_factor, got %v", params.ExpansionScoreFactor)
+	}
+}
+
+func TestResolveParamsAppliesDocumentQuotaOverrides(t *testing.T) {
+	params, err := ResolveParams(baseParams(), `{"max_per_document": 2}`, "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if params.MaxPerDocument != 2 {
+		t.Fatalf("the knowledge base tier must set max_per_document, got %d", params.MaxPerDocument)
+	}
+	if _, err := ResolveParams(baseParams(), "", `{"max_per_document": 51}`); err == nil {
+		t.Fatalf("max_per_document above 50 must be rejected")
 	}
 }
 

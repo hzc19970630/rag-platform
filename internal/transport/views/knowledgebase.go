@@ -136,6 +136,7 @@ func RetrievalParams(view knowledgebase.RetrievalParamsV1) httpapi.RetrievalPara
 		ContextTokenLimit:    view.ContextTokenLimit,
 		AdjacentExpansion:    view.AdjacentExpansion,
 		MaxAdjacentChunks:    view.MaxAdjacentChunks,
+		MaxPerDocument:       view.MaxPerDocument,
 		RRFK:                 view.RRFK,
 		ExpansionScoreFactor: view.ExpansionScoreFactor,
 	}
@@ -177,6 +178,7 @@ func RetrievalOverride(view retrieval.ParamsOverride) httpapi.RetrievalConfigOve
 		ContextTokenLimit:    view.ContextTokenLimit,
 		AdjacentExpansion:    view.AdjacentExpansion,
 		MaxAdjacentChunks:    view.MaxAdjacentChunks,
+		MaxPerDocument:       view.MaxPerDocument,
 		RRFK:                 view.RRFK,
 		ExpansionScoreFactor: view.ExpansionScoreFactor,
 	}
@@ -198,6 +200,7 @@ func ParamsOverride(view httpapi.RetrievalConfigOverride) retrieval.ParamsOverri
 		ContextTokenLimit:    view.ContextTokenLimit,
 		AdjacentExpansion:    view.AdjacentExpansion,
 		MaxAdjacentChunks:    view.MaxAdjacentChunks,
+		MaxPerDocument:       view.MaxPerDocument,
 		RRFK:                 view.RRFK,
 		ExpansionScoreFactor: view.ExpansionScoreFactor,
 	}

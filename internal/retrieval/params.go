@@ -28,6 +28,7 @@ type ParamsOverride struct {
 	ContextTokenLimit    *int     `json:"context_token_limit,omitempty"`
 	AdjacentExpansion    *int     `json:"adjacent_expansion,omitempty"`
 	MaxAdjacentChunks    *int     `json:"max_adjacent_chunks,omitempty"`
+	MaxPerDocument       *int     `json:"max_per_document,omitempty"`
 	RRFK                 *int     `json:"rrf_k,omitempty"`
 	ExpansionScoreFactor *float64 `json:"expansion_score_factor,omitempty"`
 }
@@ -75,6 +76,9 @@ func (o ParamsOverride) Apply(base Params) Params {
 	}
 	if o.MaxAdjacentChunks != nil {
 		base.MaxAdjacentChunks = *o.MaxAdjacentChunks
+	}
+	if o.MaxPerDocument != nil {
+		base.MaxPerDocument = *o.MaxPerDocument
 	}
 	if o.RRFK != nil {
 		base.RRFK = *o.RRFK
@@ -132,6 +136,9 @@ func (o ParamsOverride) Overlay(other ParamsOverride) ParamsOverride {
 	if other.MaxAdjacentChunks != nil {
 		result.MaxAdjacentChunks = other.MaxAdjacentChunks
 	}
+	if other.MaxPerDocument != nil {
+		result.MaxPerDocument = other.MaxPerDocument
+	}
 	if other.RRFK != nil {
 		result.RRFK = other.RRFK
 	}
@@ -173,6 +180,7 @@ func ValidateOverride(override ParamsOverride) error {
 	putInt("context_token_limit", override.ContextTokenLimit)
 	putInt("adjacent_expansion", override.AdjacentExpansion)
 	putInt("max_adjacent_chunks", override.MaxAdjacentChunks)
+	putInt("max_per_document", override.MaxPerDocument)
 	putInt("rrf_k", override.RRFK)
 	putFloat("expansion_score_factor", override.ExpansionScoreFactor)
 	return configschema.ValidateNative(configschema.DomainRetrieval, values)
@@ -197,6 +205,7 @@ func (p Params) Validate() error {
 		"context_token_limit":    p.ContextTokenLimit,
 		"adjacent_expansion":     p.AdjacentExpansion,
 		"max_adjacent_chunks":    p.MaxAdjacentChunks,
+		"max_per_document":       p.MaxPerDocument,
 		"rrf_k":                  p.RRFK,
 		"expansion_score_factor": p.ExpansionScoreFactor,
 	}

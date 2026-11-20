@@ -74,10 +74,14 @@ type Params struct {
 	// VectorIterativeScan enables pgvector's relaxed-order iterative scan so a
 	// filtered HNSW scan keeps walking until it fills TopK. Exact scans ignore
 	// it; false leaves the server default (off) in place.
-	VectorIterativeScan  bool
-	ContextTokenLimit    int
-	AdjacentExpansion    int
-	MaxAdjacentChunks    int
+	VectorIterativeScan bool
+	ContextTokenLimit   int
+	AdjacentExpansion   int
+	MaxAdjacentChunks   int
+	// MaxPerDocument caps how many evidence candidates one document may
+	// contribute after in-document duplicate collapsing. Zero disables the
+	// quota.
+	MaxPerDocument       int
 	RRFK                 int
 	ExpansionScoreFactor float64
 }

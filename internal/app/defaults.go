@@ -23,6 +23,7 @@ func retrievalDefaults(cfg config.RetrievalConfig) retrieval.Params {
 		ContextTokenLimit:    cfg.ContextTokenLimit,
 		AdjacentExpansion:    cfg.AdjacentExpansion,
 		MaxAdjacentChunks:    cfg.MaxAdjacentChunks,
+		MaxPerDocument:       cfg.MaxPerDocument,
 		RRFK:                 cfg.RRFK,
 		ExpansionScoreFactor: cfg.ExpansionScoreFactor,
 	}

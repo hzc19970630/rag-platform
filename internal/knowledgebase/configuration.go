@@ -65,6 +65,7 @@ type RetrievalParamsV1 struct {
 	ContextTokenLimit    int     `json:"context_token_limit"`
 	AdjacentExpansion    int     `json:"adjacent_expansion"`
 	MaxAdjacentChunks    int     `json:"max_adjacent_chunks"`
+	MaxPerDocument       int     `json:"max_per_document"`
 	RRFK                 int     `json:"rrf_k"`
 	ExpansionScoreFactor float64 `json:"expansion_score_factor"`
 }
@@ -258,7 +259,8 @@ func retrievalParamsFromConfig(cfg config.RetrievalConfig) retrieval.Params {
 		VectorEFSearch: cfg.VectorEFSearch, VectorOversample: cfg.VectorOversample,
 		VectorIterativeScan: cfg.VectorIterativeScan,
 		ContextTokenLimit:   cfg.ContextTokenLimit, AdjacentExpansion: cfg.AdjacentExpansion,
-		MaxAdjacentChunks: cfg.MaxAdjacentChunks, RRFK: cfg.RRFK, ExpansionScoreFactor: cfg.ExpansionScoreFactor,
+		MaxAdjacentChunks: cfg.MaxAdjacentChunks, MaxPerDocument: cfg.MaxPerDocument,
+		RRFK: cfg.RRFK, ExpansionScoreFactor: cfg.ExpansionScoreFactor,
 	}
 }
 
@@ -278,6 +280,7 @@ func retrievalParamsView(params retrieval.Params) RetrievalParamsV1 {
 		ContextTokenLimit:    params.ContextTokenLimit,
 		AdjacentExpansion:    params.AdjacentExpansion,
 		MaxAdjacentChunks:    params.MaxAdjacentChunks,
+		MaxPerDocument:       params.MaxPerDocument,
 		RRFK:                 params.RRFK,
 		ExpansionScoreFactor: params.ExpansionScoreFactor,
 	}

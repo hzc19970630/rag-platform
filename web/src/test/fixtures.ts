@@ -44,6 +44,7 @@ const params: RetrievalParamsV1 = {
   context_token_limit: 4000,
   adjacent_expansion: 1,
   max_adjacent_chunks: 4,
+  max_per_document: 3,
   rrf_k: 60,
   expansion_score_factor: 0.5,
 };

@@ -290,6 +290,13 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 	}
 	expanded = dedupe(expanded)
 	SortCandidates(expanded)
+	// Repeated pages or copied blocks inside one document add no information but
+	// consume evidence slots, so collapse them before the quota and the top_k
+	// cut. Identical text in *different* documents is kept: separate files
+	// stating the same thing is a source signal, not noise.
+	var duplicates, capped int
+	expanded, duplicates = dedupeWithinDocument(expanded)
+	expanded, capped = capPerDocument(expanded, params.MaxPerDocument)
 
 	if plan.TopK >= 0 && len(expanded) > plan.TopK {
 		expanded = expanded[:plan.TopK]
@@ -301,9 +308,18 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		return EvidenceSet{}, err
 	}
 
+	if duplicates > 0 {
+		s.metrics.Inc("evidence_dropped_total", metrics.Labels("reason", "duplicate_in_document"))
+	}
+	if capped > 0 {
+		s.metrics.Inc("evidence_dropped_total", metrics.Labels("reason", "document_quota"))
+	}
+
 	span.SetAttributes(
 		attribute.Int("evidence.count", len(authorized)),
 		attribute.Int("evidence.dropped_by_authorization", dropped),
+		attribute.Int("evidence.dropped_duplicate_in_document", duplicates),
+		attribute.Int("evidence.dropped_by_document_quota", capped),
 		attribute.Bool("rerank.applied", rerankApplied),
 		attribute.Int("context.token_estimate", tokens),
 	)

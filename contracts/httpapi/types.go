@@ -402,6 +402,7 @@ type RetrievalConfigOverride struct {
 	ContextTokenLimit    *int     `json:"context_token_limit,omitempty"`
 	AdjacentExpansion    *int     `json:"adjacent_expansion,omitempty"`
 	MaxAdjacentChunks    *int     `json:"max_adjacent_chunks,omitempty"`
+	MaxPerDocument       *int     `json:"max_per_document,omitempty" oa:"min=0,max=50"`
 	RRFK                 *int     `json:"rrf_k,omitempty"`
 	ExpansionScoreFactor *float64 `json:"expansion_score_factor,omitempty"`
 }
@@ -433,6 +434,7 @@ type RetrievalParams struct {
 	ContextTokenLimit    int     `json:"context_token_limit"`
 	AdjacentExpansion    int     `json:"adjacent_expansion"`
 	MaxAdjacentChunks    int     `json:"max_adjacent_chunks"`
+	MaxPerDocument       int     `json:"max_per_document"`
 	RRFK                 int     `json:"rrf_k"`
 	ExpansionScoreFactor float64 `json:"expansion_score_factor"`
 }
@@ -799,6 +801,7 @@ type QueryPlanParams struct {
 	ContextTokenLimit    int     `json:"ContextTokenLimit"`
 	AdjacentExpansion    int     `json:"AdjacentExpansion"`
 	MaxAdjacentChunks    int     `json:"MaxAdjacentChunks"`
+	MaxPerDocument       int     `json:"MaxPerDocument"`
 	RRFK                 int     `json:"RRFK"`
 	ExpansionScoreFactor float64 `json:"ExpansionScoreFactor"`
 }

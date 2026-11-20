@@ -62,6 +62,7 @@ func QueryPlanParams(view retrieval.Params) httpapi.QueryPlanParams {
 		ContextTokenLimit:    view.ContextTokenLimit,
 		AdjacentExpansion:    view.AdjacentExpansion,
 		MaxAdjacentChunks:    view.MaxAdjacentChunks,
+		MaxPerDocument:       view.MaxPerDocument,
 		RRFK:                 view.RRFK,
 		ExpansionScoreFactor: view.ExpansionScoreFactor,
 	}

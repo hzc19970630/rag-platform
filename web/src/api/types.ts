@@ -236,6 +236,7 @@ export type RetrievalParamsV1 = {
   context_token_limit: number;
   adjacent_expansion: number;
   max_adjacent_chunks: number;
+  max_per_document: number;
   rrf_k: number;
   expansion_score_factor: number;
 };

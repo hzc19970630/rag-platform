@@ -53,6 +53,11 @@ retrieval:
   # caps how many neighbour chunks may be added in total (parents excluded).
   adjacent_expansion: 1
   max_adjacent_chunks: 2
+  # One document may contribute at most this many evidence chunks after
+  # repeated text inside the document is collapsed. Without the quota a file
+  # with duplicated pages can fill every evidence slot and starve the rest of
+  # the knowledge base. 0 disables the quota.
+  max_per_document: 3
   # Reciprocal rank fusion constant. It damps the top ranks so neither channel
   # dominates on score scale alone; with 60, a chunk ranked first by both
   # channels fuses to 2/61 ~ 0.033, which is the band the API reports as `score`.

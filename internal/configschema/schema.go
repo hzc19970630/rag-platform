@@ -158,6 +158,7 @@ var fields = []Field{
 	{Key: "rerank_threshold", Domain: DomainRetrieval, Group: "rerank", Kind: KindFloat, Default: raw(-10), Min: ptr(-10), Max: ptr(10), Step: ptr(0.01), ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.rerank_threshold"},
 	// retrieval: context
 	{Key: "context_token_limit", Domain: DomainRetrieval, Group: "context", Kind: KindInt, Default: raw(3000), Min: ptr(1), Step: ptr(1), UnitKey: "retrieval.unitTokens", ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.context_token_limit"},
+	{Key: "max_per_document", Domain: DomainRetrieval, Group: "context", Kind: KindInt, Default: raw(3), Min: ptr(0), Max: ptr(50), Step: ptr(1), UnitKey: "retrieval.unitChunks", ApplyMode: ApplyNextRetrieval, Sensitivity: SensitivityNormal, LabelKey: "retrieval.max_per_document"},
 	// chunking
 	{Key: "size", Domain: DomainChunking, Group: "chunking", Kind: KindInt, Default: raw(900), Min: ptr(1), Step: ptr(1), UnitKey: "chunking.unitChars", ApplyMode: ApplyNextIngest, Sensitivity: SensitivityNormal, LabelKey: "chunking.size"},
 	{Key: "overlap", Domain: DomainChunking, Group: "chunking", Kind: KindInt, Default: raw(120), Min: ptr(0), Step: ptr(1), UnitKey: "chunking.unitChars", ApplyMode: ApplyNextIngest, Sensitivity: SensitivityNormal, LabelKey: "chunking.overlap"},

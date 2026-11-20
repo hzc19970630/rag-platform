@@ -2812,6 +2812,7 @@ export interface components {
             KeywordThreshold?: number;
             KeywordTopK?: number;
             MaxAdjacentChunks?: number;
+            MaxPerDocument?: number;
             RRFK?: number;
             RerankEnabled?: boolean;
             RerankThreshold?: number;
@@ -2879,6 +2880,7 @@ export interface components {
             keyword_threshold?: number;
             keyword_top_k?: number;
             max_adjacent_chunks?: number;
+            max_per_document?: number;
             rerank_enabled?: boolean;
             rerank_threshold?: number;
             rerank_top_k?: number;
@@ -2940,6 +2942,7 @@ export interface components {
             keyword_threshold?: number;
             keyword_top_k?: number;
             max_adjacent_chunks?: number;
+            max_per_document?: number;
             rerank_enabled?: boolean;
             rerank_threshold?: number;
             rerank_top_k?: number;

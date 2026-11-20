@@ -2162,6 +2162,8 @@ components:
           type: integer
         MaxAdjacentChunks:
           type: integer
+        MaxPerDocument:
+          type: integer
         RRFK:
           type: integer
         RerankEnabled:
@@ -2286,6 +2288,10 @@ components:
           type: integer
         max_adjacent_chunks:
           type: integer
+        max_per_document:
+          maximum: 50
+          minimum: 0
+          type: integer
         rerank_enabled:
           type: boolean
         rerank_threshold:
@@ -2401,6 +2407,8 @@ components:
         keyword_top_k:
           type: integer
         max_adjacent_chunks:
+          type: integer
+        max_per_document:
           type: integer
         rerank_enabled:
           type: boolean

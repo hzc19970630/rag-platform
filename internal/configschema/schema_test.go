@@ -32,7 +32,7 @@ func TestDefaultsComeFromSchema(t *testing.T) {
 	if got := len(StringsDefault("split_markers")); got != 8 {
 		t.Fatalf("split marker count = %d", got)
 	}
-	if got := len(FieldsFor(DomainRetrieval)); got != 16 {
+	if got := len(FieldsFor(DomainRetrieval)); got != 17 {
 		t.Fatalf("retrieval field count = %d", got)
 	}
 	if got := len(FieldsFor(DomainChunking)); got != 4 {
