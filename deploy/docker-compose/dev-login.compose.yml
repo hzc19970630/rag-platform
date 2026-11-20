@@ -1,0 +1,14 @@
+# Local-only overlay: development identity without an IdP.
+# Unlike quickstart.compose.yml this leaves CHAT_SOURCE/EMBEDDING_SOURCE alone,
+# so it can be layered over a stack using remote models.
+#
+# Usage:
+#   docker compose --env-file .env \
+#     -f deploy/docker-compose/docker-compose.yml \
+#     -f deploy/docker-compose/dev-login.compose.yml up -d api
+services:
+  api:
+    environment:
+      APP_ENV: development
+      DEV_AUTH_ENABLED: "true"
+      OIDC_ENABLED: "false"
