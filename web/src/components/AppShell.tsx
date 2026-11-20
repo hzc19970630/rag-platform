@@ -16,8 +16,8 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { useQueryClient } from "@tanstack/react-query";
-import { Avatar, Button, Drawer, Dropdown, Flex, Input, Layout, List, Menu, Modal, Space, Tooltip, Typography, Grid, type MenuProps } from "antd";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Avatar, Button, Drawer, Dropdown, Flex, Input, Layout, List, Menu, Modal, Space, Spin, Tooltip, Typography, Grid, type MenuProps } from "antd";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
@@ -260,7 +260,9 @@ export function AppShell() {
           </Flex>
         </header>
         <Content className="app-content">
-          <Outlet />
+          <Suspense fallback={<div className="route-pending"><Spin size="large" /></div>}>
+            <Outlet />
+          </Suspense>
         </Content>
       </Layout>
 

@@ -147,6 +147,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .app-content:has(.kb-detail-page) { max-width: none; }
 .app-content:has(.chat-workspace) { padding: 16px 20px; }
 .route-loading { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.route-pending { display: grid; place-items: center; padding: 48px; }
 
 /* Page primitives */
 .page { display: grid; gap: 20px; min-width: 0; }

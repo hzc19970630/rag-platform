@@ -2,24 +2,25 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App as AntdApp, Button, ConfigProvider, Result, Spin } from "antd";
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
-import { useEffect } from "react";
+import { lazy, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ApiError } from "./api/client";
 import { useMe } from "./api/hooks";
 import { AppShell } from "./components/AppShell";
 import i18n from "./i18n";
-import { AdminPage } from "./pages/AdminPage";
-import { ChatPage } from "./pages/ChatPage";
-import { DocumentPage } from "./pages/DocumentPage";
-import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
-import { KnowledgeBasesPage } from "./pages/KnowledgeBasesPage";
 import { LoginPage } from "./pages/LoginPage";
-import { McpPage } from "./pages/McpPage";
-import { OpsPage } from "./pages/OpsPage";
 import { SessionProvider } from "./session";
 import { usePreferences } from "./store/preferences";
 import { useResolvedTheme } from "./theme";
+
+const AdminPage = lazy(() => import("./pages/AdminPage").then((module) => ({ default: module.AdminPage })));
+const ChatPage = lazy(() => import("./pages/ChatPage").then((module) => ({ default: module.ChatPage })));
+const DocumentPage = lazy(() => import("./pages/DocumentPage").then((module) => ({ default: module.DocumentPage })));
+const KnowledgeBasePage = lazy(() => import("./pages/KnowledgeBasePage").then((module) => ({ default: module.KnowledgeBasePage })));
+const KnowledgeBasesPage = lazy(() => import("./pages/KnowledgeBasesPage").then((module) => ({ default: module.KnowledgeBasesPage })));
+const McpPage = lazy(() => import("./pages/McpPage").then((module) => ({ default: module.McpPage })));
+const OpsPage = lazy(() => import("./pages/OpsPage").then((module) => ({ default: module.OpsPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
