@@ -27,6 +27,10 @@ LABEL org.opencontainers.image.title="rag-platform" \
       org.opencontainers.image.revision="${COMMIT}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.source="https://github.com/hzc19970630/rag-platform"
+
+# ALPINE-CVE-2026-4738: the pinned 3.22.8 image ships zlib 1.3.2-r1; the
+# Alpine v3.22 repository publishes the fixed 1.4-r0.
+RUN apk add --no-cache zlib=1.4-r0
 WORKDIR /app
 RUN adduser -D -u 10001 app
 COPY --from=build /out/api /usr/local/bin/api

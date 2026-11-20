@@ -514,6 +514,7 @@ docker run --rm "${IMAGE}@${DIGEST}" --version
 | M6/M7 远端 chat 超时或投影停在 `KNOWLEDGE_PARTIAL` | 先确认 api 与 worker 的 `CHAT_SOURCE` 是否一致；必要时两边同时切 local 后重跑 |
 | E2E 浏览器下载失败 | `E2E_CHANNEL=chrome` 或 `msedge`；CI 仍用 Chromium |
 | 本机 Postgres 无法 `CREATE DATABASE` | 用隔离项目/新卷或一次性容器；不要删开发卷 |
+| `security` 的 Trivy image scan 失败 | 先用 OSV/Alpine secdb 确认修复版本，升级运行时包或基础镜像；不要用 `.trivyignore` 绕过 |
 | `make <feature>-acceptance` 报 `Permission denied` | 脚本缺执行位；`chmod +x scripts/<name>.sh` 后重跑 |
 | 旧 `migrate`/`seed` 镜像报迁移缺失 | 重建所有 Go 服务镜像，不只重建 api/worker |
 | 磁盘/构建缓存不足 | 先清理无用构建缓存，再重跑；不要删正在使用的卷 |
