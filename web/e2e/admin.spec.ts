@@ -18,6 +18,6 @@ test("tenant administration loads overview, quota, members and audit", async ({ 
 
   await page.locator(".admin-filter-field").filter({ hasText: "动作" }).locator(".ant-select").click();
   await page.keyboard.type("删除模型供应商");
-  await expect(page.getByTitle("删除模型供应商")).toBeVisible();
+  await expect(page.locator(".ant-select-dropdown").getByTitle("删除模型供应商")).toBeVisible();
   await page.keyboard.press("Escape");
 });

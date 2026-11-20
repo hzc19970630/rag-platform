@@ -17,5 +17,6 @@ test("development login enters the workspace", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/knowledge-bases$/);
   await expect(page.getByRole("heading", { name: "知识库", level: 2 })).toBeVisible();
-  await expect(page.getByText("Development Knowledge Base").first()).toBeVisible();
+  // Don't pin this to seeded fixture data: the local dev database is user-managed.
+  await expect(page.getByTestId("kb-create-open")).toBeVisible();
 });
