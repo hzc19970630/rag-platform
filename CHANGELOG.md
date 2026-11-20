@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - 运行时镜像升级 zlib 到 1.4-r0，修复 `ALPINE-CVE-2026-4738`（api 与 mcp 镜像）。
+- 构建工具链升级到 Go 1.26.11，修复 `GO-2026-6859`（HTTP/1 MaxBytesReader 头竞争，api 与 mcp 二进制）。
 - 文档版本写入栅栏：被替换版本进入 `CANCELLED` 后，进行中的 parse/normalize/chunk/embed/index 不会把版本写回 `CHUNKED`/`EMBEDDED`/`EVIDENCE_READY`，不重建 chunks/证据包也不触发投影；worker 将 superseded 视为已确认并关闭对应 stage/pipeline。
 - 知识空间写入并发：文件夹移动/递归删除、批量移动与知识库删除接入 KB 级 PostgreSQL advisory 锁（3s 等待超时返回 409），校验与写入进入同一临界区；SQLite 单测保持 no-op。
 - 迟到投递不再在父运行被清理后创建无租户的 `task_inbox` 行：claim 返回 `stale delivery` 并由 worker 直接确认；reconcile 新增无租约 `PROCESSING` 行回收（15 分钟宽限），`/ops/reconcile` 报告新增 `inboxesAbandoned`。

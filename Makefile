@@ -3,7 +3,7 @@
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
 # not behind the default network.
-GO_IMAGE ?= golang:1.26-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696
+GO_IMAGE ?= golang:1.26-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab
 OBSERVABILITY_IMAGE ?= prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
 GO_PROXY ?= https://goproxy.cn,direct
 # Compose reads GO_PROXY as the Docker build arg for the Go image.

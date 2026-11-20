@@ -1,6 +1,6 @@
 module github.com/hzc19970630/rag-platform
 
-go 1.26.0
+go 1.26.11
 
 require github.com/gin-gonic/gin v1.11.0
 

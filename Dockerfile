@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
+FROM golang:1.26-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS build
 # The module proxy must be selectable at build time: the default proxy is not
 # reachable from every network, and a failed download otherwise stalls the
 # whole image build.
