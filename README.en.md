@@ -22,15 +22,15 @@ Open <http://localhost:5173>, create a knowledge base, upload `examples/demo/ret
 **Why this is not another RAG demo**
 
 - **Evidence is a first-class citizen**: citation registration and validation, unauthorized-citation rejection, permission-negative tests, and refusal without evidence are all on the answer path.
-- **Upgrades you can roll back**: per-knowledge-base vector-space migration (variant table + backfill + cutover/rollback), with a reproducible v0.1.0 → v0.2.0 upgrade drill.
+- **Upgrades you can roll back**: per-knowledge-base vector-space migration (variant table + backfill + cutover/rollback), with a reproducible v0.1.0 → current release upgrade drill.
 - **Reviewable governance**: tenant/KB RBAC, API keys, audit, quotas, and optional PostgreSQL RLS (ENABLE + FORCE).
 - **Zero-config without a fork**: preset packs are data; defaults are copied at creation, tenants can clone/edit their own packs, and built-in packs stay read-only.
 - **Integrable**: stdio MCP with 8 scoped tools plus TypeScript/Python SDKs.
 
-**New in v0.2.0**: retrieval quality loop (feedback, citation clicks, evaluation regression, and a high-risk save gate), preset packs and tenant-owned packs,
-per-KB embedding migration with backfill, and configuration change preview. See [CHANGELOG](CHANGELOG.md) for the full list.
+**New in v0.3.0**: inline knowledge-base chat with per-KB sessions, the knowledge-space folder tree with tags and batch operations,
+and completed audit enums and filters; version write fencing and knowledge-space write locks close replacement/deletion races. See [CHANGELOG](CHANGELOG.md) for the full list.
 
-> Current release: [v0.2.0](https://github.com/hzc19970630/rag-platform/releases/tag/v0.2.0).
+> Current release: [v0.3.0](https://github.com/hzc19970630/rag-platform/releases/tag/v0.3.0).
 > Before production, read the [capability boundaries](#capability-boundaries) and [security policy](SECURITY.md): OCR, HA/Kubernetes, and multiple connectors are not supported yet.
 
 [Quickstart](docs/quickstart.md) · [Docs](https://hzc19970630.github.io/rag-platform/) · [Release](https://github.com/hzc19970630/rag-platform/releases/latest) · [Comparison](docs/comparison.md)
@@ -100,7 +100,7 @@ The quickstart uses local deterministic models and the development identity, **f
 | Wiki / relation projection | Available (optional) | Per-knowledge-base switch; projection failures do not block Evidence RAG |
 | Async answers | Available | Worker generation, SSE resume, leases, terminal-state convergence |
 | Vector-space migration | Available | Per-KB embedding model/dimension switch with rebuild → verify → cutover → rollback; the old space is kept until finalize |
-| Browser E2E | Available | Playwright covers the main chain, admin console, accessibility, D3 migration entry, B14 quality feedback, and B23 presets |
+| Browser E2E | Available | Playwright covers the main chain, admin console, accessibility, embedding migration entry, retrieval quality feedback, and presets |
 | Observability | Available | Prometheus metrics, OTLP tracing, alert rules, Grafana dashboards |
 | MCP / SDK | Available | stdio MCP (8 scoped tools) plus TypeScript/Python SDKs |
 | OCR / images | Not supported | Scanned PDFs and mixed scanned pages return explicit errors; finance scans are prioritized on the roadmap |
@@ -114,7 +114,7 @@ A `v*.*.*` tag triggers the release: full verification, image build and scan, Cy
 Download and verify release artifacts:
 
 ```bash
-VERSION=v0.2.0
+VERSION=v0.3.0
 gh release download "$VERSION"
 sha256sum -c SHA256SUMS
 

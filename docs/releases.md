@@ -126,7 +126,7 @@ export RAG_VERSION=v0.1.0
 BASE_ARGS=(-f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/release.compose.yml)
 docker compose --env-file .env "${BASE_ARGS[@]}" pull
 docker compose --env-file .env "${BASE_ARGS[@]}" run --rm --no-deps migrate
-# D3: copy existing vectors into chunk_embeddings before the new API reads them.
+# Embedding migration: copy existing vectors into chunk_embeddings before the new API reads them.
 docker compose --env-file .env "${BASE_ARGS[@]}" run --rm --no-deps \
   --entrypoint embedctl api backfill-embeddings
 docker compose --env-file .env "${BASE_ARGS[@]}" up -d --no-build docreader
@@ -162,7 +162,7 @@ docker compose --env-file .env "${BASE_ARGS[@]}" exec api api --version
 先判断迁移是否向后兼容：
 
 - **兼容（推荐路径）**：新版本只做 expand 型变更（加表/加列/加索引），旧二进制仍可运行。直接重新固定上一个镜像 digest，不恢复数据库。
-- **不兼容**：迁移删改列/表或改变语义。必须在维护窗口内停止写入、恢复升级前备份和对象存储，再启动旧版本。**不要**把旧二进制直接指向已迁移的库。`0028`–`0035` 均提供 `*.down.sql`，但 down 只允许在演练环境或空库使用；生产回滚优先“恢复升级前备份 + 向前修复”，因为 D3 `finalize` 会清理旧向量空间，此时只能靠备份恢复。`migrate -down` 不是通用回滚手段。
+- **不兼容**：迁移删改列/表或改变语义。必须在维护窗口内停止写入、恢复升级前备份和对象存储，再启动旧版本。**不要**把旧二进制直接指向已迁移的库。`0028`–`0036` 均提供 `*.down.sql`，但 down 只允许在演练环境或空库使用；生产回滚优先“恢复升级前备份 + 向前修复”，因为 embedding 迁移的 `finalize` 会清理旧向量空间，此时只能靠备份恢复。`migrate -down` 不是通用回滚手段。`0036_document_folders_tags` 属于 expand 型：新增 `folders`、`tags`、`document_tags` 与 `documents.folder_id`，旧二进制忽略新表/列；兼容回滚直接切回上一镜像 digest，不需要 down。
 
 兼容回滚命令：
 
@@ -224,6 +224,6 @@ Windows 上直接构建的基础镜像会把迁移 SQL 以 CRLF 写入镜像，�
 - 在仓库外创建 `v0.1.0` 与 `HEAD` 两个 detached worktree，分别构建 `api`/`docreader` 镜像；不读取、不修改仓库 `.env`，演练用配置由 `.env.example` 生成。
 - 独立项目名与偏移端口（默认 API 18082、Postgres 55432、Redis 56379、MinIO 59000/59001），可与开发栈并行；不启动 `web`。
 - 旧栈执行 `migrate → seed → docreader/worker/api`，上传两篇示例文档，记录 Chunk/向量数并完成一次检索与 SSE 问答。
-- 升级顺序为 `停 api/worker → migrate → backfill-embeddings（连跑两次，第二次 inserted=0）→ docreader → worker → api`；断言变体行数、`migrate -check`、`readyz` 耗时、`plan.vectorEnabled` 与检索条数、SSE 完成、`GET /presets` 内置包、B14 质量接口和租户包 CRUD。
-- 回滚只切回旧镜像（0031 expand、0032–0035 加表），断言旧版检索与问答仍可用；**不执行 `migrate down`、不 finalize**。down 迁移只在一次性副本库验证。
+- 升级顺序为 `停 api/worker → migrate → backfill-embeddings（连跑两次，第二次 inserted=0）→ docreader → worker → api`；断言变体行数、`migrate -check`、`readyz` 耗时、`plan.vectorEnabled` 与检索条数、SSE 完成、`GET /presets` 内置包、检索质量接口和租户包 CRUD。
+- 回滚只切回旧镜像（0031 expand、0032–0036 加表/加列），断言旧版检索与问答仍可用；**不执行 `migrate down`、不 finalize**。down 迁移只在一次性副本库验证。
 - 报告写入 `tests/eval/upgrade_drill_report.json`（已 gitignore），包含版本/commit/镜像 ID、各阶段耗时、回填计数、`readyz`、断言明细与回滚结论。任何断言失败时脚本以非零退出并保留失败明细。

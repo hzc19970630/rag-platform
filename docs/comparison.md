@@ -18,11 +18,11 @@ here. Star counts are a distribution signal, not a quality signal.
 | **Auto-Ontology** | Semantic/ontology layer over structured data: NL-to-SQL, answerability checks, SQL validation/repair, MCP/API | Teams querying relational or lakehouse data where metric definitions and SQL provenance matter |
 | **Semantica** | Graph-native context and knowledge-graph infrastructure: OWL/SHACL/SKOS, deterministic reasoning, W3C PROV-O, decision intelligence | Regulated teams needing ontology governance, reasoning, and audit over multi-source knowledge graphs |
 
-## Project snapshot (2026-11-13)
+## Project snapshot (2026-11-20; competitor data as of 2026-11-13)
 
 | Project | Stars | Latest version (source) | License | Last push | Deployment |
 | --- | ---: | --- | --- | --- | --- |
-| RAG Platform | 1 | v0.2.0 (CHANGELOG 2026-11-14) | MIT (application); bundled dependencies reviewed separately | 2026-11-13 | Docker Compose |
+| RAG Platform | 1 | v0.3.0 (CHANGELOG 2026-11-20) | MIT (application); bundled dependencies reviewed separately | 2026-11-20 | Docker Compose |
 | WeKnora | 37,364 | v0.9.0 (2026-10-29) | MIT per README; GitHub API reports `NOASSERTION` | 2026-11-09 | Compose, Helm, Lite single binary, desktop |
 | RAGFlow | 94,112 | 1.0.0 (2026-11-06) | Apache-2.0 | 2026-11-13 | Compose; source build |
 | Dify | 161,081 | Not stated in README | Dify Open Source License (Apache-2.0 with additional conditions) | 2026-11-13 | Compose, cloud |
@@ -53,7 +53,7 @@ corpus or acceptance criteria.
 | Connectors | `http_manifest` only | 10 sources: Feishu wiki/Drive, Lark, Confluence, GitLab, Tencent IMA, Notion, Yuque, DingTalk Docs, Seafile, RSS | File sources, sitemap ingestion, BigQuery incremental sync; broader catalog not documented | Tools/MCP and custom APIs; document-connector catalog not documented |
 | Agent / workflow | Not a focus | ReAct agent, skills, sandboxes, browser, memory, automations | Agent templates, agentic RAG with thinking modes | Strong visual workflow and agent builder |
 | Observability | Prometheus metrics, OTLP tracing, 10 alert rules, Alertmanager routing, Grafana dashboards | Langfuse tracing for agent steps and pipelines | Basic monitoring | Observability integrations |
-| Browser E2E | Playwright coverage of the main chain, admin console, accessibility, D3 migration entry, B14 quality feedback, and B23 presets | Not documented | Not documented | Not documented |
+| Browser E2E | Playwright coverage of the main chain, admin console, accessibility, embedding migration entry, retrieval quality feedback, and presets | Not documented | Not documented | Not documented |
 | Deployment | Compose; no Helm, no offline bundle | Compose, Helm, Lite single binary, desktop | Compose; no Helm in reviewed README | Compose, cloud |
 | License | MIT; ParadeDB/MinIO (AGPL) and Redis 7.4 (SSPL/RSALv2) are distribution decisions | MIT (READM); check bundled components | Apache-2.0 | Custom license with conditions |
 | Maturity | Early 0.1.x; public repository created 2026-11-03 | Active, Tencent-backed, large community | Active, very large community | Mature ecosystem |
@@ -74,7 +74,7 @@ loaded with this repository's corpus, or benchmarked here.
 | Async reliability | Outbox/inbox, stage state machine, leases, dead letters, reconcile | Batch ingestion; reliability primitives not documented | Ingestion worker; semantic compilation; reliability primitives not documented | Pipeline stages; reliability primitives not documented |
 | Deployment | Compose | Docker, single binary + Postgres; Helm not documented in README | Compose, Helm | Docker/Kubernetes/Helm recommended for production |
 | License | MIT | Apache-2.0 | Apache-2.0 | MIT |
-| Maturity | Early 0.1.x | v0.40.7; active; self-published LightRAG comparison (n=200) | NVIDIA-maintained; active; not accepting external contributions | Active; self-published v0.5.0 benchmarks; Rete matcher flagged as simple |
+| Maturity | Early 0.3.x | v0.40.7; active; self-published LightRAG comparison (n=200) | NVIDIA-maintained; active; not accepting external contributions | Active; self-published v0.5.0 benchmarks; Rete matcher flagged as simple |
 | Tested here | M3/M7 self-evaluation | Not tested | Not tested | Not tested |
 
 ### Evidence notes

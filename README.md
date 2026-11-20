@@ -22,15 +22,15 @@ cd rag-platform && cp .env.example .env && ./scripts/quickstart.sh
 **为什么不是又一个 RAG Demo**
 
 - **证据链是一等公民**：引用注册与校验、越权引用拦截、权限负向用例、无证据拒答都在答案路径里。
-- **升级可回滚**：知识库级向量空间迁移（变体表 + 回填 + 切换/回滚），有可复现的 v0.1.0 → v0.2.0 升级演练脚本。
+- **升级可回滚**：知识库级向量空间迁移（变体表 + 回填 + 切换/回滚），有可复现的 v0.1.0 → 当前版本升级演练脚本。
 - **治理可评审**：租户/知识库 RBAC、API Key、审计、配额，可选 PostgreSQL RLS（ENABLE + FORCE）。
 - **零配置但不锁死**：预置包是数据件；建库复制默认值，租户可克隆/编辑自己的包，内置包只读。
 - **可被集成**：stdio MCP（8 个受权工具）与 TypeScript/Python SDK。
 
-**v0.2.0 新增**：检索质量闭环（反馈、引用点击、评估回归与高风险保存门禁）、预置包与租户自定义包、
-Per-KB Embedding 迁移与回填、配置变更预检。完整变更见 [CHANGELOG](CHANGELOG.md)。
+**v0.3.0 新增**：知识库内嵌问答与按库会话、知识空间文件夹树/标签/批量操作、审计枚举与筛选补全；
+写入侧加入文档版本栅栏与知识空间写锁，修复并发替换/删除竞态。完整变更见 [CHANGELOG](CHANGELOG.md)。
 
-> 当前版本 [v0.2.0](https://github.com/hzc19970630/rag-platform/releases/tag/v0.2.0)。
+> 当前版本 [v0.3.0](https://github.com/hzc19970630/rag-platform/releases/tag/v0.3.0)。
 > 生产使用前请阅读[能力边界](#能力边界)与[安全策略](SECURITY.md)：暂不支持 OCR、HA/K8s 与多连接器。
 
 [快速开始](docs/quickstart.md) · [在线文档](https://hzc19970630.github.io/rag-platform/) · [Release](https://github.com/hzc19970630/rag-platform/releases/latest) · [竞品对比](docs/comparison.md)
@@ -100,7 +100,7 @@ cp .env.example .env
 | Wiki / 关系投影 | 可用（可选） | 按知识库开关；投影失败不阻断 Evidence RAG |
 | 异步问答 | 可用 | Worker 生成、SSE 续传、租约与终态收敛 |
 | 向量空间迁移 | 可用 | 按知识库切换 Embedding 模型/维度，重建→验证→切换→回滚，旧空间保留到 finalize |
-| 浏览器 E2E | 可用 | Playwright 覆盖主链路、管理台、可访问性，以及 D3 迁移入口、B14 质量反馈、B23 预置包 |
+| 浏览器 E2E | 可用 | Playwright 覆盖主链路、管理台、可访问性，以及 embedding 迁移入口、检索质量反馈、预置包 |
 | 可观测性 | 可用 | Prometheus 指标、OTLP 追踪、告警规则与 Grafana 面板 |
 | MCP / SDK | 可用 | stdio MCP（8 个受权工具）与 TypeScript/Python SDK |
 | OCR / 图片 | 未支持 | 扫描 PDF、混合扫描页返回明确错误；金融扫描件优先排期 |
@@ -114,7 +114,7 @@ cp .env.example .env
 从 Release 下载并校验产物：
 
 ```bash
-VERSION=v0.2.0
+VERSION=v0.3.0
 gh release download "$VERSION"
 sha256sum -c SHA256SUMS
 
