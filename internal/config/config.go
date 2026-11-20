@@ -216,6 +216,14 @@ func LoadFrom(lookup Lookup) Config {
 		},
 		Projection: ProjectionConfig{
 			IncrementalEnabled: reader.boolean("PROJECTION_INCREMENTAL_ENABLED", true),
+			// A unit is a handful of model calls, so its timeout is independent of
+			// the ingestion stage budget. 600s covers four calls even at the 60s
+			// per-call ceiling.
+			UnitTimeoutSec: int(reader.positive("PROJECTION_UNIT_TIMEOUT_SECONDS", 600)),
+			UnitChunks:     int(reader.positive("PROJECTION_UNIT_MAX_CHUNKS", 32)),
+			// Relation extraction groups chunks by rune budget as well as the
+			// 8-chunk cap; 1500 runes keeps one call well inside a 60s gateway.
+			RelationCharsPerCall: int(reader.positive("PROJECTION_RELATION_CHARS_PER_CALL", 1500)),
 		},
 		Connector: ConnectorConfig{
 			EncryptionKey:        value(lookup, "CONNECTOR_ENCRYPTION_KEY", ""),

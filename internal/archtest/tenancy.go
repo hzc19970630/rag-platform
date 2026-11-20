@@ -31,6 +31,7 @@ var TenantTables = tenantdb.TenantTables()
 var tenantChildTables = map[string][]string{
 	"stage_runs":             {"pipeline_runs"},
 	"projection_stage_runs":  {"projection_runs"},
+	"projection_units":       {"projection_runs"},
 	"knowledge_base_members": {"knowledge_bases"},
 }
 

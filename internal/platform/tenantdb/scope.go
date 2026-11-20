@@ -107,6 +107,20 @@ func MustScoped(db *gorm.DB, tenantID string) *gorm.DB {
 	return scoped
 }
 
+// SetContext applies the transaction-local tenant context without adding a
+// WHERE clause. Child tables have no tenant_id, so their statements rely on the
+// parent policy; callers that already verified the parent tenant use this to
+// expose app.tenant_id to RLS and the write-audit triggers.
+func SetContext(db *gorm.DB, tenantID string) error {
+	if err := Require(tenantID); err != nil {
+		return err
+	}
+	if CurrentRLSMode() == RLSModeOff || !isPostgres(db) {
+		return nil
+	}
+	return setTenantContext(db, tenantID)
+}
+
 var bypassLogged sync.Map
 
 // Unscoped is the single explicit cross-tenant bypass. The reason is part of

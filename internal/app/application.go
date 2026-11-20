@@ -359,6 +359,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		closeAll()
 		return nil, err
 	}
+	relationExtractor.SetCharBudget(cfg.Projection.RelationCharsPerCall)
 	var generationCache projectioncache.Cache
 	if cfg.Projection.IncrementalEnabled {
 		generationCache = pgprojectioncache.New(database)
@@ -366,10 +367,12 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	projectionService := knowledgeprojection.NewService(knowledgeprojection.Options{
 		DB: database, Authz: authorization, Embedder: embedder, Resolver: embeddingResolver, Generator: wikiGenerator, Extractor: relationExtractor,
 		Publisher: publisher, Timeout: time.Duration(cfg.TaskTimeoutSeconds) * time.Second,
-		Store:    pgrelationstore.New(database),
-		Evidence: evidencestore.New(database),
-		Cache:    generationCache,
-		Metrics:  recorder,
+		UnitTimeout: time.Duration(cfg.Projection.UnitTimeoutSec) * time.Second,
+		UnitChunks:  cfg.Projection.UnitChunks,
+		Store:       pgrelationstore.New(database),
+		Evidence:    evidencestore.New(database),
+		Cache:       generationCache,
+		Metrics:     recorder,
 	})
 	knowledgeBaseService.SetProjectionLifecycle(projectionService)
 	var queryRewriter retrieval.Rewriter

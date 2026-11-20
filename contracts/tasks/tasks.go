@@ -68,7 +68,10 @@ type Projection struct {
 	ProjectionRunID   string `json:"projection_run_id"`
 	ProjectionType    string `json:"projection_type"`
 	Stage             string `json:"stage"`
-	IdempotencyKey    string `json:"idempotency_key"`
+	// UnitID names one extraction work unit. Empty means the task runs a stage
+	// handler; relation EXTRACT units carry the unit's idempotency key.
+	UnitID         string `json:"unit_id,omitempty"`
+	IdempotencyKey string `json:"idempotency_key"`
 	// Attempt distinguishes queue task ids across independent retries while the
 	// stage row keeps the same idempotency key.
 	Attempt     int    `json:"attempt"`

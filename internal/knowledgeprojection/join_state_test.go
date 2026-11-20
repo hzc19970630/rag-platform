@@ -22,6 +22,15 @@ func (r *countingEvidenceReader) CurrentPackages(context.Context, string, string
 	return r.packages, nil
 }
 
+func (r *countingEvidenceReader) CurrentPackage(_ context.Context, _, _, packageID string) (evidence.Package, bool, error) {
+	for _, pkg := range r.packages {
+		if pkg.ID == packageID {
+			return pkg, true, nil
+		}
+	}
+	return evidence.Package{}, false, nil
+}
+
 func TestEnsureProjectionStateCachesExpectedHash(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {

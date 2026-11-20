@@ -22,6 +22,10 @@ func (r *recordingEvidence) CurrentPackages(_ context.Context, _, knowledgeBaseI
 	return nil, nil
 }
 
+func (r *recordingEvidence) CurrentPackage(context.Context, string, string, string) (evidence.Package, bool, error) {
+	return evidence.Package{}, false, nil
+}
+
 func newSweepFixture(t *testing.T, count int, sameTimestamp bool) (*Service, *recordingEvidence) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

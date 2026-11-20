@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
@@ -17,7 +15,6 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 const (
@@ -94,73 +91,9 @@ func (s *Service) Process(ctx context.Context, task Task) error {
 	}
 }
 
-// projectionStage adapts one projection stage to the shared pipeline runtime.
-// Wiki and relation keep their own stages, status names and transition rules;
-// claim, lease, inbox outcome and outbox reopening are owned by pipeline.
-type projectionStage struct {
-	task Task
-	run  *models.ProjectionRun
-}
-
-func (p projectionStage) Start(tx *gorm.DB, now time.Time) error {
-	var stage models.ProjectionStageRun
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stage, "idempotency_key = ?", p.task.IdempotencyKey).Error; err != nil {
-		return err
-	}
-	if stage.ProjectionRunID != p.run.ID || stage.Stage != p.task.Stage || stage.ProjectionType != p.run.ProjectionType {
-		return fmt.Errorf("projection stage does not belong to run")
-	}
-	if err := tenantdb.MustScoped(tx, p.run.TenantID).Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
-		"status": stageStatusFor(p.run.ProjectionType, p.task.Stage), "error_code": "", "error_message": "", "updated_at": now,
-	}).Error; err != nil {
-		return err
-	}
-	return tx.Model(&models.ProjectionStageRun{}).Where("id = ?", stage.ID).Updates(map[string]any{
-		"status": StageProcessing, "attempts": gorm.Expr("attempts + 1"), "started_at": &now,
-		"error_code": "", "error_message": "", "updated_at": now,
-	}).Error
-}
-
-func (p projectionStage) Succeed(tx *gorm.DB, now time.Time) (*models.OutboxEvent, error) {
-	if err := tx.Model(&models.ProjectionStageRun{}).Where("idempotency_key = ?", p.task.IdempotencyKey).Updates(map[string]any{
-		"status": StageSucceeded, "completed_at": &now, "error_code": "", "error_message": "", "updated_at": now,
-	}).Error; err != nil {
-		return nil, err
-	}
-	next, hasNext := nextStageFor(p.run.ProjectionType, p.task.Stage)
-	if !hasNext {
-		return nil, nil
-	}
-	nextKey := p.run.ID + ":" + next
-	var nextStageRow models.ProjectionStageRun
-	if err := tx.Where("idempotency_key = ?", nextKey).First(&nextStageRow).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-		nextStageRow = models.ProjectionStageRun{
-			ProjectionRunID: p.run.ID, ProjectionType: p.run.ProjectionType, Stage: next,
-			Status: StagePending, IdempotencyKey: nextKey,
-		}
-		if err := tx.Create(&nextStageRow).Error; err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	}
-	event, err := stageEvent(p.run, next, nextStageRow.Attempts, p.task.TraceParent)
-	if err != nil {
-		return nil, err
-	}
-	return &event, nil
-}
-
-func (p projectionStage) Fail(tx *gorm.DB, code, message string, now time.Time) error {
-	if err := tx.Model(&models.ProjectionStageRun{}).Where("idempotency_key = ?", p.task.IdempotencyKey).Updates(map[string]any{
-		"status": StageFailed, "error_code": code, "error_message": message, "updated_at": now,
-	}).Error; err != nil {
-		return err
-	}
-	return tenantdb.MustScoped(tx, p.run.TenantID).Model(&models.ProjectionRun{}).Where("id = ? AND status <> ?", p.run.ID, ProjectionCancelled).Updates(map[string]any{
-		"status": failedStatusFor(p.run.ProjectionType), "error_code": code, "error_message": message, "updated_at": now,
-	}).Error
-}
+// projectionStage lives in relation_worker.go: it calls the shared pipeline
+// runtime for both wiki and relation stages and fans relation extraction out
+// into unit events.
 
 func stageEvent(run *models.ProjectionRun, stage string, attempt int, traceParent string) (models.OutboxEvent, error) {
 	key := run.ID + ":" + stage

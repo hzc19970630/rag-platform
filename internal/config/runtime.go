@@ -46,9 +46,17 @@ type ConnectorConfig struct {
 
 // ProjectionConfig controls Pipeline B generation behavior. IncrementalEnabled
 // wires the per-package generation cache; false is the exact pre-cache
-// full-regeneration behavior and is the rollback switch.
+// full-regeneration behavior and is the rollback switch. UnitTimeoutSec bounds
+// one relation extraction unit (not the whole knowledge base), and UnitChunks
+// is how many evidence chunks one unit carries.
 type ProjectionConfig struct {
 	IncrementalEnabled bool
+	UnitTimeoutSec     int
+	UnitChunks         int
+	// RelationCharsPerCall bounds one relation extraction model call by content
+	// size. Dense pages otherwise produce multi-thousand-rune prompts that time
+	// out on slow gateways.
+	RelationCharsPerCall int
 }
 
 func (c ConnectorConfig) Validate(appEnv string) error {

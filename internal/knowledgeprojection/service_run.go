@@ -275,6 +275,15 @@ func (s *Service) insertRunFor(ctx context.Context, tx *gorm.DB, knowledgeBase m
 func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRun) error {
 	now := time.Now()
 	return tenantdb.InTx(ctx, s.db, run.TenantID, func(tx *gorm.DB) error {
+		if run.ProjectionType == ProjectionTypeRelation {
+			handled, err := s.resetRelationUnitsForRetry(ctx, tx, run, now)
+			if err != nil {
+				return err
+			}
+			if handled {
+				return nil
+			}
+		}
 		var stages []models.ProjectionStageRun
 		if err := tx.Where("projection_run_id = ?", run.ID).Order("id").Find(&stages).Error; err != nil {
 			return err
@@ -290,7 +299,7 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 			}
 		}
 		if err := tx.Model(&models.ProjectionStageRun{}).Where("projection_run_id = ? AND status <> ?", run.ID, StageSucceeded).Updates(map[string]any{
-			"status": StagePending, "error_code": "", "error_message": "", "updated_at": now,
+			"status": StagePending, "error_code": "", "error_message": "", "completed_at": nil, "updated_at": now,
 		}).Error; err != nil {
 			return err
 		}
@@ -310,6 +319,7 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 			return err
 		}
 		run.Status = retryStatusFor(run.ProjectionType)
+		run.ErrorCode, run.ErrorMessage = "", ""
 		return nil
 	})
 }
@@ -568,6 +578,84 @@ func (s *Service) Retry(ctx context.Context, principal authz.Principal, runID st
 	resourceType := "wiki_page"
 	if run.ProjectionType == ProjectionTypeRelation {
 		action = "graph_retry"
+		resourceType = "graph_run"
+	}
+	s.recordAuditResource(ctx, principal, run.KnowledgeBaseID, resourceType, run.ID, action)
+	return run, nil
+}
+
+// Cancel stops an active projection run. Finished units and pages stay; queued
+// tasks see the cancelled run and acknowledge without producing more work.
+func (s *Service) Cancel(ctx context.Context, principal authz.Principal, runID string) (models.ProjectionRun, error) {
+	if principal.CredentialType == "api_key" {
+		return models.ProjectionRun{}, apperror.ErrForbidden
+	}
+	var run models.ProjectionRun
+	if err := s.db.WithContext(ctx).First(&run, "id = ? AND tenant_id = ?", runID, principal.TenantID).Error; err != nil {
+		return models.ProjectionRun{}, apperror.ErrNotFound
+	}
+	if _, err := s.authorize(ctx, principal, run.KnowledgeBaseID, "write"); err != nil {
+		return models.ProjectionRun{}, err
+	}
+	if run.Status == ProjectionCancelled {
+		return run, nil
+	}
+	active := false
+	for _, candidate := range activeStatusesFor(run.ProjectionType) {
+		if run.Status == candidate {
+			active = true
+			break
+		}
+	}
+	if !active {
+		return models.ProjectionRun{}, fmt.Errorf("%w: only an active projection run can be cancelled", apperror.ErrConflict)
+	}
+	now := time.Now()
+	err := tenantdb.InTx(ctx, s.db, run.TenantID, func(tx *gorm.DB) error {
+		result := tenantdb.MustScoped(tx, run.TenantID).Model(&models.ProjectionRun{}).
+			Where("id = ? AND status = ?", run.ID, run.Status).Updates(map[string]any{
+			"status": ProjectionCancelled, "error_code": "cancelled_by_operator",
+			"error_message": "projection run cancelled by an operator",
+			"completed_at":  &now, "updated_at": now,
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return apperror.ErrConflict
+		}
+		if err := tenantdb.SetContext(tx, run.TenantID); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.ProjectionStageRun{}).
+			Where("projection_run_id = ? AND status NOT IN ?", run.ID, []string{StageSucceeded, StageFailed, ProjectionCancelled}).
+			Updates(map[string]any{
+				"status": ProjectionCancelled, "error_code": "cancelled",
+				"error_message": "run cancelled", "updated_at": now,
+			}).Error; err != nil {
+			return err
+		}
+		if run.ProjectionType != ProjectionTypeRelation {
+			return nil
+		}
+		return tx.Model(&models.ProjectionUnit{}).
+			Where("projection_run_id = ? AND status <> ?", run.ID, StageSucceeded).
+			Updates(map[string]any{
+				"status": ProjectionCancelled, "error_code": "cancelled",
+				"error_message": "run cancelled", "updated_at": now,
+			}).Error
+	})
+	if err != nil {
+		return models.ProjectionRun{}, err
+	}
+	run.Status = ProjectionCancelled
+	run.ErrorCode = "cancelled_by_operator"
+	run.ErrorMessage = "projection run cancelled by an operator"
+	run.CompletedAt = &now
+	action := "wiki_cancel"
+	resourceType := "wiki_page"
+	if run.ProjectionType == ProjectionTypeRelation {
+		action = "graph_cancel"
 		resourceType = "graph_run"
 	}
 	s.recordAuditResource(ctx, principal, run.KnowledgeBaseID, resourceType, run.ID, action)

@@ -256,6 +256,29 @@ func recordDeadLetter(logger *slog.Logger, application *app.Application, ctx con
 	if !hasRetried || !hasMax || retried < maxRetry {
 		return
 	}
+	// Projection tasks carry an evidence package, not a document version, so the
+	// ingestion dead-letter table cannot represent them. A spent relation unit
+	// still has to move its run out of RETRY_RELATION; the run and unit rows are
+	// the durable record, and releasing the inbox enables the operator retry.
+	if task.Type() == queue.TaskTypeRelation {
+		var message tasks.Projection
+		if err := json.Unmarshal(task.Payload(), &message); err == nil && message.UnitID != "" {
+			recordCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := application.Projection.AbandonRelationUnit(recordCtx, message.TenantID, message.ProjectionRunID, message.UnitID, taskErr); err != nil {
+				logger.Error("relation_unit_abandon_failed", "unit_id", message.UnitID, "error", err)
+				return
+			}
+			logger.Warn("relation_unit_abandoned", "run_id", message.ProjectionRunID, "unit_id", message.UnitID)
+			return
+		}
+		logger.Warn("dead_letter_skipped_projection", "task_type", task.Type())
+		return
+	}
+	if task.Type() == queue.TaskTypeWiki {
+		logger.Warn("dead_letter_skipped_projection", "task_type", task.Type())
+		return
+	}
 	var message ingestion.Task
 	if err := json.Unmarshal(task.Payload(), &message); err != nil {
 		logger.Error("dead_letter_payload_invalid", "error", err)

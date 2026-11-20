@@ -57,4 +57,8 @@ type Package struct {
 // platform/evidencestore; another store can implement the same contract.
 type Reader interface {
 	CurrentPackages(ctx context.Context, tenantID, knowledgeBaseID string) ([]Package, error)
+	// CurrentPackage returns one package only while it still describes the
+	// current, evidence-ready, non-deleted document version. found=false means
+	// the evidence changed since the caller captured the package id.
+	CurrentPackage(ctx context.Context, tenantID, knowledgeBaseID, packageID string) (Package, bool, error)
 }

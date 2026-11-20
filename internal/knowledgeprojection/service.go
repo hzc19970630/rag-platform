@@ -43,6 +43,10 @@ type Options struct {
 	Extractor *Extractor
 	Publisher Publisher
 	Timeout   time.Duration
+	// UnitTimeout bounds one relation extraction unit. Zero falls back to Timeout.
+	UnitTimeout time.Duration
+	// UnitChunks is how many evidence chunks one unit carries; clamped to 8..64.
+	UnitChunks int
 	// Store is the Relation Store port. Wiki-only deployments may leave it
 	// nil; graph operations then fail with an explicit configuration error.
 	Store relationstore.RelationStore
@@ -56,20 +60,22 @@ type Options struct {
 }
 
 type Service struct {
-	db         *gorm.DB
-	authz      Authorizer
-	embedder   ingestion.Embedder
-	resolver   embedding.Resolver
-	generator  *Generator
-	relation   *Extractor
-	publisher  Publisher
-	timeout    time.Duration
-	store      relationstore.RelationStore
-	evidence   evidence.Reader
-	cache      projectioncache.Cache
-	metrics    metrics.Recorder
-	leaseOwner inboxlease.Owner
-	leaseTTL   time.Duration
+	db          *gorm.DB
+	authz       Authorizer
+	embedder    ingestion.Embedder
+	resolver    embedding.Resolver
+	generator   *Generator
+	relation    *Extractor
+	publisher   Publisher
+	timeout     time.Duration
+	unitTimeout time.Duration
+	unitChunks  int
+	store       relationstore.RelationStore
+	evidence    evidence.Reader
+	cache       projectioncache.Cache
+	metrics     metrics.Recorder
+	leaseOwner  inboxlease.Owner
+	leaseTTL    time.Duration
 }
 
 func (s *Service) runtime() *pipeline.Runtime {
@@ -91,10 +97,26 @@ func NewService(options Options) *Service {
 	if options.Extractor != nil {
 		options.Extractor.SetCache(options.Cache)
 	}
+	unitChunks := options.UnitChunks
+	if unitChunks <= 0 {
+		unitChunks = 32
+	}
+	if unitChunks < 8 {
+		unitChunks = 8
+	}
+	if unitChunks > 64 {
+		unitChunks = 64
+	}
+	unitTimeout := options.UnitTimeout
+	if unitTimeout <= 0 {
+		unitTimeout = options.Timeout
+	}
 	return &Service{
 		db: options.DB, authz: options.Authz, embedder: options.Embedder, resolver: options.Resolver,
 		generator: options.Generator, relation: options.Extractor,
-		publisher: options.Publisher, timeout: options.Timeout, store: options.Store,
+		publisher: options.Publisher, timeout: options.Timeout,
+		unitTimeout: unitTimeout, unitChunks: unitChunks,
+		store:    options.Store,
 		evidence: reader, cache: options.Cache, metrics: recorder,
 	}
 }

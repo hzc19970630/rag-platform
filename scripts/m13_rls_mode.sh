@@ -40,7 +40,7 @@ DECLARE
         'messages', 'outbox_events', 'pipeline_runs', 'projection_generation_cache',
         'projection_runs', 'stream_events', 'sync_runs', 'task_dead_letters',
         'task_inbox', 'wiki_page_sources', 'wiki_page_versions', 'wiki_pages',
-        'stage_runs', 'projection_stage_runs', 'knowledge_base_members',
+        'stage_runs', 'projection_stage_runs', 'projection_units', 'knowledge_base_members',
         'chunk_embeddings', 'embedding_migrations', 'retrieval_feedback',
         'retrieval_eval_runs', 'tags', 'tenant_presets'
     ];

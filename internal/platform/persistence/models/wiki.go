@@ -5,25 +5,53 @@ import "time"
 // ProjectionRun is one Pipeline B execution over an immutable EvidencePackage.
 // It never owns Pipeline A state: retries and rebuilds change only these rows.
 type ProjectionRun struct {
-	ID                string     `gorm:"primaryKey;size:64" json:"id"`
-	TenantID          string     `gorm:"size:64;not null;index" json:"tenantId"`
-	KnowledgeBaseID   string     `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
-	EvidencePackageID string     `gorm:"size:64;not null;index" json:"evidencePackageId"`
-	ProjectionType    string     `gorm:"size:16;not null" json:"projectionType"`
-	Status            string     `gorm:"size:32;not null" json:"status"`
-	SourceHash        string     `gorm:"size:64;not null;default:''" json:"sourceHash"`
-	ACLVersion        int64      `gorm:"not null" json:"aclVersion"`
-	Model             string     `gorm:"size:128;not null;default:''" json:"model"`
-	PromptVersion     string     `gorm:"size:128;not null;default:''" json:"promptVersion"`
-	RetryOfRunID      *string    `gorm:"size:64" json:"retryOfRunId,omitempty"`
-	ErrorCode         string     `gorm:"size:128;not null;default:''" json:"errorCode,omitempty"`
-	ErrorMessage      string     `gorm:"type:text;not null;default:''" json:"errorMessage,omitempty"`
-	CompletedAt       *time.Time `json:"completedAt,omitempty"`
-	CreatedAt         time.Time  `gorm:"not null" json:"createdAt"`
-	UpdatedAt         time.Time  `gorm:"not null" json:"updatedAt"`
+	ID                string  `gorm:"primaryKey;size:64" json:"id"`
+	TenantID          string  `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID   string  `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
+	EvidencePackageID string  `gorm:"size:64;not null;index" json:"evidencePackageId"`
+	ProjectionType    string  `gorm:"size:16;not null" json:"projectionType"`
+	Status            string  `gorm:"size:32;not null" json:"status"`
+	SourceHash        string  `gorm:"size:64;not null;default:''" json:"sourceHash"`
+	ACLVersion        int64   `gorm:"not null" json:"aclVersion"`
+	Model             string  `gorm:"size:128;not null;default:''" json:"model"`
+	PromptVersion     string  `gorm:"size:128;not null;default:''" json:"promptVersion"`
+	RetryOfRunID      *string `gorm:"size:64" json:"retryOfRunId,omitempty"`
+	ErrorCode         string  `gorm:"size:128;not null;default:''" json:"errorCode,omitempty"`
+	ErrorMessage      string  `gorm:"type:text;not null;default:''" json:"errorMessage,omitempty"`
+	// Unit counters are maintained under a run row lock as extraction units
+	// finish, so the graph page can show progress without aggregating the unit
+	// table on every poll.
+	UnitTotal     int        `gorm:"not null;default:0" json:"unitTotal"`
+	UnitSucceeded int        `gorm:"not null;default:0" json:"unitSucceeded"`
+	UnitFailed    int        `gorm:"not null;default:0" json:"unitFailed"`
+	CompletedAt   *time.Time `json:"completedAt,omitempty"`
+	CreatedAt     time.Time  `gorm:"not null" json:"createdAt"`
+	UpdatedAt     time.Time  `gorm:"not null" json:"updatedAt"`
 }
 
 func (ProjectionRun) TableName() string { return "projection_runs" }
+
+// ProjectionUnit is one durable relation-extraction work unit: a slice of one
+// EvidencePackage's child chunks. Units make a large graph build resumable and
+// concurrent; the stage rows only aggregate them.
+type ProjectionUnit struct {
+	ID              string     `gorm:"primaryKey;size:255" json:"id"`
+	ProjectionRunID string     `gorm:"size:64;not null;index" json:"projectionRunId"`
+	PackageID       string     `gorm:"size:64;not null" json:"packageId"`
+	BatchIndex      int        `gorm:"not null" json:"batchIndex"`
+	ChunkIDs        string     `gorm:"type:jsonb;not null;default:'[]'" json:"-"`
+	Status          string     `gorm:"size:32;not null" json:"status"`
+	Attempts        int        `gorm:"not null;default:0" json:"attempts"`
+	Payload         *string    `gorm:"type:jsonb" json:"-"`
+	ErrorCode       string     `gorm:"size:128;not null;default:''" json:"errorCode,omitempty"`
+	ErrorMessage    string     `gorm:"type:text;not null;default:''" json:"errorMessage,omitempty"`
+	StartedAt       *time.Time `json:"startedAt,omitempty"`
+	CompletedAt     *time.Time `json:"completedAt,omitempty"`
+	CreatedAt       time.Time  `gorm:"not null" json:"createdAt"`
+	UpdatedAt       time.Time  `gorm:"not null" json:"updatedAt"`
+}
+
+func (ProjectionUnit) TableName() string { return "projection_units" }
 
 type ProjectionStageRun struct {
 	ID              uint64     `gorm:"primaryKey;autoIncrement" json:"id"`

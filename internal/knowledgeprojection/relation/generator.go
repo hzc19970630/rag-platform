@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -18,7 +19,14 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/prompts"
 )
 
-const maxRelationChunksPerCall = 8
+const (
+	// maxRelationChunksPerCall is the hard upper bound on chunks per model call.
+	maxRelationChunksPerCall = 8
+	// defaultRelationCharsPerCall bounds the prompt by content size. Dense
+	// documents (a 500-rune page per chunk) would otherwise send ~4k runes in
+	// one request and exceed slow gateways' latency budget.
+	defaultRelationCharsPerCall = 1500
+)
 
 // Extractor is the Relation Projection generator. It asks the configured chat
 // adapter for RelationProjectionPackageV1 JSON and always merges deterministic
@@ -30,6 +38,7 @@ type Extractor struct {
 	template      string
 	promptVersion string
 	cache         projectioncache.Cache
+	charBudget    int
 }
 
 // ExtractStats reports package-level cache effectiveness for one run.
@@ -41,6 +50,22 @@ type ExtractStats struct {
 // SetCache enables per-package extraction caching. A nil cache keeps the
 // previous full-extraction behavior.
 func (e *Extractor) SetCache(cache projectioncache.Cache) { e.cache = cache }
+
+// SetCharBudget bounds one model call by content size. Values outside 500..6000
+// fall back to the default; the chunk-count cap still applies.
+func (e *Extractor) SetCharBudget(chars int) {
+	if chars <= 0 {
+		e.charBudget = defaultRelationCharsPerCall
+		return
+	}
+	if chars < 500 {
+		chars = 500
+	}
+	if chars > 6000 {
+		chars = 6000
+	}
+	e.charBudget = chars
+}
 
 func NewExtractor(chatter Chatter, registry *prompts.Registry) (*Extractor, error) {
 	if chatter == nil {
@@ -105,17 +130,47 @@ func (e *Extractor) Extract(ctx context.Context, tenantID, knowledgeBaseID strin
 // fallback triples. The global MergeExtraction still runs once over all
 // packages, so a cached package result is indistinguishable from a fresh one.
 func (e *Extractor) ExtractPackage(ctx context.Context, pkg evidence.Package) (RelationProjectionPackage, error) {
+	return e.extractChunks(ctx, pkg, evidenceChunks(pkg))
+}
+
+// ExtractUnit extracts one work unit: an ordered slice of a package's chunks.
+// It deliberately does not merge; FINALIZE runs MergeExtraction once over the
+// union of unit payloads, which keeps normalization identical to the old
+// whole-knowledge-base path. The unit key makes each batch a distinct cache
+// variant so retries reuse finished batches.
+func (e *Extractor) ExtractUnit(ctx context.Context, pkg evidence.Package, unitKey string, chunks []evidence.Chunk) (RelationProjectionPackage, ExtractStats, error) {
 	result := RelationProjectionPackage{
 		SchemaVersion: SchemaRelationProjection, TenantID: pkg.TenantID,
 		KnowledgeBaseID: pkg.KnowledgeBaseID, ACLVersion: pkg.ACLVersion,
 	}
-	chunks := evidenceChunks(pkg)
-	for start := 0; start < len(chunks); start += maxRelationChunksPerCall {
-		end := start + maxRelationChunksPerCall
-		if end > len(chunks) {
-			end = len(chunks)
+	stats := ExtractStats{}
+	if len(chunks) == 0 {
+		return result, stats, nil
+	}
+	key := e.unitCacheKey(pkg, unitKey, chunks)
+	if payload, ok := e.cached(ctx, key); ok {
+		var extracted RelationProjectionPackage
+		if err := json.Unmarshal(payload, &extracted); err == nil {
+			stats.Reused = 1
+			return extracted, stats, nil
 		}
-		batch := chunks[start:end]
+		slog.Warn("relation_cache_decode_failed", "package_id", pkg.ID, "unit_key", unitKey)
+	}
+	extracted, err := e.extractChunks(ctx, pkg, chunks)
+	if err != nil {
+		return RelationProjectionPackage{}, stats, err
+	}
+	e.store(ctx, key, extracted)
+	stats.Generated = 1
+	return extracted, stats, nil
+}
+
+func (e *Extractor) extractChunks(ctx context.Context, pkg evidence.Package, chunks []evidence.Chunk) (RelationProjectionPackage, error) {
+	result := RelationProjectionPackage{
+		SchemaVersion: SchemaRelationProjection, TenantID: pkg.TenantID,
+		KnowledgeBaseID: pkg.KnowledgeBaseID, ACLVersion: pkg.ACLVersion,
+	}
+	for _, batch := range e.batches(chunks) {
 		extracted, err := e.extractBatch(ctx, pkg, batch)
 		if err != nil {
 			return RelationProjectionPackage{}, err
@@ -127,6 +182,33 @@ func (e *Extractor) ExtractPackage(ctx context.Context, pkg evidence.Package) (R
 		result.Relations = append(result.Relations, fallback.Relations...)
 	}
 	return result, nil
+}
+
+// batches groups chunks by the configured rune budget and the hard chunk cap.
+// A single chunk larger than the budget still gets its own call so no content
+// is dropped; the alternative (splitting a chunk) would break source ids.
+func (e *Extractor) batches(chunks []evidence.Chunk) [][]evidence.Chunk {
+	budget := e.charBudget
+	if budget <= 0 {
+		budget = defaultRelationCharsPerCall
+	}
+	result := make([][]evidence.Chunk, 0, len(chunks)/2+1)
+	start := 0
+	for start < len(chunks) {
+		end := start
+		chars := 0
+		for end < len(chunks) && end-start < maxRelationChunksPerCall {
+			next := len([]rune(chunks[end].Content))
+			if end > start && chars+next > budget {
+				break
+			}
+			chars += next
+			end++
+		}
+		result = append(result, chunks[start:end])
+		start = end
+	}
+	return result
 }
 
 func (e *Extractor) cacheKey(pkg evidence.Package) projectioncache.Key {
@@ -142,6 +224,31 @@ func (e *Extractor) cacheKey(pkg evidence.Package) projectioncache.Key {
 		TenantID: pkg.TenantID, KnowledgeBaseID: pkg.KnowledgeBaseID,
 		ProjectionType: "relation", Artifact: "extraction", PackageID: pkg.ID,
 		InputHash:     hex.EncodeToString(digest.Sum(nil)),
+		PromptVersion: e.promptVersion, Model: e.chatter.Name(), ACLVersion: pkg.ACLVersion,
+	}
+}
+
+// unitCacheKey scopes a cached extraction to one batch. The artifact column is
+// the cache's variant key (wiki already stores "document"/"overview-block"), so
+// units do not need a schema change; the package id stays real so the orphan
+// sweep still works.
+func (e *Extractor) unitCacheKey(pkg evidence.Package, unitKey string, chunks []evidence.Chunk) projectioncache.Key {
+	digest := sha256.New()
+	for _, part := range []string{
+		"relation-unit-v2", pkg.ID, unitKey,
+		e.chatter.Name(), e.promptVersion, fmt.Sprint(pkg.ACLVersion),
+	} {
+		digest.Write([]byte(part))
+		digest.Write([]byte{0})
+	}
+	for _, chunk := range chunks {
+		fmt.Fprintf(digest, "%s=%s\n", chunk.ID, chunk.ContentHash)
+	}
+	sum := hex.EncodeToString(digest.Sum(nil))
+	return projectioncache.Key{
+		TenantID: pkg.TenantID, KnowledgeBaseID: pkg.KnowledgeBaseID,
+		ProjectionType: "relation", Artifact: "extraction:" + sum[:12], PackageID: pkg.ID,
+		InputHash:     sum,
 		PromptVersion: e.promptVersion, Model: e.chatter.Name(), ACLVersion: pkg.ACLVersion,
 	}
 }
@@ -195,17 +302,57 @@ func (e *Extractor) extractBatch(ctx context.Context, pkg evidence.Package, chun
 	parsed.TenantID = pkg.TenantID
 	parsed.KnowledgeBaseID = pkg.KnowledgeBaseID
 	parsed.ACLVersion = pkg.ACLVersion
+	allowed := make(map[string]bool, len(chunks))
+	for _, chunk := range chunks {
+		allowed[chunk.ID] = true
+	}
 	for index := range parsed.Entities {
+		parsed.Entities[index].SourceChunkIDs = resolveSourceIDs(parsed.Entities[index].SourceChunkIDs, byIndex, allowed)
 		if len(parsed.Entities[index].SourceChunkIDs) == 0 {
 			parsed.Entities[index].SourceChunkIDs = chunksMentioning(chunks, parsed.Entities[index].Name)
 		}
 	}
 	for index := range parsed.Relations {
+		parsed.Relations[index].SourceChunkIDs = resolveSourceIDs(parsed.Relations[index].SourceChunkIDs, byIndex, allowed)
 		if len(parsed.Relations[index].SourceChunkIDs) == 0 {
 			parsed.Relations[index].SourceChunkIDs = chunksMentioning(chunks, parsed.Relations[index].SubjectKey, parsed.Relations[index].ObjectKey)
 		}
 	}
 	return parsed, nil
+}
+
+// resolveSourceIDs accepts real chunk ids and the 1-based evidence block ids the
+// model commonly returns ("1", "2"), translating the latter through byIndex.
+// Unknown references are dropped; an empty result triggers the text fallback.
+func resolveSourceIDs(ids []string, byIndex map[int]string, allowed map[string]bool) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(ids))
+	result := make([]string, 0, len(ids))
+	for _, raw := range ids {
+		id := strings.Trim(strings.TrimSpace(raw), "\"'")
+		if id == "" {
+			continue
+		}
+		if !allowed[id] {
+			index, err := strconv.Atoi(id)
+			if err != nil {
+				continue
+			}
+			chunkID, ok := byIndex[index]
+			if !ok {
+				continue
+			}
+			id = chunkID
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		result = append(result, id)
+	}
+	return result
 }
 
 var (

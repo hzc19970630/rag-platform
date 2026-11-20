@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -227,6 +228,106 @@ func TestExtractSkipsPackagesWithoutChunksAndUsesCache(t *testing.T) {
 	extractor.SetCache(&fakeCache{getErr: errors.New("get down"), putErr: errors.New("put down")})
 	if _, _, err := extractor.Extract(context.Background(), "tenant-a", "kb-a", 1, packages); err != nil {
 		t.Fatalf("cache errors must not fail extraction: %v", err)
+	}
+}
+
+func TestExtractUnitCachesEachBatchSeparately(t *testing.T) {
+	output := RelationProjectionPackage{Entities: []ExtractedEntity{{Name: "Acme", SourceChunkIDs: []string{"chunk-1"}}}}
+	payload, _ := json.Marshal(output)
+	chatter := &fakeChatter{text: string(payload)}
+	extractor := newTestExtractor(t, chatter)
+	cache := &fakeCache{}
+	extractor.SetCache(cache)
+	pkg := relationPackage("pkg-1", "doc-1",
+		relationChunk("chunk-1", "[[Acme|works_at|Globex]]", 0),
+		relationChunk("chunk-2", "[[Beta|owns|Gamma]]", 1),
+	)
+	ctx := context.Background()
+
+	first, stats, err := extractor.ExtractUnit(ctx, pkg, "unit-0", []evidence.Chunk{pkg.Chunks[0]})
+	if err != nil || stats.Generated != 1 || stats.Reused != 0 {
+		t.Fatalf("first unit extract = %+v, %v", stats, err)
+	}
+	calls := chatter.calls
+	reused, stats, err := extractor.ExtractUnit(ctx, pkg, "unit-0", []evidence.Chunk{pkg.Chunks[0]})
+	if err != nil || stats.Reused != 1 || stats.Generated != 0 {
+		t.Fatalf("cached unit extract = %+v, %v", stats, err)
+	}
+	if chatter.calls != calls {
+		t.Fatal("a cached unit must not call the model")
+	}
+	if len(reused.Entities) != len(first.Entities) || len(reused.Relations) != len(first.Relations) {
+		t.Fatalf("cached unit differs from the generated one: %+v vs %+v", reused, first)
+	}
+
+	// A different batch is a different cache variant, so it calls the model and
+	// does not overwrite the first unit's row.
+	if _, stats, err := extractor.ExtractUnit(ctx, pkg, "unit-1", []evidence.Chunk{pkg.Chunks[1]}); err != nil || stats.Generated != 1 {
+		t.Fatalf("second unit extract = %+v, %v", stats, err)
+	}
+	if len(cache.data) != 2 {
+		t.Fatalf("expected two unit cache rows, got %d", len(cache.data))
+	}
+}
+
+func TestBatchesRespectCharBudgetAndChunkCap(t *testing.T) {
+	extractor := newTestExtractor(t, &fakeChatter{})
+	extractor.SetCharBudget(1000)
+	chunk := func(id string, size int) evidence.Chunk {
+		return evidence.Chunk{ID: id, ParentID: "parent-1", Content: strings.Repeat("字", size)}
+	}
+	sizes := func(batches [][]evidence.Chunk) []int {
+		result := make([]int, 0, len(batches))
+		for _, batch := range batches {
+			result = append(result, len(batch))
+		}
+		return result
+	}
+
+	// Two 400-rune chunks fit, the third would cross the budget.
+	if got := sizes(extractor.batches([]evidence.Chunk{chunk("a", 400), chunk("b", 400), chunk("c", 400)})); !reflect.DeepEqual(got, []int{2, 1}) {
+		t.Fatalf("budget grouping = %v, want [2 1]", got)
+	}
+	// One chunk larger than the budget still gets its own call.
+	if got := sizes(extractor.batches([]evidence.Chunk{chunk("big", 2500), chunk("small", 10)})); !reflect.DeepEqual(got, []int{1, 1}) {
+		t.Fatalf("oversized chunk grouping = %v, want [1 1]", got)
+	}
+	// The hard chunk cap still applies even when every chunk is tiny.
+	tiny := make([]evidence.Chunk, 10)
+	for index := range tiny {
+		tiny[index] = chunk(fmt.Sprintf("c%d", index), 10)
+	}
+	if got := sizes(extractor.batches(tiny)); !reflect.DeepEqual(got, []int{8, 2}) {
+		t.Fatalf("chunk cap grouping = %v, want [8 2]", got)
+	}
+	extractor.SetCharBudget(1)
+	if extractor.charBudget != 500 {
+		t.Fatalf("char budget must clamp to 500, got %d", extractor.charBudget)
+	}
+}
+
+func TestExtractMapsEvidenceIndicesToChunkIDs(t *testing.T) {
+	output := `{"schema_version":"RelationProjectionPackageV1",` +
+		`"entities":[{"key":"a","name":"Alpha","source_chunk_ids":["2"]}],` +
+		`"relations":[{"subject_key":"a","predicate":"links","object_key":"b","source_chunk_ids":["1","9"]}]}`
+	extractor := newTestExtractor(t, &fakeChatter{text: output})
+	pkg := relationPackage("pkg-1", "doc-1",
+		relationChunk("chunk-1", "neither name appears here", 0),
+		relationChunk("chunk-2", "still no entity name", 1),
+	)
+	result, err := extractor.ExtractPackage(context.Background(), pkg)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if len(result.Entities) != 1 || len(result.Entities[0].SourceChunkIDs) != 1 || result.Entities[0].SourceChunkIDs[0] != "chunk-2" {
+		t.Fatalf("entity sources must map index 2 to chunk-2: %+v", result.Entities)
+	}
+	if len(result.Relations) != 1 {
+		t.Fatalf("expected one relation, got %+v", result.Relations)
+	}
+	sources := result.Relations[0].SourceChunkIDs
+	if len(sources) != 1 || sources[0] != "chunk-1" {
+		t.Fatalf("relation sources must map index 1 and drop the unknown one: %v", sources)
 	}
 }
 

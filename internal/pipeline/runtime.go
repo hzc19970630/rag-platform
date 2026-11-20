@@ -40,6 +40,13 @@ type Stage interface {
 	Fail(tx *gorm.DB, code, message string, now time.Time) error
 }
 
+// MultiStage is implemented by a stage that fans out into several durable
+// events instead of one next-stage event. Complete prefers it and commits every
+// returned event in the same transaction as the stage and inbox outcome.
+type MultiStage interface {
+	SucceedMany(tx *gorm.DB, now time.Time) ([]models.OutboxEvent, error)
+}
+
 type Runtime struct {
 	db    *gorm.DB
 	owner *inboxlease.Owner
@@ -131,19 +138,33 @@ func (r *Runtime) Start(ctx context.Context, stage Stage) error {
 func (r *Runtime) Complete(ctx context.Context, key string, stage Stage) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		next, err := stage.Succeed(tx, now)
-		if err != nil {
-			return err
+		var events []models.OutboxEvent
+		if multi, ok := stage.(MultiStage); ok {
+			next, err := multi.SucceedMany(tx, now)
+			if err != nil {
+				return err
+			}
+			events = next
+		} else {
+			next, err := stage.Succeed(tx, now)
+			if err != nil {
+				return err
+			}
+			if next != nil {
+				events = []models.OutboxEvent{*next}
+			}
 		}
 		if err := tx.Model(&models.TaskInbox{}).Where("idempotency_key = ?", key).Updates(map[string]any{
 			"status": InboxSucceeded, "processed_at": &now, "lease_owner": "", "lease_until": nil, "updated_at": now,
 		}).Error; err != nil {
 			return err
 		}
-		if next == nil {
-			return nil
+		for index := range events {
+			if err := ReopenEvent(tx, events[index]); err != nil {
+				return err
+			}
 		}
-		return ReopenEvent(tx, *next)
+		return nil
 	})
 }
 

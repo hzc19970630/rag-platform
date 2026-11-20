@@ -18,6 +18,15 @@ func (f *triggerEvidence) CurrentPackages(context.Context, string, string) ([]in
 	return f.packages, nil
 }
 
+func (f *triggerEvidence) CurrentPackage(_ context.Context, _, _, packageID string) (ingestion.EvidencePackage, bool, error) {
+	for _, pkg := range f.packages {
+		if pkg.ID == packageID {
+			return pkg, true, nil
+		}
+	}
+	return ingestion.EvidencePackage{}, false, nil
+}
+
 func newTriggerFixture(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	_, db := newProjectionViewsFixture(t)
