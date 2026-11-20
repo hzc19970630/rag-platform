@@ -261,19 +261,19 @@ record info oldCommit "$old_commit"
 record info newCommit "$head_commit"
 
 crlf_files=""
-for migration in "$head_tree"/migrations/postgres/003[1-5]_*.sql; do
+for migration in "$head_tree"/migrations/postgres/003[1-6]_*.sql; do
   if file "$migration" | grep -q 'CRLF'; then crlf_files="$crlf_files $migration"; fi
 done
 [[ -z "$crlf_files" ]] || fail "CRLF migration files would fail migrate -check: $crlf_files"
 down_missing=""
 shopt -s nullglob
-for version in 0028 0029 0030 0031 0032 0033 0034 0035; do
+for version in 0028 0029 0030 0031 0032 0033 0034 0035 0036; do
   matches=("$head_tree"/migrations/postgres/"$version"*.down.sql)
   [[ ${#matches[@]} -gt 0 ]] || down_missing="$down_missing $version"
 done
 shopt -u nullglob
 [[ -z "$down_missing" ]] || fail "down migration missing:$down_missing"
-record info downMigrations "0028-0035 present; drill does not run down (expand-only rollback)"
+record info downMigrations "0028-0036 present; drill does not run down (expand-only rollback)"
 
 cp "$head_tree/.env.example" "$env_file"
 cat >>"$env_file" <<EOF
