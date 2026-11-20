@@ -304,7 +304,7 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - `/api/v1/ops/metrics/prometheus` 仍保留，但它要求 tenant owner/admin session，仅用于人工排查；标准 Prometheus 无法携带该会话 cookie，不要把它作为抓取路径。
 - 独立监听器只包含本进程的指标，不包含数据库窗口内的 `operations`；API 与 worker 的 counters/timings 是两套，抓取端需要分别配置 target 与告警。
 - 解析失败率的分母只包含成功与失败，不含进行中的阶段；历史事故会在 24 小时后自动退出窗口。
-- 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 `/metrics` 暴露；`/ops/metrics` 是 API 路由，看不到 worker 进程计数，入库失败仍可看 `operations.stages.embed.failed`。`rerank_degraded_total{reason=resolve|error|breaker_open}` 记录 Rerank 降级次数：`resolve` 为知识库绑定解析失败，`error` 为供应商调用失败，`breaker_open` 为熔断期间跳过调用；降级时检索仍返回关键词/向量融合结果（`rerankApplied=false`），`model_errors_total` 只统计真实的解析/调用错误。
+- 检索耗时可通过 `timings["http_request_duration_ms{method=POST,path=/api/v1/search}"]` 观察。`model_errors_total` 只在各自进程内累加：API 的计数器覆盖检索/问答，worker 的入库 Embedding 计数器只在 worker 的 `/metrics` 暴露；`/ops/metrics` 是 API 路由，看不到 worker 进程计数，入库失败仍可看 `operations.stages.embed.failed`。`rerank_degraded_total{reason=resolve|error|breaker_open}` 记录 Rerank 降级次数：`resolve` 为知识库绑定解析失败，`error` 为供应商调用失败，`breaker_open` 为熔断期间跳过调用；降级时检索仍返回关键词/向量融合结果（`rerankApplied=false`），`model_errors_total` 只统计真实的解析/调用错误。`evidence_dropped_total{reason=duplicate_in_document|document_quota}` 按查询计数（一次查询丢弃过才加一，不代表条数）：`duplicate_in_document` 是同一文档内重复文本被折叠（重复页、复制块），`document_quota` 是超出 `max_per_document`（默认 3）的证据被截掉；对应 span 属性为 `evidence.dropped_duplicate_in_document` 与 `evidence.dropped_by_document_quota`。
 
 Worker 每分钟（`RECONCILE_INTERVAL_SECONDS`）把部署级积压写为 gauge，随 `/metrics` 暴露：
 

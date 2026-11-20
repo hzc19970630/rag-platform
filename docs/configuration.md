@@ -8,7 +8,7 @@ policy**:
 | Schema default | `internal/configschema` | code review | safe fallback for every field |
 | Deployment | env / `config/config.yaml` | operator, restart required | `RETRIEVAL_CONFIG_FILE`, `CHUNK_*`, model endpoints |
 | Tenant | `tenants.retrieval_config` / `tenants.chunking_config` | tenant owner/admin in Administration → Business configuration | default retrieval and chunking for every knowledge base |
-| Knowledge base | `knowledge_bases.retrieval_config` | editor of that knowledge base | a single knowledge base overriding `top_k` |
+| Knowledge base | `knowledge_bases.retrieval_config` | editor of that knowledge base | a single knowledge base overriding `top_k` / `max_per_document` |
 | Session | request `sessionOverride` | caller | an experiment that must not persist |
 
 Resolution order is schema default → deployment → tenant → knowledge base →

@@ -123,7 +123,8 @@ sequenceDiagram
     A->>A: authenticate + authorize KB
     A->>DB: BM25 recall (tenant/KB/current version/EVIDENCE_READY)
     A->>DB: vector recall (same scope)
-    A->>A: RRF fusion + dedupe
+    A->>A: RRF fusion + chunk dedupe
+    A->>A: collapse in-document duplicate text + per-document quota
     A->>A: optional rerank
     A->>DB: parent/neighbor expansion + final authorization
     A->>M: prompt with evidence only
@@ -135,6 +136,10 @@ sequenceDiagram
 ```
 
 - BM25 and vector recall run in parallel and are merged with reciprocal rank fusion.
+- Evidence selection collapses identical text one document contributed more than
+  once (repeated pages, copied blocks) and caps how many chunks one document may
+  contribute (`max_per_document`, default 3, `0` disables). Identical text in
+  *different* documents is kept: separate files agreeing is a source signal.
 - Every query carries tenant, knowledge-base, current-version, and
   `EVIDENCE_READY` predicates. A second authorization pass runs before delivery.
 - Citations are first-class data. The model can only cite registered evidence IDs;

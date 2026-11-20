@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - 前端构建分包：业务页面按路由懒加载，antd 与 rc-* 依赖按子系统拆分为 vendor chunk；入口 chunk 由 1.69 MB 降至 113 kB，最大 chunk 459 kB，消除 Vite 的 >500 kB chunk 告警。
+- 检索证据去重：同一文档内重复文本（重复页、复制块）在进入证据集前折叠，仅保留排序最高的一条；新增 `max_per_document` 配额（默认 3，0 关闭）限制单个文档占用的证据位。跨文档相同文本仍保留，以维持多来源引用。
 
 ## [0.3.0] - 2026-11-20
 

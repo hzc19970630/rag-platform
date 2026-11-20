@@ -317,7 +317,7 @@ Wiki 页面和图谱关系都必须记录来源、生成模型、生成时间、
 | 模型定义 | YAML/JSON 文件 + 环境变量插值 | `EMBEDDING_SOURCE`、`LLM_EMBEDDING_MODEL`、`EMBEDDING_DIMENSION`、`EMBEDDING_BATCH_SIZE`、`RERANK_SOURCE`、`LLM_RERANK_MODEL`、`CHAT_MODELS`、`RERANK_MODELS` | 进程级 | 启动时构造适配器并校验 |
 | 切分策略 | YAML 或环境变量 | `CHUNK_SIZE`、`CHUNK_OVERLAP`、`CHUNK_SPLIT_MARKERS`、`PARSER_SANDBOX_ENABLED` | 进程级，可按知识库覆盖 | 切分阶段读取 |
 | Prompt 模板 | `config/prompt_templates/*.yaml` | 系统提示、上下文模板、fallback、会话标题、Wiki 生成、关系抽取 | 进程级，可按租户覆盖 | 启动时加载并校验模板 ID 引用 |
-| 检索参数 | YAML + 数据库三级覆盖 | `embedding_top_k`、`vector_threshold`、`keyword_threshold`、`rerank_threshold`、`rerank_top_k`、`rrf_k`、`expansion_score_factor` | 全局默认 → 知识库 → 会话 | 检索请求组装时解析 |
+| 检索参数 | YAML + 数据库三级覆盖 | `embedding_top_k`、`vector_threshold`、`keyword_threshold`、`rerank_threshold`、`rerank_top_k`、`rrf_k`、`expansion_score_factor`、`max_per_document` | 全局默认 → 知识库 → 会话 | 检索请求组装时解析 |
 | 索引开关 | 数据库中的 `IndexingStrategy` | `vector_enabled`、`keyword_enabled`、`wiki_enabled`、`graph_enabled` | 知识库级 | 流水线和检索器读取 |
 
 三类载体各有明确边界，不互相替代：
@@ -420,6 +420,7 @@ YAML 全局默认  ->  知识库级覆盖（数据库，运行时可改，审计
 | `context_token_limit` | > 0 | 拼装上下文的近似 Token 上限 |
 | `adjacent_expansion` | ≥ 0 | 每个方向补入的相邻块数；父块始终补齐，不受该值影响 |
 | `max_adjacent_chunks` | ≥ 0 | 本次扩展补入的相邻块总数上限；0 表示不补相邻块（父块仍补齐） |
+| `max_per_document` | 0-50 | 单个文档在证据集中最多占用的条数；先折叠文档内重复文本，再按排序取前 N；0 表示不限 |
 | `rrf_k` | 1-200 | RRF 融合常数，决定融合分的量级（默认 60 时榜首约 `2/(60+1)`） |
 | `expansion_score_factor` | 0-1 | 扩展块继承锚点分数的折扣，保证扩展内容不越过把它拉进来的精确命中 |
 
@@ -888,7 +889,7 @@ flowchart LR
 2. 对问题做语言归一化；有历史时先由可选的查询改写器生成独立检索问题（LLM 失败或本地适配器时回退原问题），再进入召回。
 3. 并行执行 BM25 和向量召回；按元数据、状态和权限过滤。
 4. 使用 RRF 融合，避免不同检索器分数尺度不一致。
-5. 使用 Rerank 模型重新排序，执行去重、父块扩展、相邻块补全和 Top-K 截断。
+5. 使用 Rerank 模型重新排序，执行去重（chunk 级合并 + 文档内重复文本折叠）、父块扩展、相邻块补全、单文档配额和 Top-K 截断。
 6. 为每个来源分配请求级引用 ID，模型上下文只使用短引用标识。
 7. 通过 SSE 推送 `references`、`thinking`、`answer`、`error`、`complete` 等事件。
 8. 回答落库时保存模型、检索配置、引用 chunk、Token 和延迟指标，支持审计与评估。
@@ -993,7 +994,7 @@ Wiki 和知识图谱都是原始证据的派生投影，必须消费同一个 `E
 - 根据检索计划调用 Evidence Index、Knowledge Index 和 Relation Store。
 - 使用 Wiki 页面和图谱关系扩展主题与查询，再回到 Evidence Index 获取最终证据。
 - 所有检索器都接收同一个 `AuthorizationScope`，只返回已经通过授权过滤的候选。
-- 对候选结果执行去重、Rerank、版本过滤和证据充分性判断。
+- 对候选结果执行去重（含文档内重复折叠与单文档配额）、Rerank、版本过滤和证据充分性判断。
 - 基于经过授权的证据生成回答草稿和引用集合。
 
 第四层可以有“事实查询”“Wiki 导航”“图谱关系”“跨文档总结”等不同计划，但每种计划都必须经过统一的 `QueryPlan`、`AuthorizationScope` 和 `EvidenceSet` Schema，禁止由 Handler 直接拼接模型上下文。复杂度只影响检索计划，不改变权限边界和最终证据要求。
