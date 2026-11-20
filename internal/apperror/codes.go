@@ -15,5 +15,6 @@ const (
 	CodeQuotaExceeded      = "quota_exceeded"
 	CodeContentUnavailable = "content_unavailable"
 	CodePayloadTooLarge    = "payload_too_large"
+	CodeTimeout            = "timeout"
 	CodeInternal           = "internal_error"
 )

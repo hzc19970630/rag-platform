@@ -1,7 +1,16 @@
-import { apiErrorDetail, friendlyApiMessage, friendlyStatusMessage } from "./errorMessages";
+import { apiErrorDetail, friendlyApiMessage, friendlyStatusMessage, friendlyTimeoutMessage } from "./errorMessages";
 import type { DocumentView, StreamEvent } from "./types";
 
 export const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8082/api/v1";
+
+// Plain fetch has no deadline, so a stalled connection can leave action buttons
+// spinning forever. JSON calls get a default budget; slow operations opt into a
+// longer one, and streams/uploads/previews opt out or extend it explicitly.
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+export const LONG_REQUEST_TIMEOUT_MS = 120_000;
+export const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
+export type ApiInit = RequestInit & { timeoutMs?: number };
 
 // Development identity headers must never ship in a production build.
 export function devHeaders(dev = import.meta.env.DEV): Record<string, string> {
@@ -41,14 +50,18 @@ let refreshPromise: Promise<boolean> | null = null;
 // the next request retries against the rotated cookie.
 function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
     refreshPromise = fetch(`${apiBase}/auth/refresh`, {
       method: "POST",
       credentials: "include",
       headers: devHeaders(),
+      signal: controller.signal,
     })
       .then((response) => response.ok)
       .catch(() => false)
       .finally(() => {
+        clearTimeout(timer);
         refreshPromise = null;
       });
   }
@@ -63,6 +76,34 @@ async function rawFetch(path: string, init: RequestInit): Promise<Response> {
   });
 }
 
+type TimedRequest = { init: RequestInit; timedOut: () => boolean; done: () => void };
+
+function withTimeout({ timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...init }: ApiInit): TimedRequest {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return { init, timedOut: () => false, done: () => {} };
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const caller = init.signal;
+  const forwardAbort = () => controller.abort();
+  if (caller) {
+    if (caller.aborted) controller.abort();
+    else caller.addEventListener("abort", forwardAbort, { once: true });
+  }
+  return {
+    init: { ...init, signal: controller.signal },
+    timedOut: () => timedOut,
+    done: () => {
+      clearTimeout(timer);
+      caller?.removeEventListener("abort", forwardAbort);
+    },
+  };
+}
+
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   const response = await rawFetch(path, init);
   if (response.status !== 401 || path === "/auth/refresh") {
@@ -74,11 +115,27 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   return rawFetch(path, init);
 }
 
-export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await request(path, init);
-  if (!response.ok) throw await toApiError(response);
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+// The deadline wraps the whole exchange, including body reads: a response whose
+// headers arrive but body stalls would otherwise leave the caller pending.
+async function withDeadline<T>(init: ApiInit, run: (init: RequestInit) => Promise<T>): Promise<T> {
+  const timed = withTimeout(init);
+  try {
+    return await run(timed.init);
+  } catch (cause) {
+    if (timed.timedOut()) throw new ApiError(0, friendlyTimeoutMessage(), "request_timeout");
+    throw cause;
+  } finally {
+    timed.done();
+  }
+}
+
+export function api<T>(path: string, init: ApiInit = {}): Promise<T> {
+  return withDeadline(init, async (timedInit) => {
+    const response = await request(path, timedInit);
+    if (!response.ok) throw await toApiError(response);
+    if (response.status === 204) return undefined as T;
+    return (await response.json()) as T;
+  });
 }
 
 export function jsonInit(body: unknown, method = "POST"): RequestInit {
@@ -94,32 +151,37 @@ export function uploadDocument(knowledgeBaseId: string, file: File, documentId?:
     method: "POST",
     headers: { "Idempotency-Key": `web-${crypto.randomUUID()}` },
     body: form,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
   });
 }
 
-export async function openDocumentPreview(documentId: string): Promise<void> {
-  const response = await request(`/documents/${documentId}/preview`);
-  if (!response.ok) throw await toApiError(response);
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  window.open(url, "_blank", "noopener");
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+export function openDocumentPreview(documentId: string): Promise<void> {
+  return withDeadline({ timeoutMs: LONG_REQUEST_TIMEOUT_MS }, async (timedInit) => {
+    const response = await request(`/documents/${documentId}/preview`, timedInit);
+    if (!response.ok) throw await toApiError(response);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
 }
 
 // downloadDocument saves the original file instead of opening a tab. The preview
 // endpoint already enforces document permissions, so this adds no new surface.
-export async function downloadDocument(documentId: string, filename: string): Promise<void> {
-  const response = await request(`/documents/${documentId}/preview`);
-  if (!response.ok) throw await toApiError(response);
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+export function downloadDocument(documentId: string, filename: string): Promise<void> {
+  return withDeadline({ timeoutMs: LONG_REQUEST_TIMEOUT_MS }, async (timedInit) => {
+    const response = await request(`/documents/${documentId}/preview`, timedInit);
+    if (!response.ok) throw await toApiError(response);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  });
 }
 
 function parseSSEBlock(raw: string): StreamEvent | undefined {
@@ -178,6 +240,8 @@ export async function streamPost(
   onEvent: (event: StreamEvent) => void,
   options: StreamOptions = {},
 ): Promise<void> {
+  // Streams bypass withDeadline: answers have a server-side tail timeout and a
+  // user-facing cancel, so a fixed client deadline would cut healthy generations.
   const response = await request(path, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },

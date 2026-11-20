@@ -41,6 +41,9 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	if cfg.TaskTimeoutSeconds != 120 {
 		t.Fatalf("TaskTimeoutSeconds default: %d", cfg.TaskTimeoutSeconds)
 	}
+	if cfg.RequestTimeoutSeconds != 60 {
+		t.Fatalf("RequestTimeoutSeconds default: %d", cfg.RequestTimeoutSeconds)
+	}
 	wantFormats := map[string]bool{"pdf-text": true, "docx": true, "xlsx": true, "pptx": true, "markdown": true, "txt": true, "html": true}
 	if len(cfg.SupportedFormats) != len(wantFormats) {
 		t.Fatalf("SupportedFormats default: %v", cfg.SupportedFormats)

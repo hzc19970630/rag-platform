@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -67,6 +68,12 @@ func writeError(c *gin.Context, err error) {
 		// the storage error: it carries the object key.
 		status = http.StatusConflict
 		code = apperror.CodeContentUnavailable
+	case errors.Is(err, context.DeadlineExceeded):
+		// The request deadline fired while a dependency was still working. A
+		// gateway timeout tells the client to retry rather than treating it as
+		// a server bug.
+		status = http.StatusGatewayTimeout
+		code = apperror.CodeTimeout
 	case errors.As(err, &validation), invalidJSON, fieldValidation:
 		status = http.StatusBadRequest
 		code = apperror.CodeInvalidRequest

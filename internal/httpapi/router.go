@@ -50,7 +50,7 @@ func NewRouterWithReadiness(cfg config.Config, logger *slog.Logger, registry *ob
 	r.Use(gin.CustomRecovery(func(c *gin.Context, recovered any) {
 		logger.Error("http_panic", "path", c.Request.URL.Path, "panic", recovered)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal_server_error"})
-	}), tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(registry), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes))
+	}), tracingMiddleware(), corsMiddleware(cfg), requestLogger(logger), metricsMiddleware(registry), csrfProtection(cfg), requestBodyLimit(maxJSONRequestBodyBytes), requestDeadline(cfg))
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -149,6 +149,62 @@ func requestBodyLimit(limit int64) gin.HandlerFunc {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		c.Next()
 	}
+}
+
+// requestDeadline puts a context deadline on handler execution so a stalled
+// database, object store or model call cannot pin a request (and the tenant
+// transaction it holds) forever. SSE answers carry their own tail timeout and a
+// user-facing cancel, so they run without this deadline; uploads and file
+// transfers get transport-sized budgets instead of the default.
+func requestDeadline(cfg config.Config) gin.HandlerFunc {
+	// Env parsing rejects non-positive values; a hand-built Config (tests,
+	// embedders) still fails closed on the production default rather than
+	// silently running without a deadline.
+	defaultBudget := time.Duration(cfg.RequestTimeoutSeconds) * time.Second
+	if defaultBudget <= 0 {
+		defaultBudget = time.Minute
+	}
+	return func(c *gin.Context) {
+		budget, ok := routeDeadline(c.Request.Method, c.FullPath())
+		if !ok {
+			budget = defaultBudget
+		}
+		if budget <= 0 {
+			c.Next()
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), budget)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+const (
+	// uploadDeadline matches the API server's five-minute body-read window.
+	uploadDeadline = 5 * time.Minute
+	// transferDeadline covers preview/download blobs and export-style scans.
+	transferDeadline = 2 * time.Minute
+)
+
+var routeDeadlines = map[string]time.Duration{
+	"POST /api/v1" + documentUploadPath: uploadDeadline,
+	"GET /api/v1/documents/:id/preview": transferDeadline,
+	"GET /api/v1/audit":                 transferDeadline,
+	"POST /api/v1/ops/reconcile":        transferDeadline,
+}
+
+// routeDeadline returns the budget for one method+route. A zero budget with ok
+// set means "exempt". Matching by route template keeps the decision independent
+// of the concrete URL while c.FullPath() is available to global middleware.
+func routeDeadline(method, path string) (time.Duration, bool) {
+	switch {
+	case method == http.MethodPost && path == "/api/v1/conversations/sessions/:id/messages",
+		method == http.MethodGet && path == "/api/v1/requests/:requestID/events":
+		return 0, true
+	}
+	budget, ok := routeDeadlines[method+" "+path]
+	return budget, ok
 }
 
 // metricsMiddleware records request count and latency. c.FullPath() is the

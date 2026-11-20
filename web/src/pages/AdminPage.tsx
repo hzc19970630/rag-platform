@@ -35,7 +35,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, jsonInit } from "../api/client";
+import { LONG_REQUEST_TIMEOUT_MS, api, jsonInit } from "../api/client";
 import {
   queryKeys,
   useAuditEvents,
@@ -332,7 +332,7 @@ export function AdminPage() {
       if (auditFilters.resourceType) params.set("resourceType", auditFilters.resourceType);
       if (auditFilters.allowed) params.set("allowed", auditFilters.allowed);
       params.set("limit", String(auditExportLimit));
-      const data = await api<{ items: AuditEvent[] }>(`/audit?${params.toString()}`);
+      const data = await api<{ items: AuditEvent[] }>(`/audit?${params.toString()}`, { timeoutMs: LONG_REQUEST_TIMEOUT_MS });
       downloadAuditCsv(data.items, overview.data?.id ?? me.principal.tenantId);
     } catch (cause) {
       message.error(cause instanceof Error ? cause.message : t("admin.audit.exportFailed"));

@@ -40,6 +40,7 @@ const zhCN = {
   errors: {
     fallback: "操作失败，请稍后重试。",
     requestFailed: "请求失败（{{status}}）。",
+    timeout: "请求超时，请重试。",
     codes: {
       invalid_request: "输入内容不符合要求，请检查后重试。",
       unauthenticated: "登录状态已失效，请重新登录。",
@@ -1086,6 +1087,7 @@ const enUS = {
   errors: {
     fallback: "Something went wrong. Please try again.",
     requestFailed: "Request failed ({{status}}).",
+    timeout: "The request timed out. Try again.",
     codes: {
       invalid_request: "Some input is not valid. Check it and try again.",
       unauthenticated: "Your session has expired. Sign in again.",

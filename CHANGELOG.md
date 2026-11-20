@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- 请求级超时：API handler 现在带 context deadline（`HTTP_REQUEST_TIMEOUT_SECONDS`，默认 60s），依赖卡死时返回 504 `{"error":"timeout"}` 并回滚租户事务；SSE 回答流豁免，上传 5 分钟，预览/下载、审计导出与 `ops/reconcile` 2 分钟。前端 `api()` 同步分组超时（JSON 默认 30s、上传 5 分钟、长操作 2 分钟），超时抛 `request_timeout` 并收起按钮 loading，不再无限等待。
 - 前端构建分包：业务页面按路由懒加载，antd 与 rc-* 依赖按子系统拆分为 vendor chunk；入口 chunk 由 1.69 MB 降至 113 kB，最大 chunk 459 kB，消除 Vite 的 >500 kB chunk 告警。
 - 检索证据去重：同一文档内重复文本（重复页、复制块）在进入证据集前折叠，仅保留排序最高的一条；新增 `max_per_document` 配额（默认 3，0 关闭）限制单个文档占用的证据位。跨文档相同文本仍保留，以维持多来源引用。
 - 关系投影改为工作单元：抽取按证据包批次（`PROJECTION_UNIT_MAX_CHUNKS`，默认 32）拆成持久任务，单元独立计时（`PROJECTION_UNIT_TIMEOUT_SECONDS`，默认 600s）、并发执行、失败只重跑该单元；FINALIZE 合并单元结果不再调用模型。运行记录新增 `unitTotal/unitSucceeded/unitFailed`，图谱面板显示构建进度。单元失败时运行显示 `RETRY_RELATION`，队列重试预算耗尽后才转为 `FAILED_RELATION`，不再在仍有单元运行时提前报“构建失败”。运行操作栏对活跃 run 提供“取消运行”（`POST /graph|wiki/runs/:runId/cancel`），并修复关系图失败 run 不显示“重试”按钮的问题（原判断只匹配 `FAILED`）。关系抽取在生成工作单元前按包内 `content_hash` 去重，并按字符预算组批（`PROJECTION_RELATION_CHARS_PER_CALL`，默认 1500，单次最多 8 个 chunk），避免重复页 PDF 产生数千字符的单次请求而超时；同时修复模型返回证据块序号（`"1"`）时未映射回 chunk ID、导致 `unsourced_relations` 落快照失败的问题。

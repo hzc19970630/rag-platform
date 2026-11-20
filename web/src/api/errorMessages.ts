@@ -25,6 +25,7 @@ const CODE_KEYS: Record<string, string> = {
   quota_exceeded: "errors.codes.quota_exceeded",
   content_unavailable: "errors.codes.content_unavailable",
   payload_too_large: "errors.codes.payload_too_large",
+  timeout: "errors.timeout",
   internal_error: "errors.codes.internal_error",
 };
 
@@ -43,6 +44,10 @@ export function friendlyApiMessage(code: string, rawMessage: string): string {
 
 export function friendlyStatusMessage(status: number): string {
   return i18n.t("errors.requestFailed", { status });
+}
+
+export function friendlyTimeoutMessage(): string {
+  return lookup("errors.timeout") || "请求超时，请重试。";
 }
 
 export function apiErrorDetail(code: string, rawMessage: string): string {

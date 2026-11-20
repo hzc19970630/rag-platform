@@ -138,6 +138,20 @@ logs. Re-upload or reparse the document if its version was replaced.
 Rerank is off by default. It only runs when `rerank_enabled` is true in the
 knowledge-base or request configuration; `RERANK_SOURCE=none` is also a pass-through.
 
+## Errors and timeouts
+
+### A request returns 504 `timeout`
+
+Every API handler runs under a context deadline (`HTTP_REQUEST_TIMEOUT_SECONDS`,
+default 60). A handler that overruns returns 504 with `{"error":"timeout"}`, its
+tenant transaction rolls back, and the web client shows `请求超时，请重试。`.
+
+Exceptions: SSE answer streams are exempt (bounded by
+`ANSWER_TAIL_TIMEOUT_SECONDS` plus client cancel), uploads get five minutes, and
+preview/download, audit export and `ops/reconcile` get two minutes. When a route
+that used to succeed starts timing out, check the dependency latency (database,
+object storage, model gateway) before raising the global budget.
+
 ## Frontend
 
 ### Web UI cannot reach the API

@@ -58,7 +58,9 @@ type Config struct {
 	S3ForcePathStyle               bool
 	MaxFileBytes                   int64
 	TaskTimeoutSeconds             int
-	ParserSandbox                  bool
+	// RequestTimeoutSeconds bounds one API handler's context so a stalled dependency cannot pin a request and its tenant transaction; SSE answers, uploads and file transfers keep their own budgets.
+	RequestTimeoutSeconds int
+	ParserSandbox         bool
 	// ParserVersion identifies the bundled docreader parser. It is read-only
 	// configuration in the workbench and must match services/docreader.
 	ParserVersion    string
@@ -257,6 +259,7 @@ func LoadFrom(lookup Lookup) Config {
 		S3ForcePathStyle:               reader.boolean("S3_FORCE_PATH_STYLE", false),
 		MaxFileBytes:                   reader.positive("DOCREADER_MAX_FILE_MB", 100) * 1024 * 1024,
 		TaskTimeoutSeconds:             int(reader.positive("DOCREADER_TASK_TIMEOUT_SECONDS", 120)),
+		RequestTimeoutSeconds:          int(reader.positive("HTTP_REQUEST_TIMEOUT_SECONDS", 60)),
 		ParserSandbox:                  reader.boolean("PARSER_SANDBOX_ENABLED", true),
 		ParserVersion:                  value(lookup, "PARSER_VERSION", DefaultParserVersion),
 		SupportedFormats:               formats.Names(),

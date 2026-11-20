@@ -28,7 +28,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, jsonInit } from "../api/client";
+import { LONG_REQUEST_TIMEOUT_MS, api, jsonInit } from "../api/client";
 import { queryKeys, useAPIKeys, useDeadLetters, useOpsMetrics, useOpsQuality } from "../api/hooks";
 import type { APIKeyView, DeadLetter } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
@@ -83,7 +83,7 @@ export function OpsPage() {
   async function reconcile() {
     setReconciling(true);
     try {
-      const report = await api<Record<string, number>>("/ops/reconcile", { method: "POST" });
+      const report = await api<Record<string, number>>("/ops/reconcile", { method: "POST", timeoutMs: LONG_REQUEST_TIMEOUT_MS });
       setReconcileReport(JSON.stringify(report, null, 2));
       message.success(t("ops.reconcileDone"));
       await refreshAll();
