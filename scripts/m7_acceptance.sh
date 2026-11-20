@@ -164,8 +164,23 @@ wait_relation_ready() {
   fail "relation run did not reach RELATION_READY (last: $status)"
 }
 
-wait_projection_both_ready() {
-  local knowledge_base="$1" output="$2"
+# A source deletion can trigger an automatic rebuild. Wait for that run to end
+# so the next manual rebuild is accepted instead of returning started:0 (the
+# B29 semantics for "a run is already active").
+wait_relation_idle() {
+  local knowledge_base="$1" output="$2" status=""
+  for _ in $(seq 1 120); do
+    request GET "/api/v1/knowledge-bases/$knowledge_base/projection" 200 "$output" -H "$(auth_header "$dev_token")"
+    status="$(json_field "$output" relationRuns.0.status)"
+    case "$status" in
+      RELATION_PENDING|RELATION_EXTRACTING|RETRY_RELATION) sleep 1 ;;
+      *) return 0 ;;
+    esac
+  done
+  fail "relation run stayed active before manual rebuild (last: $status)"
+}
+
+wait_projection_both_ready() {  local knowledge_base="$1" output="$2"
   local wiki="" relation="" join=""
   for _ in $(seq 1 300); do
     request GET "/api/v1/knowledge-bases/$knowledge_base/projection" 200 "$output" -H "$(auth_header "$dev_token")"
@@ -562,6 +577,7 @@ wait_snapshot_status "$kb" STALE "$tmp_dir/snapshots-stale-hidden.json"
 graph_query "$viewer_token" "$kb" "Acme" 3 30 200 "$tmp_dir/query-stale.json"
 assert_json "$tmp_dir/query-stale.json" 'data["nodes"] == [] and data["edges"] == []'
 
+wait_relation_idle "$kb" "$tmp_dir/projection-before-manual.json"
 request POST "/api/v1/knowledge-bases/$kb/graph/rebuild" 202 "$tmp_dir/rebuild-after-hidden.json" \
   -H "$(auth_header "$dev_token")"
 assert_json "$tmp_dir/rebuild-after-hidden.json" 'data["started"] == 1'
