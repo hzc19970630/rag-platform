@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 图谱快照审核通过时补写 `activated_at`，并在审核响应中返回；此前 ACTIVE 快照的激活时间为空。
 - 图谱快照写库改为分批（实体/别名/关系/来源各 500 行/批），避免大知识库触发 PostgreSQL `extended protocol limited to 65535 parameters`，100 文档 / 10k chunk 的合成库可正常产出快照。
+- 重建知识页/图谱在已有活跃 run 时返回 `started:0` 并提示“已有构建正在进行”，不再伪装成已排入新任务；运维重试改为 `FAILED → RETRY` 条件更新，并发点击只有一个请求生效，避免重复重置与重投单元。
 
 ### Changed
 

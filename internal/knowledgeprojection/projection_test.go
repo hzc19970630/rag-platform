@@ -3,6 +3,7 @@ package knowledgeprojection
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -211,6 +212,9 @@ func TestResetRunForRetryUsesAFreshQueueAttempt(t *testing.T) {
 	}
 	if !claimed {
 		t.Fatalf("retry must be claimable even though the original attempt succeeded")
+	}
+	if err := service.resetRunForRetry(context.Background(), &retried); !errors.Is(err, apperror.ErrConflict) {
+		t.Fatalf("a second retry claim must conflict, got %v", err)
 	}
 }
 

@@ -64,8 +64,12 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
     if (!confirmed) return;
     setBusy(kind);
     try {
-      await api(`/knowledge-bases/${knowledgeBaseId}/${kind}/rebuild`, { method: "POST" });
-      message.success(t("projection.rebuildStarted"));
+      const result = await api<{ started: number }>(`/knowledge-bases/${knowledgeBaseId}/${kind}/rebuild`, { method: "POST" });
+      if (result.started > 0) {
+        message.success(t("projection.rebuildStarted"));
+      } else {
+        message.info(t("projection.rebuildCoalesced"));
+      }
       await queryClient.invalidateQueries({ queryKey: queryKeys.projection(knowledgeBaseId) });
     } catch (cause) {
       message.error(cause instanceof Error ? cause.message : t("projection.rebuildFailed"));

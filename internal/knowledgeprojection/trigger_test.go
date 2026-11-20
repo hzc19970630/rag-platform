@@ -89,7 +89,7 @@ func TestTriggerAndRebuildProjections(t *testing.T) {
 	}
 
 	created, err := service.RebuildKnowledgeBase(ctx, "t1", "kb1")
-	if err != nil || created != 1 || countRuns(t, db, ProjectionTypeWiki) != 1 {
+	if err != nil || created != 0 || countRuns(t, db, ProjectionTypeWiki) != 1 {
 		t.Fatalf("RebuildKnowledgeBase active = %d, %v", created, err)
 	}
 	if err := db.Model(&models.ProjectionRun{}).Where("knowledge_base_id = ? AND projection_type = ?", "kb1", ProjectionTypeWiki).
@@ -102,7 +102,7 @@ func TestTriggerAndRebuildProjections(t *testing.T) {
 	}
 
 	created, err = service.RebuildRelations(ctx, "t1", "kb1")
-	if err != nil || created != 1 || countRuns(t, db, ProjectionTypeRelation) != 1 {
+	if err != nil || created != 0 || countRuns(t, db, ProjectionTypeRelation) != 1 {
 		t.Fatalf("RebuildRelations active = %d, %v", created, err)
 	}
 	if err := db.Model(&models.ProjectionRun{}).Where("knowledge_base_id = ? AND projection_type = ?", "kb1", ProjectionTypeRelation).

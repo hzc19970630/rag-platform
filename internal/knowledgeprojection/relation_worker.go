@@ -337,13 +337,8 @@ func (s *Service) resetRelationUnitsForRetry(ctx context.Context, tx *gorm.DB, r
 	if _, _, _, err := refreshRelationUnitCounts(tx, run); err != nil {
 		return false, err
 	}
-	if err := tenantdb.MustScoped(tx, run.TenantID).Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
-		"status": retryStatusFor(run.ProjectionType), "error_code": "", "error_message": "", "updated_at": now,
-	}).Error; err != nil {
-		return false, err
-	}
-	run.Status = retryStatusFor(run.ProjectionType)
-	run.ErrorCode, run.ErrorMessage = "", ""
+	// The caller already claimed the run with a conditional FAILED -> RETRY
+	// update; writing the status again here could overwrite a concurrent cancel.
 	return true, nil
 }
 

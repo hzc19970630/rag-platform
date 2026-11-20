@@ -58,7 +58,12 @@ func (s *Service) TriggerWiki(ctx context.Context, tenantID, knowledgeBaseID, ev
 				return nil
 			}
 		case ProjectionFailed:
-			return s.resetRunForRetry(ctx, &latest)
+			// A concurrent trigger may have claimed the retry first; that is the
+			// intended coalescing outcome, not an ingestion failure.
+			if err := s.resetRunForRetry(ctx, &latest); err != nil && !errors.Is(err, apperror.ErrConflict) {
+				return err
+			}
+			return nil
 		}
 	}
 	_ = aclVersion
@@ -91,7 +96,9 @@ func (s *Service) RebuildKnowledgeBase(ctx context.Context, tenantID, knowledgeB
 	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBaseID, ProjectionTypeWiki,
 		[]string{ProjectionPending, ProjectionRunning, ProjectionRetrying}).First(&active).Error
 	if lookupErr == nil {
-		return 1, nil
+		// Another rebuild already owns the single active slot; report coalesced
+		// instead of pretending a new run was queued.
+		return 0, nil
 	}
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return 0, lookupErr
@@ -137,7 +144,7 @@ func (s *Service) RebuildRelations(ctx context.Context, tenantID, knowledgeBaseI
 	lookupErr := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("knowledge_base_id = ? AND projection_type = ? AND status IN ?", knowledgeBaseID, ProjectionTypeRelation,
 		activeStatusesFor(ProjectionTypeRelation)).First(&active).Error
 	if lookupErr == nil {
-		return 1, nil
+		return 0, nil
 	}
 	if lookupErr != nil && !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
 		return 0, lookupErr
@@ -196,7 +203,10 @@ func (s *Service) TriggerRelation(ctx context.Context, tenantID, knowledgeBaseID
 				return nil
 			}
 		case RelationFailed:
-			return s.resetRunForRetry(ctx, &latest)
+			if err := s.resetRunForRetry(ctx, &latest); err != nil && !errors.Is(err, apperror.ErrConflict) {
+				return err
+			}
+			return nil
 		}
 	}
 	_ = aclVersion
@@ -275,6 +285,20 @@ func (s *Service) insertRunFor(ctx context.Context, tx *gorm.DB, knowledgeBase m
 func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRun) error {
 	now := time.Now()
 	return tenantdb.InTx(ctx, s.db, run.TenantID, func(tx *gorm.DB) error {
+		retryStatus := retryStatusFor(run.ProjectionType)
+		// Claim the retry with a conditional update so two operators clicking at
+		// the same time cannot both reset and re-enqueue the same units.
+		claim := tenantdb.MustScoped(tx, run.TenantID).Model(&models.ProjectionRun{}).
+			Where("id = ? AND status = ?", run.ID, failedStatusFor(run.ProjectionType)).
+			Updates(map[string]any{"status": retryStatus, "error_code": "", "error_message": "", "updated_at": now})
+		if claim.Error != nil {
+			return claim.Error
+		}
+		if claim.RowsAffected == 0 {
+			return fmt.Errorf("%w: only failed projection runs can be retried", apperror.ErrConflict)
+		}
+		run.Status = retryStatus
+		run.ErrorCode, run.ErrorMessage = "", ""
 		if run.ProjectionType == ProjectionTypeRelation {
 			handled, err := s.resetRelationUnitsForRetry(ctx, tx, run, now)
 			if err != nil {
@@ -303,11 +327,6 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 		}).Error; err != nil {
 			return err
 		}
-		if err := tenantdb.MustScoped(tx, run.TenantID).Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
-			"status": retryStatusFor(run.ProjectionType), "error_code": "", "error_message": "", "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
 		// An independent retry reopens the inbox as well: the original attempt may
 		// have succeeded before the failure was recorded, and Asynq keeps the
 		// completed task record. The next attempt number gives the enqueue a fresh
@@ -318,8 +337,6 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 		if err := reopenStage(ctx, tx, run, retryStage.Stage, retryStage.Attempts+1); err != nil {
 			return err
 		}
-		run.Status = retryStatusFor(run.ProjectionType)
-		run.ErrorCode, run.ErrorMessage = "", ""
 		return nil
 	})
 }
