@@ -1,4 +1,4 @@
-import { DeleteOutlined, MessageOutlined, MoreOutlined, PlusOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
+import { DeleteOutlined, FileTextOutlined, MessageOutlined, MoreOutlined, PlusOutlined, SearchOutlined, SettingOutlined } from "@ant-design/icons";
 import { Alert, App, Button, Card, Dropdown, Flex, Form, Input, Modal, Select, Space, Tag, Typography } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -143,7 +143,7 @@ export function KnowledgeBasesPage() {
           ].filter(Boolean) as string[] : [];
           const menu = {
             items: [
-              { key: "open", label: t("knowledgeBase.details") },
+              { key: "open", label: t("knowledgeBase.details"), icon: <FileTextOutlined /> },
               { key: "settings", label: t("knowledgeBase.settings"), icon: <SettingOutlined /> },
               ...(canChat ? [{ key: "chat", label: t("knowledgeBase.chat"), icon: <MessageOutlined /> }] : []),
               ...(canDelete ? [{ key: "delete", label: t("common.delete"), icon: <DeleteOutlined />, danger: true }] : []),
