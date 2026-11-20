@@ -35,14 +35,13 @@ describe("SessionList", () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "older" }));
   });
 
-  it("offers creation from the empty state", () => {
+  it("keeps a single create action when the list is empty", () => {
     const onCreate = vi.fn();
     render(<SessionList items={[]} onSelect={() => undefined} onCreate={onCreate} />);
     expect(screen.getByText(i18n.t("chat.noConversations"))).toBeInTheDocument();
-    fireEvent.click(screen.getByText(i18n.t("chat.newConversation")));
-    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByTestId("session-new")).toHaveLength(1);
     fireEvent.click(screen.getByTestId("session-new"));
-    expect(onCreate).toHaveBeenCalledTimes(2);
+    expect(onCreate).toHaveBeenCalledTimes(1);
   });
 
   it("groups conversations by knowledge base when asked to", () => {

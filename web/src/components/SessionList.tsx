@@ -90,9 +90,6 @@ export function SessionList(props: Props) {
       {!props.loading && !props.error && items.length === 0 && (
         <div className="session-list-empty">
           <Typography.Paragraph type="secondary">{t("chat.noConversations")}</Typography.Paragraph>
-          <Button size="small" icon={<PlusOutlined />} onClick={props.onCreate} loading={props.creating}>
-            {t("chat.newConversation")}
-          </Button>
         </div>
       )}
       {!props.loading && !props.error && items.length > 0 && (
