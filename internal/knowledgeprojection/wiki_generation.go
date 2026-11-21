@@ -171,7 +171,7 @@ func (s *Service) completeGenerationReview(ctx context.Context, tenantID, knowle
 			value := carried
 			versionPtr = &value
 		}
-		if err := s.db.WithContext(ctx).Model(&models.WikiGenerationPage{}).
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Model(&models.WikiGenerationPage{}).
 			Where("generation_id = ? AND wiki_page_id = ?", generation.ID, mapping.WikiPageID).
 			Updates(map[string]any{"status": status.GenerationPageException, "wiki_page_version_id": versionPtr, "updated_at": now}).Error; err != nil {
 			return err
