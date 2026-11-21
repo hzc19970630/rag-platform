@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { test, expect } from "./support/fixtures";
 import { createKnowledgeBase, deleteKnowledgeBase, latestSessionId, listMessages, readQuality, waitForDocument } from "./support/api";
+import { uploadAndWait } from "./support/upload";
 
 test("answer feedback updates the retrieval quality view", async ({ page, api }, testInfo) => {
   test.setTimeout(240_000);
@@ -13,9 +14,7 @@ test("answer feedback updates the retrieval quality view", async ({ page, api },
     knowledgeBaseId = knowledgeBase.id;
 
     await page.goto(`/knowledge-bases/${knowledgeBaseId}`);
-    await page.getByTestId("document-upload-input").setInputFiles(
-      resolve(process.cwd(), "../examples/demo/retrieval-handbook.md"),
-    );
+    await uploadAndWait(page, resolve(process.cwd(), "../examples/demo/retrieval-handbook.md"));
     await waitForDocument(api, knowledgeBaseId, "retrieval-handbook.md");
 
     await page.getByTestId("kb-chat-toggle").click();

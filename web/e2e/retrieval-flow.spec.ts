@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { test, expect } from "./support/fixtures";
 import { deleteKnowledgeBase, searchEvidence, waitForDocument } from "./support/api";
+import { uploadAndWait } from "./support/upload";
 
 const filename = "retrieval-handbook.md";
 const fixturePath = resolve(process.cwd(), "../examples/demo/retrieval-handbook.md");
@@ -28,8 +29,7 @@ test("upload, parse, search, answer and delete document", async ({ page, api }) 
     // The knowledge base itself is the tree root and owns the top-level folders.
     await expect(page.locator(".folder-tree-scroll").getByText(knowledgeBaseName)).toBeVisible();
 
-    await page.getByTestId("document-upload-input").setInputFiles(fixturePath);
-    await expect(page.getByText(new RegExp(`已上传 ${filename}`))).toBeVisible({ timeout: 15_000 });
+    await uploadAndWait(page, fixturePath);
     await waitForDocument(api, knowledgeBaseId, filename);
 
     await page.getByRole("button", { name: /刷\s*新/ }).click();
