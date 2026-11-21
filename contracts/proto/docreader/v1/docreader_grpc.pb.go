@@ -19,7 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DocumentReader_ParseDocument_FullMethodName = "/docreader.v1.DocumentReader/ParseDocument"
+	DocumentReader_ParseDocument_FullMethodName       = "/docreader.v1.DocumentReader/ParseDocument"
+	DocumentReader_ParseDocumentStream_FullMethodName = "/docreader.v1.DocumentReader/ParseDocumentStream"
+	DocumentReader_ParseDocumentBlocks_FullMethodName = "/docreader.v1.DocumentReader/ParseDocumentBlocks"
 )
 
 // DocumentReaderClient is the client API for DocumentReader service.
@@ -27,6 +29,12 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DocumentReaderClient interface {
 	ParseDocument(ctx context.Context, in *ParseDocumentRequest, opts ...grpc.CallOption) (*ParseDocumentResponse, error)
+	// Streaming variant: the first frame carries the metadata, every frame may
+	// carry content. It removes the single-message size limit from the pipe.
+	ParseDocumentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ParseDocumentChunk, ParseDocumentResponse], error)
+	// Block-streaming variant: the response is split into block batches plus one
+	// final summary, so large tables do not hit a single gRPC message cap.
+	ParseDocumentBlocks(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ParseDocumentChunk, ParseDocumentEvent], error)
 }
 
 type documentReaderClient struct {
@@ -47,11 +55,43 @@ func (c *documentReaderClient) ParseDocument(ctx context.Context, in *ParseDocum
 	return out, nil
 }
 
+func (c *documentReaderClient) ParseDocumentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[ParseDocumentChunk, ParseDocumentResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DocumentReader_ServiceDesc.Streams[0], DocumentReader_ParseDocumentStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ParseDocumentChunk, ParseDocumentResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DocumentReader_ParseDocumentStreamClient = grpc.ClientStreamingClient[ParseDocumentChunk, ParseDocumentResponse]
+
+func (c *documentReaderClient) ParseDocumentBlocks(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ParseDocumentChunk, ParseDocumentEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &DocumentReader_ServiceDesc.Streams[1], DocumentReader_ParseDocumentBlocks_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ParseDocumentChunk, ParseDocumentEvent]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DocumentReader_ParseDocumentBlocksClient = grpc.BidiStreamingClient[ParseDocumentChunk, ParseDocumentEvent]
+
 // DocumentReaderServer is the server API for DocumentReader service.
 // All implementations must embed UnimplementedDocumentReaderServer
 // for forward compatibility.
 type DocumentReaderServer interface {
 	ParseDocument(context.Context, *ParseDocumentRequest) (*ParseDocumentResponse, error)
+	// Streaming variant: the first frame carries the metadata, every frame may
+	// carry content. It removes the single-message size limit from the pipe.
+	ParseDocumentStream(grpc.ClientStreamingServer[ParseDocumentChunk, ParseDocumentResponse]) error
+	// Block-streaming variant: the response is split into block batches plus one
+	// final summary, so large tables do not hit a single gRPC message cap.
+	ParseDocumentBlocks(grpc.BidiStreamingServer[ParseDocumentChunk, ParseDocumentEvent]) error
 	mustEmbedUnimplementedDocumentReaderServer()
 }
 
@@ -64,6 +104,12 @@ type UnimplementedDocumentReaderServer struct{}
 
 func (UnimplementedDocumentReaderServer) ParseDocument(context.Context, *ParseDocumentRequest) (*ParseDocumentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ParseDocument not implemented")
+}
+func (UnimplementedDocumentReaderServer) ParseDocumentStream(grpc.ClientStreamingServer[ParseDocumentChunk, ParseDocumentResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ParseDocumentStream not implemented")
+}
+func (UnimplementedDocumentReaderServer) ParseDocumentBlocks(grpc.BidiStreamingServer[ParseDocumentChunk, ParseDocumentEvent]) error {
+	return status.Errorf(codes.Unimplemented, "method ParseDocumentBlocks not implemented")
 }
 func (UnimplementedDocumentReaderServer) mustEmbedUnimplementedDocumentReaderServer() {}
 func (UnimplementedDocumentReaderServer) testEmbeddedByValue()                        {}
@@ -104,6 +150,20 @@ func _DocumentReader_ParseDocument_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DocumentReader_ParseDocumentStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DocumentReaderServer).ParseDocumentStream(&grpc.GenericServerStream[ParseDocumentChunk, ParseDocumentResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DocumentReader_ParseDocumentStreamServer = grpc.ClientStreamingServer[ParseDocumentChunk, ParseDocumentResponse]
+
+func _DocumentReader_ParseDocumentBlocks_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(DocumentReaderServer).ParseDocumentBlocks(&grpc.GenericServerStream[ParseDocumentChunk, ParseDocumentEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type DocumentReader_ParseDocumentBlocksServer = grpc.BidiStreamingServer[ParseDocumentChunk, ParseDocumentEvent]
+
 // DocumentReader_ServiceDesc is the grpc.ServiceDesc for DocumentReader service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -116,6 +176,18 @@ var DocumentReader_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _DocumentReader_ParseDocument_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ParseDocumentStream",
+			Handler:       _DocumentReader_ParseDocumentStream_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ParseDocumentBlocks",
+			Handler:       _DocumentReader_ParseDocumentBlocks_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "contracts/proto/docreader/v1/docreader.proto",
 }

@@ -214,6 +214,30 @@ export function DocumentPage() {
                     {t("document.title")}: {content.data.title} · {t("document.language")}: {content.data.language || t("document.unknown")}
                   </Typography.Paragraph>
                 )}
+                {content.data.truncated && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={t("document.truncatedWarning", {
+                      indexedRows: content.data.indexedRows ?? 0,
+                      totalRows: content.data.totalRows ?? 0,
+                      indexedSheets: content.data.indexedSheets ?? 0,
+                      totalSheets: content.data.totalSheets ?? 0,
+                    })}
+                    className="settings-alert"
+                  />
+                )}
+                {((content.data.totalRows ?? 0) > 0 || (content.data.totalSheets ?? 0) > 0) && (
+                  <Typography.Paragraph type="secondary">
+                    {t("document.parseStats", {
+                      indexedRows: content.data.indexedRows ?? 0,
+                      totalRows: content.data.totalRows ?? 0,
+                      indexedSheets: content.data.indexedSheets ?? 0,
+                      totalSheets: content.data.totalSheets ?? 0,
+                    })}
+                    {content.data.truncated ? ` · ${t("document.truncatedHint")}` : ""}
+                  </Typography.Paragraph>
+                )}
                 <div className="blocks">
                   {content.data.blocks.map((block) => (
                     <div className="block" key={block.blockId}>

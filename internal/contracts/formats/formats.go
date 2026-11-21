@@ -49,6 +49,9 @@ var specs = []Spec{
 	{Name: "pdf-text", MIME: "application/pdf", Extensions: []string{".pdf"}, Accepts: exact("application/pdf")},
 	{Name: "docx", MIME: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Extensions: []string{".docx"}, Accepts: exact("application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
 	{Name: "xlsx", MIME: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Extensions: []string{".xlsx"}, Accepts: exact("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+	{Name: "csv", MIME: "text/csv", Extensions: []string{".csv"}, Accepts: func(value string) bool {
+		return value == "" || value == "text/csv" || value == "application/csv" || value == "text/plain"
+	}},
 	{Name: "pptx", MIME: "application/vnd.openxmlformats-officedocument.presentationml.presentation", Extensions: []string{".pptx"}, Accepts: exact("application/vnd.openxmlformats-officedocument.presentationml.presentation")},
 	{Name: "html", MIME: "text/html", Extensions: []string{".html", ".htm"}, Accepts: func(value string) bool {
 		return value == "" || value == "text/html" || value == "application/xhtml+xml" || strings.HasPrefix(value, "text/")

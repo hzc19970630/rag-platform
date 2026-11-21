@@ -47,6 +47,18 @@ type DocumentReader interface {
 	Parse(ctx context.Context, source SourceObject, content []byte) (ParseResult, error)
 }
 
+// StreamingDocumentReader receives the source as a stream instead of a whole
+// byte slice. The unary DocumentReader stays for tests and compatibility.
+type StreamingDocumentReader interface {
+	ParseStream(ctx context.Context, source SourceObject, content io.Reader, sizeBytes, chunkBytes int64) (ParseResult, error)
+}
+
+// BlockStreamingDocumentReader returns blocks in bounded events instead of one
+// large response, which removes the single-message cap for big tables.
+type BlockStreamingDocumentReader interface {
+	ParseBlocksStream(ctx context.Context, source SourceObject, content io.Reader, sizeBytes, chunkBytes int64) (ParseResult, error)
+}
+
 // Embedder is the shared model port. Callers validate Dimension against stored
 // rows so a model or dimension change fails loudly instead of writing vectors
 // that cannot be searched.

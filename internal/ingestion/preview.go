@@ -48,6 +48,11 @@ type DocumentPreview struct {
 	ParserVersion   string         `json:"parserVersion"`
 	Blocks          []PreviewBlock `json:"blocks"`
 	Visibility      string         `json:"visibility"`
+	Truncated       bool           `json:"truncated"`
+	TotalRows       int64          `json:"totalRows"`
+	IndexedRows     int64          `json:"indexedRows"`
+	TotalSheets     int            `json:"totalSheets"`
+	IndexedSheets   int            `json:"indexedSheets"`
 }
 
 // PreviewBlock is one structured text block with its source position.
@@ -192,6 +197,8 @@ func (s *Service) Preview(ctx context.Context, principal authz.Principal, docume
 		KnowledgeBaseID: document.KnowledgeBaseID, Filename: document.Filename, MimeType: document.MimeType,
 		Status: version.Status, Title: normalized.Title, Language: normalized.Language,
 		ParserVersion: normalized.ParserVersion, Blocks: blocks, Visibility: "authorized",
+		Truncated: normalized.Truncated, TotalRows: normalized.TotalRows, IndexedRows: normalized.IndexedRows,
+		TotalSheets: normalized.TotalSheets, IndexedSheets: normalized.IndexedSheets,
 	}, nil
 }
 

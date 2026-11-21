@@ -175,6 +175,11 @@ export type DocumentPreview = {
   title: string;
   language: string;
   blocks: PreviewBlock[];
+  truncated?: boolean;
+  totalRows?: number;
+  indexedRows?: number;
+  totalSheets?: number;
+  indexedSheets?: number;
 };
 
 export type Citation = {

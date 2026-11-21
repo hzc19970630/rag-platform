@@ -432,6 +432,20 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - 分片请求按 `HTTP_READ_TIMEOUT_SECONDS`（默认 900s）计时，失败只重传该分片；批量上传在前端队列中串行/小并发执行，单文件失败不影响其余文件。
 - 配额在创建会话时预占，`complete` 在注册事务内结算；活跃会话上限为 `UPLOAD_MAX_ACTIVE_PER_TENANT`（默认 20）与 `UPLOAD_MAX_ACTIVE_PER_KB`（默认 10）。过期会话由 Worker 维护循环 abort multipart 并标记 `expired`，`upload_sessions_active` 与 `upload_sessions_reserved_bytes` 指标可在 `/ops/metrics` 与 Prometheus 抓取。
 - 运维重试：`complete` 幂等；会话在 `completing` 状态中断后，再次调用会先查已注册流水线或已合成对象并继续，不会产生第二个版本。中止用 `DELETE /api/v1/uploads/:id`。
+- 终态会话（completed/aborted/expired）按 `UPLOAD_SESSION_RETENTION_DAYS`（默认 30）由 worker 清理；活动会话不受影响，0 表示永久保留。
+- parser 升级后可用 `scripts/reparse_kb.sh <kb-id>` 按 100 个文档一组调用 batch reparse；支持 `DRY_RUN=1`、`API_BASE` 与 `API_KEY`。
+
+### 10.2 大表格与流式解析（B34）
+
+- `PARSER_VERSION=docreader-m2-v3`。worker 通过 client-streaming `ParseDocumentStream` 分帧（`DOCREADER_STREAM_CHUNK_KB`，默认 2MiB）发送源文件，docreader 写入只读容器内 `/spool` tmpfs（`DOCREADER_SPOOL_MB` 默认 384MiB，`DOCREADER_SPOOL_CONCURRENCY` 默认 2）；spool 计入 docreader 2GiB 内存限制，请求结束/取消后立即删除。
+- 表格预算：`DOCREADER_MAX_ARCHIVE_BYTES`（默认 2GiB）、`DOCREADER_MAX_PART_BYTES`（64MiB）、`DOCREADER_MAX_READ_BYTES`（1GiB）、`DOCREADER_MAX_TABLE_ROWS_PER_SHEET`（5 万）、`DOCREADER_MAX_TABLE_ROWS`（50 万）、`DOCREADER_TABLE_WINDOW_ROWS`（200）、`DOCREADER_MAX_TABLE_BLOCKS`（5000）。条目数/压缩比/单部件仍为硬拒绝；行/表/块超预算为软截断并写 `[truncated]`。
+- xlsx 使用 `iterparse` 逐行解析；CSV 支持 UTF-8/GB18030 与分隔符嗅探。表格 block `kind=table` 的文本为“首行表头 + `a | b | c` 行”，单元格内管道与换行会被转义/压平；入库切块时每个 chunk 重复表头并保留 sheet/行范围。
+- 解析预算独立于入库任务：`DOCREADER_PARSE_TIMEOUT_SECONDS`（默认 300s）。升级 parser 版本后，旧文档需通过 reparse/重建获得表格行为。
+- 可观察：docreader 每次成功解析输出 `parse_complete` 日志（blocks、truncated、total/indexed rows/sheets、elapsed_ms），worker 输出 `document_parsed` 日志；解析统计同时通过 `GET /documents/:id/content` 暴露给文档页。
+- blocks 返回：worker 优先使用 bidi `ParseDocumentBlocks`，docreader 每 `DOCREADER_BLOCK_BATCH`（默认 200）块发送一次，最后发送统计摘要；单条 gRPC 消息不再包含整份文档的全部 blocks。
+- CSV 使用逐行增量读取，不再整文件载入内存；spool 不可写时 `/healthz` 返回 `spool_ok:false`，流式请求返回可重试的 `spool_unavailable`。
+- embedding 护栏：`EMBEDDING_CHUNK_WARNING_THRESHOLD`（默认 5000）只告警；`EMBEDDING_MAX_CHUNKS_PER_DOCUMENT`（默认 0）为硬上限，超限返回 `embedding_budget_exceeded`。解析/截断/行数/spool 拒绝/embedding 预算均有 `ingestion_*` 指标（worker 配置 `METRICS_ADDR` 后暴露）。
+- 已知边界：图片/扫描页/Office 内嵌媒体仍由 B7a 承接；B34 不改变图片内容语义。
 
 ## 11. 数据库连接池
 

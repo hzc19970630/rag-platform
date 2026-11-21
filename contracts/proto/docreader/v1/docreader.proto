@@ -6,9 +6,23 @@ option go_package = "github.com/hzc19970630/rag-platform/services/docreader/gene
 
 service DocumentReader {
   rpc ParseDocument(ParseDocumentRequest) returns (ParseDocumentResponse);
+  // Streaming variant: the first frame carries the metadata, every frame may
+  // carry content. It removes the single-message size limit from the pipe.
+  rpc ParseDocumentStream(stream ParseDocumentChunk) returns (ParseDocumentResponse);
+  // Block-streaming variant: the response is split into block batches plus one
+  // final summary, so large tables do not hit a single gRPC message cap.
+  rpc ParseDocumentBlocks(stream ParseDocumentChunk) returns (stream ParseDocumentEvent);
 }
 
 message ParseDocumentRequest {
+  string schema_version = 1;
+  string document_version_id = 2;
+  string filename = 3;
+  string mime_type = 4;
+  bytes content = 5;
+}
+
+message ParseDocumentChunk {
   string schema_version = 1;
   string document_version_id = 2;
   string filename = 3;
@@ -27,6 +41,13 @@ message ParseDocumentResponse {
   string error_code = 8;
   string error_message = 9;
   repeated DocumentBlock blocks = 10;
+  // Table parsing statistics. truncated means the row/sheet/character budget
+  // stopped the parser before the whole document was indexed.
+  bool truncated = 11;
+  int64 total_rows = 12;
+  int64 indexed_rows = 13;
+  int32 total_sheets = 14;
+  int32 indexed_sheets = 15;
 }
 
 message DocumentBlock {
@@ -38,4 +59,9 @@ message DocumentBlock {
   string source_path = 6;
   int32 start_offset = 7;
   int32 end_offset = 8;
+}
+
+message ParseDocumentEvent {
+  repeated DocumentBlock blocks = 1;
+  ParseDocumentResponse summary = 2;
 }

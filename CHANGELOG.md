@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - 可续传与批量上传（B30）：新增上传会话 API（`POST /knowledge-bases/:id/uploads`、`GET/DELETE /uploads/:id`、`POST /uploads/:id/urls`、`PUT /uploads/:id/parts/:part`、`POST /uploads/:id/complete`）。分片协议在 direct（`S3_PUBLIC_ENDPOINT` 预签名直传）与 proxy（API 流式转发）两种 transport 下一致，均支持断线只补缺失分片；前端上传队列支持多选批量、并发 2、单文件进度/取消/重试，刷新后重选同名文件按会话续传。配额在会话创建时预占、complete 时在注册事务内结算；活跃会话上限（默认租户 20 / 知识库 10）、过期 sweeper 与 `upload_sessions_active`/`upload_sessions_reserved_bytes` 指标已接入 worker；审计新增 `upload_session` 资源。旧单文件上传端点保留给 CLI/MCP 与兼容调用。新增配置 `S3_PUBLIC_ENDPOINT`、`MINIO_API_CORS_ALLOW_ORIGIN`、`UPLOAD_PART_SIZE_MB`、`UPLOAD_PRESIGN_TTL_SECONDS`、`UPLOAD_SESSION_TTL_SECONDS`、`UPLOAD_MAX_ACTIVE_PER_TENANT`、`UPLOAD_MAX_ACTIVE_PER_KB`、`HTTP_READ_TIMEOUT_SECONDS`。
+- 大表格与流式解析（B34）：worker→docreader 改为 client-streaming，按 2MiB 分帧发送，docreader 使用 384MiB tmpfs spool（并发 2）并统一 unary/stream 解析源；新增 CSV 格式（UTF-8/GB18030、分隔符嗅探）与 `kind=table` 表格块（首行表头、管道行、行窗口、截断标记），入库切块每个 chunk 重复表头。xlsx 改为 `iterparse` 逐行解析，默认 parser 升级为 `docreader-m2-v3`；新增 `DOCREADER_STREAM_CHUNK_KB`、`DOCREADER_SPOOL_MB`、`DOCREADER_PARSE_TIMEOUT_SECONDS`、`DOCREADER_MAX_ARCHIVE_BYTES`、`DOCREADER_MAX_PART_BYTES`、`DOCREADER_MAX_READ_BYTES`、`DOCREADER_MAX_TABLE_*`、`DOCREADER_TABLE_WINDOW_ROWS` 预算。119MB 样例已可完成解析与切块（embedding 受远程配额限制另行处理）。
 
 ### Fixed
 
+- B30/B34 风险收口：CSV 改为逐行增量解析（不再整文件读入内存）；docreader 启动校验 spool 可写并在 `/healthz` 暴露 `spool_ok`；unary 恢复 128MiB 消息上限，流式帧保持 2MiB；并发解析等待 spool 槽位而不是立即拒绝；表格截断在文档页显示警告。新增 embedding chunk 预警/硬上限（`EMBEDDING_CHUNK_WARNING_THRESHOLD`、`EMBEDDING_MAX_CHUNKS_PER_DOCUMENT`）、`UPLOAD_SESSION_RETENTION_DAYS` 会话回收、`scripts/reparse_kb.sh` 批量重解析工具，以及 parse/truncated/rows/spool/embedding 指标。worker 改用 bidi `ParseDocumentBlocks`，blocks 按 `DOCREADER_BLOCK_BATCH`（默认 200）分批返回，解除大表格单条 gRPC 响应上限。
 - 图谱快照审核通过时补写 `activated_at`，并在审核响应中返回；此前 ACTIVE 快照的激活时间为空。
 - 图谱快照写库改为分批（实体/别名/关系/来源各 500 行/批），避免大知识库触发 PostgreSQL `extended protocol limited to 65535 parameters`，100 文档 / 10k chunk 的合成库可正常产出快照。
 - 重建知识页/图谱在已有活跃 run 时返回 `started:0` 并提示“已有构建正在进行”，不再伪装成已排入新任务；运维重试改为 `FAILED → RETRY` 条件更新，并发点击只有一个请求生效，避免重复重置与重投单元。

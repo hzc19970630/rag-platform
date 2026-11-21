@@ -84,6 +84,9 @@ func main() {
 	chunker := ingestion.NewRuneChunker(ingestion.RuneChunkerOptions{Size: cfg.Chunk.Size, Overlap: cfg.Chunk.Overlap, Markers: cfg.Chunk.Markers, MinSize: cfg.Chunk.MinSize})
 	logger.Info("chunking_policy_ready", "strategy", chunker.Strategy(), "size", cfg.Chunk.Size, "overlap", cfg.Chunk.Overlap, "min_size", cfg.Chunk.MinSize, "markers", len(cfg.Chunk.Markers))
 	pipeline := ingestion.NewPipelineWorker(application.DB, application.Objects, application.Docreader, embedder, application.Index, chunker, time.Duration(cfg.TaskTimeoutSeconds)*time.Second)
+	pipeline.SetParseTransport(cfg.StreamChunkBytes, time.Duration(cfg.ParseTimeoutSeconds)*time.Second)
+	pipeline.SetEmbeddingBudget(cfg.EmbeddingChunkWarningThreshold, cfg.EmbeddingMaxChunksPerDocument)
+	pipeline.SetMetrics(metricsRegistry)
 	pipeline.SetChunkingResolver(app.TenantChunkingResolver(application.TenantConfig))
 	pipeline.SetEmbeddingResolver(application.Embedding)
 	pipeline.SetProjectionTrigger(application.Projection)
@@ -235,11 +238,12 @@ type maintenanceRunner struct {
 	staleAfter  time.Duration
 	gauges      metrics.Gauge
 
-	lastAuditPurge       time.Time
-	lastStreamEventPurge time.Time
-	lastTaskHistoryPurge time.Time
-	lastLDAPSync         time.Time
-	projectionCursor     string
+	lastAuditPurge         time.Time
+	lastStreamEventPurge   time.Time
+	lastTaskHistoryPurge   time.Time
+	lastUploadSessionPurge time.Time
+	lastLDAPSync           time.Time
+	projectionCursor       string
 }
 
 // collectGauges publishes deployment-wide backlog as gauges. It runs on every
@@ -322,6 +326,17 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 		}
 		if historyPurged > 0 {
 			logger.Info("task_history_purge_complete", "rows", historyPurged, "retention_days", cfg.Limits.TaskHistoryRetentionDays)
+		}
+	}
+	if cfg.Limits.UploadSessionRetentionDays > 0 && time.Since(m.lastUploadSessionPurge) >= retentionPurgeInterval {
+		m.lastUploadSessionPurge = time.Now()
+		cutoff := m.lastUploadSessionPurge.Add(-time.Duration(cfg.Limits.UploadSessionRetentionDays) * 24 * time.Hour)
+		sessionPurged, err := purgeInBatches(ctx, cutoff, retentionPurgeBatchSize, application.Ingestion.PurgeUploadSessions)
+		if err != nil {
+			logger.Error("upload_session_purge_failed", "error", err)
+		}
+		if sessionPurged > 0 {
+			logger.Info("upload_session_purge_complete", "rows", sessionPurged, "retention_days", cfg.Limits.UploadSessionRetentionDays)
 		}
 	}
 	triggered, err := application.DataSources.Maintenance().ScheduleDue(ctx, 20)

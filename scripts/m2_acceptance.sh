@@ -103,8 +103,8 @@ blocks, _ = parse_content("sample.xlsx", sheet_mime, xlsx.getvalue())
 texts = [item.text for item in blocks]
 assert blocks[0].heading_path == "sample / First", [item.heading_path for item in blocks]
 assert blocks[0].source_path.startswith("sheet:First!"), blocks[0].source_path
-assert texts[0] == "A: Report | B: Q1", texts
-assert "A: inline note | B: 128" in texts, texts
+assert texts[0] == "Report | Q1" + chr(10) + "inline note | 128" + chr(10) + "2024-01-01 | 129", texts
+assert "inline note | 128" in texts[0], texts
 assert any("2024-01-01" in text for text in texts), texts
 assert any("129" in text for text in texts), texts
 assert any(item.heading_path == "sample / Budget" for item in blocks), [item.heading_path for item in blocks]

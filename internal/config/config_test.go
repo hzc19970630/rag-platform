@@ -44,7 +44,16 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	if cfg.RequestTimeoutSeconds != 60 {
 		t.Fatalf("RequestTimeoutSeconds default: %d", cfg.RequestTimeoutSeconds)
 	}
-	wantFormats := map[string]bool{"pdf-text": true, "docx": true, "xlsx": true, "pptx": true, "markdown": true, "txt": true, "html": true}
+	if cfg.StreamChunkBytes != 2048*1024 || cfg.ParseTimeoutSeconds != 300 {
+		t.Fatalf("stream/parse defaults: %d/%d", cfg.StreamChunkBytes, cfg.ParseTimeoutSeconds)
+	}
+	if cfg.ParserVersion != "docreader-m2-v3" {
+		t.Fatalf("ParserVersion default: %q", cfg.ParserVersion)
+	}
+	if cfg.EmbeddingChunkWarningThreshold != 5000 || cfg.EmbeddingMaxChunksPerDocument != 0 {
+		t.Fatalf("embedding budgets default: %d/%d", cfg.EmbeddingChunkWarningThreshold, cfg.EmbeddingMaxChunksPerDocument)
+	}
+	wantFormats := map[string]bool{"pdf-text": true, "docx": true, "xlsx": true, "csv": true, "pptx": true, "markdown": true, "txt": true, "html": true}
 	if len(cfg.SupportedFormats) != len(wantFormats) {
 		t.Fatalf("SupportedFormats default: %v", cfg.SupportedFormats)
 	}

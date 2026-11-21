@@ -742,6 +742,11 @@ type DocumentPreview struct {
 	ParserVersion   string         `json:"parserVersion"`
 	Blocks          []PreviewBlock `json:"blocks"`
 	Visibility      string         `json:"visibility"`
+	Truncated       bool           `json:"truncated"`
+	TotalRows       int64          `json:"totalRows"`
+	IndexedRows     int64          `json:"indexedRows"`
+	TotalSheets     int            `json:"totalSheets"`
+	IndexedSheets   int            `json:"indexedSheets"`
 }
 
 type DocumentStatus struct {

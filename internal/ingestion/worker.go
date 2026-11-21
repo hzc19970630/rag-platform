@@ -15,7 +15,9 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/contracts/embedding"
 	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
+	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"gorm.io/gorm"
@@ -33,19 +35,24 @@ const (
 var DefaultChunking = NewRuneChunker(RuneChunkerOptions{Size: 900, Overlap: 120})
 
 type PipelineWorker struct {
-	db                *gorm.DB
-	objects           ObjectStore
-	reader            DocumentReader
-	embedder          Embedder
-	embeddingResolver EmbeddingResolver
-	indexWriter       EvidenceIndexWriter
-	chunker           Chunker
-	chunkingResolver  ChunkingResolver
-	timeout           time.Duration
-	projection        ProjectionTrigger
-	leaseOwner        inboxlease.Owner
-	leaseTTL          time.Duration
-	formats           formats.Registry
+	db                 *gorm.DB
+	objects            ObjectStore
+	reader             DocumentReader
+	embedder           Embedder
+	embeddingResolver  EmbeddingResolver
+	indexWriter        EvidenceIndexWriter
+	chunker            Chunker
+	chunkingResolver   ChunkingResolver
+	timeout            time.Duration
+	streamChunkBytes   int64
+	parseTimeout       time.Duration
+	embeddingWarning   int
+	embeddingMaxChunks int
+	metrics            *observability.Registry
+	projection         ProjectionTrigger
+	leaseOwner         inboxlease.Owner
+	leaseTTL           time.Duration
+	formats            formats.Registry
 }
 
 // ChunkingResolver resolves the chunking policy for one tenant. The worker
@@ -97,6 +104,47 @@ type ProjectionTrigger interface {
 
 func (w *PipelineWorker) SetProjectionTrigger(trigger ProjectionTrigger) {
 	w.projection = trigger
+}
+
+// SetParseTransport switches parsing to the streaming docreader RPC and gives
+// the parse stage its own deadline. Zero values keep the unary path.
+func (w *PipelineWorker) SetParseTransport(chunkBytes int64, timeout time.Duration) {
+	w.streamChunkBytes = chunkBytes
+	w.parseTimeout = timeout
+}
+
+// SetEmbeddingBudget guards large tables before embedding. warning<=0 disables
+// the warning; maxChunks<=0 disables the hard failure.
+func (w *PipelineWorker) SetEmbeddingBudget(warning, maxChunks int) {
+	w.embeddingWarning = warning
+	w.embeddingMaxChunks = maxChunks
+}
+
+func (w *PipelineWorker) SetMetrics(registry *observability.Registry) {
+	w.metrics = registry
+}
+
+func (w *PipelineWorker) recordParseMetrics(source SourceObject, result ParseResult, err error, elapsed time.Duration) {
+	if w.metrics == nil {
+		return
+	}
+	status := "ok"
+	if err != nil || result.ErrorCode != "" {
+		status = "error"
+	}
+	format := source.MimeType
+	w.metrics.Inc("ingestion_parse_total", metrics.Labels("status", status, "format", format))
+	w.metrics.Observe("ingestion_parse_duration", elapsed, metrics.Labels("format", format))
+	if result.ErrorCode == "parser_busy" || result.ErrorCode == "spool_unavailable" ||
+		(err != nil && (strings.Contains(err.Error(), "parser_busy") || strings.Contains(err.Error(), "spool_unavailable"))) {
+		w.metrics.Inc("ingestion_spool_reject_total", nil)
+	}
+	if status == "ok" {
+		w.metrics.Add("ingestion_parse_rows", result.IndexedRows, nil)
+		if result.Truncated {
+			w.metrics.Inc("ingestion_parse_truncated_total", nil)
+		}
+	}
 }
 
 func NewPipelineWorker(db *gorm.DB, objects ObjectStore, reader DocumentReader, embedder Embedder, indexWriter EvidenceIndexWriter, chunker Chunker, timeout time.Duration) *PipelineWorker {
@@ -210,15 +258,49 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if version.Status == StatusCancelled {
 		return apperror.ErrVersionSuperseded
 	}
-	content, err := w.objects.Get(ctx, version.SourceObjectKey)
-	if err != nil {
-		return fmt.Errorf("load source object: %w", err)
+	streaming, streamingOK := w.reader.(StreamingDocumentReader)
+	var err error
+	var content []byte
+	if !streamingOK || w.streamChunkBytes <= 0 {
+		content, err = w.objects.Get(ctx, version.SourceObjectKey)
+		if err != nil {
+			return fmt.Errorf("load source object: %w", err)
+		}
 	}
-	source := SourceObject{SchemaVersion: SchemaSourceObject, Envelope: Envelope{SchemaVersion: SchemaSourceObject, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, ContentHash: version.ContentHash}, ObjectKey: version.SourceObjectKey, Filename: filenameFromKey(version.SourceObjectKey), MimeType: w.mimeForFilename(version.SourceObjectKey), SizeBytes: int64(len(content))}
-	result, err := w.reader.Parse(ctx, source, content)
+	source := SourceObject{SchemaVersion: SchemaSourceObject, Envelope: Envelope{SchemaVersion: SchemaSourceObject, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, ContentHash: version.ContentHash}, ObjectKey: version.SourceObjectKey, Filename: filenameFromKey(version.SourceObjectKey), MimeType: w.mimeForFilename(version.SourceObjectKey), SizeBytes: version.SizeBytes}
+	parseCtx := ctx
+	if w.parseTimeout > 0 {
+		var cancel context.CancelFunc
+		parseCtx, cancel = context.WithTimeout(ctx, w.parseTimeout)
+		defer cancel()
+	}
+	parseStarted := time.Now()
+	var result ParseResult
+	blockStreaming, blockStreamOK := w.reader.(BlockStreamingDocumentReader)
+	if blockStreamOK && w.streamChunkBytes > 0 {
+		body, openErr := w.objects.Open(parseCtx, version.SourceObjectKey)
+		if openErr != nil {
+			return openErr
+		}
+		defer body.Close()
+		result, err = blockStreaming.ParseBlocksStream(parseCtx, source, body, version.SizeBytes, w.streamChunkBytes)
+	} else if streamingOK && w.streamChunkBytes > 0 {
+		body, openErr := w.objects.Open(parseCtx, version.SourceObjectKey)
+		if openErr != nil {
+			return openErr
+		}
+		defer body.Close()
+		result, err = streaming.ParseStream(parseCtx, source, body, version.SizeBytes, w.streamChunkBytes)
+	} else {
+		result, err = w.reader.Parse(parseCtx, source, content)
+	}
+	w.recordParseMetrics(source, result, err, time.Since(parseStarted))
 	if err != nil {
 		return fmt.Errorf("parser_error: %w", err)
 	}
+	slog.Info("document_parsed", "document_version_id", version.ID, "parser_version", result.ParserVersion,
+		"blocks", len(result.Blocks), "truncated", result.Truncated, "total_rows", result.TotalRows,
+		"indexed_rows", result.IndexedRows, "total_sheets", result.TotalSheets, "indexed_sheets", result.IndexedSheets)
 	if result.ErrorCode != "" {
 		if terminalParserCode(result.ErrorCode) {
 			return apperror.Terminalf(result.ErrorCode, "%s", result.ErrorMessage)
@@ -228,7 +310,7 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if len(result.Blocks) == 0 {
 		return apperror.Terminalf("empty_document", "parser returned no text blocks")
 	}
-	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks}
+	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks, Truncated: result.Truncated, TotalRows: result.TotalRows, IndexedRows: result.IndexedRows, TotalSheets: result.TotalSheets, IndexedSheets: result.IndexedSheets}
 	data, err := json.Marshal(normalized)
 	if err != nil {
 		return fmt.Errorf("marshal normalized document: %w", err)
@@ -263,7 +345,11 @@ func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
 	}
 	blocks := normalized.Blocks[:0]
 	for _, block := range normalized.Blocks {
-		block.Text = cleanText(block.Text)
+		if block.Kind == "table" {
+			block.Text = cleanTableText(block.Text)
+		} else {
+			block.Text = cleanText(block.Text)
+		}
 		block.HeadingPath = cleanText(block.HeadingPath)
 		if block.Text != "" {
 			blocks = append(blocks, block)
@@ -381,8 +467,18 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	for blockIndex, block := range normalized.Blocks {
 		parentID := stableID("parent", version.ID, fmt.Sprint(blockIndex), block.Text)
 		rows = append(rows, chunkRow{ID: parentID, Content: block.Text, ContentHash: hashString(block.Text), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: blockIndex})
-		for _, content := range chunker.Split(block.Text) {
-			content = cleanText(content)
+		contents := chunker.Split(block.Text)
+		if block.Kind == "table" {
+			if splitter, ok := chunker.(TableSplitter); ok {
+				contents = splitter.SplitTable(block.Text)
+			}
+		}
+		for _, content := range contents {
+			if block.Kind == "table" {
+				content = cleanTableText(content)
+			} else {
+				content = cleanText(content)
+			}
 			if content == "" {
 				continue
 			}
@@ -392,6 +488,22 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	}
 	if len(rows) == 0 {
 		return apperror.Terminalf("empty_document", "chunker returned no chunks")
+	}
+	childChunks := 0
+	for _, row := range rows {
+		if row.ParentID != "" {
+			childChunks++
+		}
+	}
+	if w.embeddingMaxChunks > 0 && childChunks > w.embeddingMaxChunks {
+		return apperror.Terminalf("embedding_budget_exceeded",
+			"document produced %d chunks, above the %d chunk limit; split the table or raise EMBEDDING_MAX_CHUNKS_PER_DOCUMENT", childChunks, w.embeddingMaxChunks)
+	}
+	if w.embeddingWarning > 0 && childChunks > w.embeddingWarning {
+		slog.Warn("embedding_budget_high", "document_version_id", version.ID, "chunks", childChunks, "warning_threshold", w.embeddingWarning)
+		if w.metrics != nil {
+			w.metrics.Inc("ingestion_embedding_budget_high_total", nil)
+		}
 	}
 	// A reprocessed version reuses its id, so the old index entries must be
 	// removed before the new chunks are written. PostgreSQL is a no-op; an

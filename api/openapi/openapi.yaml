@@ -814,6 +814,11 @@ components:
           type: string
         filename:
           type: string
+        indexedRows:
+          format: int64
+          type: integer
+        indexedSheets:
+          type: integer
         knowledgeBaseId:
           type: string
         language:
@@ -828,6 +833,13 @@ components:
           type: string
         title:
           type: string
+        totalRows:
+          format: int64
+          type: integer
+        totalSheets:
+          type: integer
+        truncated:
+          type: boolean
         versionId:
           type: string
         visibility:

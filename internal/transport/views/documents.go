@@ -268,6 +268,11 @@ func DocumentPreview(view ingestion.DocumentPreview) httpapi.DocumentPreview {
 		ParserVersion:   view.ParserVersion,
 		Blocks:          blocks,
 		Visibility:      view.Visibility,
+		Truncated:       view.Truncated,
+		TotalRows:       view.TotalRows,
+		IndexedRows:     view.IndexedRows,
+		TotalSheets:     view.TotalSheets,
+		IndexedSheets:   view.IndexedSheets,
 	}
 }
 

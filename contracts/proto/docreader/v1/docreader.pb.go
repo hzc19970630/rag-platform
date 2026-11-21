@@ -97,6 +97,82 @@ func (x *ParseDocumentRequest) GetContent() []byte {
 	return nil
 }
 
+type ParseDocumentChunk struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion     string                 `protobuf:"bytes,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
+	DocumentVersionId string                 `protobuf:"bytes,2,opt,name=document_version_id,json=documentVersionId,proto3" json:"document_version_id,omitempty"`
+	Filename          string                 `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
+	MimeType          string                 `protobuf:"bytes,4,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	Content           []byte                 `protobuf:"bytes,5,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ParseDocumentChunk) Reset() {
+	*x = ParseDocumentChunk{}
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParseDocumentChunk) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParseDocumentChunk) ProtoMessage() {}
+
+func (x *ParseDocumentChunk) ProtoReflect() protoreflect.Message {
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParseDocumentChunk.ProtoReflect.Descriptor instead.
+func (*ParseDocumentChunk) Descriptor() ([]byte, []int) {
+	return file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ParseDocumentChunk) GetSchemaVersion() string {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return ""
+}
+
+func (x *ParseDocumentChunk) GetDocumentVersionId() string {
+	if x != nil {
+		return x.DocumentVersionId
+	}
+	return ""
+}
+
+func (x *ParseDocumentChunk) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *ParseDocumentChunk) GetMimeType() string {
+	if x != nil {
+		return x.MimeType
+	}
+	return ""
+}
+
+func (x *ParseDocumentChunk) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
 type ParseDocumentResponse struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	SchemaVersion     string                 `protobuf:"bytes,1,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
@@ -109,13 +185,20 @@ type ParseDocumentResponse struct {
 	ErrorCode         string                 `protobuf:"bytes,8,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
 	ErrorMessage      string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	Blocks            []*DocumentBlock       `protobuf:"bytes,10,rep,name=blocks,proto3" json:"blocks,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Table parsing statistics. truncated means the row/sheet/character budget
+	// stopped the parser before the whole document was indexed.
+	Truncated     bool  `protobuf:"varint,11,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	TotalRows     int64 `protobuf:"varint,12,opt,name=total_rows,json=totalRows,proto3" json:"total_rows,omitempty"`
+	IndexedRows   int64 `protobuf:"varint,13,opt,name=indexed_rows,json=indexedRows,proto3" json:"indexed_rows,omitempty"`
+	TotalSheets   int32 `protobuf:"varint,14,opt,name=total_sheets,json=totalSheets,proto3" json:"total_sheets,omitempty"`
+	IndexedSheets int32 `protobuf:"varint,15,opt,name=indexed_sheets,json=indexedSheets,proto3" json:"indexed_sheets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ParseDocumentResponse) Reset() {
 	*x = ParseDocumentResponse{}
-	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[1]
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -127,7 +210,7 @@ func (x *ParseDocumentResponse) String() string {
 func (*ParseDocumentResponse) ProtoMessage() {}
 
 func (x *ParseDocumentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[1]
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -140,7 +223,7 @@ func (x *ParseDocumentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ParseDocumentResponse.ProtoReflect.Descriptor instead.
 func (*ParseDocumentResponse) Descriptor() ([]byte, []int) {
-	return file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP(), []int{1}
+	return file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ParseDocumentResponse) GetSchemaVersion() string {
@@ -213,6 +296,41 @@ func (x *ParseDocumentResponse) GetBlocks() []*DocumentBlock {
 	return nil
 }
 
+func (x *ParseDocumentResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *ParseDocumentResponse) GetTotalRows() int64 {
+	if x != nil {
+		return x.TotalRows
+	}
+	return 0
+}
+
+func (x *ParseDocumentResponse) GetIndexedRows() int64 {
+	if x != nil {
+		return x.IndexedRows
+	}
+	return 0
+}
+
+func (x *ParseDocumentResponse) GetTotalSheets() int32 {
+	if x != nil {
+		return x.TotalSheets
+	}
+	return 0
+}
+
+func (x *ParseDocumentResponse) GetIndexedSheets() int32 {
+	if x != nil {
+		return x.IndexedSheets
+	}
+	return 0
+}
+
 type DocumentBlock struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BlockId       string                 `protobuf:"bytes,1,opt,name=block_id,json=blockId,proto3" json:"block_id,omitempty"`
@@ -229,7 +347,7 @@ type DocumentBlock struct {
 
 func (x *DocumentBlock) Reset() {
 	*x = DocumentBlock{}
-	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[2]
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -241,7 +359,7 @@ func (x *DocumentBlock) String() string {
 func (*DocumentBlock) ProtoMessage() {}
 
 func (x *DocumentBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[2]
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -254,7 +372,7 @@ func (x *DocumentBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocumentBlock.ProtoReflect.Descriptor instead.
 func (*DocumentBlock) Descriptor() ([]byte, []int) {
-	return file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP(), []int{2}
+	return file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DocumentBlock) GetBlockId() string {
@@ -313,6 +431,58 @@ func (x *DocumentBlock) GetEndOffset() int32 {
 	return 0
 }
 
+type ParseDocumentEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Blocks        []*DocumentBlock       `protobuf:"bytes,1,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	Summary       *ParseDocumentResponse `protobuf:"bytes,2,opt,name=summary,proto3" json:"summary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ParseDocumentEvent) Reset() {
+	*x = ParseDocumentEvent{}
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParseDocumentEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParseDocumentEvent) ProtoMessage() {}
+
+func (x *ParseDocumentEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_contracts_proto_docreader_v1_docreader_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParseDocumentEvent.ProtoReflect.Descriptor instead.
+func (*ParseDocumentEvent) Descriptor() ([]byte, []int) {
+	return file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ParseDocumentEvent) GetBlocks() []*DocumentBlock {
+	if x != nil {
+		return x.Blocks
+	}
+	return nil
+}
+
+func (x *ParseDocumentEvent) GetSummary() *ParseDocumentResponse {
+	if x != nil {
+		return x.Summary
+	}
+	return nil
+}
+
 var File_contracts_proto_docreader_v1_docreader_proto protoreflect.FileDescriptor
 
 const file_contracts_proto_docreader_v1_docreader_proto_rawDesc = "" +
@@ -323,7 +493,13 @@ const file_contracts_proto_docreader_v1_docreader_proto_rawDesc = "" +
 	"\x13document_version_id\x18\x02 \x01(\tR\x11documentVersionId\x12\x1a\n" +
 	"\bfilename\x18\x03 \x01(\tR\bfilename\x12\x1b\n" +
 	"\tmime_type\x18\x04 \x01(\tR\bmimeType\x12\x18\n" +
-	"\acontent\x18\x05 \x01(\fR\acontent\"\x80\x03\n" +
+	"\acontent\x18\x05 \x01(\fR\acontent\"\xbe\x01\n" +
+	"\x12ParseDocumentChunk\x12%\n" +
+	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12.\n" +
+	"\x13document_version_id\x18\x02 \x01(\tR\x11documentVersionId\x12\x1a\n" +
+	"\bfilename\x18\x03 \x01(\tR\bfilename\x12\x1b\n" +
+	"\tmime_type\x18\x04 \x01(\tR\bmimeType\x12\x18\n" +
+	"\acontent\x18\x05 \x01(\fR\acontent\"\xaa\x04\n" +
 	"\x15ParseDocumentResponse\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\tR\rschemaVersion\x12.\n" +
 	"\x13document_version_id\x18\x02 \x01(\tR\x11documentVersionId\x12!\n" +
@@ -336,7 +512,13 @@ const file_contracts_proto_docreader_v1_docreader_proto_rawDesc = "" +
 	"error_code\x18\b \x01(\tR\terrorCode\x12#\n" +
 	"\rerror_message\x18\t \x01(\tR\ferrorMessage\x123\n" +
 	"\x06blocks\x18\n" +
-	" \x03(\v2\x1b.docreader.v1.DocumentBlockR\x06blocks\"\xf9\x01\n" +
+	" \x03(\v2\x1b.docreader.v1.DocumentBlockR\x06blocks\x12\x1c\n" +
+	"\ttruncated\x18\v \x01(\bR\ttruncated\x12\x1d\n" +
+	"\n" +
+	"total_rows\x18\f \x01(\x03R\ttotalRows\x12!\n" +
+	"\findexed_rows\x18\r \x01(\x03R\vindexedRows\x12!\n" +
+	"\ftotal_sheets\x18\x0e \x01(\x05R\vtotalSheets\x12%\n" +
+	"\x0eindexed_sheets\x18\x0f \x01(\x05R\rindexedSheets\"\xf9\x01\n" +
 	"\rDocumentBlock\x12\x19\n" +
 	"\bblock_id\x18\x01 \x01(\tR\ablockId\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -348,9 +530,14 @@ const file_contracts_proto_docreader_v1_docreader_proto_rawDesc = "" +
 	"sourcePath\x12!\n" +
 	"\fstart_offset\x18\a \x01(\x05R\vstartOffset\x12\x1d\n" +
 	"\n" +
-	"end_offset\x18\b \x01(\x05R\tendOffset2j\n" +
+	"end_offset\x18\b \x01(\x05R\tendOffset\"\x88\x01\n" +
+	"\x12ParseDocumentEvent\x123\n" +
+	"\x06blocks\x18\x01 \x03(\v2\x1b.docreader.v1.DocumentBlockR\x06blocks\x12=\n" +
+	"\asummary\x18\x02 \x01(\v2#.docreader.v1.ParseDocumentResponseR\asummary2\xa9\x02\n" +
 	"\x0eDocumentReader\x12X\n" +
-	"\rParseDocument\x12\".docreader.v1.ParseDocumentRequest\x1a#.docreader.v1.ParseDocumentResponseBNZLgithub.com/hzc19970630/rag-platform/services/docreader/generated;docreaderv1b\x06proto3"
+	"\rParseDocument\x12\".docreader.v1.ParseDocumentRequest\x1a#.docreader.v1.ParseDocumentResponse\x12^\n" +
+	"\x13ParseDocumentStream\x12 .docreader.v1.ParseDocumentChunk\x1a#.docreader.v1.ParseDocumentResponse(\x01\x12]\n" +
+	"\x13ParseDocumentBlocks\x12 .docreader.v1.ParseDocumentChunk\x1a .docreader.v1.ParseDocumentEvent(\x010\x01BNZLgithub.com/hzc19970630/rag-platform/services/docreader/generated;docreaderv1b\x06proto3"
 
 var (
 	file_contracts_proto_docreader_v1_docreader_proto_rawDescOnce sync.Once
@@ -364,21 +551,29 @@ func file_contracts_proto_docreader_v1_docreader_proto_rawDescGZIP() []byte {
 	return file_contracts_proto_docreader_v1_docreader_proto_rawDescData
 }
 
-var file_contracts_proto_docreader_v1_docreader_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_contracts_proto_docreader_v1_docreader_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_contracts_proto_docreader_v1_docreader_proto_goTypes = []any{
 	(*ParseDocumentRequest)(nil),  // 0: docreader.v1.ParseDocumentRequest
-	(*ParseDocumentResponse)(nil), // 1: docreader.v1.ParseDocumentResponse
-	(*DocumentBlock)(nil),         // 2: docreader.v1.DocumentBlock
+	(*ParseDocumentChunk)(nil),    // 1: docreader.v1.ParseDocumentChunk
+	(*ParseDocumentResponse)(nil), // 2: docreader.v1.ParseDocumentResponse
+	(*DocumentBlock)(nil),         // 3: docreader.v1.DocumentBlock
+	(*ParseDocumentEvent)(nil),    // 4: docreader.v1.ParseDocumentEvent
 }
 var file_contracts_proto_docreader_v1_docreader_proto_depIdxs = []int32{
-	2, // 0: docreader.v1.ParseDocumentResponse.blocks:type_name -> docreader.v1.DocumentBlock
-	0, // 1: docreader.v1.DocumentReader.ParseDocument:input_type -> docreader.v1.ParseDocumentRequest
-	1, // 2: docreader.v1.DocumentReader.ParseDocument:output_type -> docreader.v1.ParseDocumentResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 0: docreader.v1.ParseDocumentResponse.blocks:type_name -> docreader.v1.DocumentBlock
+	3, // 1: docreader.v1.ParseDocumentEvent.blocks:type_name -> docreader.v1.DocumentBlock
+	2, // 2: docreader.v1.ParseDocumentEvent.summary:type_name -> docreader.v1.ParseDocumentResponse
+	0, // 3: docreader.v1.DocumentReader.ParseDocument:input_type -> docreader.v1.ParseDocumentRequest
+	1, // 4: docreader.v1.DocumentReader.ParseDocumentStream:input_type -> docreader.v1.ParseDocumentChunk
+	1, // 5: docreader.v1.DocumentReader.ParseDocumentBlocks:input_type -> docreader.v1.ParseDocumentChunk
+	2, // 6: docreader.v1.DocumentReader.ParseDocument:output_type -> docreader.v1.ParseDocumentResponse
+	2, // 7: docreader.v1.DocumentReader.ParseDocumentStream:output_type -> docreader.v1.ParseDocumentResponse
+	4, // 8: docreader.v1.DocumentReader.ParseDocumentBlocks:output_type -> docreader.v1.ParseDocumentEvent
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_contracts_proto_docreader_v1_docreader_proto_init() }
@@ -392,7 +587,7 @@ func file_contracts_proto_docreader_v1_docreader_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_contracts_proto_docreader_v1_docreader_proto_rawDesc), len(file_contracts_proto_docreader_v1_docreader_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

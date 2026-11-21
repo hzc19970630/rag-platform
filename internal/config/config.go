@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultParserVersion must stay in sync with services/docreader/main.py.
-const DefaultParserVersion = "docreader-m2-v2"
+const DefaultParserVersion = "docreader-m2-v3"
 
 type Config struct {
 	APIAddr string
@@ -52,20 +52,26 @@ type Config struct {
 	S3Endpoint                     string
 	// S3PublicEndpoint is the browser-reachable storage host used only to sign
 	// upload part URLs. Empty means uploads flow through the API (proxy mode).
-	S3PublicEndpoint         string
-	S3Region                 string
-	S3Bucket                 string
-	S3AccessKey              string
-	S3SecretKey              string
-	S3UseTLS                 bool
-	S3ForcePathStyle         bool
-	MaxFileBytes             int64
-	UploadPartSizeBytes      int64
-	UploadPresignTTLSeconds  int
-	UploadSessionTTLSeconds  int
-	UploadMaxActivePerTenant int
-	UploadMaxActivePerKB     int
-	TaskTimeoutSeconds       int
+	S3PublicEndpoint    string
+	S3Region            string
+	S3Bucket            string
+	S3AccessKey         string
+	S3SecretKey         string
+	S3UseTLS            bool
+	S3ForcePathStyle    bool
+	MaxFileBytes        int64
+	StreamChunkBytes    int64
+	ParseTimeoutSeconds int
+	// Embedding chunk budgets guard large tables before they consume provider
+	// quota. Warning only by default; a positive hard limit fails the document.
+	EmbeddingChunkWarningThreshold int
+	EmbeddingMaxChunksPerDocument  int
+	UploadPartSizeBytes            int64
+	UploadPresignTTLSeconds        int
+	UploadSessionTTLSeconds        int
+	UploadMaxActivePerTenant       int
+	UploadMaxActivePerKB           int
+	TaskTimeoutSeconds             int
 	// HTTPReadTimeoutSeconds bounds request body reads. Upload parts are the
 	// slowest caller; SSE responses are unaffected because the value only
 	// applies while reading a request.
@@ -222,6 +228,7 @@ func LoadFrom(lookup Lookup) Config {
 			AuditRetentionDays:           int(reader.nonNegative("AUDIT_RETENTION_DAYS", 180)),
 			StreamEventRetentionDays:     int(reader.nonNegative("STREAM_EVENT_RETENTION_DAYS", 7)),
 			TaskHistoryRetentionDays:     int(reader.nonNegative("TASK_HISTORY_RETENTION_DAYS", 90)),
+			UploadSessionRetentionDays:   int(reader.nonNegative("UPLOAD_SESSION_RETENTION_DAYS", 30)),
 			OutboxMaxAttempts:            int(reader.positive("OUTBOX_MAX_ATTEMPTS", 10)),
 			OutboxBatchSize:              int(reader.positive("OUTBOX_BATCH_SIZE", 64)),
 			ReconcileIntervalSeconds:     int(reader.positive("RECONCILE_INTERVAL_SECONDS", 60)),
@@ -271,6 +278,10 @@ func LoadFrom(lookup Lookup) Config {
 		S3UseTLS:                       reader.boolean("S3_USE_TLS", false),
 		S3ForcePathStyle:               reader.boolean("S3_FORCE_PATH_STYLE", false),
 		MaxFileBytes:                   reader.positive("DOCREADER_MAX_FILE_MB", 100) * 1024 * 1024,
+		StreamChunkBytes:               reader.positive("DOCREADER_STREAM_CHUNK_KB", 2048) * 1024,
+		ParseTimeoutSeconds:            int(reader.positive("DOCREADER_PARSE_TIMEOUT_SECONDS", 300)),
+		EmbeddingChunkWarningThreshold: int(reader.nonNegative("EMBEDDING_CHUNK_WARNING_THRESHOLD", 5000)),
+		EmbeddingMaxChunksPerDocument:  int(reader.nonNegative("EMBEDDING_MAX_CHUNKS_PER_DOCUMENT", 0)),
 		UploadPartSizeBytes:            reader.positive("UPLOAD_PART_SIZE_MB", 16) * 1024 * 1024,
 		UploadPresignTTLSeconds:        int(reader.positive("UPLOAD_PRESIGN_TTL_SECONDS", 3600)),
 		UploadSessionTTLSeconds:        int(reader.positive("UPLOAD_SESSION_TTL_SECONDS", 86400)),

@@ -21,11 +21,14 @@ type LimitsConfig struct {
 	// TaskHistoryRetentionDays bounds finished ingestion pipeline runs and
 	// resolved dead letters. Zero keeps them forever.
 	TaskHistoryRetentionDays int
-	OutboxMaxAttempts        int
-	OutboxBatchSize          int
-	ReconcileIntervalSeconds int
-	WorkerConcurrency        int
-	ShutdownTimeoutSeconds   int
+	// UploadSessionRetentionDays bounds completed/aborted/expired upload
+	// session rows. Zero keeps them forever; active sessions are never purged.
+	UploadSessionRetentionDays int
+	OutboxMaxAttempts          int
+	OutboxBatchSize            int
+	ReconcileIntervalSeconds   int
+	WorkerConcurrency          int
+	ShutdownTimeoutSeconds     int
 }
 
 // ConnectorConfig is the M5 external-source baseline. Credentials are sealed
@@ -83,18 +86,19 @@ func (c ConnectorConfig) Validate(appEnv string) error {
 
 func (l LimitsConfig) Validate() error {
 	for name, value := range map[string]int{
-		"RATE_LIMIT_PER_MINUTE":        l.RateLimitPerMinute,
-		"DOCUMENT_RETENTION_DAYS":      l.DocumentRetentionDays,
-		"AUDIT_RETENTION_DAYS":         l.AuditRetentionDays,
-		"STREAM_EVENT_RETENTION_DAYS":  l.StreamEventRetentionDays,
-		"TASK_HISTORY_RETENTION_DAYS":  l.TaskHistoryRetentionDays,
-		"OUTBOX_MAX_ATTEMPTS":          l.OutboxMaxAttempts,
-		"OUTBOX_BATCH_SIZE":            l.OutboxBatchSize,
-		"RECONCILE_INTERVAL_SECONDS":   l.ReconcileIntervalSeconds,
-		"WORKER_CONCURRENCY":           l.WorkerConcurrency,
-		"SHUTDOWN_TIMEOUT_SECONDS":     l.ShutdownTimeoutSeconds,
-		"TENANT_MAX_DOCUMENTS":         l.TenantMaxDocuments,
-		"TENANT_CHAT_REQUESTS_PER_DAY": l.TenantChatRequestsPerDay,
+		"RATE_LIMIT_PER_MINUTE":         l.RateLimitPerMinute,
+		"DOCUMENT_RETENTION_DAYS":       l.DocumentRetentionDays,
+		"AUDIT_RETENTION_DAYS":          l.AuditRetentionDays,
+		"STREAM_EVENT_RETENTION_DAYS":   l.StreamEventRetentionDays,
+		"TASK_HISTORY_RETENTION_DAYS":   l.TaskHistoryRetentionDays,
+		"UPLOAD_SESSION_RETENTION_DAYS": l.UploadSessionRetentionDays,
+		"OUTBOX_MAX_ATTEMPTS":           l.OutboxMaxAttempts,
+		"OUTBOX_BATCH_SIZE":             l.OutboxBatchSize,
+		"RECONCILE_INTERVAL_SECONDS":    l.ReconcileIntervalSeconds,
+		"WORKER_CONCURRENCY":            l.WorkerConcurrency,
+		"SHUTDOWN_TIMEOUT_SECONDS":      l.ShutdownTimeoutSeconds,
+		"TENANT_MAX_DOCUMENTS":          l.TenantMaxDocuments,
+		"TENANT_CHAT_REQUESTS_PER_DAY":  l.TenantChatRequestsPerDay,
 	} {
 		if value < 0 {
 			return fmt.Errorf("%s must not be negative", name)

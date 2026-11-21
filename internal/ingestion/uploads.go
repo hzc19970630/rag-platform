@@ -421,6 +421,21 @@ func (s *Service) UploadSessionStats(ctx context.Context) (int64, int64, error) 
 	return row.Active, row.Reserved, nil
 }
 
+// PurgeUploadSessions deletes terminal sessions older than the cutoff. Active
+// sessions are never touched; the caller must use the maintenance connection.
+func (s *Service) PurgeUploadSessions(ctx context.Context, before time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	result := tenantdb.Unscoped(s.db.WithContext(ctx), "upload session retention purge").
+		Where("status IN ? AND updated_at < ?", []string{uploadStatusCompleted, uploadStatusAborted, uploadStatusExpired}, before.UTC()).
+		Limit(limit).Delete(&models.UploadSession{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("purge upload sessions: %w", result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
 func (s *Service) loadSessionByIdempotencyKey(ctx context.Context, tenantID, key string) (models.UploadSession, error) {
 	var session models.UploadSession
 	err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).Where("idempotency_key = ?", key).First(&session).Error

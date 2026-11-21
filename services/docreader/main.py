@@ -1,12 +1,16 @@
+import csv
 import hashlib
 import html.parser
 import http.server
 import io
+import json
 import os
 import posixpath
 import re
 import sys
+import tempfile
 import threading
+import time
 import zipfile
 from concurrent import futures
 from datetime import date, timedelta
@@ -19,7 +23,14 @@ sys.path.insert(0, "/app/generated")
 import docreader_pb2  # type: ignore
 import docreader_pb2_grpc  # type: ignore
 
-PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-m2-v2")
+def _env_int(name, default):
+    try:
+        return int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+
+
+PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-m2-v3")
 SCHEMA_VERSION = "NormalizedDocumentV1"
 
 WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -32,21 +43,85 @@ NS_DML = "http://schemas.openxmlformats.org/drawingml/2006/main"
 NS_OFFICE_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 
-MAX_ARCHIVE_ENTRIES = 2048
-MAX_PART_BYTES = 32 * 1024 * 1024
-MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
-MAX_COMPRESSION_RATIO = 1000
+MIB = 1024 * 1024
+MAX_FILE_BYTES = _env_int("DOCREADER_MAX_FILE_MB", 100) * MIB
+MAX_ARCHIVE_ENTRIES = _env_int("DOCREADER_MAX_ARCHIVE_ENTRIES", 2048)
+MAX_PART_BYTES = _env_int("DOCREADER_MAX_PART_BYTES", 64 * MIB)
+MAX_ARCHIVE_BYTES = _env_int("DOCREADER_MAX_ARCHIVE_BYTES", 2048 * MIB)
+MAX_READ_BYTES = _env_int("DOCREADER_MAX_READ_BYTES", 1024 * MIB)
+MAX_COMPRESSION_RATIO = _env_int("DOCREADER_MAX_COMPRESSION_RATIO", 1000)
 MAX_XML_DEPTH = 64
-MAX_TOTAL_BLOCKS = 20000
+MAX_TOTAL_BLOCKS = _env_int("DOCREADER_MAX_TABLE_BLOCKS", 5000)
 MAX_BLOCK_CHARS = 8000
-MAX_XLSX_SHEETS = 64
-MAX_XLSX_ROWS = 5000
+MAX_XLSX_SHEETS = _env_int("DOCREADER_MAX_TABLE_SHEETS", 256)
+MAX_XLSX_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS_PER_SHEET", 50000)
+MAX_TABLE_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS", 500000)
+MAX_TABLE_WINDOW_ROWS = _env_int("DOCREADER_TABLE_WINDOW_ROWS", 200)
 MAX_XLSX_COLUMNS = 128
 MAX_CELL_CHARS = 4096
 MAX_PPTX_SLIDES = 500
 MAX_SLIDE_SHAPES = 200
 MAX_SHAPE_PARAGRAPHS = 200
-MAX_HTML_BYTES = 16 * 1024 * 1024
+MAX_HTML_BYTES = 16 * MIB
+
+def _spool_writable(path):
+    if not os.path.isdir(path):
+        return False
+    try:
+        fd, probe = tempfile.mkstemp(prefix="spool-probe-", dir=path)
+        os.close(fd)
+        os.unlink(probe)
+        return True
+    except OSError:
+        return False
+
+
+def _select_spool_dir():
+    candidates = []
+    configured = os.getenv("DOCREADER_SPOOL_DIR", "/spool")
+    if configured:
+        candidates.append(configured)
+    candidates.append(tempfile.gettempdir())
+    for candidate in candidates:
+        if _spool_writable(candidate):
+            return candidate, True
+    return tempfile.gettempdir(), False
+
+
+SPOOL_DIR, SPOOL_READY = _select_spool_dir()
+SPOOL_MAX_BYTES = _env_int("DOCREADER_SPOOL_MB", 384) * MIB
+SPOOL_SEMAPHORE = threading.BoundedSemaphore(_env_int("DOCREADER_SPOOL_CONCURRENCY", 2))
+SPOOL_WAIT_SECONDS = _env_int("DOCREADER_SPOOL_WAIT_SECONDS", 60)
+DOCREADER_BLOCK_BATCH = _env_int("DOCREADER_BLOCK_BATCH", 200)
+_SPOOL_LOCK = threading.Lock()
+_SPOOL_USED = 0
+_STATS = threading.local()
+
+
+def _stats_reset():
+    _STATS.truncated = False
+    _STATS.total_rows = 0
+    _STATS.indexed_rows = 0
+    _STATS.total_sheets = 0
+    _STATS.indexed_sheets = 0
+
+
+def _stats_add(total_rows=0, indexed_rows=0, total_sheets=0, indexed_sheets=0, truncated=False):
+    _STATS.total_rows = getattr(_STATS, "total_rows", 0) + total_rows
+    _STATS.indexed_rows = getattr(_STATS, "indexed_rows", 0) + indexed_rows
+    _STATS.total_sheets = getattr(_STATS, "total_sheets", 0) + total_sheets
+    _STATS.indexed_sheets = getattr(_STATS, "indexed_sheets", 0) + indexed_sheets
+    _STATS.truncated = getattr(_STATS, "truncated", False) or truncated
+
+
+def _stats_snapshot():
+    return {
+        "truncated": getattr(_STATS, "truncated", False),
+        "total_rows": getattr(_STATS, "total_rows", 0),
+        "indexed_rows": getattr(_STATS, "indexed_rows", 0),
+        "total_sheets": getattr(_STATS, "total_sheets", 0),
+        "indexed_sheets": getattr(_STATS, "indexed_sheets", 0),
+    }
 
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 WHITESPACE = re.compile(r"\s+")
@@ -78,7 +153,15 @@ def block(block_id, kind, text, heading_path="", page_number=0, source_path="", 
     )
 
 
-def parse_markdown(content):
+def _source_bytes(source):
+    if isinstance(source, (bytes, bytearray, memoryview)):
+        return bytes(source)
+    with open(source, "rb") as handle:
+        return handle.read()
+
+
+def parse_markdown(source):
+    content = _source_bytes(source)
     blocks, heading, offset = [], [], 0
     for index, raw in enumerate(content.decode("utf-8-sig").splitlines(keepends=True)):
         line = raw.rstrip("\r\n")
@@ -93,7 +176,8 @@ def parse_markdown(content):
     return blocks, heading[0] if heading else ""
 
 
-def parse_text(content):
+def parse_text(source):
+    content = _source_bytes(source)
     blocks, offset = [], 0
     for index, raw in enumerate(content.decode("utf-8-sig").splitlines(keepends=True)):
         line = raw.rstrip("\r\n")
@@ -103,8 +187,8 @@ def parse_text(content):
     return blocks, ""
 
 
-def parse_docx(content):
-    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+def parse_docx(source):
+    with _OoxmlArchive(source) as archive:
         xml = archive.read("word/document.xml")
     root = ElementTree.fromstring(xml)
     ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
@@ -120,8 +204,8 @@ def parse_docx(content):
     return blocks, ""
 
 
-def parse_pdf(content):
-    reader = PdfReader(io.BytesIO(content))
+def parse_pdf(source):
+    reader = PdfReader(source if not isinstance(source, (bytes, bytearray, memoryview)) else io.BytesIO(source))
     blocks = []
     for page_index, page in enumerate(reader.pages):
         text = (page.extract_text() or "").strip()
@@ -142,9 +226,12 @@ def _collapse(value):
 
 
 class _OoxmlArchive:
-    def __init__(self, content):
+    def __init__(self, source):
         try:
-            self._zip = zipfile.ZipFile(io.BytesIO(content))
+            if isinstance(source, (bytes, bytearray, memoryview)):
+                self._zip = zipfile.ZipFile(io.BytesIO(source))
+            else:
+                self._zip = zipfile.ZipFile(source)
         except (zipfile.BadZipFile, zipfile.LargeZipFile, RuntimeError, OSError, EOFError, ValueError) as error:
             raise ValueError("unsupported_corrupt_document") from error
         infos = self._zip.infolist()
@@ -171,6 +258,15 @@ class _OoxmlArchive:
 
     def has(self, name):
         return name in self.names
+
+    def open_stream(self, name):
+        if name not in self.names:
+            raise ValueError("unsupported_corrupt_document")
+        info = self._zip.getinfo(name)
+        self._read_total += info.file_size
+        if self._read_total > MAX_READ_BYTES:
+            raise ValueError("document_too_complex")
+        return self._zip.open(name)
 
     def read(self, name):
         if name not in self.names:
@@ -344,55 +440,131 @@ def _cell_text(cell, shared, style_dates):
     return text
 
 
-def _sheet_blocks(archive, heading_root, sheet_name, target, shared, style_dates, prefix, budget):
-    root = archive.read_xml(target)
-    rows = root.findall(f"{{{NS_SML}}}sheetData/{{{NS_SML}}}row")
-    rendered = []
-    rendered_rows = 0
-    last_column = 0
-    last_row = 0
-    for position, row in enumerate(rows):
-        if rendered_rows >= MAX_XLSX_ROWS or rendered_rows >= budget:
-            break
-        try:
-            row_number = int(row.attrib.get("r", "0"))
-        except ValueError:
-            row_number = 0
+def _table_cell(value):
+    text = _collapse(value or "").replace("|", "\\|")
+    return text[:MAX_CELL_CHARS]
+
+
+def _normalize_table_headers(values):
+    headers = []
+    seen = {}
+    for index, value in enumerate(values):
+        name = _table_cell(value) or _column_letter(index)
+        count = seen.get(name, 0) + 1
+        seen[name] = count
+        headers.append(name if count == 1 else f"{name}_{count}")
+    return headers
+
+
+def _emit_table_blocks(prefix, heading, sheet, headers, rows, start_row, block_budget):
+    blocks = []
+    current = []
+    header_line = " | ".join(headers)
+    chars = len(header_line) + 1
+    start = start_row
+    end = start_row - 1
+    index = 0
+
+    def flush():
+        nonlocal current, chars, index
+        if not current:
+            return
+        text = "\n".join([header_line] + [" | ".join(row) for row in current])
+        blocks.append(block(
+            f"{prefix}-{index}", "table", text[:MAX_BLOCK_CHARS], heading, 0,
+            f"sheet:{sheet}!A{start}:{_column_letter(max(len(headers) - 1, 0))}{end}",
+        ))
+        index += 1
+        current = []
+        chars = len(header_line) + 1
+
+    for offset, row in enumerate(rows):
+        line = " | ".join(row)
+        row_number = start_row + offset
+        if current and (len(current) >= MAX_TABLE_WINDOW_ROWS or chars + len(line) + 1 > MAX_BLOCK_CHARS):
+            flush()
+        if not current:
+            start = row_number
+        current.append(row)
+        end = row_number
+        chars += len(line) + 1
+        if block_budget > 0 and len(blocks) >= block_budget:
+            flush()
+            blocks.append(block(f"{prefix}-truncated", "table", "[truncated: block limit reached]", heading, 0, f"sheet:{sheet}!truncated"))
+            return blocks
+    flush()
+    return blocks[:block_budget] if block_budget > 0 else blocks
+
+
+def _iter_sheet_rows(archive, target):
+    with archive.open_stream(target) as stream:
+        for _, element in ElementTree.iterparse(stream, events=("end",)):
+            if element.tag != f"{{{NS_SML}}}row":
+                continue
+            try:
+                row_number = int(element.attrib.get("r", "0"))
+            except ValueError:
+                row_number = 0
+            cells = []
+            for index, cell in enumerate(element.findall(f"{{{NS_SML}}}c")):
+                reference = CELL_REF.match(cell.attrib.get("r", "").upper())
+                column = _column_index(reference.group(1)) if reference else index
+                if column >= MAX_XLSX_COLUMNS:
+                    continue
+                value = _cell_text(cell, archive.shared, archive.style_dates)
+                if value:
+                    cells.append((column, value))
+            element.clear()
+            yield row_number, cells
+
+
+def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budget):
+    heading = f"{heading_root} / {sheet_name}"
+    headers = None
+    rows = []
+    indexed = 0
+    total = 0
+    start_row = 1
+    truncated = False
+    for position, (row_number, cells) in enumerate(_iter_sheet_rows(archive, target)):
         row_number = row_number or position + 1
-        cells = []
-        for index, cell in enumerate(row.findall(f"{{{NS_SML}}}c")):
-            reference = CELL_REF.match(cell.attrib.get("r", "").upper())
-            column = _column_index(reference.group(1)) if reference else index
-            if column >= MAX_XLSX_COLUMNS:
-                continue
-            value = _cell_text(cell, shared, style_dates)
-            if not value:
-                continue
-            cells.append((column, value[:MAX_CELL_CHARS]))
-            last_column = max(last_column, column)
-            last_row = max(last_row, row_number)
         if not cells:
             continue
-        cells.sort()
-        text = " | ".join(f"{_column_letter(column)}: {value}" for column, value in cells)
-        rendered.append(text[:MAX_BLOCK_CHARS])
-        rendered_rows += 1
-    heading_path = f"{heading_root} / {sheet_name}"
-    source_path = f"sheet:{sheet_name}!A1:{_column_letter(last_column)}{max(last_row, 1)}"
-    blocks = [block(f"{prefix}-{index}", "paragraph", text, heading_path, 0, source_path) for index, text in enumerate(rendered)]
-    remaining_rows = len(rows) - rendered_rows
-    if remaining_rows > 0:
-        blocks.append(block(f"{prefix}-truncated", "paragraph", f"[truncated: {remaining_rows} more rows]", heading_path, 0, source_path))
-    return blocks
+        total += 1
+        if headers is None:
+            width = max(column for column, _ in cells) + 1
+            header_values = [""] * width
+            for column, value in cells:
+                header_values[column] = value
+            headers = _normalize_table_headers(header_values)
+            start_row = row_number + 1
+            continue
+        row = [""] * len(headers)
+        for column, value in cells:
+            if column < len(headers):
+                row[column] = _table_cell(value)
+        rows.append(row)
+        indexed += 1
+        if indexed >= MAX_XLSX_ROWS or total >= MAX_TABLE_ROWS:
+            truncated = True
+            break
+    blocks = []
+    if headers is not None and not rows:
+        blocks = [block(f"{prefix}-0", "table", " | ".join(headers), heading, 0, f"sheet:{sheet_name}!A{start_row}:A{start_row}")]
+    elif headers is not None and rows:
+        blocks = _emit_table_blocks(prefix, heading, sheet_name, headers, rows, start_row, block_budget)
+    if truncated:
+        blocks.append(block(f"{prefix}-truncated", "table", "[truncated: additional rows not indexed]", heading, 0, f"sheet:{sheet_name}!truncated"))
+    return blocks, total, indexed, truncated
 
 
-def parse_xlsx(content, filename):
+def parse_xlsx(source, filename):
     stem = os.path.splitext(os.path.basename(filename))[0] or "workbook"
-    with _OoxmlArchive(content) as archive:
+    with _OoxmlArchive(source) as archive:
         workbook = archive.read_xml("xl/workbook.xml")
         relationships = _relationships(archive, "xl/workbook.xml", "xl")
-        shared = _shared_strings(archive)
-        style_dates = _style_date_flags(archive)
+        archive.shared = _shared_strings(archive)
+        archive.style_dates = _style_date_flags(archive)
         sheets = []
         for node in workbook.findall(f"{{{NS_SML}}}sheets/{{{NS_SML}}}sheet"):
             name = node.attrib.get("name", "").strip()
@@ -401,14 +573,110 @@ def parse_xlsx(content, filename):
                 raise ValueError("unsupported_corrupt_document")
             sheets.append((name, target[1]))
         blocks = []
-        rendered = 0
-        for index, (name, target) in enumerate(sheets):
-            if rendered >= MAX_XLSX_SHEETS or len(blocks) >= MAX_TOTAL_BLOCKS:
-                blocks.append(block("sheet-truncated", "paragraph", f"[truncated: {len(sheets) - index} more sheets]", stem, 0, "sheet:truncated"))
+        total_rows = 0
+        indexed_rows = 0
+        indexed_sheets = 0
+        truncated = len(sheets) > MAX_XLSX_SHEETS
+        for index, (name, target) in enumerate(sheets[:MAX_XLSX_SHEETS]):
+            if len(blocks) >= MAX_TOTAL_BLOCKS or total_rows >= MAX_TABLE_ROWS:
+                truncated = True
                 break
-            blocks.extend(_sheet_blocks(archive, stem, name, target, shared, style_dates, f"sheet-{index}", MAX_TOTAL_BLOCKS - len(blocks)))
-            rendered += 1
+            sheet_blocks, sheet_total, sheet_indexed, sheet_truncated = _sheet_blocks(
+                archive, stem, name, target, f"sheet-{index}", MAX_TOTAL_BLOCKS - len(blocks),
+            )
+            blocks.extend(sheet_blocks)
+            total_rows += sheet_total
+            indexed_rows += sheet_indexed
+            if sheet_blocks:
+                indexed_sheets += 1
+            truncated = truncated or sheet_truncated
+    _stats_add(total_rows=total_rows, indexed_rows=indexed_rows, total_sheets=len(sheets), indexed_sheets=indexed_sheets, truncated=truncated)
     return blocks, ""
+
+
+def _open_csv_text(source):
+    if isinstance(source, (bytes, bytearray, memoryview)):
+        stream = io.BytesIO(bytes(source))
+    else:
+        stream = open(source, "rb")
+    head = stream.read(65536)
+    try:
+        head.decode("utf-8-sig")
+        encoding = "utf-8-sig"
+    except UnicodeDecodeError:
+        encoding = "gb18030"
+    sample = head.decode(encoding, errors="replace")
+    try:
+        delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t|").delimiter
+    except csv.Error:
+        delimiter = ","
+    stream.seek(0)
+    return io.TextIOWrapper(stream, encoding=encoding, newline="", errors="replace"), delimiter
+
+
+def parse_csv(source, filename):
+    text = None
+    try:
+        text, delimiter = _open_csv_text(source)
+        reader = csv.reader(text, delimiter=delimiter)
+        stem = os.path.splitext(os.path.basename(filename))[0] or "csv"
+        headers = None
+        window = []
+        window_start = 2
+        total = 0
+        indexed = 0
+        truncated = False
+        blocks = []
+
+        def flush():
+            nonlocal window, blocks, truncated
+            if not window:
+                return
+            budget = MAX_TOTAL_BLOCKS - len(blocks)
+            if budget <= 0:
+                truncated = True
+                window = []
+                return
+            emitted = _emit_table_blocks("csv", stem, stem, headers, window, window_start, budget)
+            blocks.extend(emitted)
+            if len(blocks) >= MAX_TOTAL_BLOCKS:
+                truncated = True
+            window = []
+
+        try:
+            for values in reader:
+                if not any(value.strip() for value in values):
+                    continue
+                total += 1
+                if headers is None:
+                    headers = _normalize_table_headers(values)
+                    continue
+                if indexed >= MAX_TABLE_ROWS:
+                    truncated = True
+                    break
+                row = [_table_cell(values[index] if index < len(values) else "") for index in range(len(headers))]
+                if not window:
+                    window_start = 2 + indexed
+                window.append(row)
+                indexed += 1
+                if len(window) >= MAX_TABLE_WINDOW_ROWS:
+                    flush()
+                    if truncated:
+                        break
+        except csv.Error as error:
+            raise ValueError("unsupported_corrupt_document") from error
+        flush()
+        if headers is None:
+            raise ValueError("empty_document")
+        if not indexed:
+            blocks = [block("csv-0", "table", " | ".join(headers), stem, 0, "csv:1:1")]
+        if truncated and not any("truncated" in item.text for item in blocks):
+            blocks.append(block("csv-truncated", "table", "[truncated: additional rows not indexed]", stem, 0, "csv:truncated"))
+        _stats_add(total_rows=total, indexed_rows=indexed, total_sheets=1, indexed_sheets=1, truncated=truncated)
+        return blocks, ""
+    finally:
+        if text is not None:
+            text.close()
 
 
 def _slide_paragraphs(tx_body):
@@ -504,9 +772,9 @@ def _slide_record(archive, part):
     return (title_paragraphs[0] if title_paragraphs else ""), items
 
 
-def parse_pptx(content, filename):
+def parse_pptx(source, filename):
     stem = os.path.splitext(os.path.basename(filename))[0] or "presentation"
-    with _OoxmlArchive(content) as archive:
+    with _OoxmlArchive(source) as archive:
         presentation = archive.read_xml("ppt/presentation.xml")
         relationships = _relationships(archive, "ppt/presentation.xml", "ppt")
         parts = []
@@ -733,7 +1001,8 @@ class _HtmlExtractor(html.parser.HTMLParser):
         self._flush()
 
 
-def parse_html(content, filename):
+def parse_html(source, filename):
+    content = _source_bytes(source)
     extractor = _HtmlExtractor()
     extractor.feed(_decode_html(content))
     extractor.close()
@@ -741,30 +1010,151 @@ def parse_html(content, filename):
     return extractor.blocks, extractor.title
 
 
-def parse_content(filename, mime_type, content):
+def parse_content(filename, mime_type, source):
     lowered = filename.lower()
     mime_type = (mime_type or "").lower()
     if lowered.endswith(".xls") or lowered.endswith(".ppt"):
         raise ValueError("unsupported_legacy_office")
     if lowered.endswith(".xlsx") or mime_type == SHEET_MIME:
-        return parse_xlsx(content, filename)
+        return parse_xlsx(source, filename)
+    if lowered.endswith(".csv") or mime_type in ("text/csv", "application/csv"):
+        return parse_csv(source, filename)
     if lowered.endswith(".pptx") or mime_type == SLIDE_MIME:
-        return parse_pptx(content, filename)
+        return parse_pptx(source, filename)
     if lowered.endswith(".html") or lowered.endswith(".htm") or mime_type in ("text/html", "application/xhtml+xml"):
-        return parse_html(content, filename)
+        return parse_html(source, filename)
     if lowered.endswith(".pdf") or mime_type == "application/pdf":
-        return parse_pdf(content)
+        return parse_pdf(source)
     if lowered.endswith(".docx") or mime_type == WORD_MIME:
-        return parse_docx(content)
+        return parse_docx(source)
     if lowered.endswith(".md") or mime_type in ("text/markdown", "text/x-markdown"):
-        return parse_markdown(content)
+        return parse_markdown(source)
     if lowered.endswith(".txt") or mime_type.startswith("text/"):
-        return parse_text(content)
+        return parse_text(source)
     raise ValueError("unsupported_mime_type")
+
+
+def _spool_reserve(size):
+    global _SPOOL_USED
+    with _SPOOL_LOCK:
+        if _SPOOL_USED + size > SPOOL_MAX_BYTES:
+            return False
+        _SPOOL_USED += size
+        return True
+
+
+def _spool_release(size):
+    global _SPOOL_USED
+    with _SPOOL_LOCK:
+        _SPOOL_USED = max(0, _SPOOL_USED - size)
+
+
+def _log_parse(filename, started, blocks, stats, error_code=""):
+    print(
+        '{"level":"%s","msg":"parse_complete","filename":%s,"blocks":%d,"truncated":%s,'
+        '"total_rows":%d,"indexed_rows":%d,"total_sheets":%d,"indexed_sheets":%d,"elapsed_ms":%d,"error_code":"%s"}'
+        % (
+            "ERROR" if error_code else "INFO", json.dumps(filename), len(blocks), str(stats["truncated"]).lower(),
+            stats["total_rows"], stats["indexed_rows"], stats["total_sheets"], stats["indexed_sheets"],
+            int((time.monotonic() - started) * 1000), error_code,
+        ),
+        flush=True,
+    )
+
+
+class _SpoolUpload:
+    def __init__(self):
+        self.meta = None
+        self.spool = None
+        self.spool_path = ""
+        self.hasher = hashlib.sha256()
+        self.reserved = 0
+        self.acquired = False
+
+    def response(self, code, message, version_id="", mime_type=""):
+        return docreader_pb2.ParseDocumentResponse(
+            schema_version=SCHEMA_VERSION,
+            document_version_id=version_id or (self.meta[0] if self.meta else ""),
+            content_hash=self.hasher.hexdigest(),
+            mime_type=mime_type or (self.meta[2] if self.meta else ""),
+            parser_version=PARSER_VERSION, error_code=code, error_message=message,
+        )
+
+    def close(self):
+        if self.spool is not None:
+            try:
+                self.spool.close()
+            except OSError:
+                pass
+            self.spool = None
+        if self.spool_path:
+            try:
+                os.unlink(self.spool_path)
+            except OSError:
+                pass
+            self.spool_path = ""
+        if self.acquired:
+            SPOOL_SEMAPHORE.release()
+            self.acquired = False
+        if self.reserved:
+            _spool_release(self.reserved)
+            self.reserved = 0
+
+
+def _receive_spool_upload(request_iterator):
+    state = _SpoolUpload()
+    try:
+        for frame in request_iterator:
+            if state.meta is None:
+                if frame.schema_version != "SourceObjectV1":
+                    state.close()
+                    return None, docreader_pb2.ParseDocumentResponse(
+                        schema_version=SCHEMA_VERSION, document_version_id=frame.document_version_id,
+                        error_code="schema_incompatible", error_message="unsupported source schema",
+                    )
+                state.meta = (frame.document_version_id, frame.filename, frame.mime_type)
+            if not frame.content:
+                continue
+            if not SPOOL_READY:
+                state.close()
+                return None, state.response("spool_unavailable", "parse spool is not writable")
+            state.hasher.update(frame.content)
+            if state.reserved + len(frame.content) > MAX_FILE_BYTES:
+                state.close()
+                return None, state.response("file_too_large", "file exceeds maximum size")
+            if not state.acquired:
+                state.acquired = SPOOL_SEMAPHORE.acquire(timeout=SPOOL_WAIT_SECONDS)
+                if not state.acquired:
+                    state.close()
+                    return None, state.response("parser_busy", "too many concurrent parses")
+            if state.spool is None:
+                fd, state.spool_path = tempfile.mkstemp(prefix="docreader-", dir=SPOOL_DIR)
+                state.spool = os.fdopen(fd, "wb")
+            if not _spool_reserve(len(frame.content)):
+                state.close()
+                return None, state.response("parser_busy", "parse spool is full")
+            state.reserved += len(frame.content)
+            state.spool.write(frame.content)
+        if state.meta is None:
+            state.close()
+            return None, docreader_pb2.ParseDocumentResponse(
+                schema_version=SCHEMA_VERSION, error_code="request_invalid", error_message="stream metadata is required",
+            )
+        if state.spool is None:
+            state.close()
+            return None, state.response("empty_document", "stream had no content")
+        state.spool.close()
+        state.spool = None
+        return state, None
+    except Exception:
+        state.close()
+        raise
 
 
 class Reader(docreader_pb2_grpc.DocumentReaderServicer):
     def ParseDocument(self, request, context):
+        _stats_reset()
+        started = time.monotonic()
         if request.schema_version != "SourceObjectV1":
             return docreader_pb2.ParseDocumentResponse(schema_version=SCHEMA_VERSION, document_version_id=request.document_version_id, error_code="schema_incompatible", error_message="unsupported source schema")
         try:
@@ -774,13 +1164,81 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
             return docreader_pb2.ParseDocumentResponse(schema_version=SCHEMA_VERSION, document_version_id=request.document_version_id, content_hash=hashlib.sha256(request.content).hexdigest(), mime_type=request.mime_type, parser_version=PARSER_VERSION, error_code=code, error_message=code)
         except Exception as error:
             return docreader_pb2.ParseDocumentResponse(schema_version=SCHEMA_VERSION, document_version_id=request.document_version_id, content_hash=hashlib.sha256(request.content).hexdigest(), mime_type=request.mime_type, parser_version=PARSER_VERSION, error_code="parser_error", error_message=str(error)[:500])
-        return docreader_pb2.ParseDocumentResponse(schema_version=SCHEMA_VERSION, document_version_id=request.document_version_id, content_hash=hashlib.sha256(request.content).hexdigest(), mime_type=request.mime_type, title=title or request.filename, language="und", parser_version=PARSER_VERSION, blocks=blocks)
+        stats = _stats_snapshot()
+        _log_parse(request.filename, started, blocks, stats)
+        return docreader_pb2.ParseDocumentResponse(
+            schema_version=SCHEMA_VERSION, document_version_id=request.document_version_id,
+            content_hash=hashlib.sha256(request.content).hexdigest(), mime_type=request.mime_type,
+            title=title or request.filename, language="und", parser_version=PARSER_VERSION, blocks=blocks,
+            truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
+            total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
+        )
+
+    def ParseDocumentStream(self, request_iterator, context):
+        _stats_reset()
+        started = time.monotonic()
+        state, error_response = _receive_spool_upload(request_iterator)
+        if error_response is not None:
+            return error_response
+        try:
+            meta = state.meta
+            try:
+                blocks, title = parse_content(meta[1], meta[2], state.spool_path)
+            except ValueError as error:
+                code = str(error)
+                return state.response(code, code)
+            except Exception as error:
+                return state.response("parser_error", str(error)[:500])
+            stats = _stats_snapshot()
+            _log_parse(meta[1], started, blocks, stats)
+            return docreader_pb2.ParseDocumentResponse(
+                schema_version=SCHEMA_VERSION, document_version_id=meta[0], content_hash=state.hasher.hexdigest(),
+                mime_type=meta[2], title=title or meta[1], language="und", parser_version=PARSER_VERSION, blocks=blocks,
+                truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
+                total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
+            )
+        finally:
+            state.close()
+
+    def ParseDocumentBlocks(self, request_iterator, context):
+        _stats_reset()
+        started = time.monotonic()
+        state, error_response = _receive_spool_upload(request_iterator)
+        if error_response is not None:
+            yield docreader_pb2.ParseDocumentEvent(summary=error_response)
+            return
+        try:
+            meta = state.meta
+            try:
+                blocks, title = parse_content(meta[1], meta[2], state.spool_path)
+            except ValueError as error:
+                code = str(error)
+                yield docreader_pb2.ParseDocumentEvent(summary=state.response(code, code))
+                return
+            except Exception as error:
+                yield docreader_pb2.ParseDocumentEvent(summary=state.response("parser_error", str(error)[:500]))
+                return
+            stats = _stats_snapshot()
+            _log_parse(meta[1], started, blocks, stats)
+            batch = max(1, DOCREADER_BLOCK_BATCH)
+            for start in range(0, len(blocks), batch):
+                yield docreader_pb2.ParseDocumentEvent(blocks=blocks[start:start + batch])
+            yield docreader_pb2.ParseDocumentEvent(summary=docreader_pb2.ParseDocumentResponse(
+                schema_version=SCHEMA_VERSION, document_version_id=meta[0], content_hash=state.hasher.hexdigest(),
+                mime_type=meta[2], title=title or meta[1], language="und", parser_version=PARSER_VERSION,
+                truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
+                total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
+            ))
+        finally:
+            state.close()
 
 
 class HealthHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/healthz", "/readyz"):
-            payload = b'{"status":"ok","mode":"m2-grpc","ocr":false}'
+            payload = b'{"status":"ok","mode":"m2-grpc","ocr":false,"spool_ok":%s,"spool_dir":"%s"}' % (
+            b"true" if SPOOL_READY else b"false", SPOOL_DIR.encode("utf-8", "replace"),
+        )
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
@@ -797,7 +1255,16 @@ class HealthHandler(http.server.BaseHTTPRequestHandler):
 def serve():
     grpc_port = int(os.getenv("DOCREADER_GRPC_PORT", "50051"))
     health_port = int(os.getenv("DOCREADER_HEALTH_PORT", "8080"))
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=4), options=[("grpc.max_receive_message_length", 128 * 1024 * 1024)])
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=4),
+        options=[
+            # Unary clients keep the original 128MiB envelope; streaming frames
+            # are bounded by the client at 2MiB, so this does not increase the
+            # streaming memory footprint.
+            ("grpc.max_receive_message_length", 128 * 1024 * 1024),
+            ("grpc.max_send_message_length", 128 * 1024 * 1024),
+        ],
+    )
     docreader_pb2_grpc.add_DocumentReaderServicer_to_server(Reader(), server)
     server.add_insecure_port(f"[::]:{grpc_port}")
     server.start()

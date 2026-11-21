@@ -66,6 +66,11 @@ type NormalizedDocument struct {
 	Language      string          `json:"language"`
 	ParserVersion string          `json:"parser_version"`
 	Blocks        []DocumentBlock `json:"blocks"`
+	Truncated     bool            `json:"truncated,omitempty"`
+	TotalRows     int64           `json:"total_rows,omitempty"`
+	IndexedRows   int64           `json:"indexed_rows,omitempty"`
+	TotalSheets   int             `json:"total_sheets,omitempty"`
+	IndexedSheets int             `json:"indexed_sheets,omitempty"`
 }
 
 type DocumentBlock struct {
@@ -94,4 +99,9 @@ type ParseResult struct {
 	ErrorCode         string
 	ErrorMessage      string
 	Blocks            []DocumentBlock
+	Truncated         bool
+	TotalRows         int64
+	IndexedRows       int64
+	TotalSheets       int
+	IndexedSheets     int
 }

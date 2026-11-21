@@ -68,7 +68,19 @@ services:
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     environment:
-      PARSER_VERSION: ${PARSER_VERSION:-docreader-m2-v2}
+      PARSER_VERSION: ${PARSER_VERSION:-docreader-m2-v3}
+      DOCREADER_MAX_FILE_MB: ${DOCREADER_MAX_FILE_MB:-100}
+      DOCREADER_SPOOL_MB: ${DOCREADER_SPOOL_MB:-384}
+      DOCREADER_SPOOL_CONCURRENCY: ${DOCREADER_SPOOL_CONCURRENCY:-2}
+      DOCREADER_SPOOL_WAIT_SECONDS: ${DOCREADER_SPOOL_WAIT_SECONDS:-60}
+      DOCREADER_BLOCK_BATCH: ${DOCREADER_BLOCK_BATCH:-200}
+      DOCREADER_MAX_ARCHIVE_BYTES: ${DOCREADER_MAX_ARCHIVE_BYTES:-2147483648}
+      DOCREADER_MAX_PART_BYTES: ${DOCREADER_MAX_PART_BYTES:-67108864}
+      DOCREADER_MAX_READ_BYTES: ${DOCREADER_MAX_READ_BYTES:-2147483648}
+      DOCREADER_MAX_TABLE_ROWS_PER_SHEET: ${DOCREADER_MAX_TABLE_ROWS_PER_SHEET:-50000}
+      DOCREADER_MAX_TABLE_ROWS: ${DOCREADER_MAX_TABLE_ROWS:-500000}
+      DOCREADER_TABLE_WINDOW_ROWS: ${DOCREADER_TABLE_WINDOW_ROWS:-200}
+      DOCREADER_MAX_TABLE_BLOCKS: ${DOCREADER_MAX_TABLE_BLOCKS:-5000}
     expose:
       - "50051"
       - "8080"
@@ -83,6 +95,9 @@ services:
       # Docker's default seccomp profile is applied when no custom profile is set.
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
+      # Streaming parse spool. tmpfs counts toward the 2GiB memory limit; the
+      # docreader enforces the same budget plus a 2-parse concurrency gate.
+      - /spool:rw,noexec,nosuid,size=${DOCREADER_SPOOL_MB:-384}m,uid=10001,gid=10001,mode=0700
     networks:
       - backend
     healthcheck:

@@ -512,6 +512,45 @@ func TestUploadSessionStatsReportsActiveReservations(t *testing.T) {
 	}
 }
 
+func TestPurgeUploadSessionsOnlyRemovesOldTerminalSessions(t *testing.T) {
+	service, db, _, principal := newUploadFixture(t, UploadSupport{PartSize: 4, MaxActivePerTenant: 5, MaxActivePerKB: 5})
+	ctx := context.Background()
+	old, err := service.CreateUploadSession(ctx, principal, CreateUploadInput{
+		KnowledgeBaseID: "kb-a", Filename: "old.txt", MimeType: "text/plain", SizeBytes: 4, IdempotencyKey: "purge-old",
+	})
+	if err != nil {
+		t.Fatalf("create old: %v", err)
+	}
+	if err := service.AbortUploadSession(ctx, principal, old.Session.ID); err != nil {
+		t.Fatalf("abort old: %v", err)
+	}
+	past := time.Now().UTC().Add(-48 * time.Hour)
+	if err := db.Model(&models.UploadSession{}).Where("id = ?", old.Session.ID).Update("updated_at", past).Error; err != nil {
+		t.Fatalf("age old session: %v", err)
+	}
+	active, err := service.CreateUploadSession(ctx, principal, CreateUploadInput{
+		KnowledgeBaseID: "kb-a", Filename: "active.txt", MimeType: "text/plain", SizeBytes: 4, IdempotencyKey: "purge-active",
+	})
+	if err != nil {
+		t.Fatalf("create active: %v", err)
+	}
+	purged, err := service.PurgeUploadSessions(ctx, time.Now().UTC().Add(-24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("purge: %v", err)
+	}
+	if purged != 1 {
+		t.Fatalf("purged = %d, want 1", purged)
+	}
+	var remaining int64
+	db.Model(&models.UploadSession{}).Count(&remaining)
+	if remaining != 1 {
+		t.Fatalf("remaining sessions = %d, want active only", remaining)
+	}
+	if err := db.First(&models.UploadSession{}, "id = ?", active.Session.ID).Error; err != nil {
+		t.Fatalf("active session removed: %v", err)
+	}
+}
+
 func TestCreateUploadSessionRejectsOversizeAndUnsupportedFormat(t *testing.T) {
 	service, _, _, principal := newUploadFixture(t, UploadSupport{PartSize: 4})
 	_, err := service.CreateUploadSession(context.Background(), principal, CreateUploadInput{

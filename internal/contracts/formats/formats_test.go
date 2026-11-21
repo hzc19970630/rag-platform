@@ -6,7 +6,7 @@ import (
 )
 
 func TestNamesMatchThePublishedFormatList(t *testing.T) {
-	want := []string{"pdf-text", "docx", "xlsx", "pptx", "html", "markdown", "txt"}
+	want := []string{"pdf-text", "docx", "xlsx", "csv", "pptx", "html", "markdown", "txt"}
 	if got := Names(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected format order: %v", got)
 	}

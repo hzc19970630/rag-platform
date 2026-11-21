@@ -62,7 +62,7 @@ import { ProjectionPanel } from "../features/settings/ProjectionPanel";
 import { usePermissions } from "../session";
 import { formatSize, formatTime } from "../utils/format";
 
-const accept = ".pdf,.docx,.xlsx,.pptx,.md,.txt,.html,.htm";
+const accept = ".pdf,.docx,.xlsx,.csv,.pptx,.md,.txt,.html,.htm";
 const EMPTY_FOLDERS: Folder[] = [];
 const EMPTY_TAGS: TagView[] = [];
 const CHAT_PANEL_QUERY = "(min-width: 1101px)";

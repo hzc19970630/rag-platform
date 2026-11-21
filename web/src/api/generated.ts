@@ -2246,6 +2246,9 @@ export interface components {
             blocks?: components["schemas"]["PreviewBlock"][];
             documentId?: string;
             filename?: string;
+            /** Format: int64 */
+            indexedRows?: number;
+            indexedSheets?: number;
             knowledgeBaseId?: string;
             language?: string;
             mimeType?: string;
@@ -2253,6 +2256,10 @@ export interface components {
             schemaVersion?: string;
             status?: string;
             title?: string;
+            /** Format: int64 */
+            totalRows?: number;
+            totalSheets?: number;
+            truncated?: boolean;
             versionId?: string;
             visibility?: string;
         };
