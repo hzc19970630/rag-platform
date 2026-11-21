@@ -166,11 +166,11 @@ HTML_BLOCK_TAGS = {
 }
 
 
-def block(block_id, kind, text, heading_path="", page_number=0, source_path="", start=0, end=0):
+def block(block_id, kind, text, heading_path="", page_number=0, source_path="", start=0, end=0, table=None):
     return docreader_pb2.DocumentBlock(
         block_id=block_id, kind=kind, text=text, heading_path=heading_path,
         page_number=page_number, source_path=source_path,
-        start_offset=start, end_offset=end,
+        start_offset=start, end_offset=end, table=table,
     )
 
 
@@ -491,9 +491,14 @@ def _emit_table_blocks(prefix, heading, sheet, headers, rows, start_row, block_b
         if not current:
             return
         text = "\n".join([header_line] + [" | ".join(row) for row in current])
+        meta = docreader_pb2.TableMeta(
+            sheet=sheet, header=headers, row_start=start, row_end=end,
+            column_count=len(headers),
+        )
         blocks.append(block(
             f"{prefix}-{index}", "table", text[:MAX_BLOCK_CHARS], heading, 0,
             f"sheet:{sheet}!A{start}:{_column_letter(max(len(headers) - 1, 0))}{end}",
+            table=meta,
         ))
         index += 1
         current = []

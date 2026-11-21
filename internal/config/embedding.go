@@ -46,6 +46,18 @@ type EmbeddingConfig struct {
 	Dimension  int
 	BatchSize  int
 	TimeoutSec int
+	// BatchMaxTokens caps one provider request by estimated tokens in addition
+	// to BatchSize. Zero disables the token cap.
+	BatchMaxTokens int
+	// TPMBudget paces provider calls to tokens per minute. Zero disables pacing.
+	TPMBudget int64
+	// RetryAfterMaxSec caps how long a 429 Retry-After hint may pause a batch.
+	RetryAfterMaxSec int
+	// StageTimeoutSec bounds the whole embed stage independently of the
+	// ingestion task timeout. Zero falls back to the task timeout.
+	StageTimeoutSec int
+	// CharsPerToken estimates prompt tokens from rune count for batching/pacing.
+	CharsPerToken int
 	// HealthURL is the provider liveness endpoint used by the model catalog.
 	// Empty derives it from BaseURL (/models); a non-empty value must be a URL.
 	HealthURL string

@@ -1,6 +1,7 @@
 package views
 
 import (
+	"encoding/json"
 	"github.com/hzc19970630/rag-platform/contracts/httpapi"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
@@ -16,6 +17,7 @@ func Document(row models.Document) httpapi.Document {
 		MimeType:        row.MimeType,
 		Status:          row.Status,
 		LatestVersionID: row.LatestVersionID,
+		IndexMode:       row.IndexMode,
 		FolderID:        row.FolderID,
 		DeletedAt:       row.DeletedAt,
 		DeletedBy:       row.DeletedBy,
@@ -37,10 +39,56 @@ func DocumentVersion(row models.DocumentVersion) httpapi.DocumentVersion {
 		SizeBytes:       row.SizeBytes,
 		Status:          row.Status,
 		ACLVersion:      row.ACLVersion,
+		IndexMode:       row.IndexMode,
+		VectorRows:      row.VectorRows,
+		TotalRows:       row.TotalRows,
+		VectorSheets:    row.VectorSheets,
+		TotalSheets:     row.TotalSheets,
+		VectorTokens:    row.VectorTokens,
+		EstimatedTokens: row.EstimatedTokens,
 		ErrorCode:       row.ErrorCode,
 		ErrorMessage:    row.ErrorMessage,
 		CreatedAt:       row.CreatedAt,
 		UpdatedAt:       row.UpdatedAt,
+	}
+}
+
+func TableAsset(row models.TableAsset) httpapi.TableAsset {
+	var header []string
+	_ = json.Unmarshal([]byte(row.Header), &header)
+	return httpapi.TableAsset{
+		ID: row.ID, DocumentID: row.DocumentID, DocumentVersionID: row.DocumentVersionID,
+		Sheet: row.Sheet, Header: header, RowStart: row.RowStart, RowEnd: row.RowEnd,
+		RowCount: row.RowCount, ColumnCount: row.ColumnCount, IndexMode: row.IndexMode,
+	}
+}
+
+func TableAssets(rows []models.TableAsset) []httpapi.TableAsset {
+	items := make([]httpapi.TableAsset, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, TableAsset(row))
+	}
+	return items
+}
+
+func TableQueryResult(view ingestion.TableQueryResult) httpapi.TableQueryResult {
+	rows := make([]httpapi.TableRow, 0, len(view.Rows))
+	for _, row := range view.Rows {
+		rows = append(rows, httpapi.TableRow{RowNumber: row.RowNumber, Cells: row.Cells})
+	}
+	return httpapi.TableQueryResult{
+		AssetID: view.AssetID, Sheet: view.Sheet, Header: view.Header,
+		TotalRows: view.TotalRows, MatchedRows: view.MatchedRows, Rows: rows,
+	}
+}
+
+func DocumentIndexEstimate(view ingestion.IndexEstimate) httpapi.DocumentIndexEstimate {
+	return httpapi.DocumentIndexEstimate{
+		DocumentID: view.DocumentID, DocumentVersionID: view.DocumentVersionID, IndexMode: view.IndexMode,
+		TableCount: view.TableCount, TotalRows: view.TotalRows, VectorRows: view.VectorRows,
+		TotalSheets: view.TotalSheets, VectorSheets: view.VectorSheets,
+		CurrentVectorTokens: view.CurrentVectorTokens, DeepEstimatedTokens: view.DeepEstimatedTokens,
+		DeepEstimatedMinutes: view.DeepEstimatedMinutes, TPMBudget: view.TPMBudget,
 	}
 }
 

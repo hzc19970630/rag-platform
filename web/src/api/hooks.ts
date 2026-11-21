@@ -13,6 +13,7 @@ import type {
   DocumentPage,
   DocumentPreview,
   DocumentStatus,
+  DocumentIndexEstimate,
   DocumentVersionPage,
   DocumentFilter,
   FolderList,
@@ -215,6 +216,14 @@ export function useDocumentVersions(documentId: string | undefined) {
     queryKey: queryKeys.documentVersions(documentId ?? ""),
     queryFn: () => api<DocumentVersionPage>(`/documents/${documentId}/versions`),
     enabled: Boolean(documentId),
+  });
+}
+
+export function useDocumentIndexEstimate(documentId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["document-index-estimate", documentId ?? ""],
+    queryFn: () => api<DocumentIndexEstimate>(`/documents/${documentId}/index-estimate`),
+    enabled: Boolean(documentId) && enabled,
   });
 }
 

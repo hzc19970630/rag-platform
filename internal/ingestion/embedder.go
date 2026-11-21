@@ -12,11 +12,13 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/netprobe"
 	"github.com/hzc19970630/rag-platform/internal/platform/resilience"
+	"golang.org/x/time/rate"
 )
 
 // LocalEmbedder provides a deterministic, offline embedding adapter for local
@@ -63,14 +65,18 @@ func (e LocalEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, 
 // most hosted providers and self-hosted gateways (vLLM, one-api style proxies)
 // without provider-specific SDKs.
 type RemoteEmbedder struct {
-	baseURL   string
-	apiKey    string
-	model     string
-	dimension int
-	batchSize int
-	healthURL string
-	client    *http.Client
-	guard     *resilience.Guard
+	baseURL        string
+	apiKey         string
+	model          string
+	dimension      int
+	batchSize      int
+	healthURL      string
+	client         *http.Client
+	guard          *resilience.Guard
+	maxBatchTokens int
+	charsPerToken  int
+	limiter        *rate.Limiter
+	retryAfterMax  time.Duration
 }
 
 type RemoteEmbedderOptions struct {
@@ -83,6 +89,15 @@ type RemoteEmbedderOptions struct {
 	// HealthURL overrides the liveness endpoint. Empty uses /models, which is
 	// part of the OpenAI-compatible surface this adapter targets.
 	HealthURL string
+	// BatchMaxTokens caps one request by estimated tokens. Zero keeps only the
+	// fixed BatchSize cap.
+	BatchMaxTokens int
+	// TPMBudget paces requests to this many tokens per minute. Zero disables.
+	TPMBudget int64
+	// CharsPerToken estimates tokens from rune count for batching and pacing.
+	CharsPerToken int
+	// RetryAfterMax caps a provider Retry-After pause. Zero uses 60s.
+	RetryAfterMax time.Duration
 	// Guard is optional; nil creates a breaker and tenant bulkhead. The batch
 	// retry policy stays inside this adapter, so the guard does not retry again.
 	Guard *resilience.Guard
@@ -104,6 +119,12 @@ func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
 	if opts.Timeout <= 0 {
 		opts.Timeout = 60 * time.Second
 	}
+	if opts.CharsPerToken <= 0 {
+		opts.CharsPerToken = 2
+	}
+	if opts.RetryAfterMax <= 0 {
+		opts.RetryAfterMax = 60 * time.Second
+	}
 	baseURL := strings.TrimRight(opts.BaseURL, "/")
 	healthURL := strings.TrimSpace(opts.HealthURL)
 	if healthURL == "" {
@@ -115,21 +136,38 @@ func NewRemoteEmbedder(opts RemoteEmbedderOptions) (*RemoteEmbedder, error) {
 		cfg.MaxAttempts = 1
 		guard = resilience.New(cfg)
 	}
+	var limiter *rate.Limiter
+	if opts.TPMBudget > 0 {
+		limiter = rate.NewLimiter(rate.Limit(float64(opts.TPMBudget)/60), int(opts.TPMBudget))
+	}
 	return &RemoteEmbedder{
-		baseURL:   baseURL,
-		apiKey:    opts.APIKey,
-		model:     opts.Model,
-		dimension: opts.Dimension,
-		batchSize: opts.BatchSize,
-		healthURL: healthURL,
-		client:    &http.Client{Timeout: opts.Timeout},
-		guard:     guard,
+		baseURL: baseURL, apiKey: opts.APIKey, model: opts.Model,
+		dimension: opts.Dimension, batchSize: opts.BatchSize,
+		healthURL: healthURL, client: &http.Client{Timeout: opts.Timeout}, guard: guard,
+		maxBatchTokens: opts.BatchMaxTokens, charsPerToken: opts.CharsPerToken,
+		limiter: limiter, retryAfterMax: opts.RetryAfterMax,
 	}, nil
 }
 
 func (e *RemoteEmbedder) Dimension() int { return e.dimension }
 
 func (e *RemoteEmbedder) Name() string { return e.model }
+
+func parseRetryAfter(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(value); err == nil {
+		if delay := time.Until(when); delay > 0 {
+			return delay
+		}
+	}
+	return 0
+}
 
 // Probe reports provider reachability for the model catalog.
 func (e *RemoteEmbedder) Probe(ctx context.Context) error {
@@ -153,10 +191,24 @@ type embeddingResponse struct {
 
 func (e *RemoteEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	result := make([][]float32, 0, len(texts))
-	for start := 0; start < len(texts); start += e.batchSize {
-		end := start + e.batchSize
-		if end > len(texts) {
-			end = len(texts)
+	for start := 0; start < len(texts); {
+		end := start
+		tokens := 0
+		for end < len(texts) && end-start < e.batchSize {
+			cost := e.estimateTextTokens(texts[end])
+			if end > start && e.maxBatchTokens > 0 && tokens+cost > e.maxBatchTokens {
+				break
+			}
+			tokens += cost
+			end++
+		}
+		if tokens == 0 {
+			tokens = 1
+		}
+		if e.limiter != nil {
+			if err := e.limiter.WaitN(ctx, tokens); err != nil {
+				return nil, err
+			}
 		}
 		var batch [][]float32
 		if err := e.guard.Do(ctx, func(attemptCtx context.Context) error {
@@ -167,8 +219,17 @@ func (e *RemoteEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 			return nil, err
 		}
 		result = append(result, batch...)
+		start = end
 	}
 	return result, nil
+}
+
+func (e *RemoteEmbedder) estimateTextTokens(text string) int {
+	chars := len([]rune(text))
+	if chars <= 0 {
+		return 1
+	}
+	return (chars + e.charsPerToken - 1) / e.charsPerToken
 }
 
 const embedMaxAttempts = 3
@@ -193,8 +254,9 @@ func (e *embeddingTransportError) Unwrap() error { return e.err }
 // embedStatusError carries the provider status so retries can distinguish a
 // transient 429/5xx from a deterministic 4xx.
 type embedStatusError struct {
-	Status int
-	Body   string
+	Status     int
+	Body       string
+	RetryAfter time.Duration
 }
 
 func (e *embedStatusError) Error() string {
@@ -218,6 +280,13 @@ func (e *RemoteEmbedder) embedBatchWithRetry(ctx context.Context, batch []string
 		delay := embedRetryBaseDelay << (attempt - 1)
 		if delay > embedRetryMaxDelay {
 			delay = embedRetryMaxDelay
+		}
+		var status *embedStatusError
+		if errors.As(lastErr, &status) && status.RetryAfter > delay {
+			delay = status.RetryAfter
+			if e.retryAfterMax > 0 && delay > e.retryAfterMax {
+				delay = e.retryAfterMax
+			}
 		}
 		slog.Warn("embedding_batch_retry", "attempt", attempt, "delay_ms", delay.Milliseconds(), "error", err)
 		timer := time.NewTimer(delay)
@@ -267,7 +336,8 @@ func (e *RemoteEmbedder) embedBatch(ctx context.Context, batch []string) ([][]fl
 		return nil, fmt.Errorf("read embedding response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, &embedStatusError{Status: response.StatusCode, Body: strings.TrimSpace(string(raw))}
+		retryAfter := parseRetryAfter(response.Header.Get("Retry-After"))
+		return nil, &embedStatusError{Status: response.StatusCode, Body: strings.TrimSpace(string(raw)), RetryAfter: retryAfter}
 	}
 
 	var decoded embeddingResponse

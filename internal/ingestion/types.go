@@ -73,15 +73,24 @@ type NormalizedDocument struct {
 	IndexedSheets int             `json:"indexed_sheets,omitempty"`
 }
 
+type TableMeta struct {
+	Sheet       string   `json:"sheet,omitempty"`
+	Header      []string `json:"header,omitempty"`
+	RowStart    int      `json:"row_start,omitempty"`
+	RowEnd      int      `json:"row_end,omitempty"`
+	ColumnCount int      `json:"column_count,omitempty"`
+}
+
 type DocumentBlock struct {
-	BlockID     string `json:"block_id"`
-	Kind        string `json:"kind"`
-	Text        string `json:"text"`
-	HeadingPath string `json:"heading_path"`
-	PageNumber  int    `json:"page_number"`
-	SourcePath  string `json:"source_path"`
-	StartOffset int    `json:"start_offset"`
-	EndOffset   int    `json:"end_offset"`
+	BlockID     string     `json:"block_id"`
+	Kind        string     `json:"kind"`
+	Text        string     `json:"text"`
+	HeadingPath string     `json:"heading_path"`
+	PageNumber  int        `json:"page_number"`
+	SourcePath  string     `json:"source_path"`
+	StartOffset int        `json:"start_offset"`
+	EndOffset   int        `json:"end_offset"`
+	Table       *TableMeta `json:"table,omitempty"`
 }
 
 type Chunk = evidence.Chunk

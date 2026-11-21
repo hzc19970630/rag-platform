@@ -160,6 +160,7 @@ type Document struct {
 	MimeType        string     `gorm:"size:128;not null" json:"mimeType"`
 	Status          string     `gorm:"size:32;not null" json:"status"`
 	LatestVersionID string     `gorm:"size:64" json:"latestVersionId"`
+	IndexMode       string     `gorm:"size:16;not null;default:''" json:"indexMode"`
 	FolderID        string     `gorm:"size:64;default:null" json:"folderId"`
 	DeletedAt       *time.Time `json:"deletedAt,omitempty"`
 	DeletedBy       string     `gorm:"size:64;not null;default:''" json:"deletedBy,omitempty"`
@@ -262,6 +263,13 @@ type DocumentVersion struct {
 	NormalizedKey   string    `gorm:"size:1024" json:"-"`
 	Status          string    `gorm:"size:32;not null" json:"status"`
 	ACLVersion      int64     `gorm:"not null" json:"aclVersion"`
+	IndexMode       string    `gorm:"size:16;not null;default:''" json:"indexMode"`
+	VectorRows      int64     `gorm:"not null;default:0" json:"vectorRows"`
+	TotalRows       int64     `gorm:"not null;default:0" json:"totalRows"`
+	VectorSheets    int       `gorm:"not null;default:0" json:"vectorSheets"`
+	TotalSheets     int       `gorm:"not null;default:0" json:"totalSheets"`
+	VectorTokens    int64     `gorm:"not null;default:0" json:"vectorTokens"`
+	EstimatedTokens int64     `gorm:"not null;default:0" json:"estimatedTokens"`
 	ErrorCode       string    `gorm:"size:128" json:"errorCode"`
 	ErrorMessage    string    `gorm:"type:text" json:"errorMessage"`
 	CreatedAt       time.Time `gorm:"not null" json:"createdAt"`
@@ -321,6 +329,8 @@ type Chunk struct {
 	StartOffset        int       `json:"startOffset"`
 	EndOffset          int       `json:"endOffset"`
 	Embedding          string    `gorm:"type:halfvec" json:"-"`
+	IndexRole          string    `gorm:"size:16;not null;default:'both'" json:"indexRole"`
+	TableAssetID       *string   `gorm:"size:64" json:"tableAssetId,omitempty"`
 	EmbeddingDimension int       `gorm:"not null;default:0" json:"embeddingDimension"`
 	Status             string    `gorm:"size:32;not null" json:"status"`
 	CreatedAt          time.Time `gorm:"not null" json:"createdAt"`

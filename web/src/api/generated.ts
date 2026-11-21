@@ -416,6 +416,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{id}/index-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/documents/{id}/index-estimate */
+        get: operations["get_documents_id_index_estimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{id}/index-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/documents/{id}/index-mode */
+        post: operations["post_documents_id_index_mode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{id}/preview": {
         parameters: {
             query?: never;
@@ -1014,6 +1048,40 @@ export interface paths {
         put?: never;
         /** POST /api/v1/knowledge-bases/{id}/sync/cancel */
         post: operations["post_knowledge_bases_id_sync_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/knowledge-bases/{id}/tables */
+        get: operations["get_knowledge_bases_id_tables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/tables/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/tables/query */
+        post: operations["post_knowledge_bases_id_tables_query"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2236,6 +2304,7 @@ export interface components {
             filename?: string;
             folderId?: string;
             id?: string;
+            indexMode?: string;
             knowledgeBaseId?: string;
             latestVersionId?: string;
             mimeType?: string;
@@ -2251,6 +2320,26 @@ export interface components {
         };
         DocumentEnvelope: {
             document: components["schemas"]["Document"];
+        };
+        DocumentIndexEstimate: {
+            /** Format: int64 */
+            currentVectorTokens?: number;
+            deepEstimatedMinutes?: number;
+            /** Format: int64 */
+            deepEstimatedTokens?: number;
+            documentId?: string;
+            documentVersionId?: string;
+            indexMode?: string;
+            /** Format: int64 */
+            tableCount?: number;
+            /** Format: int64 */
+            totalRows?: number;
+            totalSheets?: number;
+            /** Format: int64 */
+            tpmBudget?: number;
+            /** Format: int64 */
+            vectorRows?: number;
+            vectorSheets?: number;
         };
         DocumentPage: {
             hasMore?: boolean;
@@ -2313,14 +2402,25 @@ export interface components {
             documentId?: string;
             errorCode?: string;
             errorMessage?: string;
+            /** Format: int64 */
+            estimatedTokens?: number;
             id?: string;
+            indexMode?: string;
             knowledgeBaseId?: string;
             /** Format: int64 */
             sizeBytes?: number;
             status?: string;
             tenantId?: string;
+            /** Format: int64 */
+            totalRows?: number;
+            totalSheets?: number;
             /** Format: date-time */
             updatedAt?: string;
+            /** Format: int64 */
+            vectorRows?: number;
+            vectorSheets?: number;
+            /** Format: int64 */
+            vectorTokens?: number;
             version?: number;
         };
         DocumentVersionPage: {
@@ -3181,6 +3281,47 @@ export interface components {
             request_id: string;
             sequence: number;
             type: string;
+        };
+        TableAsset: {
+            columnCount?: number;
+            documentId?: string;
+            documentVersionId?: string;
+            header?: string[];
+            id?: string;
+            indexMode?: string;
+            rowCount?: number;
+            rowEnd?: number;
+            rowStart?: number;
+            sheet?: string;
+        };
+        TableAssetList: {
+            items?: components["schemas"]["TableAsset"][];
+        };
+        TableFilter: {
+            column?: string;
+            op?: string;
+            value?: string;
+        };
+        TableQueryRequest: {
+            assetId: string;
+            desc?: boolean;
+            filters?: components["schemas"]["TableFilter"][];
+            limit?: number;
+            orderBy?: string;
+        };
+        TableQueryResult: {
+            assetId?: string;
+            header?: string[];
+            matchedRows?: number;
+            rows?: components["schemas"]["TableRow"][];
+            sheet?: string;
+            totalRows?: number;
+        };
+        TableRow: {
+            cells?: {
+                [key: string]: string;
+            };
+            rowNumber?: number;
         };
         Tag: {
             /** Format: date-time */
@@ -4210,6 +4351,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_documents_id_index_estimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentIndexEstimate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_documents_id_index_mode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartResult"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -5388,6 +5581,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_knowledge_bases_id_tables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableAssetList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_tables_query: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TableQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableQueryResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

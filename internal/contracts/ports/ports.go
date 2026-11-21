@@ -26,6 +26,7 @@ type (
 	SourceObject        = ingestion.SourceObject
 	ParseResult         = ingestion.ParseResult
 	DocumentBlock       = ingestion.DocumentBlock
+	TableMeta           = ingestion.TableMeta
 	EvidenceIndexWriter = ingestion.EvidenceIndexWriter
 	EmbeddingRecord     = ingestion.EmbeddingRecord
 	ChunkDocument       = ingestion.ChunkDocument

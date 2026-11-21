@@ -50,6 +50,14 @@ message ParseDocumentResponse {
   int32 indexed_sheets = 15;
 }
 
+message TableMeta {
+  string sheet = 1;
+  repeated string header = 2;
+  int32 row_start = 3;
+  int32 row_end = 4;
+  int32 column_count = 5;
+}
+
 message DocumentBlock {
   string block_id = 1;
   string kind = 2;
@@ -59,6 +67,7 @@ message DocumentBlock {
   string source_path = 6;
   int32 start_offset = 7;
   int32 end_offset = 8;
+  TableMeta table = 9;
 }
 
 message ParseDocumentEvent {

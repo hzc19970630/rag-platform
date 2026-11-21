@@ -16,6 +16,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/contracts/formats"
+	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
@@ -27,19 +28,22 @@ import (
 var filenamePattern = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 type Service struct {
-	db         *gorm.DB
-	authz      *authz.Service
-	objects    ObjectStore
-	publisher  TaskPublisher
-	maxBytes   int64
-	retention  time.Duration
-	quota      Quota
-	quotas     QuotaResolver
-	index      EvidenceIndexWriter
-	formats    formats.Registry
-	uploads    UploadSupport
-	uploadGate *uploadGate
-	projection ProjectionInvalidator
+	db            *gorm.DB
+	authz         *authz.Service
+	objects       ObjectStore
+	publisher     TaskPublisher
+	maxBytes      int64
+	retention     time.Duration
+	quota         Quota
+	quotas        QuotaResolver
+	index         EvidenceIndexWriter
+	formats       formats.Registry
+	uploads       UploadSupport
+	uploadGate    *uploadGate
+	projection    ProjectionInvalidator
+	embeddingTPM  int64
+	charsPerToken int
+	metrics       metrics.Recorder
 }
 
 // ProjectionInvalidator hides derived content immediately after a document
@@ -62,6 +66,22 @@ func (s *Service) SetQuotaResolver(resolver QuotaResolver) {
 
 func (s *Service) SetProjectionInvalidator(invalidator ProjectionInvalidator) {
 	s.projection = invalidator
+}
+
+// SetMetrics wires the process metrics recorder for table queries and mode
+// switches. A nil recorder simply disables those counters.
+func (s *Service) SetMetrics(recorder metrics.Recorder) {
+	s.metrics = recorder
+}
+
+// SetIndexingBudget feeds the table index estimate endpoint. Zero TPM leaves
+// the time estimate unavailable instead of guessing a provider quota.
+func (s *Service) SetIndexingBudget(tpm int64, charsPerToken int) {
+	if charsPerToken <= 0 {
+		charsPerToken = 2
+	}
+	s.embeddingTPM = tpm
+	s.charsPerToken = charsPerToken
 }
 
 // SetIndexWriter wires the Evidence Index write port. It is optional at

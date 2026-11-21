@@ -72,7 +72,7 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	if err := db.AutoMigrate(
 		&models.KnowledgeBase{}, &models.KnowledgeBaseMember{}, &models.Membership{},
 		&models.AuthorizationRevision{}, &models.AuditLog{},
-		&models.Document{}, &models.DocumentVersion{}, &models.Chunk{},
+		&models.Document{}, &models.DocumentVersion{}, &models.Chunk{}, &models.TableAsset{}, &models.TableRow{},
 		&models.Folder{}, &models.Tag{}, &models.DocumentTag{},
 		&models.WikiPage{}, &models.WikiPageVersion{}, &models.WikiPageSource{},
 		&models.KnowledgeIndexRecord{}, &models.ProjectionRun{}, &models.ProjectionStageRun{},
@@ -350,7 +350,19 @@ func TestOperationsRoutesAndModelHealth(t *testing.T) {
 }
 
 func TestKnowledgeBaseRoutes(t *testing.T) {
-	router, _ := newProjectionHTTPRouter(t)
+	router, db := newProjectionHTTPRouter(t)
+	if err := db.Create(&models.TableAsset{
+		ID: "asset-http", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-a",
+		Sheet: "Sheet1", Header: `["name","qty"]`, RowCount: 1, ColumnCount: 2,
+	}).Error; err != nil {
+		t.Fatalf("seed table asset: %v", err)
+	}
+	if err := db.Create(&models.TableRow{
+		ID: "row-http", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-a",
+		TableAssetID: "asset-http", RowNumber: 2, Cells: `{"name":"pen","qty":"2"}`,
+	}).Error; err != nil {
+		t.Fatalf("seed table row: %v", err)
+	}
 	cases := []struct {
 		method string
 		path   string
@@ -372,6 +384,18 @@ func TestKnowledgeBaseRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/knowledge-bases/kb-a/members", "", http.StatusOK},
 		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/members", `{"user_id":"ghost","role":"viewer"}`, http.StatusNotFound},
 		{http.MethodDelete, "/api/v1/knowledge-bases/kb-a/members/ghost", "", http.StatusNotFound},
+		{http.MethodGet, "/api/v1/documents/doc-a/index-estimate", "", http.StatusOK},
+		{http.MethodPost, "/api/v1/documents/doc-a/index-mode", `{"mode":"bogus"}`, http.StatusBadRequest},
+		{http.MethodPost, "/api/v1/documents/doc-a/index-mode", `{"mode":"standard"}`, http.StatusAccepted},
+		{http.MethodGet, "/api/v1/knowledge-bases/kb-a/tables", "", http.StatusOK},
+		{http.MethodGet, "/api/v1/uploads/missing", "", http.StatusInternalServerError},
+		{http.MethodDelete, "/api/v1/uploads/missing", "", http.StatusInternalServerError},
+		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/uploads", `{"filename":"a.txt","sizeBytes":1,"mimeType":"text/plain"}`, http.StatusInternalServerError},
+		{http.MethodPost, "/api/v1/uploads/missing/urls", `{"partNumbers":[1]}`, http.StatusInternalServerError},
+		{http.MethodPost, "/api/v1/uploads/missing/complete", `{}`, http.StatusInternalServerError},
+		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/query", `{"assetId":"missing"}`, http.StatusNotFound},
+		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/query", `{"assetId":"asset-http"}`, http.StatusOK},
+
 		{http.MethodDelete, "/api/v1/knowledge-bases/kb-a", "", http.StatusNoContent},
 		{http.MethodGet, "/api/v1/knowledge-bases/kb-a", "", http.StatusForbidden},
 	}

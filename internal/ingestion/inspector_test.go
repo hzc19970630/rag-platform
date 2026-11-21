@@ -30,6 +30,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&models.Document{},
 		&models.DocumentVersion{},
+		&models.TableAsset{},
+		&models.TableRow{},
 		&models.Folder{},
 		&models.Tag{},
 		&models.DocumentTag{},

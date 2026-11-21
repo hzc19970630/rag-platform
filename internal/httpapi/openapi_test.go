@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 135
+const businessRouteCount = 139
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -291,6 +291,10 @@ func TestOpenAPIResponseSchemasMatchContractDTOs(t *testing.T) {
 		{"GET /api/v1/documents/{id}/content", "DocumentPreview", contract.DocumentPreview{}},
 		{"POST /api/v1/documents/{id}/restore", "DocumentEnvelope", contract.DocumentEnvelope{}},
 		{"GET /api/v1/documents/{id}/status", "DocumentStatus", contract.DocumentStatus{}},
+		{"GET /api/v1/documents/{id}/index-estimate", "DocumentIndexEstimate", contract.DocumentIndexEstimate{}},
+		{"GET /api/v1/knowledge-bases/{id}/tables", "TableAssetList", contract.TableAssetList{}},
+		{"POST /api/v1/knowledge-bases/{id}/tables/query", "TableQueryResult", contract.TableQueryResult{}},
+		{"POST /api/v1/documents/{id}/index-mode", "StartResult", contract.StartResult{}},
 		{"GET /api/v1/documents/{id}/versions", "DocumentVersionPage", contract.DocumentVersionPage{}},
 		{"POST /api/v1/documents/{id}/versions/{versionID}/activate", "DocumentView", contract.DocumentView{}},
 		{"GET /api/v1/graph/runs/{runId}", "GraphRunDetail", contract.GraphRunDetail{}},
@@ -351,6 +355,7 @@ func TestOpenAPIDeclaresWriteStatuses(t *testing.T) {
 		"POST /api/v1/connectors/{id}/runs/{runId}/retry":                            "202",
 		"POST /api/v1/connectors/{id}/sync":                                          "202",
 		"POST /api/v1/documents/{id}/reparse":                                        "202",
+		"POST /api/v1/documents/{id}/index-mode":                                     "202",
 		"POST /api/v1/knowledge-bases":                                               "201",
 		"POST /api/v1/knowledge-bases/{id}/connectors":                               "201",
 		"POST /api/v1/knowledge-bases/{id}/documents":                                "202",

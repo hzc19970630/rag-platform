@@ -760,6 +760,8 @@ components:
           type: string
         id:
           type: string
+        indexMode:
+          type: string
         knowledgeBaseId:
           type: string
         latestVersionId:
@@ -788,6 +790,39 @@ components:
           $ref: '#/components/schemas/Document'
       required:
         - document
+      type: object
+    DocumentIndexEstimate:
+      properties:
+        currentVectorTokens:
+          format: int64
+          type: integer
+        deepEstimatedMinutes:
+          type: number
+        deepEstimatedTokens:
+          format: int64
+          type: integer
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        indexMode:
+          type: string
+        tableCount:
+          format: int64
+          type: integer
+        totalRows:
+          format: int64
+          type: integer
+        totalSheets:
+          type: integer
+        tpmBudget:
+          format: int64
+          type: integer
+        vectorRows:
+          format: int64
+          type: integer
+        vectorSheets:
+          type: integer
       type: object
     DocumentPage:
       properties:
@@ -910,7 +945,12 @@ components:
           type: string
         errorMessage:
           type: string
+        estimatedTokens:
+          format: int64
+          type: integer
         id:
+          type: string
+        indexMode:
           type: string
         knowledgeBaseId:
           type: string
@@ -921,9 +961,22 @@ components:
           type: string
         tenantId:
           type: string
+        totalRows:
+          format: int64
+          type: integer
+        totalSheets:
+          type: integer
         updatedAt:
           format: date-time
           type: string
+        vectorRows:
+          format: int64
+          type: integer
+        vectorSheets:
+          type: integer
+        vectorTokens:
+          format: int64
+          type: integer
         version:
           type: integer
       type: object
@@ -2599,6 +2652,92 @@ components:
         - sequence
         - type
       type: object
+    TableAsset:
+      properties:
+        columnCount:
+          type: integer
+        documentId:
+          type: string
+        documentVersionId:
+          type: string
+        header:
+          items:
+            type: string
+          type: array
+        id:
+          type: string
+        indexMode:
+          type: string
+        rowCount:
+          type: integer
+        rowEnd:
+          type: integer
+        rowStart:
+          type: integer
+        sheet:
+          type: string
+      type: object
+    TableAssetList:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TableAsset'
+          type: array
+      type: object
+    TableFilter:
+      properties:
+        column:
+          type: string
+        op:
+          type: string
+        value:
+          type: string
+      type: object
+    TableQueryRequest:
+      properties:
+        assetId:
+          type: string
+        desc:
+          type: boolean
+        filters:
+          items:
+            $ref: '#/components/schemas/TableFilter'
+          type: array
+        limit:
+          type: integer
+        orderBy:
+          type: string
+      required:
+        - assetId
+      type: object
+    TableQueryResult:
+      properties:
+        assetId:
+          type: string
+        header:
+          items:
+            type: string
+          type: array
+        matchedRows:
+          type: integer
+        rows:
+          items:
+            $ref: '#/components/schemas/TableRow'
+          type: array
+        sheet:
+          type: string
+        totalRows:
+          type: integer
+      type: object
+    TableRow:
+      properties:
+        cells:
+          additionalProperties:
+            type: string
+          type: object
+        rowNumber:
+          type: integer
+      type: object
     Tag:
       properties:
         createdAt:
@@ -3850,6 +3989,60 @@ paths:
       summary: GET /api/v1/documents/{id}/content
       tags:
         - documents
+  /api/v1/documents/{id}/index-estimate:
+    get:
+      operationId: get_documents_id_index_estimate
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentIndexEstimate'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/documents/{id}/index-estimate
+      tags:
+        - documents
+  /api/v1/documents/{id}/index-mode:
+    post:
+      operationId: post_documents_id_index_mode
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartResult'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/documents/{id}/index-mode
+      tags:
+        - documents
   /api/v1/documents/{id}/preview:
     get:
       operationId: get_documents_id_preview
@@ -5090,6 +5283,66 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/sync/cancel
       tags:
         - connectors
+  /api/v1/knowledge-bases/{id}/tables:
+    get:
+      operationId: get_knowledge_bases_id_tables
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableAssetList'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: GET /api/v1/knowledge-bases/{id}/tables
+      tags:
+        - documents
+  /api/v1/knowledge-bases/{id}/tables/query:
+    post:
+      operationId: post_knowledge_bases_id_tables_query
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableQueryRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableQueryResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/tables/query
+      tags:
+        - documents
   /api/v1/knowledge-bases/{id}/tags:
     get:
       operationId: get_knowledge_bases_id_tags

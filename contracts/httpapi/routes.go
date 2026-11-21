@@ -206,6 +206,10 @@ var Routes = []Route{
 		Success: ok((*ChunkPage)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/documents/{id}/status", OperationID: "get_documents_id_status", Tag: "documents",
 		Success: ok((*DocumentStatus)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/documents/{id}/index-estimate", OperationID: "get_documents_id_index_estimate", Tag: "documents",
+		Success: ok((*DocumentIndexEstimate)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/documents/{id}/index-mode", OperationID: "post_documents_id_index_mode", Tag: "documents",
+		Success: accepted((*StartResult)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/documents/{id}/versions", OperationID: "get_documents_id_versions", Tag: "documents",
 		Success: ok((*DocumentVersionPage)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/chunks/{chunkID}", OperationID: "get_chunks_chunkID", Tag: "documents",
@@ -238,6 +242,10 @@ var Routes = []Route{
 		Success: noContent(), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/documents/batch", OperationID: "post_knowledge_bases_id_documents_batch", Tag: "documents",
 		Request: jsonBody((*BatchDocumentsRequest)(nil)), Success: ok((*BatchDocumentsResult)(nil)), Errors: commonErrors},
+	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/tables", OperationID: "get_knowledge_bases_id_tables", Tag: "documents",
+		Success: ok((*TableAssetList)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/query", OperationID: "post_knowledge_bases_id_tables_query", Tag: "documents",
+		Request: jsonBody((*TableQueryRequest)(nil)), Success: ok((*TableQueryResult)(nil)), Errors: commonErrors},
 
 	// conversations
 	{Method: http.MethodPost, Path: "/api/v1/search", OperationID: "post_search", Tag: "conversations",

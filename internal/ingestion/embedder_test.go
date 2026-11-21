@@ -39,6 +39,66 @@ func writeEmbeddingResponse(t *testing.T, writer http.ResponseWriter) {
 	}
 }
 
+func TestRemoteEmbedderBatchesByTokenBudget(t *testing.T) {
+	var batchSizes []int
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var payload struct {
+			Input []string `json:"input"`
+		}
+		_ = json.NewDecoder(request.Body).Decode(&payload)
+		batchSizes = append(batchSizes, len(payload.Input))
+		data := make([]map[string]any, 0, len(payload.Input))
+		for index := range payload.Input {
+			data = append(data, map[string]any{"index": index, "embedding": []float32{0.25, 0.75}})
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]any{"data": data})
+	}))
+	defer server.Close()
+	embedder, err := NewRemoteEmbedder(RemoteEmbedderOptions{
+		BaseURL: server.URL, Model: "test-model", Dimension: 2, BatchSize: 8,
+		BatchMaxTokens: 4, CharsPerToken: 2, Timeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewRemoteEmbedder: %v", err)
+	}
+	if _, err := embedder.Embed(context.Background(), []string{"aaaa", "bbbb", "cccc", "dddd"}); err != nil {
+		t.Fatalf("Embed: %v", err)
+	}
+	if len(batchSizes) != 2 || batchSizes[0] != 2 || batchSizes[1] != 2 {
+		t.Fatalf("batch sizes = %v, want two batches of 2", batchSizes)
+	}
+}
+
+func TestRemoteEmbedderHonorsRetryAfter(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			writer.Header().Set("Retry-After", "1")
+			writer.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		writeEmbeddingResponse(t, writer)
+	}))
+	defer server.Close()
+	embedder, err := NewRemoteEmbedder(RemoteEmbedderOptions{
+		BaseURL: server.URL, Model: "test-model", Dimension: 2, BatchSize: 8, Timeout: 2 * time.Second,
+		RetryAfterMax: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewRemoteEmbedder: %v", err)
+	}
+	started := time.Now()
+	if _, err := embedder.Embed(context.Background(), []string{"hello"}); err != nil {
+		t.Fatalf("Embed: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed < 900*time.Millisecond {
+		t.Fatalf("Retry-After not honored, elapsed=%s", elapsed)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts.Load())
+	}
+}
+
 func TestRemoteEmbedderRetriesTransientProviderFailures(t *testing.T) {
 	embedder, attempts := newTestRemoteEmbedder(t, func(writer http.ResponseWriter, _ *http.Request, attempt int) {
 		if attempt < 3 {

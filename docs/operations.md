@@ -459,6 +459,17 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - 可观察：`/healthz` 与知识库/投影状态可对照 `targetEpoch/appliedEpoch`；新增 run 日志 `projection_batch_scheduled`，过期 run 状态为 `SUPERSEDED`。
 - 升级注意：0039 迁移会从现有已发布页面建立 generation 0 并设为 ACTIVE，可见内容不变；首次批次运行后切换到 generation 1。
 
+### 10.4 大表选择性索引（B36）
+
+- 默认不整表向量化。按规模选模式：≤2,000 行且 ≤50 列为 `deep`；≤50,000 行、≤100 列且 ≤20 sheet 为 `standard`；更大或更宽为 `lexical`。
+- `standard` 向量化表名/sheet/表头/列说明/统计摘要/样本行，原始行 chunk 的 `index_role=keyword`，只进入 BM25/结构化查询；`deep` 全部行 `both`；`lexical` 全部 `keyword`。
+- `table_assets` 按 sheet 聚合表资产（表头/列数/行范围/样本/行数），`table_rows` 保存原始单元格供确定性筛选/TopN；行数上限 `maxPersistedTableRows`（20 万）。
+- 文档版本记录 `index_mode`、`vector_rows/total_rows`、`vector_sheets/total_sheets`、`vector_tokens/estimated_tokens`；文档页“索引覆盖”卡片显示覆盖并提供标准/深度/仅全文切换。
+- API：`GET /documents/:id/index-estimate` 返回深度索引 tokens/预计分钟（需 `EMBEDDING_TPM_BUDGET`）；`POST /documents/:id/index-mode` 切换模式并 reparse；`GET /knowledge-bases/:id/tables`、`POST /knowledge-bases/:id/tables/query` 提供列过滤/TopN。
+- embedding：按 token 预算组批（`EMBEDDING_BATCH_MAX_TOKENS`）、TPM 配速（`EMBEDDING_TPM_BUDGET`）、429 `Retry-After` 退避、独立 `EMBEDDING_STAGE_TIMEOUT_SECONDS`；已 embedded 的 chunk 在重跑时跳过，支持断点续跑。
+- 指标：`ingestion_table_query_total/duration`、`ingestion_index_mode_switch_total`；问题类型的命中率对比留待评估集补齐。
+- 升级注意：0040/0041 迁移新增表与列；旧文档保持原切块，重新 reparse 后才应用新策略。
+
 ## 11. 数据库连接池
 
 - API、worker、embedctl 共用同一组连接池参数：`DATABASE_MAX_OPEN_CONNS`（默认 20）、`DATABASE_MAX_IDLE_CONNS`（默认 10）、`DATABASE_CONN_MAX_LIFETIME_SECONDS`（默认 1800）。`0` 空闲连接合法，其余非法值会让配置校验失败。

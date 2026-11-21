@@ -86,6 +86,7 @@ func main() {
 	pipeline := ingestion.NewPipelineWorker(application.DB, application.Objects, application.Docreader, embedder, application.Index, chunker, time.Duration(cfg.TaskTimeoutSeconds)*time.Second)
 	pipeline.SetParseTransport(cfg.StreamChunkBytes, time.Duration(cfg.ParseTimeoutSeconds)*time.Second)
 	pipeline.SetEmbeddingBudget(cfg.EmbeddingChunkWarningThreshold, cfg.EmbeddingMaxChunksPerDocument)
+	pipeline.SetEmbeddingTimeout(time.Duration(cfg.Embedding.StageTimeoutSec) * time.Second)
 	pipeline.SetMetrics(metricsRegistry)
 	pipeline.SetChunkingResolver(app.TenantChunkingResolver(application.TenantConfig))
 	pipeline.SetEmbeddingResolver(application.Embedding)

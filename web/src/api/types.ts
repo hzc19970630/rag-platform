@@ -80,6 +80,21 @@ type StageRun = {
   errorCode?: string;
 };
 
+export type DocumentIndexEstimate = {
+  documentId: string;
+  documentVersionId: string;
+  indexMode: string;
+  tableCount: number;
+  totalRows: number;
+  vectorRows: number;
+  totalSheets: number;
+  vectorSheets: number;
+  currentVectorTokens: number;
+  deepEstimatedTokens: number;
+  deepEstimatedMinutes: number;
+  tpmBudget: number;
+};
+
 export type DocumentStatus = {
   document: { id: string; filename: string; mimeType: string; status: string };
   version: { id: string; status: string; errorCode?: string; errorMessage?: string };

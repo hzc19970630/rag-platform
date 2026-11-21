@@ -24,10 +24,14 @@ type embeddingSpaceResolver interface {
 // remote adapter pinned to the provider revision. It never falls back: a
 // substitute model would write or query a different vector space.
 type embeddingRouter struct {
-	fallback  embedding.Embedder
-	spaces    embeddingSpaceResolver
-	batchSize int
-	timeout   time.Duration
+	fallback       embedding.Embedder
+	spaces         embeddingSpaceResolver
+	batchSize      int
+	batchMaxTokens int
+	tpmBudget      int64
+	charsPerToken  int
+	retryAfterMax  time.Duration
+	timeout        time.Duration
 
 	mu    sync.Mutex
 	cache map[string]*ingestion.RemoteEmbedder
@@ -35,11 +39,15 @@ type embeddingRouter struct {
 
 func newEmbeddingRouter(fallback embedding.Embedder, spaces embeddingSpaceResolver, cfg config.Config) *embeddingRouter {
 	return &embeddingRouter{
-		fallback:  fallback,
-		spaces:    spaces,
-		batchSize: cfg.Embedding.BatchSize,
-		timeout:   time.Duration(cfg.Embedding.TimeoutSec) * time.Second,
-		cache:     make(map[string]*ingestion.RemoteEmbedder),
+		fallback:       fallback,
+		spaces:         spaces,
+		batchSize:      cfg.Embedding.BatchSize,
+		batchMaxTokens: cfg.Embedding.BatchMaxTokens,
+		tpmBudget:      cfg.Embedding.TPMBudget,
+		charsPerToken:  cfg.Embedding.CharsPerToken,
+		retryAfterMax:  time.Duration(cfg.Embedding.RetryAfterMaxSec) * time.Second,
+		timeout:        time.Duration(cfg.Embedding.TimeoutSec) * time.Second,
+		cache:          make(map[string]*ingestion.RemoteEmbedder),
 	}
 }
 
@@ -104,13 +112,17 @@ func (r *embeddingRouter) adapter(space modelregistry.EmbeddingSpace) (*ingestio
 	}
 	r.mu.Unlock()
 	adapter, err := ingestion.NewRemoteEmbedder(ingestion.RemoteEmbedderOptions{
-		BaseURL:   route.BaseURL,
-		APIKey:    route.APIKey,
-		Model:     route.Model,
-		Dimension: space.Binding.Dimension,
-		BatchSize: r.batchSize,
-		Timeout:   r.timeout,
-		HealthURL: route.HealthURL,
+		BaseURL:        route.BaseURL,
+		APIKey:         route.APIKey,
+		Model:          route.Model,
+		Dimension:      space.Binding.Dimension,
+		BatchSize:      r.batchSize,
+		BatchMaxTokens: r.batchMaxTokens,
+		TPMBudget:      r.tpmBudget,
+		CharsPerToken:  r.charsPerToken,
+		RetryAfterMax:  r.retryAfterMax,
+		Timeout:        r.timeout,
+		HealthURL:      route.HealthURL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build embedding adapter for provider %q: %w", route.ProviderID, err)

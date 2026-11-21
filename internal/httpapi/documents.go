@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hzc19970630/rag-platform/contracts/httpapi"
 	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
@@ -82,6 +83,34 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 		c.Status(http.StatusNoContent)
 	})
 
+	protected.GET("/knowledge-bases/:id/tables", func(c *gin.Context) {
+		rows, err := deps.Ingestion.ListTableAssets(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, httpapi.TableAssetList{Items: views.TableAssets(rows)})
+	})
+	protected.POST("/knowledge-bases/:id/tables/query", func(c *gin.Context) {
+		var input httpapi.TableQueryRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		filters := make([]ingestion.TableFilter, 0, len(input.Filters))
+		for _, filter := range input.Filters {
+			filters = append(filters, ingestion.TableFilter{Column: filter.Column, Op: filter.Op, Value: filter.Value})
+		}
+		result, err := deps.Ingestion.QueryTable(c.Request.Context(), accessContext(c).Principal, c.Param("id"), ingestion.TableQuery{
+			AssetID: input.AssetID, Filters: filters, OrderBy: input.OrderBy, Desc: input.Desc, Limit: input.Limit,
+		})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.TableQueryResult(result))
+	})
+
 	documents := protected.Group("/documents/:id")
 	documents.GET("/preview", func(c *gin.Context) {
 		source, err := deps.Ingestion.SourceDocument(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
@@ -123,6 +152,26 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 			return
 		}
 		c.JSON(http.StatusOK, views.DocumentStatus(status))
+	})
+	documents.GET("/index-estimate", func(c *gin.Context) {
+		estimate, err := deps.Ingestion.IndexEstimate(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.DocumentIndexEstimate(estimate))
+	})
+	documents.POST("/index-mode", func(c *gin.Context) {
+		var input httpapi.DocumentIndexModeRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		if _, err := deps.Ingestion.SetIndexMode(c.Request.Context(), accessContext(c).Principal, c.Param("id"), input.Mode); err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusAccepted, httpapi.StartResult{Started: 1})
 	})
 
 	protected.GET("/chunks/:chunkID", func(c *gin.Context) {

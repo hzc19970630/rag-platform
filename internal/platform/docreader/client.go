@@ -121,11 +121,19 @@ func resultFromResponse(response *docreaderv1.ParseDocumentResponse) ports.Parse
 }
 
 func blockFromProto(item *docreaderv1.DocumentBlock) ports.DocumentBlock {
-	return ports.DocumentBlock{
+	result := ports.DocumentBlock{
 		BlockID: item.BlockId, Kind: item.Kind, Text: item.Text, HeadingPath: item.HeadingPath,
 		PageNumber: int(item.PageNumber), SourcePath: item.SourcePath,
 		StartOffset: int(item.StartOffset), EndOffset: int(item.EndOffset),
 	}
+	if item.Table != nil {
+		result.Table = &ports.TableMeta{
+			Sheet: item.Table.Sheet, Header: item.Table.Header,
+			RowStart: int(item.Table.RowStart), RowEnd: int(item.Table.RowEnd),
+			ColumnCount: int(item.Table.ColumnCount),
+		}
+	}
+	return result
 }
 
 // ParseBlocksStream uses the bidi RPC: blocks arrive in bounded events and the

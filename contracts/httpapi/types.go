@@ -532,6 +532,7 @@ type Document struct {
 	MimeType        string     `json:"mimeType"`
 	Status          string     `json:"status"`
 	LatestVersionID string     `json:"latestVersionId"`
+	IndexMode       string     `json:"indexMode"`
 	FolderID        string     `json:"folderId"`
 	DeletedAt       *time.Time `json:"deletedAt,omitempty"`
 	DeletedBy       string     `json:"deletedBy,omitempty"`
@@ -551,10 +552,81 @@ type DocumentVersion struct {
 	SizeBytes       int64     `json:"sizeBytes"`
 	Status          string    `json:"status"`
 	ACLVersion      int64     `json:"aclVersion"`
+	IndexMode       string    `json:"indexMode"`
+	VectorRows      int64     `json:"vectorRows"`
+	TotalRows       int64     `json:"totalRows"`
+	VectorSheets    int       `json:"vectorSheets"`
+	TotalSheets     int       `json:"totalSheets"`
+	VectorTokens    int64     `json:"vectorTokens"`
+	EstimatedTokens int64     `json:"estimatedTokens"`
 	ErrorCode       string    `json:"errorCode"`
 	ErrorMessage    string    `json:"errorMessage"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type TableFilter struct {
+	Column string `json:"column"`
+	Op     string `json:"op"`
+	Value  string `json:"value"`
+}
+
+type TableAsset struct {
+	ID                string   `json:"id"`
+	DocumentID        string   `json:"documentId"`
+	DocumentVersionID string   `json:"documentVersionId"`
+	Sheet             string   `json:"sheet"`
+	Header            []string `json:"header"`
+	RowStart          int      `json:"rowStart"`
+	RowEnd            int      `json:"rowEnd"`
+	RowCount          int      `json:"rowCount"`
+	ColumnCount       int      `json:"columnCount"`
+	IndexMode         string   `json:"indexMode"`
+}
+
+type TableAssetList struct {
+	Items []TableAsset `json:"items"`
+}
+
+type TableQueryRequest struct {
+	AssetID string        `json:"assetId" binding:"required"`
+	Filters []TableFilter `json:"filters"`
+	OrderBy string        `json:"orderBy"`
+	Desc    bool          `json:"desc"`
+	Limit   int           `json:"limit"`
+}
+
+type TableRow struct {
+	RowNumber int               `json:"rowNumber"`
+	Cells     map[string]string `json:"cells"`
+}
+
+type TableQueryResult struct {
+	AssetID     string     `json:"assetId"`
+	Sheet       string     `json:"sheet"`
+	Header      []string   `json:"header"`
+	TotalRows   int        `json:"totalRows"`
+	MatchedRows int        `json:"matchedRows"`
+	Rows        []TableRow `json:"rows"`
+}
+
+type DocumentIndexEstimate struct {
+	DocumentID           string  `json:"documentId"`
+	DocumentVersionID    string  `json:"documentVersionId"`
+	IndexMode            string  `json:"indexMode"`
+	TableCount           int64   `json:"tableCount"`
+	TotalRows            int64   `json:"totalRows"`
+	VectorRows           int64   `json:"vectorRows"`
+	TotalSheets          int     `json:"totalSheets"`
+	VectorSheets         int     `json:"vectorSheets"`
+	CurrentVectorTokens  int64   `json:"currentVectorTokens"`
+	DeepEstimatedTokens  int64   `json:"deepEstimatedTokens"`
+	DeepEstimatedMinutes float64 `json:"deepEstimatedMinutes"`
+	TPMBudget            int64   `json:"tpmBudget"`
+}
+
+type DocumentIndexModeRequest struct {
+	Mode string `json:"mode" binding:"required"`
 }
 
 type PipelineRun struct {
@@ -1146,20 +1218,20 @@ type GraphCounts struct {
 }
 
 type ProjectionState struct {
-	KnowledgeBaseID string          `json:"knowledgeBaseId"`
-	JoinStatus      string          `json:"joinStatus"`
-	WikiEnabled     bool            `json:"wikiEnabled"`
-	GraphEnabled    bool            `json:"graphEnabled"`
-	Runs            []ProjectionRun `json:"runs"`
-	RelationRuns    []ProjectionRun `json:"relationRuns"`
-	Pages           PageCounts      `json:"pages"`
-	Graph           GraphCounts     `json:"graph"`
-	TargetEpoch          int64  `json:"targetEpoch"`
-	WikiAppliedEpoch     int64  `json:"wikiAppliedEpoch"`
-	RelationAppliedEpoch int64  `json:"relationAppliedEpoch"`
-	PendingChanges       int64  `json:"pendingChanges"`
-	Invalidated          bool   `json:"invalidated"`
-	ActiveWikiGeneration string `json:"activeWikiGeneration,omitempty"`
+	KnowledgeBaseID      string          `json:"knowledgeBaseId"`
+	JoinStatus           string          `json:"joinStatus"`
+	WikiEnabled          bool            `json:"wikiEnabled"`
+	GraphEnabled         bool            `json:"graphEnabled"`
+	Runs                 []ProjectionRun `json:"runs"`
+	RelationRuns         []ProjectionRun `json:"relationRuns"`
+	Pages                PageCounts      `json:"pages"`
+	Graph                GraphCounts     `json:"graph"`
+	TargetEpoch          int64           `json:"targetEpoch"`
+	WikiAppliedEpoch     int64           `json:"wikiAppliedEpoch"`
+	RelationAppliedEpoch int64           `json:"relationAppliedEpoch"`
+	PendingChanges       int64           `json:"pendingChanges"`
+	Invalidated          bool            `json:"invalidated"`
+	ActiveWikiGeneration string          `json:"activeWikiGeneration,omitempty"`
 }
 
 type WikiGenerationRollbackResult struct {

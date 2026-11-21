@@ -19,13 +19,17 @@ func NewEmbedder(cfg config.Config) (ingestion.Embedder, error) {
 		return ingestion.NewLocalEmbedder(cfg.Embedding.Dimension), nil
 	case "remote":
 		return ingestion.NewRemoteEmbedder(ingestion.RemoteEmbedderOptions{
-			BaseURL:   cfg.Embedding.BaseURL,
-			APIKey:    cfg.Embedding.APIKey,
-			Model:     cfg.Embedding.Model,
-			Dimension: cfg.Embedding.Dimension,
-			BatchSize: cfg.Embedding.BatchSize,
-			Timeout:   time.Duration(cfg.Embedding.TimeoutSec) * time.Second,
-			HealthURL: cfg.Embedding.HealthURL,
+			BaseURL:        cfg.Embedding.BaseURL,
+			APIKey:         cfg.Embedding.APIKey,
+			Model:          cfg.Embedding.Model,
+			Dimension:      cfg.Embedding.Dimension,
+			BatchSize:      cfg.Embedding.BatchSize,
+			BatchMaxTokens: cfg.Embedding.BatchMaxTokens,
+			TPMBudget:      cfg.Embedding.TPMBudget,
+			CharsPerToken:  cfg.Embedding.CharsPerToken,
+			RetryAfterMax:  time.Duration(cfg.Embedding.RetryAfterMaxSec) * time.Second,
+			Timeout:        time.Duration(cfg.Embedding.TimeoutSec) * time.Second,
+			HealthURL:      cfg.Embedding.HealthURL,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported EMBEDDING_SOURCE %q", cfg.Embedding.Source)

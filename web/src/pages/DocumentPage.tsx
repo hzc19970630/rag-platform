@@ -15,6 +15,7 @@ import {
 } from "../api/hooks";
 import type { DocumentVersionView } from "../api/types";
 import { PageHeader } from "../components/PageHeader";
+import { IndexCoverageCard } from "../features/documents/IndexCoverageCard";
 import { LoadingBlock, QueryFallback } from "../components/QueryFallback";
 import { DocumentStatusBadge } from "../components/DocumentStatusBadge";
 import { StatusBadge } from "../components/StatusBadge";
@@ -186,6 +187,8 @@ export function DocumentPage() {
         </Card>
       )}
       {focused.error && <Alert type="warning" showIcon message={t("document.citationLoadFailed")} />}
+
+      <IndexCoverageCard documentId={documentId} canWrite={canWrite} />
 
       <Card className="detail-card" title={t("document.versions")} extra={<Tag>{versions.data?.items.length ?? 0}</Tag>}>
         {versions.isLoading && <LoadingBlock />}

@@ -48,6 +48,7 @@ type PipelineWorker struct {
 	parseTimeout       time.Duration
 	embeddingWarning   int
 	embeddingMaxChunks int
+	embeddingTimeout   time.Duration
 	metrics            *observability.Registry
 	projection         ProjectionTrigger
 	leaseOwner         inboxlease.Owner
@@ -122,6 +123,12 @@ func (w *PipelineWorker) SetParseTransport(chunkBytes int64, timeout time.Durati
 func (w *PipelineWorker) SetEmbeddingBudget(warning, maxChunks int) {
 	w.embeddingWarning = warning
 	w.embeddingMaxChunks = maxChunks
+}
+
+// SetEmbeddingTimeout bounds the embed stage independently of the ingestion
+// task timeout so a large deep index is not killed by the parse budget.
+func (w *PipelineWorker) SetEmbeddingTimeout(timeout time.Duration) {
+	w.embeddingTimeout = timeout
 }
 
 func (w *PipelineWorker) SetMetrics(registry *observability.Registry) {
@@ -203,7 +210,13 @@ func (w *PipelineWorker) Process(ctx context.Context, task Task) error {
 	case StageChunk:
 		processErr = w.chunk(processCtx, task)
 	case StageEmbed:
-		processErr = w.embed(processCtx, task)
+		embedCtx := processCtx
+		if w.embeddingTimeout > 0 {
+			var cancel context.CancelFunc
+			embedCtx, cancel = context.WithTimeout(processCtx, w.embeddingTimeout)
+			defer cancel()
+		}
+		processErr = w.embed(embedCtx, task)
 	case StageIndex:
 		processErr = w.index(processCtx, task)
 	default:
@@ -384,6 +397,7 @@ func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
 
 type chunkRow struct {
 	ID, ParentID, Content, ContentHash, HeadingPath, SourcePath string
+	IndexRole, TableAssetID                                     string
 	Ordinal, PageNumber, StartOffset, EndOffset                 int
 }
 
@@ -412,8 +426,8 @@ func chunkDocuments(rows []chunkRow) []ChunkDocument {
 var chunkInsertBatchSize = 500
 
 const (
-	chunkInsertColumns     = 17
-	chunkInsertPlaceholder = "(?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)"
+	chunkInsertColumns     = 19
+	chunkInsertPlaceholder = "(?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, COALESCE(NULLIF(?, ''), 'both'), NULLIF(?, ''), ?, ?)"
 )
 
 // insertChunks writes rows in multi-row INSERT batches. The explicit timestamps
@@ -434,9 +448,9 @@ func insertChunks(tx *gorm.DB, version models.DocumentVersion, rows []chunkRow, 
 				chunkStatus = StatusChunked
 			}
 			placeholders = append(placeholders, chunkInsertPlaceholder)
-			args = append(args, item.ID, version.TenantID, version.KnowledgeBaseID, version.ID, item.ParentID, item.Ordinal, item.Content, item.ContentHash, item.HeadingPath, item.PageNumber, item.SourcePath, item.StartOffset, item.EndOffset, chunkStatus, now, now)
+			args = append(args, item.ID, version.TenantID, version.KnowledgeBaseID, version.ID, item.ParentID, item.Ordinal, item.Content, item.ContentHash, item.HeadingPath, item.PageNumber, item.SourcePath, item.StartOffset, item.EndOffset, chunkStatus, item.IndexRole, item.TableAssetID, now, now)
 		}
-		query := `INSERT INTO chunks (id, tenant_id, knowledge_base_id, document_version_id, parent_id, ordinal, content, content_hash, heading_path, page_number, source_path, start_offset, end_offset, embedding_dimension, status, created_at, updated_at) VALUES ` + strings.Join(placeholders, ", ")
+		query := `INSERT INTO chunks (id, tenant_id, knowledge_base_id, document_version_id, parent_id, ordinal, content, content_hash, heading_path, page_number, source_path, start_offset, end_offset, embedding_dimension, status, index_role, table_asset_id, created_at, updated_at) VALUES ` + strings.Join(placeholders, ", ")
 		if err := tx.Exec(query, args...).Error; err != nil {
 			return fmt.Errorf("insert chunk batch: %w", err)
 		}
@@ -466,27 +480,97 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 			chunker = resolved
 		}
 	}
+	var document models.Document
+	if err := w.db.WithContext(ctx).First(&document, "id = ?", version.DocumentID).Error; err != nil {
+		return fmt.Errorf("load document: %w", err)
+	}
+	indexMode := document.IndexMode
+	if version.IndexMode != "" {
+		indexMode = version.IndexMode
+	}
+	indexMode = resolveIndexMode(indexMode, normalized.Blocks)
 	rows := make([]chunkRow, 0, len(normalized.Blocks)*2)
+	blockAsset, assets := buildTableAssets(version, normalized.Blocks)
+	for index := range assets {
+		assets[index].IndexMode = indexMode
+	}
+	tableRows := make([]models.TableRow, 0)
+	coverage := struct {
+		totalRows    int64
+		vectorRows   int64
+		sheets       map[string]bool
+		vectorSheets map[string]bool
+		vectorChars  int64
+	}{sheets: map[string]bool{}, vectorSheets: map[string]bool{}}
 	childOrdinal := 0
+	type plannedChunk struct {
+		content string
+		role    string
+	}
 	for blockIndex, block := range normalized.Blocks {
+		info, isTable := tableMetaFor(block)
+		assetID := blockAsset[blockIndex]
+		if isTable {
+			if len(tableRows) < maxPersistedTableRows {
+				rowsForAsset := tableRowModels(version, assetID, info)
+				if remaining := maxPersistedTableRows - len(tableRows); len(rowsForAsset) > remaining {
+					rowsForAsset = rowsForAsset[:remaining]
+				}
+				tableRows = append(tableRows, rowsForAsset...)
+			}
+			coverage.totalRows += int64(info.rowCount)
+			if info.sheet != "" {
+				coverage.sheets[info.sheet] = true
+			}
+		}
 		parentID := stableID("parent", version.ID, fmt.Sprint(blockIndex), block.Text)
-		rows = append(rows, chunkRow{ID: parentID, Content: block.Text, ContentHash: hashString(block.Text), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: blockIndex})
-		contents := chunker.Split(block.Text)
-		if block.Kind == "table" {
+		rows = append(rows, chunkRow{ID: parentID, Content: block.Text, ContentHash: hashString(block.Text), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: blockIndex, IndexRole: IndexRoleBoth, TableAssetID: assetID})
+		planned := make([]plannedChunk, 0, 2)
+		if !isTable {
+			for _, content := range chunker.Split(block.Text) {
+				planned = append(planned, plannedChunk{content: cleanText(content), role: IndexRoleBoth})
+			}
+		} else {
+			contents := []string{block.Text}
 			if splitter, ok := chunker.(TableSplitter); ok {
 				contents = splitter.SplitTable(block.Text)
 			}
-		}
-		for _, content := range contents {
-			if block.Kind == "table" {
-				content = cleanTableText(content)
-			} else {
-				content = cleanText(content)
+			switch indexMode {
+			case IndexModeDeep:
+				for _, content := range contents {
+					planned = append(planned, plannedChunk{content: cleanTableText(content), role: IndexRoleBoth})
+				}
+				coverage.vectorRows += int64(info.rowCount)
+				if info.sheet != "" {
+					coverage.vectorSheets[info.sheet] = true
+				}
+				for _, content := range contents {
+					coverage.vectorChars += int64(len([]rune(content)))
+				}
+			case IndexModeLexical:
+				for _, content := range contents {
+					planned = append(planned, plannedChunk{content: cleanTableText(content), role: IndexRoleKeyword})
+				}
+			default:
+				summary := tableSummaryText(info)
+				if summary != "" {
+					planned = append(planned, plannedChunk{content: summary, role: IndexRoleBoth})
+					coverage.vectorRows += int64(len(info.samples))
+					if info.sheet != "" {
+						coverage.vectorSheets[info.sheet] = true
+					}
+					coverage.vectorChars += int64(len([]rune(summary)))
+				}
+				for _, content := range contents {
+					planned = append(planned, plannedChunk{content: cleanTableText(content), role: IndexRoleKeyword})
+				}
 			}
-			if content == "" {
+		}
+		for _, item := range planned {
+			if item.content == "" {
 				continue
 			}
-			rows = append(rows, chunkRow{ID: stableID("chunk", version.ID, fmt.Sprint(childOrdinal), content), ParentID: parentID, Content: content, ContentHash: hashString(content), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: childOrdinal})
+			rows = append(rows, chunkRow{ID: stableID("chunk", version.ID, fmt.Sprint(childOrdinal), item.content), ParentID: parentID, Content: item.content, ContentHash: hashString(item.content), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: childOrdinal, IndexRole: item.role, TableAssetID: assetID})
 			childOrdinal++
 		}
 	}
@@ -495,7 +579,7 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	}
 	childChunks := 0
 	for _, row := range rows {
-		if row.ParentID != "" {
+		if row.ParentID != "" && row.IndexRole != IndexRoleKeyword {
 			childChunks++
 		}
 	}
@@ -526,12 +610,36 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.Chunk{}).Error; err != nil {
 			return err
 		}
+		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.TableAsset{}).Error; err != nil {
+			return err
+		}
+		if len(assets) > 0 {
+			if err := tx.Create(&assets).Error; err != nil {
+				return fmt.Errorf("insert table assets: %w", err)
+			}
+		}
+		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.TableRow{}).Error; err != nil {
+			return err
+		}
+		if len(tableRows) > 0 {
+			if err := tx.CreateInBatches(&tableRows, 500).Error; err != nil {
+				return fmt.Errorf("insert table rows: %w", err)
+			}
+		}
 		if err := insertChunks(tx, version, rows, time.Now()); err != nil {
+			return err
+		}
+		if err := tx.Model(&models.Document{}).Where("id = ?", version.DocumentID).
+			Update("index_mode", indexMode).Error; err != nil {
 			return err
 		}
 		result := tx.Model(&models.DocumentVersion{}).
 			Where("id = ? AND status <> ?", version.ID, StatusCancelled).
-			Updates(statusFields(StatusChunked, nil))
+			Updates(statusFields(StatusChunked, map[string]any{
+				"index_mode": indexMode, "vector_rows": coverage.vectorRows, "total_rows": coverage.totalRows,
+				"vector_sheets": len(coverage.vectorSheets), "total_sheets": len(coverage.sheets),
+				"vector_tokens": estimateTokens(int(coverage.vectorChars)), "estimated_tokens": estimateTokens(int(coverage.vectorChars)),
+			}))
 		if result.Error != nil {
 			return result.Error
 		}
@@ -597,11 +705,44 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 	// A restarted pipeline can find chunks that its previous attempt already
 	// embedded; re-embedding them is idempotent and avoids reporting an empty
 	// document for work that actually exists.
-	if err := w.db.WithContext(ctx).Where("document_version_id = ? AND parent_id IS NOT NULL AND status IN ?", version.ID, []string{StatusChunked, StatusEmbedded}).Order("ordinal").Find(&chunks).Error; err != nil {
+	if err := w.db.WithContext(ctx).Where("document_version_id = ? AND parent_id IS NOT NULL AND status = ? AND index_role <> ?", version.ID, StatusChunked, IndexRoleKeyword).Order("ordinal").Find(&chunks).Error; err != nil {
 		return fmt.Errorf("load chunks: %w", err)
 	}
+	markKeywordOnly := func() error {
+		return w.db.WithContext(ctx).Model(&models.Chunk{}).
+			Where("document_version_id = ? AND parent_id IS NOT NULL AND index_role = ? AND status = ?", version.ID, IndexRoleKeyword, StatusChunked).
+			Update("status", StatusEmbedded).Error
+	}
 	if len(chunks) == 0 {
-		return apperror.Terminalf("empty_document", "no child chunks to embed")
+		var alreadyEmbedded int64
+		if err := w.db.WithContext(ctx).Model(&models.Chunk{}).
+			Where("document_version_id = ? AND parent_id IS NOT NULL AND status = ? AND index_role <> ?", version.ID, StatusEmbedded, IndexRoleKeyword).
+			Count(&alreadyEmbedded).Error; err != nil {
+			return fmt.Errorf("count embedded chunks: %w", err)
+		}
+		if alreadyEmbedded > 0 {
+			// Resume after a partial attempt: every vector chunk is already done.
+			if err := markKeywordOnly(); err != nil {
+				return fmt.Errorf("mark keyword chunks: %w", err)
+			}
+			return nil
+		}
+		// A lexical table produces keyword-only chunks; indexing still runs, but
+		// no provider call is made. A document with no child chunks at all is
+		// still a terminal failure.
+		var keywordOnly int64
+		if err := w.db.WithContext(ctx).Model(&models.Chunk{}).
+			Where("document_version_id = ? AND parent_id IS NOT NULL AND index_role = ?", version.ID, IndexRoleKeyword).
+			Count(&keywordOnly).Error; err != nil {
+			return fmt.Errorf("count keyword chunks: %w", err)
+		}
+		if keywordOnly == 0 {
+			return apperror.Terminalf("empty_document", "no child chunks to embed")
+		}
+		if err := markKeywordOnly(); err != nil {
+			return fmt.Errorf("mark keyword chunks: %w", err)
+		}
+		return nil
 	}
 	texts := make([]string, len(chunks))
 	for i := range chunks {
@@ -629,6 +770,9 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 			return apperror.ErrVersionSuperseded
 		}
 		return fmt.Errorf("embedding_error: %w", err)
+	}
+	if err := markKeywordOnly(); err != nil {
+		return fmt.Errorf("mark keyword chunks: %w", err)
 	}
 	// The adapter fences its own write, but a replacement may have committed
 	// just after it; never leave a superseded version looking embedded.

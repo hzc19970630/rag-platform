@@ -41,6 +41,8 @@ var tenantTables = []string{
 	"projection_runs",
 	"stream_events",
 	"sync_runs",
+	"table_assets",
+	"table_rows",
 	"tags",
 	"task_dead_letters",
 	"task_inbox",

@@ -245,6 +245,8 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	})
 	ingestionService := ingestion.NewService(database, authorization, objects, publisher, cfg.MaxFileBytes, cfg.Limits.DocumentRetentionDays, ingestion.Quota{MaxDocuments: int64(cfg.Limits.TenantMaxDocuments), MaxStorageBytes: cfg.Limits.TenantMaxStorageBytes})
 	ingestionService.SetIndexWriter(indexWriter)
+	ingestionService.SetIndexingBudget(cfg.Embedding.TPMBudget, cfg.Embedding.CharsPerToken)
+	ingestionService.SetMetrics(recorder)
 	ingestionService.SetQuotaResolver(quotaResolver)
 	knowledgeBaseService.SetUploadAborter(ingestionService)
 	ingestionService.SetUploadSupport(ingestion.UploadSupport{
