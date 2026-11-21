@@ -971,7 +971,7 @@ func (w *PipelineWorker) mimeForFilename(value string) string {
 // the bytes are what they are, so another attempt only burns the attempt budget.
 func terminalParserCode(code string) bool {
 	switch code {
-	case "unsupported_scanned_pdf", "unsupported_legacy_office", "unsupported_corrupt_document", "document_too_complex":
+	case "unsupported_scanned_pdf", "unsupported_legacy_office", "unsupported_corrupt_document", "document_too_complex", "file_too_large":
 		return true
 	default:
 		return false

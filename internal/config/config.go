@@ -277,7 +277,7 @@ func LoadFrom(lookup Lookup) Config {
 		S3SecretKey:                    value(lookup, "S3_SECRET_KEY", value(lookup, "MINIO_ROOT_PASSWORD", "change-me-local-only")),
 		S3UseTLS:                       reader.boolean("S3_USE_TLS", false),
 		S3ForcePathStyle:               reader.boolean("S3_FORCE_PATH_STYLE", false),
-		MaxFileBytes:                   reader.positive("DOCREADER_MAX_FILE_MB", 100) * 1024 * 1024,
+		MaxFileBytes:                   reader.positive("DOCREADER_MAX_FILE_MB", 150) * 1024 * 1024,
 		StreamChunkBytes:               reader.positive("DOCREADER_STREAM_CHUNK_KB", 2048) * 1024,
 		ParseTimeoutSeconds:            int(reader.positive("DOCREADER_PARSE_TIMEOUT_SECONDS", 300)),
 		EmbeddingChunkWarningThreshold: int(reader.nonNegative("EMBEDDING_CHUNK_WARNING_THRESHOLD", 5000)),

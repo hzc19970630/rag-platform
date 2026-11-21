@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- 大文件上传与解析上限统一：`DOCREADER_MAX_FILE_MB`（默认 150MB）现在同时约束 API 上传、worker 尺寸声明与 docreader 接收/解析；此前 compose 插值默认 100MB，导致 120MB 文件上传约 100MB 后被 parser 拒绝。docreader 仍只接收 `DOCREADER_*` 白名单变量（不加载包含模型/数据库凭据的完整 `.env`），启动栈需带 `--env-file .env`。docreader 启动时校验 `DOCREADER_SPOOL_MB ≥ DOCREADER_MAX_FILE_MB × DOCREADER_SPOOL_CONCURRENCY`，不满足直接启动失败；`/healthz` 暴露 `max_file_mb`/`spool_mb`/`spool_concurrency`。bidi `ParseDocumentBlocks` 在上传中途被拒时会读取服务端摘要并透传 `file_too_large` 等错误码，不再显示裸 EOF；`file_too_large` 归为终态失败并在文档页显示可操作提示。
 - B30/B34 风险收口：CSV 改为逐行增量解析（不再整文件读入内存）；docreader 启动校验 spool 可写并在 `/healthz` 暴露 `spool_ok`；unary 恢复 128MiB 消息上限，流式帧保持 2MiB；并发解析等待 spool 槽位而不是立即拒绝；表格截断在文档页显示警告。新增 embedding chunk 预警/硬上限（`EMBEDDING_CHUNK_WARNING_THRESHOLD`、`EMBEDDING_MAX_CHUNKS_PER_DOCUMENT`）、`UPLOAD_SESSION_RETENTION_DAYS` 会话回收、`scripts/reparse_kb.sh` 批量重解析工具，以及 parse/truncated/rows/spool/embedding 指标。worker 改用 bidi `ParseDocumentBlocks`，blocks 按 `DOCREADER_BLOCK_BATCH`（默认 200）分批返回，解除大表格单条 gRPC 响应上限。
 - 图谱快照审核通过时补写 `activated_at`，并在审核响应中返回；此前 ACTIVE 快照的激活时间为空。
 - 图谱快照写库改为分批（实体/别名/关系/来源各 500 行/批），避免大知识库触发 PostgreSQL `extended protocol limited to 65535 parameters`，100 文档 / 10k chunk 的合成库可正常产出快照。

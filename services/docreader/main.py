@@ -44,11 +44,11 @@ NS_OFFICE_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relations
 NS_PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 MIB = 1024 * 1024
-MAX_FILE_BYTES = _env_int("DOCREADER_MAX_FILE_MB", 100) * MIB
+MAX_FILE_BYTES = _env_int("DOCREADER_MAX_FILE_MB", 150) * MIB
 MAX_ARCHIVE_ENTRIES = _env_int("DOCREADER_MAX_ARCHIVE_ENTRIES", 2048)
 MAX_PART_BYTES = _env_int("DOCREADER_MAX_PART_BYTES", 64 * MIB)
 MAX_ARCHIVE_BYTES = _env_int("DOCREADER_MAX_ARCHIVE_BYTES", 2048 * MIB)
-MAX_READ_BYTES = _env_int("DOCREADER_MAX_READ_BYTES", 1024 * MIB)
+MAX_READ_BYTES = _env_int("DOCREADER_MAX_READ_BYTES", 2048 * MIB)
 MAX_COMPRESSION_RATIO = _env_int("DOCREADER_MAX_COMPRESSION_RATIO", 1000)
 MAX_XML_DEPTH = 64
 MAX_TOTAL_BLOCKS = _env_int("DOCREADER_MAX_TABLE_BLOCKS", 5000)
@@ -90,12 +90,33 @@ def _select_spool_dir():
 
 SPOOL_DIR, SPOOL_READY = _select_spool_dir()
 SPOOL_MAX_BYTES = _env_int("DOCREADER_SPOOL_MB", 384) * MIB
-SPOOL_SEMAPHORE = threading.BoundedSemaphore(_env_int("DOCREADER_SPOOL_CONCURRENCY", 2))
+SPOOL_CONCURRENCY = _env_int("DOCREADER_SPOOL_CONCURRENCY", 2)
+SPOOL_SEMAPHORE = threading.BoundedSemaphore(SPOOL_CONCURRENCY)
 SPOOL_WAIT_SECONDS = _env_int("DOCREADER_SPOOL_WAIT_SECONDS", 60)
 DOCREADER_BLOCK_BATCH = _env_int("DOCREADER_BLOCK_BATCH", 200)
 _SPOOL_LOCK = threading.Lock()
 _SPOOL_USED = 0
 _STATS = threading.local()
+
+
+def _spool_capacity_bytes():
+    try:
+        info = os.statvfs(SPOOL_DIR)
+        return info.f_blocks * info.f_frsize
+    except OSError:
+        return SPOOL_MAX_BYTES
+
+
+def _validate_spool_budget():
+    required = MAX_FILE_BYTES * SPOOL_CONCURRENCY
+    capacity = min(SPOOL_MAX_BYTES, _spool_capacity_bytes())
+    if capacity < required:
+        raise SystemExit(
+            "docreader spool budget too small: %d MiB available, %d MiB required "
+            "(DOCREADER_MAX_FILE_MB=%d x DOCREADER_SPOOL_CONCURRENCY=%d); "
+            "raise DOCREADER_SPOOL_MB or lower DOCREADER_MAX_FILE_MB"
+            % (capacity // MIB, required // MIB, MAX_FILE_BYTES // MIB, SPOOL_CONCURRENCY)
+        )
 
 
 def _stats_reset():
@@ -1236,9 +1257,12 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
 class HealthHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/healthz", "/readyz"):
-            payload = b'{"status":"ok","mode":"m2-grpc","ocr":false,"spool_ok":%s,"spool_dir":"%s"}' % (
-            b"true" if SPOOL_READY else b"false", SPOOL_DIR.encode("utf-8", "replace"),
-        )
+            payload = ('{"status":"ok","mode":"m2-grpc","ocr":false,"spool_ok":%s,"spool_dir":"%s",'
+                       '"max_file_mb":%d,"spool_mb":%d,"spool_concurrency":%d}') % (
+                "true" if SPOOL_READY else "false", SPOOL_DIR,
+                MAX_FILE_BYTES // MIB, min(SPOOL_MAX_BYTES, _spool_capacity_bytes()) // MIB, SPOOL_CONCURRENCY,
+            )
+            payload = payload.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
@@ -1253,6 +1277,7 @@ class HealthHandler(http.server.BaseHTTPRequestHandler):
 
 
 def serve():
+    _validate_spool_budget()
     grpc_port = int(os.getenv("DOCREADER_GRPC_PORT", "50051"))
     health_port = int(os.getenv("DOCREADER_HEALTH_PORT", "8080"))
     server = grpc.server(

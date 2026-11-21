@@ -438,7 +438,8 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 ### 10.2 大表格与流式解析（B34）
 
 - `PARSER_VERSION=docreader-m2-v3`。worker 通过 client-streaming `ParseDocumentStream` 分帧（`DOCREADER_STREAM_CHUNK_KB`，默认 2MiB）发送源文件，docreader 写入只读容器内 `/spool` tmpfs（`DOCREADER_SPOOL_MB` 默认 384MiB，`DOCREADER_SPOOL_CONCURRENCY` 默认 2）；spool 计入 docreader 2GiB 内存限制，请求结束/取消后立即删除。
-- 表格预算：`DOCREADER_MAX_ARCHIVE_BYTES`（默认 2GiB）、`DOCREADER_MAX_PART_BYTES`（64MiB）、`DOCREADER_MAX_READ_BYTES`（1GiB）、`DOCREADER_MAX_TABLE_ROWS_PER_SHEET`（5 万）、`DOCREADER_MAX_TABLE_ROWS`（50 万）、`DOCREADER_TABLE_WINDOW_ROWS`（200）、`DOCREADER_MAX_TABLE_BLOCKS`（5000）。条目数/压缩比/单部件仍为硬拒绝；行/表/块超预算为软截断并写 `[truncated]`。
+- 单文件上限 `DOCREADER_MAX_FILE_MB`（默认 150MB）是 API 上传校验、worker 尺寸声明与 docreader 接收/解析共用的唯一值。api/worker 通过 `env_file` 读取根 `.env`；docreader 是解析不可信文档的沙箱，只接收 `DOCREADER_*` 白名单变量，由 Compose 插值读取该值，因此启动栈时需带 `--env-file .env`（`scripts/*.sh` 与 quickstart 均已如此）。docreader 会额外做启动校验，要求 `DOCREADER_SPOOL_MB ≥ DOCREADER_MAX_FILE_MB × DOCREADER_SPOOL_CONCURRENCY`（默认 150×2=300MiB，384MiB 留有余量），不满足时直接启动失败而不是在上传中途报错。`/healthz` 同时返回 `max_file_mb`、`spool_mb`、`spool_concurrency` 便于核对。
+- 表格预算：`DOCREADER_MAX_ARCHIVE_BYTES`（默认 2GiB）、`DOCREADER_MAX_PART_BYTES`（64MiB）、`DOCREADER_MAX_READ_BYTES`（2GiB）、`DOCREADER_MAX_TABLE_ROWS_PER_SHEET`（5 万）、`DOCREADER_MAX_TABLE_ROWS`（50 万）、`DOCREADER_TABLE_WINDOW_ROWS`（200）、`DOCREADER_MAX_TABLE_BLOCKS`（5000）。条目数/压缩比/单部件仍为硬拒绝；行/表/块超预算为软截断并写 `[truncated]`。
 - xlsx 使用 `iterparse` 逐行解析；CSV 支持 UTF-8/GB18030 与分隔符嗅探。表格 block `kind=table` 的文本为“首行表头 + `a | b | c` 行”，单元格内管道与换行会被转义/压平；入库切块时每个 chunk 重复表头并保留 sheet/行范围。
 - 解析预算独立于入库任务：`DOCREADER_PARSE_TIMEOUT_SECONDS`（默认 300s）。升级 parser 版本后，旧文档需通过 reparse/重建获得表格行为。
 - 可观察：docreader 每次成功解析输出 `parse_complete` 日志（blocks、truncated、total/indexed rows/sheets、elapsed_ms），worker 输出 `document_parsed` 日志；解析统计同时通过 `GET /documents/:id/content` 暴露给文档页。

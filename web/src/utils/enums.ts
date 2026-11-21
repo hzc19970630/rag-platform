@@ -234,6 +234,7 @@ const DOCUMENT_FAILURE_KEYS: Record<string, string> = {
   unsupported_legacy_office: "document.failures.legacyOffice",
   unsupported_corrupt_document: "document.failures.corrupt",
   document_too_complex: "document.failures.tooComplex",
+  file_too_large: "document.failures.tooLarge",
   unsupported_mime_type: "document.failures.unsupportedMime",
   empty_document: "document.failures.empty",
   parser_error: "document.failures.parser",

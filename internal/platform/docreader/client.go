@@ -2,6 +2,7 @@ package docreader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -155,6 +156,16 @@ func (c *Client) ParseBlocksStream(ctx context.Context, source ports.SourceObjec
 				return ports.ParseResult{}, fmt.Errorf("docreader block stream exceeds declared size")
 			}
 			if err := stream.Send(&docreaderv1.ParseDocumentChunk{Content: buffer[:read]}); err != nil {
+				// A server that rejects the upload early closes the receive
+				// side before yielding its summary. Drain the events so the
+				// caller sees the parser error code instead of a bare EOF.
+				result, drainErr := drainBlockStream(stream)
+				if drainErr == nil {
+					return result, nil
+				}
+				if !errors.Is(drainErr, io.EOF) {
+					return ports.ParseResult{}, fmt.Errorf("docreader block stream response: %w", drainErr)
+				}
 				return ports.ParseResult{}, fmt.Errorf("docreader block stream content: %w", err)
 			}
 			sent += int64(read)
@@ -188,6 +199,39 @@ func (c *Client) ParseBlocksStream(ctx context.Context, source ports.SourceObjec
 	}
 	if summary == nil {
 		return ports.ParseResult{}, fmt.Errorf("docreader block stream returned no summary")
+	}
+	result := resultFromResponse(summary)
+	result.Blocks = append(blocks, result.Blocks...)
+	return result, nil
+}
+
+// drainBlockStream collects events after the upload side closes early. The
+// summary carries the parser error code; io.EOF means the server closed
+// without one.
+func drainBlockStream(stream docreaderv1.DocumentReader_ParseDocumentBlocksClient) (ports.ParseResult, error) {
+	_ = stream.CloseSend()
+	blocks := make([]ports.DocumentBlock, 0, 64)
+	var summary *docreaderv1.ParseDocumentResponse
+	for {
+		event, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			if summary == nil {
+				return ports.ParseResult{}, err
+			}
+			break
+		}
+		for _, item := range event.Blocks {
+			blocks = append(blocks, blockFromProto(item))
+		}
+		if event.Summary != nil {
+			summary = event.Summary
+		}
+	}
+	if summary == nil {
+		return ports.ParseResult{}, io.EOF
 	}
 	result := resultFromResponse(summary)
 	result.Blocks = append(blocks, result.Blocks...)

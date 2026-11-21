@@ -35,7 +35,7 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	if !cfg.ParserSandbox {
 		t.Fatalf("ParserSandbox should default to true")
 	}
-	if cfg.MaxFileBytes != 100*1024*1024 {
+	if cfg.MaxFileBytes != 150*1024*1024 {
 		t.Fatalf("MaxFileBytes default: %d", cfg.MaxFileBytes)
 	}
 	if cfg.TaskTimeoutSeconds != 120 {

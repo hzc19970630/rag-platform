@@ -26,7 +26,7 @@ func TestMimeForFilename(t *testing.T) {
 }
 
 func TestTerminalParserCode(t *testing.T) {
-	for _, code := range []string{"unsupported_scanned_pdf", "unsupported_legacy_office", "unsupported_corrupt_document", "document_too_complex"} {
+	for _, code := range []string{"unsupported_scanned_pdf", "unsupported_legacy_office", "unsupported_corrupt_document", "document_too_complex", "file_too_large"} {
 		if !terminalParserCode(code) {
 			t.Fatalf("expected %q to be terminal", code)
 		}

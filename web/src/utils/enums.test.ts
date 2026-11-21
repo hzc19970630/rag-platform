@@ -141,6 +141,7 @@ describe("enum label helpers", () => {
       }
       expect(answerFailureText(t, "unknown_code")).toBe(t("chat.failures.generic"));
       expect(documentFailureText(t, "unsupported_scanned_pdf")).toBe(t("document.failures.scannedPdf"));
+      expect(documentFailureText(t, "file_too_large")).toBe(t("document.failures.tooLarge"));
       expect(documentFailureText(t, "unknown_code")).toBe(t("document.failures.generic"));
     }
   });
