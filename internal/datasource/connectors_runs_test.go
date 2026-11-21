@@ -33,6 +33,7 @@ func newDSFixture(t *testing.T) (*Service, *gorm.DB) {
 		&models.AuthorizationRevision{}, &models.AuditLog{},
 		&models.Document{}, &models.DocumentVersion{}, &models.PipelineRun{}, &models.StageRun{},
 		&models.TaskInbox{}, &models.TaskDeadLetter{}, &models.Chunk{}, &models.EvidencePackage{},
+		&models.KnowledgeProjectionState{}, &models.ProjectionChange{},
 	); err != nil {
 		t.Fatalf("migrate datasource tables: %v", err)
 	}

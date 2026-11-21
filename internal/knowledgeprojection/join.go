@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
@@ -105,6 +106,11 @@ func (s *Service) evaluateJoin(ctx context.Context, knowledgeBase models.Knowled
 	if err != nil {
 		return joinEvaluation{}, err
 	}
+	if state.InvalidatedAt != nil {
+		// A delete or ACL change is not projected yet: no derived content may be
+		// served until the rebuild catches up.
+		return joinEvaluation{status: JoinKnowledgePartial, wikiReady: false, relationReady: false}, nil
+	}
 	evaluation := joinEvaluation{wikiReady: true, relationReady: true}
 	var latestWiki, latestRelation *models.ProjectionRun
 	if strategy.WikiEnabled {
@@ -157,8 +163,12 @@ func (s *Service) ensureProjectionState(ctx context.Context, knowledgeBase model
 	if err != nil {
 		return models.KnowledgeProjectionState{}, err
 	}
-	if !found || state.ACLVersion != knowledgeBase.ACLVersion {
+	previousACL := state.ACLVersion
+	if !found {
 		state = models.KnowledgeProjectionState{TenantID: knowledgeBase.TenantID, KnowledgeBaseID: knowledgeBase.ID}
+	} else if previousACL != knowledgeBase.ACLVersion {
+		state.WikiExpectedHash = ""
+		state.RelationExpectedHash = ""
 	}
 	state.ACLVersion = knowledgeBase.ACLVersion
 	if len(packages) > 0 {
@@ -172,7 +182,13 @@ func (s *Service) ensureProjectionState(ctx context.Context, knowledgeBase model
 		}
 	}
 	state.UpdatedAt = time.Now()
-	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&state).Error; err != nil {
+	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "tenant_id"}, {Name: "knowledge_base_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"acl_version", "wiki_expected_hash", "wiki_prompt_version", "wiki_model",
+			"relation_expected_hash", "relation_prompt_version", "relation_model", "updated_at",
+		}),
+	}).Create(&state).Error; err != nil {
 		return models.KnowledgeProjectionState{}, err
 	}
 	return state, nil
@@ -261,11 +277,24 @@ func (s *Service) upsertRelationExpectedHash(ctx context.Context, knowledgeBase 
 }
 
 // InvalidateProjectionState drops the cached hashes so the next gated query
-// recomputes them. Pipeline A calls it before triggering projections, which
-// keeps a failed trigger from leaving a trusted stale row.
+// recomputes them. Epoch counters and invalidation flags survive; only the
+// source hashes are cleared.
 func (s *Service) InvalidateProjectionState(ctx context.Context, tenantID, knowledgeBaseID string) error {
-	return s.db.WithContext(ctx).Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, knowledgeBaseID).
-		Delete(&models.KnowledgeProjectionState{}).Error
+	now := time.Now()
+	return tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&models.KnowledgeProjectionState{
+			TenantID: tenantID, KnowledgeBaseID: knowledgeBaseID, UpdatedAt: now,
+		}).Error; err != nil {
+			return err
+		}
+		return tenantdb.MustScoped(tx, tenantID).Model(&models.KnowledgeProjectionState{}).
+			Where("knowledge_base_id = ?", knowledgeBaseID).
+			Updates(map[string]any{
+				"wiki_expected_hash": "", "wiki_prompt_version": "", "wiki_model": "",
+				"relation_expected_hash": "", "relation_prompt_version": "", "relation_model": "",
+				"updated_at": now,
+			}).Error
+	})
 }
 
 func (s *Service) latestRun(ctx context.Context, tenantID, knowledgeBaseID, projectionType string) (*models.ProjectionRun, error) {

@@ -28,6 +28,7 @@ type GraphSnapshot struct {
 	Status          string     `gorm:"size:24;not null" json:"status"`
 	SourceHash      string     `gorm:"size:64;not null;default:''" json:"sourceHash"`
 	ACLVersion      int64      `gorm:"not null" json:"aclVersion"`
+	TargetEpoch     int64      `gorm:"not null;default:0" json:"targetEpoch"`
 	Model           string     `gorm:"size:128;not null;default:''" json:"model"`
 	PromptVersion   string     `gorm:"size:128;not null;default:''" json:"promptVersion"`
 	Stats           string     `gorm:"type:jsonb;not null;default:'{}'" json:"stats"`

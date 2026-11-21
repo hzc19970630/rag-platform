@@ -57,25 +57,31 @@ type Options struct {
 	Cache projectioncache.Cache
 	// Metrics records cache hit/miss package counts.
 	Metrics metrics.Recorder
+	// BatchQuiet delays a batch run until evidence writes settle; BatchMaxWait
+	// forces one when writes never stop. Zero uses 60s/30m defaults.
+	BatchQuiet   time.Duration
+	BatchMaxWait time.Duration
 }
 
 type Service struct {
-	db          *gorm.DB
-	authz       Authorizer
-	embedder    ingestion.Embedder
-	resolver    embedding.Resolver
-	generator   *Generator
-	relation    *Extractor
-	publisher   Publisher
-	timeout     time.Duration
-	unitTimeout time.Duration
-	unitChunks  int
-	store       relationstore.RelationStore
-	evidence    evidence.Reader
-	cache       projectioncache.Cache
-	metrics     metrics.Recorder
-	leaseOwner  inboxlease.Owner
-	leaseTTL    time.Duration
+	db           *gorm.DB
+	authz        Authorizer
+	embedder     ingestion.Embedder
+	resolver     embedding.Resolver
+	generator    *Generator
+	relation     *Extractor
+	publisher    Publisher
+	timeout      time.Duration
+	unitTimeout  time.Duration
+	unitChunks   int
+	store        relationstore.RelationStore
+	evidence     evidence.Reader
+	cache        projectioncache.Cache
+	metrics      metrics.Recorder
+	leaseOwner   inboxlease.Owner
+	leaseTTL     time.Duration
+	batchQuiet   time.Duration
+	batchMaxWait time.Duration
 }
 
 func (s *Service) runtime() *pipeline.Runtime {
@@ -111,6 +117,14 @@ func NewService(options Options) *Service {
 	if unitTimeout <= 0 {
 		unitTimeout = options.Timeout
 	}
+	batchQuiet := options.BatchQuiet
+	if batchQuiet <= 0 {
+		batchQuiet = 60 * time.Second
+	}
+	batchMaxWait := options.BatchMaxWait
+	if batchMaxWait <= 0 {
+		batchMaxWait = 30 * time.Minute
+	}
 	return &Service{
 		db: options.DB, authz: options.Authz, embedder: options.Embedder, resolver: options.Resolver,
 		generator: options.Generator, relation: options.Extractor,
@@ -118,6 +132,7 @@ func NewService(options Options) *Service {
 		unitTimeout: unitTimeout, unitChunks: unitChunks,
 		store:    options.Store,
 		evidence: reader, cache: options.Cache, metrics: recorder,
+		batchQuiet: batchQuiet, batchMaxWait: batchMaxWait,
 	}
 }
 

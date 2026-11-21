@@ -687,6 +687,10 @@ const zhCN = {
   projection: {
     title: "知识整理状态",
     joinStatus: "整体状态",
+    invalidated: "投影已失效",
+    invalidatedHint: "有删除或权限变更尚未同步到知识页/图谱；重建完成前这些内容不可用。",
+    pendingChanges: "{{count}} 项变更待同步",
+    pendingChangesHint: "将按批次静默窗口同步；当前读取的是上一完整版本（目标 epoch {{target}}，已应用 {{applied}}）。",
     wiki: "知识页",
     graph: "关系图谱",
     pages: "知识页总数",
@@ -1750,6 +1754,10 @@ const enUS = {
   projection: {
     title: "Knowledge organization state",
     joinStatus: "Overall state",
+    invalidated: "Projection invalidated",
+    invalidatedHint: "A delete or permission change is not projected yet; knowledge pages and graph stay unavailable until the rebuild completes.",
+    pendingChanges: "{{count}} change(s) pending",
+    pendingChangesHint: "Changes sync after the batch quiet window; this view is the last complete version (target epoch {{target}}, applied {{applied}}).",
     wiki: "Knowledge pages",
     graph: "Relation graph",
     pages: "Knowledge pages",

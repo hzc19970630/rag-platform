@@ -6,8 +6,8 @@ import (
 )
 
 func TestTenantTableCatalog(t *testing.T) {
-	if len(TenantTables) != 39 {
-		t.Fatalf("expected 39 tenant tables, got %d; update the RLS migration and this test together", len(TenantTables))
+	if len(TenantTables) != 42 {
+		t.Fatalf("expected 42 tenant tables, got %d; update the RLS migration and this test together", len(TenantTables))
 	}
 	if len(tenantChildTables) != 4 {
 		t.Fatalf("expected 4 child tables, got %d", len(tenantChildTables))

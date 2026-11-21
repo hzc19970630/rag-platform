@@ -1038,6 +1038,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge-bases/{id}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/uploads */
+        post: operations["post_knowledge_bases_id_uploads"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback */
+        post: operations["post_knowledge_bases_id_wiki_generations_generationId_rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge-bases/{id}/wiki/pages": {
         parameters: {
             query?: never;
@@ -1628,6 +1662,75 @@ export interface paths {
         patch: operations["patch_tenant_quota"];
         trace?: never;
     };
+    "/api/v1/uploads/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /api/v1/uploads/{id} */
+        get: operations["get_uploads_id"];
+        put?: never;
+        post?: never;
+        /** DELETE /api/v1/uploads/{id} */
+        delete: operations["delete_uploads_id"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/uploads/{id}/complete */
+        post: operations["post_uploads_id_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/{id}/parts/{part}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** PUT /api/v1/uploads/{id}/parts/{part} */
+        put: operations["put_uploads_id_parts_part"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/uploads/{id}/urls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/uploads/{id}/urls */
+        post: operations["post_uploads_id_urls"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wiki/pages/{pageId}": {
         parameters: {
             query?: never;
@@ -2160,6 +2263,9 @@ export interface components {
             blocks?: components["schemas"]["PreviewBlock"][];
             documentId?: string;
             filename?: string;
+            /** Format: int64 */
+            indexedRows?: number;
+            indexedSheets?: number;
             knowledgeBaseId?: string;
             language?: string;
             mimeType?: string;
@@ -2167,6 +2273,10 @@ export interface components {
             schemaVersion?: string;
             status?: string;
             title?: string;
+            /** Format: int64 */
+            totalRows?: number;
+            totalSheets?: number;
+            truncated?: boolean;
             versionId?: string;
             visibility?: string;
         };
@@ -2442,6 +2552,8 @@ export interface components {
             sourceHash?: string;
             stats?: string;
             status?: string;
+            /** Format: int64 */
+            targetEpoch?: number;
             tenantId?: string;
             /** Format: date-time */
             updatedAt?: string;
@@ -2770,6 +2882,8 @@ export interface components {
         ProjectionRun: {
             /** Format: int64 */
             aclVersion?: number;
+            /** Format: int64 */
+            baseEpoch?: number;
             /** Format: date-time */
             completedAt?: string;
             /** Format: date-time */
@@ -2785,6 +2899,8 @@ export interface components {
             retryOfRunId?: string;
             sourceHash?: string;
             status?: string;
+            /** Format: int64 */
+            targetEpoch?: number;
             tenantId?: string;
             unitFailed?: number;
             unitSucceeded?: number;
@@ -2813,13 +2929,23 @@ export interface components {
             updatedAt?: string;
         };
         ProjectionState: {
+            activeWikiGeneration?: string;
             graph?: components["schemas"]["GraphCounts"];
             graphEnabled?: boolean;
+            invalidated?: boolean;
             joinStatus?: string;
             knowledgeBaseId?: string;
             pages?: components["schemas"]["PageCounts"];
+            /** Format: int64 */
+            pendingChanges?: number;
+            /** Format: int64 */
+            relationAppliedEpoch?: number;
             relationRuns?: components["schemas"]["ProjectionRun"][];
             runs?: components["schemas"]["ProjectionRun"][];
+            /** Format: int64 */
+            targetEpoch?: number;
+            /** Format: int64 */
+            wikiAppliedEpoch?: number;
             wikiEnabled?: boolean;
         };
         QueryPlan: {
@@ -3199,6 +3325,43 @@ export interface components {
             /** Format: int64 */
             maxStorageBytes?: number;
         };
+        UploadPartView: {
+            number?: number;
+            /** Format: int64 */
+            sizeBytes?: number;
+            uploaded?: boolean;
+            url?: string;
+        };
+        UploadSessionCreateRequest: {
+            documentId?: string;
+            filename: string;
+            folderId?: string;
+            mimeType?: string;
+            /** Format: int64 */
+            sizeBytes: number;
+        };
+        UploadSessionView: {
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            documentId?: string;
+            errorCode?: string;
+            errorMessage?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            filename?: string;
+            id?: string;
+            knowledgeBaseId?: string;
+            partCount?: number;
+            /** Format: int64 */
+            partSize?: number;
+            parts?: components["schemas"]["UploadPartView"][];
+            /** Format: int64 */
+            sizeBytes?: number;
+            status?: string;
+            transport?: string;
+        };
         User: {
             /** Format: date-time */
             createdAt?: string;
@@ -3212,6 +3375,11 @@ export interface components {
             content?: string;
             headingPath?: string;
             sourceChunkIds?: string[];
+        };
+        WikiGenerationRollbackResult: {
+            generationId?: string;
+            generationNo?: number;
+            status?: string;
         };
         WikiPage: {
             /** Format: int64 */
@@ -5284,6 +5452,63 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    post_knowledge_bases_id_uploads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadSessionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadSessionView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_wiki_generations_generationId_rollback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                generationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiGenerationRollbackResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     get_knowledge_bases_id_wiki_pages: {
         parameters: {
             query?: never;
@@ -6469,6 +6694,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantQuota"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    get_uploads_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadSessionView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    delete_uploads_id: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    post_uploads_id_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    put_uploads_id_parts_part: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                part: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": unknown;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadSessionView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_uploads_id_urls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadSessionView"];
                 };
             };
             400: components["responses"]["BadRequest"];

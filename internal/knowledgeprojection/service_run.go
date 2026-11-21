@@ -14,6 +14,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/pipeline"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/projectionintent"
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
@@ -252,10 +253,20 @@ func (s *Service) insertRun(ctx context.Context, tx *gorm.DB, knowledgeBase mode
 
 func (s *Service) insertRunFor(ctx context.Context, tx *gorm.DB, knowledgeBase models.KnowledgeBase, projectionType, evidencePackageID, sourceHash string, now time.Time) error {
 	runID := stableID("prj", knowledgeBase.ID, projectionType, evidencePackageID, sourceHash, fmt.Sprint(now.UnixNano()))
+	var state models.KnowledgeProjectionState
+	if err := tenantdb.MustScoped(tx, knowledgeBase.TenantID).
+		Where("knowledge_base_id = ?", knowledgeBase.ID).First(&state).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	baseEpoch := state.WikiAppliedEpoch
+	if projectionType == ProjectionTypeRelation {
+		baseEpoch = state.RelationAppliedEpoch
+	}
 	run := models.ProjectionRun{
 		ID: runID, TenantID: knowledgeBase.TenantID, KnowledgeBaseID: knowledgeBase.ID,
 		EvidencePackageID: evidencePackageID, ProjectionType: projectionType,
 		Status: ProjectionPending, SourceHash: sourceHash, ACLVersion: knowledgeBase.ACLVersion,
+		BaseEpoch: baseEpoch, TargetEpoch: state.TargetEpoch,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if projectionType == ProjectionTypeRelation {
@@ -341,11 +352,19 @@ func (s *Service) resetRunForRetry(ctx context.Context, run *models.ProjectionRu
 	})
 }
 
-// InvalidateKnowledgeBase is called on ACL/version changes. Removing the
-// Knowledge Index rows makes the derived page disappear immediately, before a
-// rebuild has run.
+// InvalidateKnowledgeBase is called on ACL and configuration changes. It
+// records an ACL change, cancels active runs and hides every derived page and
+// snapshot immediately. Epoch counters are preserved; only the cached hashes
+// are cleared so the rebuild recomputes them.
 func (s *Service) InvalidateKnowledgeBase(ctx context.Context, tenantID, knowledgeBaseID, reason string) error {
 	now := time.Now()
+	var knowledgeBase models.KnowledgeBase
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), tenantID).First(&knowledgeBase, "id = ?", knowledgeBaseID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return fmt.Errorf("load knowledge base for invalidation: %w", err)
+	}
 	// Graph invalidation runs before the wiki transaction: if it fails, the
 	// caller still sees an error and no derived state is left queryable under
 	// the old ACL. The two stores cannot share a transaction.
@@ -354,8 +373,19 @@ func (s *Service) InvalidateKnowledgeBase(ctx context.Context, tenantID, knowled
 			return fmt.Errorf("invalidate graph snapshots: %w", err)
 		}
 	}
+	message := strings.TrimSpace(reason)
+	if message == "" {
+		message = "knowledge_base_changed"
+	}
+	key := fmt.Sprintf("acl:%s:%d", message, knowledgeBase.ACLVersion)
 	return tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
-		if err := tx.Model(&models.WikiPage{}).
+		if _, err := projectionintent.RecordTx(tx, projectionintent.Input{
+			TenantID: tenantID, KnowledgeBaseID: knowledgeBaseID, Kind: projectionintent.KindACL,
+			IdempotencyKey: key,
+		}); err != nil {
+			return err
+		}
+		if err := tenantdb.MustScoped(tx, tenantID).Model(&models.WikiPage{}).
 			Where("tenant_id = ? AND knowledge_base_id = ? AND status <> ? AND status <> ?", tenantID, knowledgeBaseID, PageArchived, PageStale).
 			Updates(map[string]any{"status": PageStale, "updated_at": now}).Error; err != nil {
 			return err
@@ -363,12 +393,14 @@ func (s *Service) InvalidateKnowledgeBase(ctx context.Context, tenantID, knowled
 		if err := tx.Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, knowledgeBaseID).Delete(&models.KnowledgeIndexRecord{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("tenant_id = ? AND knowledge_base_id = ?", tenantID, knowledgeBaseID).Delete(&models.KnowledgeProjectionState{}).Error; err != nil {
+		if err := tenantdb.MustScoped(tx, tenantID).Model(&models.KnowledgeProjectionState{}).
+			Where("knowledge_base_id = ?", knowledgeBaseID).
+			Updates(map[string]any{
+				"acl_version": knowledgeBase.ACLVersion, "wiki_expected_hash": "", "relation_expected_hash": "",
+				"wiki_prompt_version": "", "wiki_model": "", "relation_prompt_version": "", "relation_model": "",
+				"updated_at": now,
+			}).Error; err != nil {
 			return err
-		}
-		message := strings.TrimSpace(reason)
-		if message == "" {
-			message = "knowledge_base_changed"
 		}
 		return tx.Model(&models.ProjectionRun{}).
 			Where("tenant_id = ? AND knowledge_base_id = ? AND status IN ?", tenantID, knowledgeBaseID,
@@ -417,7 +449,7 @@ func (s *Service) ScheduleMissing(ctx context.Context, limit int, cursor string)
 			continue
 		}
 		if strategy.WikiEnabled {
-			created, err := s.scheduleProjection(ctx, knowledgeBase, packages, ProjectionTypeWiki, s.generator.PromptVersion(), s.generator.Model())
+			created, err := s.scheduleProjection(ctx, knowledgeBase, packages, ProjectionTypeWiki, s.generator.PromptVersion(), s.generator.Model(), false)
 			if err != nil {
 				return started, position, err
 			}
@@ -426,7 +458,7 @@ func (s *Service) ScheduleMissing(ctx context.Context, limit int, cursor string)
 			}
 		}
 		if strategy.GraphEnabled && s.relation != nil {
-			created, err := s.scheduleProjection(ctx, knowledgeBase, packages, ProjectionTypeRelation, s.relation.PromptVersion(), s.relation.Model())
+			created, err := s.scheduleProjection(ctx, knowledgeBase, packages, ProjectionTypeRelation, s.relation.PromptVersion(), s.relation.Model(), false)
 			if err != nil {
 				return started, position, err
 			}
@@ -465,7 +497,20 @@ func decodeProjectionCursor(raw string) (projectionCursor, error) {
 	return projectionCursor{UpdatedAt: time.Unix(0, nanos).UTC(), ID: raw[separator+1:]}, nil
 }
 
-func (s *Service) scheduleProjection(ctx context.Context, knowledgeBase models.KnowledgeBase, packages []ingestion.EvidencePackage, projectionType, promptVersion, model string) (bool, error) {
+func (s *Service) scheduleProjection(ctx context.Context, knowledgeBase models.KnowledgeBase, packages []ingestion.EvidencePackage, projectionType, promptVersion, model string, batch bool) (bool, error) {
+	var state models.KnowledgeProjectionState
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), knowledgeBase.TenantID).
+		Where("knowledge_base_id = ?", knowledgeBase.ID).First(&state).Error; err == nil {
+		applied := state.WikiAppliedEpoch
+		if projectionType == ProjectionTypeRelation {
+			applied = state.RelationAppliedEpoch
+		}
+		if !batch && state.TargetEpoch > applied {
+			// The batch scheduler owns pending epochs; the hash sweep must not
+			// race it and create one run per tick.
+			return false, nil
+		}
+	}
 	sourceHash, err := packagesSourceHash(packages, knowledgeBase.ACLVersion, promptVersion, model)
 	if err != nil {
 		return false, nil
@@ -537,11 +582,27 @@ func (s *Service) Status(ctx context.Context, principal authz.Principal, knowled
 	if err != nil {
 		return ProjectionStatus{}, err
 	}
-	return ProjectionStatus{
+	state, err := s.ensureProjectionState(ctx, knowledgeBase, strategy)
+	if err != nil {
+		return ProjectionStatus{}, err
+	}
+	var pendingChanges int64
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.ProjectionChange{}).
+		Where("knowledge_base_id = ? AND applied_at IS NULL", knowledgeBaseID).Count(&pendingChanges).Error; err != nil {
+		return ProjectionStatus{}, err
+	}
+	status := ProjectionStatus{
 		KnowledgeBaseID: knowledgeBaseID, JoinStatus: joinStatus,
 		WikiEnabled: strategy.WikiEnabled, GraphEnabled: strategy.GraphEnabled,
 		Runs: runs, RelationRuns: relationRuns, Pages: counts, Graph: graph,
-	}, nil
+		TargetEpoch: state.TargetEpoch, WikiAppliedEpoch: state.WikiAppliedEpoch,
+		RelationAppliedEpoch: state.RelationAppliedEpoch, PendingChanges: pendingChanges,
+		Invalidated: state.InvalidatedAt != nil,
+	}
+	if state.ActiveWikiGenerationID != nil {
+		status.ActiveWikiGeneration = *state.ActiveWikiGenerationID
+	}
+	return status, nil
 }
 
 func (s *Service) ListRuns(ctx context.Context, principal authz.Principal, knowledgeBaseID string, limit int) ([]models.ProjectionRun, error) {

@@ -292,6 +292,8 @@ var Routes = []Route{
 		Success: ok((*WikiRunList)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/wiki/rebuild", OperationID: "post_knowledge_bases_id_wiki_rebuild", Tag: "projections",
 		Success: accepted((*StartResult)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback", OperationID: "post_knowledge_bases_id_wiki_generations_generationId_rollback", Tag: "projections",
+		Success: ok((*WikiGenerationRollbackResult)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/knowledge-bases/{id}/knowledge/search", OperationID: "get_knowledge_bases_id_knowledge_search", Tag: "projections",
 		Success: ok((*KnowledgeSearchResult)(nil)), Errors: commonErrors},
 	{Method: http.MethodGet, Path: "/api/v1/wiki/runs/{runId}", OperationID: "get_wiki_runs_runId", Tag: "projections",

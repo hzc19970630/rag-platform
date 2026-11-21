@@ -20,6 +20,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
+	"github.com/hzc19970630/rag-platform/internal/projectionintent"
 	"gorm.io/gorm"
 )
 
@@ -38,6 +39,14 @@ type Service struct {
 	formats    formats.Registry
 	uploads    UploadSupport
 	uploadGate *uploadGate
+	projection ProjectionInvalidator
+}
+
+// ProjectionInvalidator hides derived content immediately after a document
+// delete or ACL change. The projection service implements it; ingestion keeps
+// the port narrow so it never imports the projection domain.
+type ProjectionInvalidator interface {
+	InvalidateDocument(ctx context.Context, tenantID, knowledgeBaseID, documentID, documentVersionID, reason string) error
 }
 
 // QuotaResolver reads the tenant's current limits. The service keeps the
@@ -49,6 +58,10 @@ type QuotaResolver interface {
 
 func (s *Service) SetQuotaResolver(resolver QuotaResolver) {
 	s.quotas = resolver
+}
+
+func (s *Service) SetProjectionInvalidator(invalidator ProjectionInvalidator) {
+	s.projection = invalidator
 }
 
 // SetIndexWriter wires the Evidence Index write port. It is optional at
@@ -438,6 +451,16 @@ func (s *Service) storeVersion(ctx context.Context, principal authz.Principal, k
 			return err
 		}
 		if err := tx.Model(&document).Where("tenant_id = ?", principal.TenantID).Updates(map[string]any{"status": StatusStored, "latest_version_id": versionID, "updated_at": time.Now()}).Error; err != nil {
+			return err
+		}
+		changeKind := projectionintent.KindUpdate
+		if isNewDocument {
+			changeKind = projectionintent.KindAdd
+		}
+		if _, err := projectionintent.RecordTx(tx, projectionintent.Input{
+			TenantID: principal.TenantID, KnowledgeBaseID: input.KnowledgeBaseID, Kind: changeKind,
+			DocumentID: documentID, DocumentVersionID: versionID, ContentHash: hash,
+		}); err != nil {
 			return err
 		}
 		if err := tx.Create(&pipeline).Error; err != nil {

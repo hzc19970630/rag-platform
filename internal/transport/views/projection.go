@@ -8,14 +8,20 @@ import (
 
 func ProjectionState(view knowledgeprojection.ProjectionStatus) httpapi.ProjectionState {
 	return httpapi.ProjectionState{
-		KnowledgeBaseID: view.KnowledgeBaseID,
-		JoinStatus:      view.JoinStatus,
-		WikiEnabled:     view.WikiEnabled,
-		GraphEnabled:    view.GraphEnabled,
-		Runs:            ProjectionRuns(view.Runs),
-		RelationRuns:    ProjectionRuns(view.RelationRuns),
-		Pages:           PageCounts(view.Pages),
-		Graph:           GraphCounts(view.Graph),
+		KnowledgeBaseID:      view.KnowledgeBaseID,
+		JoinStatus:           view.JoinStatus,
+		WikiEnabled:          view.WikiEnabled,
+		GraphEnabled:         view.GraphEnabled,
+		Runs:                 ProjectionRuns(view.Runs),
+		RelationRuns:         ProjectionRuns(view.RelationRuns),
+		Pages:                PageCounts(view.Pages),
+		Graph:                GraphCounts(view.Graph),
+		TargetEpoch:          view.TargetEpoch,
+		WikiAppliedEpoch:     view.WikiAppliedEpoch,
+		RelationAppliedEpoch: view.RelationAppliedEpoch,
+		PendingChanges:       view.PendingChanges,
+		Invalidated:          view.Invalidated,
+		ActiveWikiGeneration: view.ActiveWikiGeneration,
 	}
 }
 
@@ -49,6 +55,8 @@ func ProjectionRun(row models.ProjectionRun) httpapi.ProjectionRun {
 		Status:            row.Status,
 		SourceHash:        row.SourceHash,
 		ACLVersion:        row.ACLVersion,
+		BaseEpoch:         row.BaseEpoch,
+		TargetEpoch:       row.TargetEpoch,
 		Model:             row.Model,
 		PromptVersion:     row.PromptVersion,
 		RetryOfRunID:      row.RetryOfRunID,
@@ -95,6 +103,14 @@ func ProjectionStageRuns(rows []models.ProjectionStageRun) []httpapi.ProjectionS
 		items = append(items, ProjectionStageRun(row))
 	}
 	return items
+}
+
+func WikiGenerationRollback(generation models.WikiGeneration) httpapi.WikiGenerationRollbackResult {
+	return httpapi.WikiGenerationRollbackResult{
+		GenerationID: generation.ID,
+		GenerationNo: generation.GenerationNo,
+		Status:       generation.Status,
+	}
 }
 
 func WikiPage(row models.WikiPage) httpapi.WikiPage {
@@ -328,6 +344,7 @@ func GraphSnapshot(row models.GraphSnapshot) httpapi.GraphSnapshot {
 		Status:          row.Status,
 		SourceHash:      row.SourceHash,
 		ACLVersion:      row.ACLVersion,
+		TargetEpoch:     row.TargetEpoch,
 		Model:           row.Model,
 		PromptVersion:   row.PromptVersion,
 		Stats:           row.Stats,

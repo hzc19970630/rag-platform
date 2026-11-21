@@ -1098,6 +1098,8 @@ type ProjectionRun struct {
 	Status            string     `json:"status"`
 	SourceHash        string     `json:"sourceHash"`
 	ACLVersion        int64      `json:"aclVersion"`
+	BaseEpoch         int64      `json:"baseEpoch"`
+	TargetEpoch       int64      `json:"targetEpoch"`
 	Model             string     `json:"model"`
 	PromptVersion     string     `json:"promptVersion"`
 	RetryOfRunID      *string    `json:"retryOfRunId,omitempty"`
@@ -1152,6 +1154,18 @@ type ProjectionState struct {
 	RelationRuns    []ProjectionRun `json:"relationRuns"`
 	Pages           PageCounts      `json:"pages"`
 	Graph           GraphCounts     `json:"graph"`
+	TargetEpoch          int64  `json:"targetEpoch"`
+	WikiAppliedEpoch     int64  `json:"wikiAppliedEpoch"`
+	RelationAppliedEpoch int64  `json:"relationAppliedEpoch"`
+	PendingChanges       int64  `json:"pendingChanges"`
+	Invalidated          bool   `json:"invalidated"`
+	ActiveWikiGeneration string `json:"activeWikiGeneration,omitempty"`
+}
+
+type WikiGenerationRollbackResult struct {
+	GenerationID string `json:"generationId"`
+	GenerationNo int    `json:"generationNo"`
+	Status       string `json:"status"`
 }
 
 type WikiPage struct {
@@ -1317,6 +1331,7 @@ type GraphSnapshot struct {
 	Status          string     `json:"status"`
 	SourceHash      string     `json:"sourceHash"`
 	ACLVersion      int64      `json:"aclVersion"`
+	TargetEpoch     int64      `json:"targetEpoch"`
 	Model           string     `json:"model"`
 	PromptVersion   string     `json:"promptVersion"`
 	Stats           string     `json:"stats"`

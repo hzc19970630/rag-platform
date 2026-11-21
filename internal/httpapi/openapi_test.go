@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 134
+const businessRouteCount = 135
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -311,6 +311,7 @@ func TestOpenAPIResponseSchemasMatchContractDTOs(t *testing.T) {
 		{"GET /api/v1/knowledge-bases/{id}/projection", "ProjectionState", contract.ProjectionState{}},
 		{"GET /api/v1/knowledge-bases/{id}/wiki/pages", "WikiPageList", contract.WikiPageList{}},
 		{"POST /api/v1/knowledge-bases/{id}/wiki/rebuild", "StartResult", contract.StartResult{}},
+		{"POST /api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback", "WikiGenerationRollbackResult", contract.WikiGenerationRollbackResult{}},
 		{"GET /api/v1/knowledge-bases/{id}/wiki/runs", "WikiRunList", contract.WikiRunList{}},
 		{"GET /api/v1/me", "MeResponse", contract.MeResponse{}},
 		{"GET /api/v1/ops/dead-letters", "DeadLetterList", contract.DeadLetterList{}},
@@ -357,6 +358,7 @@ func TestOpenAPIDeclaresWriteStatuses(t *testing.T) {
 		"POST /api/v1/knowledge-bases/{id}/members":        "201",
 		"POST /api/v1/knowledge-bases/{id}/sync/cancel":    "202",
 		"POST /api/v1/knowledge-bases/{id}/wiki/rebuild":   "202",
+		"POST /api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback": "200",
 		"POST /api/v1/ops/dead-letters/{id}/discard":       "204",
 		"POST /api/v1/ops/dead-letters/{id}/retry":         "204",
 		"POST /api/v1/ops/pipelines/{id}/cancel":           "204",

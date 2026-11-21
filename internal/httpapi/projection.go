@@ -45,6 +45,14 @@ func RegisterWikiProjectionRoutes(protected *gin.RouterGroup, cfg config.Config,
 		}
 		c.JSON(http.StatusAccepted, httpapi.StartResult{Started: count})
 	})
+	knowledgeBases.POST("/wiki/generations/:generationId/rollback", func(c *gin.Context) {
+		generation, err := deps.Projection.RollbackGeneration(c.Request.Context(), accessContext(c).Principal, c.Param("id"), c.Param("generationId"))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.WikiGenerationRollback(generation))
+	})
 	knowledgeBases.GET("/knowledge/search", func(c *gin.Context) {
 		result, err := deps.Projection.Search(c.Request.Context(), accessContext(c).Principal, knowledgeprojection.SearchOptions{
 			KnowledgeBaseID: c.Param("id"), Query: c.Query("q"), Limit: intQuery(c, "limit"),

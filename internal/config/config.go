@@ -245,6 +245,8 @@ func LoadFrom(lookup Lookup) Config {
 			// Relation extraction groups chunks by rune budget as well as the
 			// 8-chunk cap; 1500 runes keeps one call well inside a 60s gateway.
 			RelationCharsPerCall: int(reader.positive("PROJECTION_RELATION_CHARS_PER_CALL", 1500)),
+			BatchQuietSeconds:    int(reader.nonNegative("PROJECTION_BATCH_QUIET_SECONDS", 60)),
+			BatchMaxWaitSeconds:  int(reader.positive("PROJECTION_BATCH_MAX_WAIT_SECONDS", 1800)),
 		},
 		Connector: ConnectorConfig{
 			EncryptionKey:        value(lookup, "CONNECTOR_ENCRYPTION_KEY", ""),

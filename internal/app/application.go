@@ -377,14 +377,17 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	projectionService := knowledgeprojection.NewService(knowledgeprojection.Options{
 		DB: database, Authz: authorization, Embedder: embedder, Resolver: embeddingResolver, Generator: wikiGenerator, Extractor: relationExtractor,
 		Publisher: publisher, Timeout: time.Duration(cfg.TaskTimeoutSeconds) * time.Second,
-		UnitTimeout: time.Duration(cfg.Projection.UnitTimeoutSec) * time.Second,
-		UnitChunks:  cfg.Projection.UnitChunks,
-		Store:       pgrelationstore.New(database),
-		Evidence:    evidencestore.New(database),
-		Cache:       generationCache,
-		Metrics:     recorder,
+		UnitTimeout:  time.Duration(cfg.Projection.UnitTimeoutSec) * time.Second,
+		UnitChunks:   cfg.Projection.UnitChunks,
+		Store:        pgrelationstore.New(database),
+		Evidence:     evidencestore.New(database),
+		Cache:        generationCache,
+		Metrics:      recorder,
+		BatchQuiet:   time.Duration(cfg.Projection.BatchQuietSeconds) * time.Second,
+		BatchMaxWait: time.Duration(cfg.Projection.BatchMaxWaitSeconds) * time.Second,
 	})
 	knowledgeBaseService.SetProjectionLifecycle(projectionService)
+	ingestionService.SetProjectionInvalidator(projectionService)
 	var queryRewriter retrieval.Rewriter
 	if cfg.Chat.QueryRewriteEnabled {
 		queryRewriter = conversation.NewQueryRewriter(chatter, registry, time.Duration(cfg.Chat.QueryRewriteTimeoutSec)*time.Second, recorder)

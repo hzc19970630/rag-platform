@@ -125,6 +125,13 @@ func (s *Service) ReviewGraphSnapshot(ctx context.Context, principal authz.Princ
 	if snapshot.ACLVersion != knowledgeBase.ACLVersion {
 		return models.GraphSnapshot{}, fmt.Errorf("%w: acl_changed: rebuild and review the snapshot under the current ACL", apperror.ErrConflict)
 	}
+	state, _, err := s.loadProjectionState(ctx, principal.TenantID, snapshot.KnowledgeBaseID)
+	if err != nil {
+		return models.GraphSnapshot{}, err
+	}
+	if snapshot.TargetEpoch != state.TargetEpoch {
+		return models.GraphSnapshot{}, fmt.Errorf("%w: epoch_stale: evidence changed after this snapshot; rebuild and review again", apperror.ErrConflict)
+	}
 	status := models.GraphSnapshotRejected
 	if action == "approve" {
 		if err := s.validateSnapshotSources(ctx, snapshot.ID); err != nil {
@@ -141,6 +148,11 @@ func (s *Service) ReviewGraphSnapshot(ctx context.Context, principal authz.Princ
 	}
 	if err != nil {
 		return models.GraphSnapshot{}, err
+	}
+	if status == models.GraphSnapshotActive {
+		if err := s.markProjectionApplied(ctx, principal.TenantID, snapshot.KnowledgeBaseID, ProjectionTypeRelation, snapshot.TargetEpoch); err != nil {
+			return models.GraphSnapshot{}, err
+		}
 	}
 	result := snapshotToModel(*snapshot)
 	result.Status = status
@@ -160,8 +172,8 @@ func snapshotToModel(snapshot relationstore.Snapshot) models.GraphSnapshot {
 	return models.GraphSnapshot{
 		ID: snapshot.ID, TenantID: snapshot.TenantID, KnowledgeBaseID: snapshot.KnowledgeBaseID,
 		ProjectionRunID: snapshot.ProjectionRunID, Version: snapshot.Version, Status: snapshot.Status,
-		SourceHash: snapshot.SourceHash, ACLVersion: snapshot.ACLVersion, Model: snapshot.Model,
-		PromptVersion: snapshot.PromptVersion, Stats: snapshot.Stats, ReviewNote: snapshot.ReviewNote,
+		SourceHash: snapshot.SourceHash, ACLVersion: snapshot.ACLVersion, TargetEpoch: snapshot.TargetEpoch,
+		Model: snapshot.Model, PromptVersion: snapshot.PromptVersion, Stats: snapshot.Stats, ReviewNote: snapshot.ReviewNote,
 		ReviewedBy: snapshot.ReviewedBy, ReviewedAt: snapshot.ReviewedAt, ActivatedAt: snapshot.ActivatedAt,
 		CreatedAt: snapshot.CreatedAt, UpdatedAt: snapshot.UpdatedAt,
 	}

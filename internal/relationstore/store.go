@@ -27,6 +27,7 @@ type Snapshot struct {
 	Status          string
 	SourceHash      string
 	ACLVersion      int64
+	TargetEpoch     int64
 	Model           string
 	PromptVersion   string
 	Stats           string
@@ -168,5 +169,6 @@ type RelationStore interface {
 	Approve(ctx context.Context, tenantID, snapshotID, knowledgeBaseID string, update ReviewUpdate) error
 	MarkStale(ctx context.Context, snapshotIDs []string, now time.Time) error
 	MarkStaleByKnowledgeBase(ctx context.Context, tenantID, knowledgeBaseID string, now time.Time) error
+	MarkStaleByDocument(ctx context.Context, tenantID, knowledgeBaseID, documentID string, now time.Time) error
 	StaleSnapshotIDs(ctx context.Context) ([]string, error)
 }

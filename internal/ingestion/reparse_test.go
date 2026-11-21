@@ -79,6 +79,7 @@ func newReparseFixture(t *testing.T) (*Service, *gorm.DB, *memoryObjects) {
 	if err := db.AutoMigrate(
 		&models.KnowledgeBase{}, &models.KnowledgeBaseMember{}, &models.AuthorizationRevision{},
 		&models.AuditLog{}, &models.Chunk{},
+		&models.KnowledgeProjectionState{}, &models.ProjectionChange{},
 	); err != nil {
 		t.Fatalf("migrate reparse tables: %v", err)
 	}

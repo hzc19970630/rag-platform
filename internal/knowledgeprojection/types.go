@@ -26,17 +26,18 @@ const (
 	StageGenerate = "GENERATE"
 	StageFinalize = "FINALIZE"
 
-	ProjectionPending   = status.WikiPending
-	ProjectionRunning   = status.WikiGenerating
-	ProjectionReady     = status.WikiReady
-	ProjectionFailed    = status.WikiFailed
-	ProjectionRetrying  = status.WikiRetrying
-	RelationPending     = status.RelationPending
-	RelationExtracting  = status.RelationExtracting
-	RelationReady       = status.RelationReady
-	RelationFailed      = status.RelationFailed
-	RelationRetrying    = status.RelationRetrying
-	ProjectionCancelled = status.Cancelled
+	ProjectionPending    = status.WikiPending
+	ProjectionRunning    = status.WikiGenerating
+	ProjectionReady      = status.WikiReady
+	ProjectionFailed     = status.WikiFailed
+	ProjectionRetrying   = status.WikiRetrying
+	RelationPending      = status.RelationPending
+	RelationExtracting   = status.RelationExtracting
+	RelationReady        = status.RelationReady
+	RelationFailed       = status.RelationFailed
+	RelationRetrying     = status.RelationRetrying
+	ProjectionCancelled  = status.Cancelled
+	ProjectionSuperseded = status.Superseded
 
 	StagePending    = status.Pending
 	StageProcessing = status.Processing
@@ -91,14 +92,20 @@ type Lifecycle interface {
 }
 
 type ProjectionStatus struct {
-	KnowledgeBaseID string                 `json:"knowledgeBaseId"`
-	JoinStatus      string                 `json:"joinStatus"`
-	WikiEnabled     bool                   `json:"wikiEnabled"`
-	GraphEnabled    bool                   `json:"graphEnabled"`
-	Runs            []models.ProjectionRun `json:"runs"`
-	RelationRuns    []models.ProjectionRun `json:"relationRuns"`
-	Pages           PageCounts             `json:"pages"`
-	Graph           GraphCounts            `json:"graph"`
+	KnowledgeBaseID      string                 `json:"knowledgeBaseId"`
+	JoinStatus           string                 `json:"joinStatus"`
+	WikiEnabled          bool                   `json:"wikiEnabled"`
+	GraphEnabled         bool                   `json:"graphEnabled"`
+	Runs                 []models.ProjectionRun `json:"runs"`
+	RelationRuns         []models.ProjectionRun `json:"relationRuns"`
+	Pages                PageCounts             `json:"pages"`
+	Graph                GraphCounts            `json:"graph"`
+	TargetEpoch          int64                  `json:"targetEpoch"`
+	WikiAppliedEpoch     int64                  `json:"wikiAppliedEpoch"`
+	RelationAppliedEpoch int64                  `json:"relationAppliedEpoch"`
+	PendingChanges       int64                  `json:"pendingChanges"`
+	Invalidated          bool                   `json:"invalidated"`
+	ActiveWikiGeneration string                 `json:"activeWikiGeneration,omitempty"`
 }
 
 type GraphCounts struct {

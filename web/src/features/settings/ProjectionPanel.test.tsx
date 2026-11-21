@@ -53,4 +53,22 @@ describe("ProjectionPanel", () => {
     const widths = [...table.querySelectorAll("colgroup col")].map((col) => (col as HTMLElement).style.width);
     expect(widths).toEqual(["110px", "240px", "180px", "150px", "170px"]);
   });
+
+  it("shows the invalidation gate instead of pretending the projection is current", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      ...status,
+      joinStatus: "KNOWLEDGE_PARTIAL",
+      pendingChanges: 3,
+      targetEpoch: 7,
+      wikiAppliedEpoch: 4,
+      relationAppliedEpoch: 4,
+      invalidated: true,
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+    const { container } = renderPanel();
+    await waitFor(() => expect(container.textContent).toContain("投影已失效"));
+    expect(container.textContent).toContain("重建完成前这些内容不可用");
+  });
 });

@@ -1,4 +1,4 @@
-import { App, Button, Card, Col, Empty, Flex, Row, Space, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Col, Empty, Flex, Row, Space, Statistic, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -194,6 +194,12 @@ export function ProjectionPanel({ knowledgeBaseId, canWrite, embedded = false }:
         </Space>
         <Button size="small" loading={status.isFetching} onClick={() => void status.refetch()}>{t("common.refresh")}</Button>
       </Flex>
+
+      {data.invalidated
+        ? <Alert type="error" showIcon message={t("projection.invalidated")} description={t("projection.invalidatedHint")} />
+        : (data.pendingChanges ?? 0) > 0
+          ? <Alert type="warning" showIcon message={t("projection.pendingChanges", { count: data.pendingChanges })} description={t("projection.pendingChangesHint", { target: data.targetEpoch ?? 0, applied: Math.min(data.wikiAppliedEpoch ?? 0, data.relationAppliedEpoch ?? 0) })} />
+          : null}
 
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}><Card size="small"><Statistic title={t("projection.pages")} value={data.pages.total} /></Card></Col>

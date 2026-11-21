@@ -787,6 +787,11 @@ func (s *Service) cancelUnitForSourceChange(ctx context.Context, task Task, run 
 }
 
 func (s *Service) finalizeRelation(ctx context.Context, run *models.ProjectionRun) error {
+	if superseded, err := s.supersedeStaleRun(ctx, run); err != nil {
+		return err
+	} else if superseded {
+		return nil
+	}
 	packages, err := s.loadCurrentPackages(ctx, run.TenantID, run.KnowledgeBaseID)
 	if err != nil {
 		return err
@@ -882,26 +887,19 @@ func (s *Service) cancelForSourceChange(ctx context.Context, run *models.Project
 		}
 	}
 	return tenantdb.InTx(ctx, s.db, knowledgeBase.TenantID, func(tx *gorm.DB) error {
-		status, code := ProjectionCancelled, "source_changed"
-		message := "evidence changed during relation projection; replacement run created"
+		status, code := ProjectionSuperseded, "epoch_superseded"
+		message := "evidence changed during relation projection; catch-up will rebuild"
 		if len(packages) == 0 {
 			// The evidence disappeared mid-run and no replacement can be
 			// scheduled. Cancel instead of indexing an empty slice.
-			code = "source_removed"
+			status, code = ProjectionCancelled, "source_removed"
 			message = "evidence was removed during relation projection; rebuild is required"
 		}
-		if err := tx.Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		return tx.Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
 			"status": status, "error_code": code,
 			"error_message": message,
 			"completed_at":  &now, "updated_at": now,
-		}).Error; err != nil {
-			return err
-		}
-		if len(packages) == 0 {
-			return nil
-		}
-		replacement := packages[len(packages)-1]
-		return s.insertRunFor(ctx, tx, knowledgeBase, ProjectionTypeRelation, replacement.ID, sourceHash, now)
+		}).Error
 	})
 }
 
@@ -1098,7 +1096,8 @@ func (s *Service) persistSnapshot(ctx context.Context, run *models.ProjectionRun
 		Snapshot: relationstore.Snapshot{
 			ID: snapshotID, TenantID: knowledgeBase.TenantID, KnowledgeBaseID: knowledgeBase.ID,
 			ProjectionRunID: run.ID, Status: models.GraphSnapshotBuilding, SourceHash: run.SourceHash,
-			ACLVersion: knowledgeBase.ACLVersion, Model: s.relation.Model(), PromptVersion: s.relation.PromptVersion(),
+			ACLVersion: knowledgeBase.ACLVersion, TargetEpoch: run.TargetEpoch,
+			Model: s.relation.Model(), PromptVersion: s.relation.PromptVersion(),
 			Stats: string(statsJSON), CreatedAt: now, UpdatedAt: now,
 		},
 		Entities: entityRows, Aliases: aliasRows, Relations: relationRows, Sources: sourceRows,

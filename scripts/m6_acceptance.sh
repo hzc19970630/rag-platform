@@ -138,7 +138,7 @@ PY
     fi
     status="$(json_field "$output" runs.0.status)"
     join="$(json_field "$output" joinStatus)"
-    [[ "$status" == "WIKI_READY" && "$join" == "KNOWLEDGE_READY" ]] && return 0
+    [[ "$status" == "WIKI_READY" ]] && return 0
     case "$status" in
       FAILED_WIKI|CANCELLED)
         cat "$output" >&2
@@ -224,8 +224,8 @@ PY
       review="APPROVED"
     fi
     [[ "$review" == "APPROVED" ]] || fail "page $page_id current version $current is $review"
-    request POST "/api/v1/wiki/pages/$page_id/versions/$current/publish" 200 "$tmp_dir/publish.json" \
-      -H "$(auth_header "$dev_token")"
+    # B35 publishes the whole generation once every page is approved; per-page
+    # publish is intentionally gated until then.
   done
 }
 
@@ -415,7 +415,7 @@ wait_projection_ready "$tmp_dir/projection-ready.json"
 statistics="$(json_field "$tmp_dir/projection-ready.json" pages.total)"
 [[ "$statistics" == "3" ]] || fail "expected 3 wiki pages, got $statistics"
 join="$(json_field "$tmp_dir/projection-ready.json" joinStatus)"
-[[ "$join" == "KNOWLEDGE_READY" ]] || fail "join is $join"
+[[ "$join" == "KNOWLEDGE_PARTIAL" ]] || fail "join before generation review is $join"
 run_initial="$(json_field "$tmp_dir/projection-ready.json" runs.0.id)"
 wait_run_status "$run_initial" WIKI_READY "$tmp_dir/run-initial.json"
 assert_json "$tmp_dir/run-initial.json" \
@@ -513,12 +513,16 @@ request POST "/api/v1/wiki/pages/$alpha_page/versions/$alpha_version/review" 409
   -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' -d '{"action":"approve"}'
 request POST "/api/v1/wiki/pages/$alpha_page/versions/$alpha_version/publish" 403 "$tmp_dir/publish-viewer.json" \
   -H "$(auth_header "$viewer_token")"
-request POST "/api/v1/wiki/pages/$alpha_page/versions/$alpha_version/publish" 200 "$tmp_dir/publish-ok.json" \
+# B35: the whole generation must be reviewed before any page is published.
+request POST "/api/v1/wiki/pages/$alpha_page/versions/$alpha_version/publish" 409 "$tmp_dir/publish-gated.json" \
   -H "$(auth_header "$dev_token")"
-assert_json "$tmp_dir/publish-ok.json" 'data["status"] == "PUBLISHED" and data["publishedVersionId"] == "'"$alpha_version"'"'
+grep -q 'whole generation' "$tmp_dir/publish-gated.json" || fail "generation gate did not explain itself"
 
 publish_all_current
 assert_all_pages_published
+request GET "/api/v1/knowledge-bases/$kb/projection" 200 "$tmp_dir/projection-after-publish.json" -H "$(auth_header "$dev_token")"
+join="$(json_field "$tmp_dir/projection-after-publish.json" joinStatus)"
+[[ "$join" == "KNOWLEDGE_READY" ]] || fail "join after generation activation is $join"
 [[ "$(index_row_count)" == "3" ]] || fail "expected 3 active knowledge index rows"
 
 # ---------------------------------------------------------------------------

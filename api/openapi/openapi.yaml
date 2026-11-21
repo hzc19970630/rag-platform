@@ -1379,6 +1379,9 @@ components:
           type: string
         status:
           type: string
+        targetEpoch:
+          format: int64
+          type: integer
         tenantId:
           type: string
         updatedAt:
@@ -2024,6 +2027,9 @@ components:
         aclVersion:
           format: int64
           type: integer
+        baseEpoch:
+          format: int64
+          type: integer
         completedAt:
           format: date-time
           type: string
@@ -2052,6 +2058,9 @@ components:
           type: string
         status:
           type: string
+        targetEpoch:
+          format: int64
+          type: integer
         tenantId:
           type: string
         unitFailed:
@@ -2100,9 +2109,13 @@ components:
       type: object
     ProjectionState:
       properties:
+        activeWikiGeneration:
+          type: string
         graph:
           $ref: '#/components/schemas/GraphCounts'
         graphEnabled:
+          type: boolean
+        invalidated:
           type: boolean
         joinStatus:
           type: string
@@ -2110,6 +2123,12 @@ components:
           type: string
         pages:
           $ref: '#/components/schemas/PageCounts'
+        pendingChanges:
+          format: int64
+          type: integer
+        relationAppliedEpoch:
+          format: int64
+          type: integer
         relationRuns:
           items:
             $ref: '#/components/schemas/ProjectionRun'
@@ -2118,6 +2137,12 @@ components:
           items:
             $ref: '#/components/schemas/ProjectionRun'
           type: array
+        targetEpoch:
+          format: int64
+          type: integer
+        wikiAppliedEpoch:
+          format: int64
+          type: integer
         wikiEnabled:
           type: boolean
       type: object
@@ -2932,6 +2957,15 @@ components:
           items:
             type: string
           type: array
+      type: object
+    WikiGenerationRollbackResult:
+      properties:
+        generationId:
+          type: string
+        generationNo:
+          type: integer
+        status:
+          type: string
       type: object
     WikiPage:
       properties:
@@ -5148,6 +5182,38 @@ paths:
       summary: POST /api/v1/knowledge-bases/{id}/uploads
       tags:
         - documents
+  /api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback:
+    post:
+      operationId: post_knowledge_bases_id_wiki_generations_generationId_rollback
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: generationId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WikiGenerationRollbackResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback
+      tags:
+        - projections
   /api/v1/knowledge-bases/{id}/wiki/pages:
     get:
       operationId: get_knowledge_bases_id_wiki_pages

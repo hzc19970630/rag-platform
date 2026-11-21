@@ -14,6 +14,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/platform/vecutil"
+	"github.com/hzc19970630/rag-platform/internal/status"
 	"gorm.io/gorm"
 )
 
@@ -42,7 +43,7 @@ func (s *Service) ListPages(ctx context.Context, principal authz.Principal, know
 		return nil, err
 	}
 	var pages []models.WikiPage
-	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND knowledge_base_id = ?", principal.TenantID, knowledgeBaseID).
+	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND knowledge_base_id = ? AND status <> ?", principal.TenantID, knowledgeBaseID, PageStale).
 		Order("page_type, title").Find(&pages).Error; err != nil {
 		return nil, err
 	}
@@ -90,6 +91,9 @@ func (s *Service) GetPage(ctx context.Context, principal authz.Principal, pageID
 	}
 	if _, err := s.authorize(ctx, principal, page.KnowledgeBaseID, "read"); err != nil {
 		return PageDetail{}, err
+	}
+	if page.Status == PageStale {
+		return PageDetail{}, apperror.ErrNotFound
 	}
 	versionID := page.CurrentVersionID
 	if page.PublishedVersionID != nil {
@@ -168,6 +172,9 @@ func (s *Service) Review(ctx context.Context, principal authz.Principal, pageID,
 	version.ReviewNote = input.Note
 	version.ReviewedBy = principal.SubjectID
 	version.ReviewedAt = &now
+	if err := s.completeGenerationReview(ctx, principal.TenantID, page.KnowledgeBaseID, version.ID); err != nil {
+		return models.WikiPageVersion{}, err
+	}
 	s.recordAudit(ctx, principal, page.KnowledgeBaseID, page.ID, "wiki_review_"+status)
 	return version, nil
 }
@@ -182,6 +189,13 @@ func (s *Service) Publish(ctx context.Context, principal authz.Principal, pageID
 	}
 	if version.ReviewStatus != ReviewApproved {
 		return models.WikiPage{}, fmt.Errorf("%w: only approved versions can be published", apperror.ErrConflict)
+	}
+	var mapping models.WikiGenerationPage
+	if err := s.db.WithContext(ctx).Where("wiki_page_version_id = ?", version.ID).First(&mapping).Error; err == nil {
+		var generation models.WikiGeneration
+		if err := s.db.WithContext(ctx).First(&generation, "id = ?", mapping.GenerationID).Error; err == nil && generation.Status != status.Active {
+			return models.WikiPage{}, fmt.Errorf("%w: wait for the whole generation to activate", apperror.ErrConflict)
+		}
 	}
 	return s.publishVersion(ctx, principal, page, version, "wiki_publish")
 }

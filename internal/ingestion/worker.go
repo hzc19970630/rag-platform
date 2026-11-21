@@ -97,6 +97,10 @@ func (w *PipelineWorker) runtime() *pipeline.Runtime {
 type ProjectionTrigger interface {
 	TriggerWiki(ctx context.Context, tenantID, knowledgeBaseID, evidencePackageID string, aclVersion int64) error
 	TriggerRelation(ctx context.Context, tenantID, knowledgeBaseID, evidencePackageID string, aclVersion int64) error
+	// NoteEvidenceChange appends one ordered projection intent. Batch scheduling
+	// turns the intents into runs after the quiet window; ingestion no longer
+	// creates one run per published package.
+	NoteEvidenceChange(ctx context.Context, tenantID, knowledgeBaseID, evidencePackageID string) error
 	// InvalidateProjectionState drops cached expected hashes before the triggers
 	// run, so a failed trigger cannot leave ProjectionJoin trusting stale state.
 	InvalidateProjectionState(ctx context.Context, tenantID, knowledgeBaseID string) error
@@ -773,11 +777,8 @@ func (w *PipelineWorker) triggerProjection(ctx context.Context, tenantID, knowle
 	if err := w.projection.InvalidateProjectionState(triggerCtx, tenantID, knowledgeBaseID); err != nil {
 		slog.Warn("projection_state_invalidate_failed", "knowledge_base_id", knowledgeBaseID, "error", err)
 	}
-	if err := w.projection.TriggerWiki(triggerCtx, tenantID, knowledgeBaseID, packageID, aclVersion); err != nil {
-		slog.Warn("wiki_projection_trigger_failed", "knowledge_base_id", knowledgeBaseID, "package_id", packageID, "error", err)
-	}
-	if err := w.projection.TriggerRelation(triggerCtx, tenantID, knowledgeBaseID, packageID, aclVersion); err != nil {
-		slog.Warn("relation_projection_trigger_failed", "knowledge_base_id", knowledgeBaseID, "package_id", packageID, "error", err)
+	if err := w.projection.NoteEvidenceChange(triggerCtx, tenantID, knowledgeBaseID, packageID); err != nil {
+		slog.Warn("projection_change_note_failed", "knowledge_base_id", knowledgeBaseID, "package_id", packageID, "error", err)
 	}
 }
 

@@ -363,6 +363,11 @@ func (m *maintenanceRunner) tick(ctx context.Context) {
 		logger.Error("maintenance_reconcile_failed", "error", err)
 		return
 	}
+	if scheduled, err := application.Projection.SchedulePendingChanges(ctx, 50); err != nil {
+		logger.Error("projection_batch_schedule_failed", "error", err)
+	} else if scheduled > 0 {
+		logger.Info("projection_batch_scheduled", "runs", scheduled)
+	}
 	if scheduled, nextCursor, err := application.Projection.ScheduleMissing(ctx, 20, m.projectionCursor); err != nil {
 		logger.Error("projection_schedule_failed", "error", err)
 	} else {

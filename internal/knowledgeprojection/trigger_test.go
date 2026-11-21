@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
@@ -151,8 +152,17 @@ func TestInvalidateAndScheduleMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ScheduleMissing: %v", err)
 	}
-	if started < 1 || cursor != "" {
-		t.Fatalf("ScheduleMissing = %d, %q", started, cursor)
+	if started != 0 || cursor != "" {
+		t.Fatalf("ScheduleMissing must defer pending epochs to the batch scheduler, got %d %q", started, cursor)
+	}
+	past := time.Now().Add(-2 * time.Minute)
+	if err := db.Model(&models.KnowledgeProjectionState{}).Where("knowledge_base_id = ?", "kb1").
+		Update("last_change_at", past).Error; err != nil {
+		t.Fatalf("age change: %v", err)
+	}
+	batched, err := service.SchedulePendingChanges(ctx, 10)
+	if err != nil || batched < 1 {
+		t.Fatalf("SchedulePendingChanges = %d, %v", batched, err)
 	}
 	if _, _, err := service.ScheduleMissing(ctx, 10, "bad-cursor"); err == nil {
 		t.Fatal("malformed cursor must fail")

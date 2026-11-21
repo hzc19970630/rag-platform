@@ -1055,6 +1055,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/wiki/generations/{generationId}/rollback */
+        post: operations["post_knowledge_bases_id_wiki_generations_generationId_rollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge-bases/{id}/wiki/pages": {
         parameters: {
             query?: never;
@@ -2535,6 +2552,8 @@ export interface components {
             sourceHash?: string;
             stats?: string;
             status?: string;
+            /** Format: int64 */
+            targetEpoch?: number;
             tenantId?: string;
             /** Format: date-time */
             updatedAt?: string;
@@ -2863,6 +2882,8 @@ export interface components {
         ProjectionRun: {
             /** Format: int64 */
             aclVersion?: number;
+            /** Format: int64 */
+            baseEpoch?: number;
             /** Format: date-time */
             completedAt?: string;
             /** Format: date-time */
@@ -2878,6 +2899,8 @@ export interface components {
             retryOfRunId?: string;
             sourceHash?: string;
             status?: string;
+            /** Format: int64 */
+            targetEpoch?: number;
             tenantId?: string;
             unitFailed?: number;
             unitSucceeded?: number;
@@ -2906,13 +2929,23 @@ export interface components {
             updatedAt?: string;
         };
         ProjectionState: {
+            activeWikiGeneration?: string;
             graph?: components["schemas"]["GraphCounts"];
             graphEnabled?: boolean;
+            invalidated?: boolean;
             joinStatus?: string;
             knowledgeBaseId?: string;
             pages?: components["schemas"]["PageCounts"];
+            /** Format: int64 */
+            pendingChanges?: number;
+            /** Format: int64 */
+            relationAppliedEpoch?: number;
             relationRuns?: components["schemas"]["ProjectionRun"][];
             runs?: components["schemas"]["ProjectionRun"][];
+            /** Format: int64 */
+            targetEpoch?: number;
+            /** Format: int64 */
+            wikiAppliedEpoch?: number;
             wikiEnabled?: boolean;
         };
         QueryPlan: {
@@ -3342,6 +3375,11 @@ export interface components {
             content?: string;
             headingPath?: string;
             sourceChunkIds?: string[];
+        };
+        WikiGenerationRollbackResult: {
+            generationId?: string;
+            generationNo?: number;
+            status?: string;
         };
         WikiPage: {
             /** Format: int64 */
@@ -5436,6 +5474,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadSessionView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_wiki_generations_generationId_rollback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                generationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WikiGenerationRollbackResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

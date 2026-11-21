@@ -493,6 +493,12 @@ export type ProjectionStatus = {
   relationRuns: ProjectionRun[];
   pages: PageCounts;
   graph: GraphCounts;
+  targetEpoch?: number;
+  wikiAppliedEpoch?: number;
+  relationAppliedEpoch?: number;
+  pendingChanges?: number;
+  invalidated?: boolean;
+  activeWikiGeneration?: string;
 };
 
 export type RetrievalQualitySummary = {

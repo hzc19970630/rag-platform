@@ -13,6 +13,8 @@ type ProjectionRun struct {
 	Status            string  `gorm:"size:32;not null" json:"status"`
 	SourceHash        string  `gorm:"size:64;not null;default:''" json:"sourceHash"`
 	ACLVersion        int64   `gorm:"not null" json:"aclVersion"`
+	BaseEpoch         int64   `gorm:"not null;default:0" json:"baseEpoch"`
+	TargetEpoch       int64   `gorm:"not null;default:0" json:"targetEpoch"`
 	Model             string  `gorm:"size:128;not null;default:''" json:"model"`
 	PromptVersion     string  `gorm:"size:128;not null;default:''" json:"promptVersion"`
 	RetryOfRunID      *string `gorm:"size:64" json:"retryOfRunId,omitempty"`

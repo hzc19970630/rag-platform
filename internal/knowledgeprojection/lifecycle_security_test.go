@@ -30,6 +30,7 @@ func newWikiSecurityFixture(t *testing.T) (*Service, *gorm.DB) {
 	if err := db.AutoMigrate(
 		&models.KnowledgeBase{}, &models.Document{}, &models.DocumentVersion{}, &models.Chunk{},
 		&models.WikiPage{}, &models.WikiPageVersion{}, &models.WikiPageSource{},
+		&models.WikiGeneration{}, &models.WikiGenerationPage{},
 		&models.KnowledgeIndexRecord{}, &models.AuditLog{},
 	); err != nil {
 		t.Fatalf("migrate test db: %v", err)

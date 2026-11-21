@@ -11,6 +11,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
+	"github.com/hzc19970630/rag-platform/internal/projectionintent"
 	"gorm.io/gorm"
 )
 
@@ -57,13 +58,26 @@ func (s *Service) TombstoneExternal(ctx context.Context, tenantID, documentID, a
 
 func (s *Service) softDelete(ctx context.Context, document models.Document, actorID string) error {
 	if document.DeletedAt != nil {
-		return nil
+		return s.invalidateDeletedDocument(ctx, document)
 	}
 	err := tenantdb.InTx(ctx, s.db, document.TenantID, func(tx *gorm.DB) error {
 		return s.softDeleteTx(tx, document, actorID, time.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("delete document: %w", err)
+	}
+	return s.invalidateDeletedDocument(ctx, document)
+}
+
+// invalidateDeletedDocument hides wiki pages and graph snapshots sourced from
+// the document immediately. A failure is returned after the soft delete has
+// committed; retrying the delete re-runs this step.
+func (s *Service) invalidateDeletedDocument(ctx context.Context, document models.Document) error {
+	if s.projection == nil {
+		return nil
+	}
+	if err := s.projection.InvalidateDocument(ctx, document.TenantID, document.KnowledgeBaseID, document.ID, document.LatestVersionID, "document_deleted"); err != nil {
+		return fmt.Errorf("invalidate deleted document projection: %w", err)
 	}
 	return nil
 }
@@ -95,6 +109,12 @@ func (s *Service) softDeleteTx(tx *gorm.DB, document models.Document, actorID st
 			return err
 		}
 	}
+	if _, err := projectionintent.RecordTx(tx, projectionintent.Input{
+		TenantID: document.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, Kind: projectionintent.KindDelete,
+		DocumentID: document.ID, DocumentVersionID: document.LatestVersionID,
+	}); err != nil {
+		return err
+	}
 	return cancelDocumentPipelines(tx, document.TenantID, document.ID)
 }
 
@@ -123,9 +143,11 @@ func (s *Service) Restore(ctx context.Context, principal authz.Principal, docume
 		return models.Document{}, fmt.Errorf("the retention window for this document has expired")
 	}
 	status := StatusStored
+	contentHash := ""
 	if document.LatestVersionID != "" {
 		var version models.DocumentVersion
 		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&version, "id = ?", document.LatestVersionID).Error; err == nil {
+			contentHash = version.ContentHash
 			if ready, readyErr := s.versionReady(ctx, principal.TenantID, version); readyErr != nil {
 				return models.Document{}, readyErr
 			} else if ready {
@@ -134,9 +156,19 @@ func (s *Service) Restore(ctx context.Context, principal authz.Principal, docume
 		}
 	}
 	now := time.Now()
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
-		"status": status, "deleted_at": nil, "deleted_by": "", "purge_after": nil, "restored_at": &now, "updated_at": now,
-	}).Error; err != nil {
+	if err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
+			"status": status, "deleted_at": nil, "deleted_by": "", "purge_after": nil, "restored_at": &now, "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		_, err := projectionintent.RecordTx(tx, projectionintent.Input{
+			TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID, Kind: projectionintent.KindAdd,
+			DocumentID: document.ID, DocumentVersionID: document.LatestVersionID, ContentHash: contentHash,
+			IdempotencyKey: "restore:" + document.ID + ":" + fmt.Sprint(now.UnixNano()),
+		})
+		return err
+	}); err != nil {
 		return models.Document{}, fmt.Errorf("restore document: %w", err)
 	}
 	// Read into a fresh value: reusing the loaded struct keeps the pre-restore
@@ -331,6 +363,18 @@ func (s *Service) loadActiveDocument(ctx context.Context, principal authz.Princi
 }
 
 func supersedeVersion(tx *gorm.DB, tenantID, versionID, reason string) error {
+	var version models.DocumentVersion
+	if err := tenantdb.MustScoped(tx, tenantID).First(&version, "id = ?", versionID).Error; err == nil {
+		if _, err := projectionintent.RecordTx(tx, projectionintent.Input{
+			TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, Kind: projectionintent.KindUpdate,
+			DocumentID: version.DocumentID, DocumentVersionID: version.ID, ContentHash: version.ContentHash,
+			IdempotencyKey: "supersede:" + version.ID + ":" + reason,
+		}); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
 	if err := tenantdb.MustScoped(tx, tenantID).Model(&models.DocumentVersion{}).Where("id = ?", versionID).Updates(map[string]any{
 		"status": StatusCancelled, "error_code": "superseded", "error_message": reason, "updated_at": time.Now(),
 	}).Error; err != nil {

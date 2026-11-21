@@ -31,7 +31,7 @@ func seedProjectionRun(t *testing.T, db *gorm.DB, id, projectionType, status str
 func newProjectionViewsFixture(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	service, db := newWikiSecurityFixture(t)
-	if err := db.AutoMigrate(&models.ProjectionRun{}, &models.ProjectionStageRun{}, &models.KnowledgeProjectionState{}, &models.EvidencePackage{}, &models.TaskInbox{}, &models.OutboxEvent{}); err != nil {
+	if err := db.AutoMigrate(&models.ProjectionRun{}, &models.ProjectionStageRun{}, &models.KnowledgeProjectionState{}, &models.ProjectionChange{}, &models.EvidencePackage{}, &models.TaskInbox{}, &models.OutboxEvent{}); err != nil {
 		t.Fatalf("migrate projection tables: %v", err)
 	}
 	return service, db

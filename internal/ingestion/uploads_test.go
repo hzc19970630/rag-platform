@@ -116,6 +116,7 @@ func newUploadFixture(t *testing.T, support UploadSupport) (*Service, *gorm.DB, 
 	if err := db.AutoMigrate(
 		&models.KnowledgeBase{}, &models.KnowledgeBaseMember{}, &models.AuthorizationRevision{},
 		&models.AuditLog{}, &models.UploadSession{}, &models.User{},
+		&models.KnowledgeProjectionState{}, &models.ProjectionChange{},
 	); err != nil {
 		t.Fatalf("migrate upload tables: %v", err)
 	}

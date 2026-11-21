@@ -58,6 +58,13 @@ const (
 	PendingReview = "PENDING_REVIEW"
 	Superseded    = "SUPERSEDED"
 
+	// B35 atomic wiki generation states and page mappings.
+	GenerationReview        = "REVIEW"
+	GenerationReady         = "READY"
+	GenerationPageGenerated = "GENERATED"
+	GenerationPageCarried   = "CARRIED"
+	GenerationPageException = "EXCEPTION"
+
 	// Connector sync run states.
 	SyncPartial      = "PARTIAL"
 	Tombstoned       = "TOMBSTONED"

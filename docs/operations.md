@@ -448,6 +448,17 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - embedding 护栏：`EMBEDDING_CHUNK_WARNING_THRESHOLD`（默认 5000）只告警；`EMBEDDING_MAX_CHUNKS_PER_DOCUMENT`（默认 0）为硬上限，超限返回 `embedding_budget_exceeded`。解析/截断/行数/spool 拒绝/embedding 预算均有 `ingestion_*` 指标（worker 配置 `METRICS_ADDR` 后暴露）。
 - 已知边界：图片/扫描页/Office 内嵌媒体仍由 B7a 承接；B34 不改变图片内容语义。
 
+### 10.3 投影批次一致性与增量同步（B35）
+
+- 变更日志：证据发布、版本替换、文档删除/恢复和 ACL 变化都会在业务事务内追加 `projection_changes` 并推进 `knowledge_projection_states.target_epoch`。删除 tombstone 保留到对应 epoch 被应用。
+- 批次窗口：worker 在最后一次变更静默 `PROJECTION_BATCH_QUIET_SECONDS`（默认 60s）后为每个知识库/投影创建**一个** run；持续写入超过 `PROJECTION_BATCH_MAX_WAIT_SECONDS`（默认 1800s）时强制创建。手动“立即整理”仍可绕过窗口。
+- epoch 化 run：run 记录 `base_epoch/target_epoch`；完成时若 `target_epoch` 已落后，标记 `SUPERSEDED` 且不发布，由批次窗口追赶。run 期间新增只推进 epoch，不取消当前 run；删除/ACL 立即取消活跃 run。
+- 立即失效：文档删除/ACL 变化在 API 事务内写 delete/acl 变更、按 `wiki_page_sources` 反查页面并标 stale、删除知识索引、把图谱快照标 stale，并关闭 wiki/graph 能力；恢复只写 add 变更，页面保持 stale 直到重建完成。
+- Wiki generation：`wiki_generations`/`wiki_generation_pages` 记录整库待发布版本；未变化页 carried forward，审核拒绝的页按上一 ACTIVE 版本作为 exception 沿用。全部页面审核完成后 generation 才变 READY，并用一次 CAS 切换 `active_wiki_generation_id` 与所有页面发布版本，读者不会混读新旧 generation。回滚沿用上一 generation。
+- 图谱快照：审核/激活要求快照 `target_epoch` 等于当前目标；数据变化后的旧快照只能重建，不能激活。
+- 可观察：`/healthz` 与知识库/投影状态可对照 `targetEpoch/appliedEpoch`；新增 run 日志 `projection_batch_scheduled`，过期 run 状态为 `SUPERSEDED`。
+- 升级注意：0039 迁移会从现有已发布页面建立 generation 0 并设为 ACTIVE，可见内容不变；首次批次运行后切换到 generation 1。
+
 ## 11. 数据库连接池
 
 - API、worker、embedctl 共用同一组连接池参数：`DATABASE_MAX_OPEN_CONNS`（默认 20）、`DATABASE_MAX_IDLE_CONNS`（默认 10）、`DATABASE_CONN_MAX_LIFETIME_SECONDS`（默认 1800）。`0` 空闲连接合法，其余非法值会让配置校验失败。

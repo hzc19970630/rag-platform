@@ -187,7 +187,9 @@ wait_projection_both_ready() {  local knowledge_base="$1" output="$2"
     wiki="$(json_field "$output" runs.0.status)"
     relation="$(json_field "$output" relationRuns.0.status)"
     join="$(json_field "$output" joinStatus)"
-    if [[ "$wiki" == "WIKI_READY" && "$relation" == "RELATION_READY" && "$join" == "KNOWLEDGE_READY" ]]; then
+    # B35: generation review is a separate publication gate; wait for the runs
+    # first, then approve wiki pages and the graph snapshot.
+    if [[ "$wiki" == "WIKI_READY" && "$relation" == "RELATION_READY" ]]; then
       return 0
     fi
     case "$wiki" in
@@ -206,6 +208,56 @@ wait_projection_both_ready() {  local knowledge_base="$1" output="$2"
   done
   cat "$output" >&2
   fail "projections did not both become ready (last: $wiki/$relation/$join)"
+}
+
+review_all_wiki_pages() {
+  local knowledge_base="$1" pages="$tmp_dir/review-wiki-pages.json"
+  local count index info page current review
+  request GET "/api/v1/knowledge-bases/$knowledge_base/wiki/pages" 200 "$pages" -H "$(auth_header "$dev_token")"
+  count="$(python3 - "$pages" <<'PY'
+import json
+import sys
+print(len(json.load(open(sys.argv[1]))["pages"]))
+PY
+)"
+  for ((index = 0; index < count; index++)); do
+    info="$(python3 - "$pages" "$index" <<'PY'
+import json
+import sys
+item = json.load(open(sys.argv[1]))["pages"][int(sys.argv[2])]
+page = item["page"]
+current = item.get("currentVersion") or {}
+review = current.get("reviewStatus", "")
+print("|".join([page["id"], current.get("id", ""), review]))
+PY
+)"
+    IFS='|' read -r page current review <<<"$info"
+    [[ -n "$current" ]] || fail "page $page has no current version"
+    if [[ "$review" == "PENDING" ]]; then
+      request POST "/api/v1/wiki/pages/$page/versions/$current/review" 200 "$tmp_dir/review-wiki.json" \
+        -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' \
+        -d '{"action":"approve","note":"m7 acceptance"}'
+    fi
+  done
+}
+
+approve_latest_snapshot() {
+  local knowledge_base="$1" snapshot
+  snapshot="$(latest_snapshot_id "$knowledge_base" "$tmp_dir/snapshot-approve.json")"
+  request POST "/api/v1/graph/snapshots/$snapshot/review" 200 "$tmp_dir/review-approve.json" \
+    -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' -d '{"action":"approve"}'
+}
+
+wait_join_ready() {
+  local knowledge_base="$1" output="$2" join=""
+  for _ in $(seq 1 120); do
+    request GET "/api/v1/knowledge-bases/$knowledge_base/projection" 200 "$output" -H "$(auth_header "$dev_token")"
+    join="$(json_field "$output" joinStatus)"
+    [[ "$join" == "KNOWLEDGE_READY" ]] && return 0
+    sleep 1
+  done
+  cat "$output" >&2
+  fail "join did not reach KNOWLEDGE_READY (last: $join)"
 }
 
 latest_snapshot_id() {
@@ -561,14 +613,12 @@ python3 - "$tmp_dir/query-hidden-live.json" <<'PY'
 import json
 import sys
 
+# B35: a document delete closes the graph capability immediately; the old
+# snapshot is not filtered, it is unavailable until the rebuild is reviewed.
 data = json.load(open(sys.argv[1]))
-names = {node["name"] for node in data["nodes"]}
-assert "Shared Co" in names, names
-assert "Secret Project" not in names, names
-assert "Hidden Team" not in names, names
-predicates = {edge["predicate"] for edge in data["edges"]}
-assert "owns" not in predicates, predicates
-assert "partner_of" in predicates, predicates
+assert data["nodes"] == [], data["nodes"]
+assert data["edges"] == [], data["edges"]
+assert data["paths"] == [], data["paths"]
 PY
 graph_query "$viewer_token" "$kb" "Secret Project" 3 30 200 "$tmp_dir/query-hidden-seed.json"
 assert_json "$tmp_dir/query-hidden-seed.json" 'data["nodes"] == [] and data["edges"] == [] and data["paths"] == []'
@@ -682,11 +732,21 @@ psql_value "INSERT INTO graph_relations (id, tenant_id, knowledge_base_id, snaps
 code="$(request_code POST "/api/v1/graph/snapshots/$snapshot_idempotent/review" "$tmp_dir/review-unsourced.json" \
   -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' -d '{"action":"approve"}')"
 [[ "$code" != "200" ]] || fail "review activated a snapshot containing an unsourced relation"
-[[ "$(psql_value "SELECT status FROM graph_snapshots WHERE id = '$snapshot_idempotent';")" == "PENDING_REVIEW" ]] \
-  || fail "unsourced review changed the snapshot state"
+unsourced_status="$(psql_value "SELECT status FROM graph_snapshots WHERE id = '$snapshot_idempotent';")"
+# The stale sweep may already have quarantined the unsourced snapshot; either
+# state proves it was never activated.
+[[ "$unsourced_status" == "PENDING_REVIEW" || "$unsourced_status" == "STALE" ]] \
+  || fail "unsourced review changed the snapshot state to $unsourced_status"
 psql_value "DELETE FROM graph_relations WHERE id = 'gr-unsourced-$run_id';" >/dev/null
 
-request POST "/api/v1/graph/snapshots/$snapshot_idempotent/review" 200 "$tmp_dir/review-idempotent.json" \
+# A quarantined snapshot cannot be approved; build a clean one instead of
+# racing the stale sweep.
+wait_relation_idle "$kb" "$tmp_dir/projection-before-clean.json"
+request POST "/api/v1/knowledge-bases/$kb/graph/rebuild" 202 "$tmp_dir/rebuild-after-unsourced.json" \
+  -H "$(auth_header "$dev_token")"
+wait_relation_ready "$kb" "$run_idempotent" "$tmp_dir/projection-unsourced-clean.json"
+snapshot_clean="$(latest_snapshot_id "$kb" "$tmp_dir/snapshots-unsourced-clean.json")"
+request POST "/api/v1/graph/snapshots/$snapshot_clean/review" 200 "$tmp_dir/review-idempotent.json" \
   -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' -d '{"action":"approve"}'
 [[ "$(psql_value "SELECT status FROM graph_snapshots WHERE id = '$snapshot_version';")" == "SUPERSEDED" ]] \
   || fail "approving the newer snapshot did not supersede the previous active snapshot"
@@ -763,6 +823,9 @@ request PATCH "/api/v1/knowledge-bases/$kb2" 200 "$tmp_dir/strategy-both.json" \
   -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' \
   -d '{"indexing_strategy":{"vector_enabled":true,"keyword_enabled":true,"wiki_enabled":true,"graph_enabled":true,"required_capabilities":["evidence","wiki"]}}'
 wait_projection_both_ready "$kb2" "$tmp_dir/projection-both-ready.json"
+review_all_wiki_pages "$kb2"
+approve_latest_snapshot "$kb2"
+wait_join_ready "$kb2" "$tmp_dir/projection-both-joined.json"
 run_wiki="$(json_field "$tmp_dir/projection-both-ready.json" runs.0.id)"
 run_relation="$(json_field "$tmp_dir/projection-both-ready.json" relationRuns.0.id)"
 wiki_versions_before="$(psql_value "SELECT count(*) FROM wiki_page_versions WHERE knowledge_base_id = '$kb2';")"
@@ -777,10 +840,19 @@ request GET "/api/v1/knowledge-bases/$kb2/wiki/pages" 200 "$tmp_dir/pages-partia
 assert_json "$tmp_dir/pages-partial.json" 'data["pages"] != [] and all(item["page"]["status"] != "STALE" for item in data["pages"])'
 evidence_search "$dev_token" "$kb2" "JOIN-$run_id" "$tmp_dir/evidence-partial.json"
 assert_evidence_has_document "$tmp_dir/evidence-partial.json" "$doc_join"
-# The failed run's snapshot was never reviewed, so the graph stays empty even
-# though evidence and wiki remain usable.
+# B35: a failed newer relation run must not replace the last complete ACTIVE
+# snapshot; evidence and wiki stay usable and the old graph keeps serving.
 graph_query "$dev_token" "$kb2" "Northwind" 2 30 200 "$tmp_dir/query-partial.json"
-assert_json "$tmp_dir/query-partial.json" 'data.get("snapshotId", "") == "" and data["nodes"] == [] and data["edges"] == [] and data["joined"] is False'
+python3 - "$tmp_dir/query-partial.json" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1]))
+assert data.get("snapshotId", ""), data
+assert data["joined"] is False
+names = {node["name"] for node in data["nodes"]}
+assert {"Northwind", "Contoso"} <= names, names
+PY
 
 request POST /api/v1/api-keys 201 "$tmp_dir/api-key2.json" \
   -H "$(auth_header "$dev_token")" -H 'Content-Type: application/json' \
@@ -798,8 +870,7 @@ for _ in $(seq 1 300); do
   request GET "/api/v1/knowledge-bases/$kb2/projection" 200 "$tmp_dir/projection-retried.json" \
     -H "$(auth_header "$dev_token")"
   status="$(json_field "$tmp_dir/projection-retried.json" relationRuns.0.status)"
-  join="$(json_field "$tmp_dir/projection-retried.json" joinStatus)"
-  [[ "$status" == "RELATION_READY" && "$join" == "KNOWLEDGE_READY" ]] && break
+  [[ "$status" == "RELATION_READY" ]] && break
   case "$status" in
     FAILED_RELATION|CANCELLED)
       cat "$tmp_dir/projection-retried.json" >&2
@@ -808,7 +879,9 @@ for _ in $(seq 1 300); do
   esac
   sleep 1
 done
-assert_json "$tmp_dir/projection-retried.json" 'data["joinStatus"] == "KNOWLEDGE_READY" and data["relationRuns"][0]["status"] == "RELATION_READY" and data["runs"][0]["status"] == "WIKI_READY" and data["runs"][0]["id"] == "'"$run_wiki"'"'
+approve_latest_snapshot "$kb2"
+wait_join_ready "$kb2" "$tmp_dir/projection-retried-joined.json"
+assert_json "$tmp_dir/projection-retried-joined.json" 'data["joinStatus"] == "KNOWLEDGE_READY" and data["relationRuns"][0]["status"] == "RELATION_READY" and data["runs"][0]["status"] == "WIKI_READY" and data["runs"][0]["id"] == "'"$run_wiki"'"'
 [[ "$(psql_value "SELECT count(*) FROM wiki_page_versions WHERE knowledge_base_id = '$kb2';")" == "$wiki_versions_before" ]] \
   || fail "relation retry regenerated wiki page versions"
 [[ "$(psql_value "SELECT count(*) FROM projection_runs WHERE knowledge_base_id = '$kb2' AND projection_type = 'wiki';")" == "1" ]] \

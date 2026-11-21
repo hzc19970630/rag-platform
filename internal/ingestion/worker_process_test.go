@@ -71,8 +71,7 @@ func (w *recordingIndexWriter) WriteEmbeddings(_ context.Context, versionID, mod
 
 type recordingProjection struct {
 	invalidated []string
-	wiki        []string
-	relation    []string
+	noted       []string
 	err         error
 }
 
@@ -82,12 +81,15 @@ func (p *recordingProjection) InvalidateProjectionState(_ context.Context, _, kn
 }
 
 func (p *recordingProjection) TriggerWiki(_ context.Context, _, knowledgeBaseID, packageID string, _ int64) error {
-	p.wiki = append(p.wiki, packageID)
 	return p.err
 }
 
 func (p *recordingProjection) TriggerRelation(_ context.Context, _, knowledgeBaseID, packageID string, _ int64) error {
-	p.relation = append(p.relation, packageID)
+	return p.err
+}
+
+func (p *recordingProjection) NoteEvidenceChange(_ context.Context, _, _, packageID string) error {
+	p.noted = append(p.noted, packageID)
 	return p.err
 }
 
@@ -325,7 +327,7 @@ func TestWorkerRunsEveryStageEndToEnd(t *testing.T) {
 	if version.Status != StatusEvidenceReady {
 		t.Fatalf("version status = %s, want %s", version.Status, StatusEvidenceReady)
 	}
-	if len(projection.invalidated) != 1 || len(projection.wiki) != 1 || len(projection.relation) != 1 {
+	if len(projection.invalidated) != 1 || len(projection.noted) != 1 {
 		t.Fatalf("projection calls = %+v", projection)
 	}
 }

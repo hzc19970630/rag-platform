@@ -36,6 +36,7 @@ var tenantTables = []string{
 	"model_providers",
 	"outbox_events",
 	"pipeline_runs",
+	"projection_changes",
 	"projection_generation_cache",
 	"projection_runs",
 	"stream_events",
@@ -46,6 +47,8 @@ var tenantTables = []string{
 	"wiki_page_sources",
 	"wiki_page_versions",
 	"wiki_pages",
+	"wiki_generation_pages",
+	"wiki_generations",
 }
 
 var tenantTableSet = func() map[string]struct{} {

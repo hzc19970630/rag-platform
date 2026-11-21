@@ -270,7 +270,8 @@ func (s *Store) ReplaceRunSnapshot(ctx context.Context, write relationstore.Snap
 			ID: write.Snapshot.ID, TenantID: write.Snapshot.TenantID, KnowledgeBaseID: write.Snapshot.KnowledgeBaseID,
 			ProjectionRunID: write.Snapshot.ProjectionRunID, Version: nextVersion + 1, Status: status,
 			SourceHash: write.Snapshot.SourceHash, ACLVersion: write.Snapshot.ACLVersion,
-			Model: write.Snapshot.Model, PromptVersion: write.Snapshot.PromptVersion, Stats: stats,
+			TargetEpoch: write.Snapshot.TargetEpoch,
+			Model:       write.Snapshot.Model, PromptVersion: write.Snapshot.PromptVersion, Stats: stats,
 			CreatedAt: now, UpdatedAt: updatedAt,
 		}
 		if err := tx.Create(&snapshot).Error; err != nil {
@@ -426,6 +427,21 @@ func (s *Store) MarkStaleByKnowledgeBase(ctx context.Context, tenantID, knowledg
 		Updates(map[string]any{"status": models.GraphSnapshotStale, "updated_at": now}).Error
 }
 
+func (s *Store) MarkStaleByDocument(ctx context.Context, tenantID, knowledgeBaseID, documentID string, now time.Time) error {
+	if strings.TrimSpace(documentID) == "" {
+		return nil
+	}
+	sourceSnapshots := s.db.Table("graph_relations gr").
+		Select("DISTINCT gr.snapshot_id").
+		Joins("JOIN graph_relation_sources rs ON rs.relation_id = gr.id").
+		Where("rs.tenant_id = ? AND rs.knowledge_base_id = ? AND rs.document_id = ?", tenantID, knowledgeBaseID, documentID)
+	return s.db.WithContext(ctx).Model(&models.GraphSnapshot{}).
+		Where("tenant_id = ? AND knowledge_base_id = ? AND status IN ?", tenantID, knowledgeBaseID,
+			[]string{models.GraphSnapshotBuilding, models.GraphSnapshotPending, models.GraphSnapshotActive}).
+		Where("id IN (?)", sourceSnapshots).
+		Updates(map[string]any{"status": models.GraphSnapshotStale, "updated_at": now}).Error
+}
+
 func (s *Store) StaleSnapshotIDs(ctx context.Context) ([]string, error) {
 	var staleIDs []string
 	if err := s.db.WithContext(ctx).Table("graph_snapshots gs").
@@ -450,7 +466,7 @@ func toSnapshot(row models.GraphSnapshot) relationstore.Snapshot {
 	return relationstore.Snapshot{
 		ID: row.ID, TenantID: row.TenantID, KnowledgeBaseID: row.KnowledgeBaseID,
 		ProjectionRunID: row.ProjectionRunID, Version: row.Version, Status: row.Status,
-		SourceHash: row.SourceHash, ACLVersion: row.ACLVersion, Model: row.Model,
+		SourceHash: row.SourceHash, ACLVersion: row.ACLVersion, TargetEpoch: row.TargetEpoch, Model: row.Model,
 		PromptVersion: row.PromptVersion, Stats: row.Stats, ReviewNote: row.ReviewNote,
 		ReviewedBy: row.ReviewedBy, ReviewedAt: row.ReviewedAt, ActivatedAt: row.ActivatedAt,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,

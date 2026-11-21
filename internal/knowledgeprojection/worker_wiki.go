@@ -185,6 +185,11 @@ func (s *Service) generate(ctx context.Context, run *models.ProjectionRun) error
 }
 
 func (s *Service) finalize(ctx context.Context, run *models.ProjectionRun) error {
+	if superseded, err := s.supersedeStaleRun(ctx, run); err != nil {
+		return err
+	} else if superseded {
+		return nil
+	}
 	packages, err := s.loadCurrentPackages(ctx, run.TenantID, run.KnowledgeBaseID)
 	if err != nil {
 		return err
@@ -198,24 +203,14 @@ func (s *Service) finalize(ctx context.Context, run *models.ProjectionRun) error
 		return err
 	}
 	if run.SourceHash != "" && run.SourceHash != sourceHash {
-		// Evidence changed while the run was generating. Cancel this run and
-		// create its replacement in the same transaction: the package that
-		// changed the hash may have been coalesced into this run, so waiting for
-		// another trigger could leave the knowledge base partial forever.
-		now := time.Now()
-		replacement := packages[len(packages)-1]
-		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-			if err := tx.Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
-				"status": ProjectionCancelled, "error_code": "source_changed",
-				"error_message": "evidence changed during projection; replacement run created",
-				"completed_at":  &now, "updated_at": now,
-			}).Error; err != nil {
-				return err
-			}
-			return s.insertRun(ctx, tx, knowledgeBase, replacement.ID, sourceHash, now)
-		})
+		// Evidence changed while the run was generating. The batch scheduler
+		// starts the catch-up after the quiet window; this run must not publish.
+		return s.markRunSuperseded(ctx, run, "evidence changed during wiki projection")
 	}
 	now := time.Now()
+	if _, err := s.buildGeneration(ctx, run, knowledgeBase, sourceHash); err != nil {
+		return err
+	}
 	return s.db.WithContext(ctx).Model(&models.ProjectionRun{}).Where("id = ?", run.ID).Updates(map[string]any{
 		"status": ProjectionReady, "source_hash": sourceHash, "acl_version": knowledgeBase.ACLVersion,
 		"completed_at": &now, "error_code": "", "error_message": "", "updated_at": now,

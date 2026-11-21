@@ -76,7 +76,8 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		&models.Folder{}, &models.Tag{}, &models.DocumentTag{},
 		&models.WikiPage{}, &models.WikiPageVersion{}, &models.WikiPageSource{},
 		&models.KnowledgeIndexRecord{}, &models.ProjectionRun{}, &models.ProjectionStageRun{},
-		&models.KnowledgeProjectionState{}, &models.EvidencePackage{}, &models.TaskInbox{}, &models.TaskDeadLetter{},
+		&models.KnowledgeProjectionState{}, &models.ProjectionChange{},
+		&models.WikiGeneration{}, &models.WikiGenerationPage{}, &models.EvidencePackage{}, &models.TaskInbox{}, &models.TaskDeadLetter{},
 		&models.PipelineRun{}, &models.StageRun{}, &models.OutboxEvent{}, &models.SyncRun{}, &models.AnswerJob{}, &models.Message{}, &models.Tenant{}, &models.Connector{}, &models.ConnectorItem{}, &models.Conversation{}, &models.Message{}, &models.MessageCitation{}, &models.StreamEvent{}, &models.ModelProvider{}, &models.ModelCatalogEntry{}, &models.TenantPreset{},
 	); err != nil {
 		t.Fatalf("migrate http projection tables: %v", err)

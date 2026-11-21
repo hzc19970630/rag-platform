@@ -60,6 +60,11 @@ type ProjectionConfig struct {
 	// size. Dense pages otherwise produce multi-thousand-rune prompts that time
 	// out on slow gateways.
 	RelationCharsPerCall int
+	// BatchQuietSeconds waits for evidence writes to settle before starting one
+	// batch projection run. BatchMaxWaitSeconds forces a run when a knowledge
+	// base keeps receiving writes and would otherwise starve.
+	BatchQuietSeconds   int
+	BatchMaxWaitSeconds int
 }
 
 func (c ConnectorConfig) Validate(appEnv string) error {

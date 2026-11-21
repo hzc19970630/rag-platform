@@ -262,6 +262,7 @@ func (s *Service) deleteFolderTree(ctx context.Context, principal authz.Principa
 	// The subtree read, document soft-deletes and folder deletes share one
 	// transaction under the KB lock, so a concurrent move cannot land between
 	// the read and the delete.
+	var deletedDocuments []models.Document
 	err := tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
 		if err := persistence.LockKnowledgeBaseXact(tx, principal.TenantID, folder.KnowledgeBaseID); err != nil {
 			return err
@@ -292,6 +293,7 @@ func (s *Service) deleteFolderTree(ctx context.Context, principal authz.Principa
 				return err
 			}
 		}
+		deletedDocuments = documents
 		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).
 			Where("knowledge_base_id = ? AND folder_id IN ?", current.KnowledgeBaseID, folderIDs).
 			Update("folder_id", nil).Error; err != nil {
@@ -308,6 +310,11 @@ func (s *Service) deleteFolderTree(ctx context.Context, principal authz.Principa
 	})
 	if err != nil {
 		return err
+	}
+	for _, document := range deletedDocuments {
+		if err := s.invalidateDeletedDocument(ctx, document); err != nil {
+			return err
+		}
 	}
 	return s.recordWorkspaceAudit(ctx, principal, "delete", "folder", folder.ID, folder.Name+" (recursive)")
 }
