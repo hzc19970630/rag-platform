@@ -20,6 +20,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/inboxlease"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -709,13 +710,13 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 		return fmt.Errorf("load chunks: %w", err)
 	}
 	markKeywordOnly := func() error {
-		return w.db.WithContext(ctx).Model(&models.Chunk{}).
+		return tenantdb.MustScoped(w.db.WithContext(ctx), version.TenantID).Model(&models.Chunk{}).
 			Where("document_version_id = ? AND parent_id IS NOT NULL AND index_role = ? AND status = ?", version.ID, IndexRoleKeyword, StatusChunked).
 			Update("status", StatusEmbedded).Error
 	}
 	if len(chunks) == 0 {
 		var alreadyEmbedded int64
-		if err := w.db.WithContext(ctx).Model(&models.Chunk{}).
+		if err := tenantdb.MustScoped(w.db.WithContext(ctx), version.TenantID).Model(&models.Chunk{}).
 			Where("document_version_id = ? AND parent_id IS NOT NULL AND status = ? AND index_role <> ?", version.ID, StatusEmbedded, IndexRoleKeyword).
 			Count(&alreadyEmbedded).Error; err != nil {
 			return fmt.Errorf("count embedded chunks: %w", err)
@@ -731,7 +732,7 @@ func (w *PipelineWorker) embed(ctx context.Context, task Task) error {
 		// no provider call is made. A document with no child chunks at all is
 		// still a terminal failure.
 		var keywordOnly int64
-		if err := w.db.WithContext(ctx).Model(&models.Chunk{}).
+		if err := tenantdb.MustScoped(w.db.WithContext(ctx), version.TenantID).Model(&models.Chunk{}).
 			Where("document_version_id = ? AND parent_id IS NOT NULL AND index_role = ?", version.ID, IndexRoleKeyword).
 			Count(&keywordOnly).Error; err != nil {
 			return fmt.Errorf("count keyword chunks: %w", err)
