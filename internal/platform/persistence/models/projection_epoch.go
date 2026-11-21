@@ -25,17 +25,17 @@ func (ProjectionChange) TableName() string { return "projection_changes" }
 // WikiGeneration is one atomic knowledge-base generation. Exactly one row per
 // knowledge base may be ACTIVE; readers resolve pages through it.
 type WikiGeneration struct {
-	ID              string    `gorm:"primaryKey;size:64"`
-	TenantID        string    `gorm:"size:64;not null;index"`
-	KnowledgeBaseID string    `gorm:"size:64;not null;index"`
-	GenerationNo    int       `gorm:"not null"`
-	Status          string    `gorm:"size:16;not null"`
+	ID               string    `gorm:"primaryKey;size:64"`
+	TenantID         string    `gorm:"size:64;not null;index"`
+	KnowledgeBaseID  string    `gorm:"size:64;not null;index"`
+	GenerationNo     int       `gorm:"not null"`
+	Status           string    `gorm:"size:16;not null"`
 	BaseGenerationID *string   `gorm:"size:64"`
-	ProjectionRunID string    `gorm:"size:64;not null;default:''"`
-	TargetEpoch     int64     `gorm:"not null;default:0"`
-	SourceHash      string    `gorm:"size:64;not null;default:''"`
-	CreatedAt       time.Time `gorm:"not null"`
-	UpdatedAt       time.Time `gorm:"not null"`
+	ProjectionRunID  string    `gorm:"size:64;not null;default:''"`
+	TargetEpoch      int64     `gorm:"not null;default:0"`
+	SourceHash       string    `gorm:"size:64;not null;default:''"`
+	CreatedAt        time.Time `gorm:"not null"`
+	UpdatedAt        time.Time `gorm:"not null"`
 }
 
 func (WikiGeneration) TableName() string { return "wiki_generations" }
