@@ -46,6 +46,11 @@ type TableQueryResult struct {
 	Truncated   bool           `json:"truncated,omitempty"`
 }
 
+// liveTableAsset confines table reads to documents that are not soft deleted.
+// Table assets survive the retention window so a restore brings them back, but
+// they must stay invisible to read APIs until then.
+const liveTableAsset = "EXISTS (SELECT 1 FROM documents d WHERE d.id = table_assets.document_id AND d.deleted_at IS NULL)"
+
 // QueryTable answers deterministic filters and TopN over a table asset. It does
 // not call a model: natural-language aggregation/Text-to-SQL is a later step.
 func (s *Service) QueryTable(ctx context.Context, principal authz.Principal, knowledgeBaseID string, query TableQuery) (TableQueryResult, error) {
@@ -68,7 +73,8 @@ func (s *Service) queryTable(ctx context.Context, principal authz.Principal, kno
 	}
 	var asset models.TableAsset
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("id = ? AND knowledge_base_id = ?", query.AssetID, knowledgeBaseID).First(&asset).Error; err != nil {
+		Where("id = ? AND knowledge_base_id = ?", query.AssetID, knowledgeBaseID).
+		Where(liveTableAsset).First(&asset).Error; err != nil {
 		return TableQueryResult{}, apperror.ErrNotFound
 	}
 	if asset.StorageMode != "" && asset.StorageMode != StorageModeFull {
@@ -191,6 +197,7 @@ func (s *Service) ListTableAssets(ctx context.Context, principal authz.Principal
 	}
 	var assets []models.TableAsset
 	err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("knowledge_base_id = ?", knowledgeBaseID).Order("sheet, row_start, id").Find(&assets).Error
+		Where("knowledge_base_id = ?", knowledgeBaseID).
+		Where(liveTableAsset).Order("sheet, row_start, id").Find(&assets).Error
 	return assets, err
 }
