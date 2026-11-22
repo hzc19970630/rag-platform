@@ -332,6 +332,103 @@ func TestWorkerRunsEveryStageEndToEnd(t *testing.T) {
 	}
 }
 
+func TestChunkStageRecordsPerSheetCoverage(t *testing.T) {
+	worker, db, objects, _, _ := newWorkerFixture(t)
+	normalized := NormalizedDocument{
+		SchemaVersion: SchemaNormalizedDocument,
+		Sheets: []SheetMeta{
+			{Name: "small", Header: []string{"name", "qty"}, TotalRows: 2, ParsedRows: 2, ColumnCount: 2, ParseStatus: ParseStatusParsed},
+			{Name: "huge", Header: []string{"name", "qty"}, DeclaredRows: 50000, TotalRows: 50000, ParsedRows: 50, ColumnCount: 2, ParseStatus: ParseStatusSampled, Truncated: true, SampleRows: []string{"pen | 2"}},
+			{Name: "catalog", Header: []string{"id", "v"}, DeclaredRows: 6000000, TotalRows: 6000000, ColumnCount: 2, ParseStatus: ParseStatusMetadata, Truncated: true},
+		},
+		Blocks: []DocumentBlock{
+			{Kind: "table", SourcePath: "sheet:small!A2:B3", Text: "name | qty\npen | 2\ntape | 5",
+				Table: &TableMeta{Sheet: "small", Header: []string{"name", "qty"}, RowStart: 2, RowEnd: 3, ColumnCount: 2}},
+			{Kind: "table", SourcePath: "sheet:huge!A2:B51", Text: "name | qty\npen | 2",
+				Table: &TableMeta{Sheet: "huge", Header: []string{"name", "qty"}, RowStart: 2, RowEnd: 51, ColumnCount: 2}},
+			{Kind: "table", SourcePath: "sheet:huge!A52:B52", Text: "name | qty\nbox | 3",
+				Table: &TableMeta{Sheet: "huge", Header: []string{"name", "qty"}, RowStart: 52, RowEnd: 52, ColumnCount: 2}},
+			{Kind: "table", SourcePath: "sheet:catalog!A1:B1", Text: "id | v",
+				Table: &TableMeta{Sheet: "catalog", Header: []string{"id", "v"}, RowStart: 2, RowEnd: 1, ColumnCount: 2}},
+		},
+	}
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		t.Fatalf("marshal normalized: %v", err)
+	}
+	objects.data["normalized-key"] = data
+	if err := db.Model(&models.DocumentVersion{}).Where("id = ?", "ver-1").
+		Updates(map[string]any{"normalized_key": "normalized-key", "status": StatusNormalized}).Error; err != nil {
+		t.Fatalf("set normalized key: %v", err)
+	}
+	if err := runStage(t, worker, db, StageChunk); err != nil {
+		t.Fatalf("chunk stage: %v", err)
+	}
+
+	var assets []models.TableAsset
+	if err := db.Where("document_version_id = ?", "ver-1").Order("sheet").Find(&assets).Error; err != nil {
+		t.Fatalf("load assets: %v", err)
+	}
+	if len(assets) != 3 {
+		t.Fatalf("assets = %d, want 3", len(assets))
+	}
+	bySheet := map[string]models.TableAsset{}
+	for _, asset := range assets {
+		bySheet[asset.Sheet] = asset
+	}
+	small := bySheet["small"]
+	if small.StorageMode != StorageModeFull || small.RowCount != 2 || small.ParsedRows != 2 || small.IndexMode != IndexModeDeep {
+		t.Fatalf("small asset = %+v", small)
+	}
+	huge := bySheet["huge"]
+	if huge.StorageMode != StorageModeSampled || huge.RowCount != 50 || huge.ParsedRows != 50 || huge.TotalRows != 50000 || huge.IndexMode != IndexModeStandard || !huge.Truncated {
+		t.Fatalf("huge asset = %+v", huge)
+	}
+	catalog := bySheet["catalog"]
+	if catalog.StorageMode != StorageModeMetadata || catalog.ParsedRows != 0 || catalog.TotalRows != 6000000 || catalog.IndexMode != IndexModeStandard {
+		t.Fatalf("catalog asset = %+v", catalog)
+	}
+
+	var tableRows int64
+	if err := db.Model(&models.TableRow{}).Where("document_version_id = ?", "ver-1").Count(&tableRows).Error; err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	if tableRows != 2 {
+		t.Fatalf("persisted table rows = %d, want only the full sheet's 2 rows", tableRows)
+	}
+
+	var summaries int64
+	if err := db.Model(&models.Chunk{}).
+		Where("document_version_id = ? AND source_path = ?", "ver-1", "sheet:huge!summary").Count(&summaries).Error; err != nil {
+		t.Fatalf("count summaries: %v", err)
+	}
+	if summaries != 1 {
+		t.Fatalf("huge summary chunks = %d, want 1 for repeated row blocks", summaries)
+	}
+
+	var version models.DocumentVersion
+	if err := db.First(&version, "id = ?", "ver-1").Error; err != nil {
+		t.Fatalf("load version: %v", err)
+	}
+	if version.StorageMode != StorageModeMetadata || version.ParseStatus != "partial" || !version.ParseTruncated || !version.CoverageKnown {
+		t.Fatalf("version coverage = %+v", version)
+	}
+	if version.ParsedSheets != 3 || version.TotalSheets != 3 || version.ParsedRows != 52 || version.TotalRows != 6050002 {
+		t.Fatalf("version rows = parsed %d/%d sheets %d/%d total %d", version.ParsedRows, version.TotalRows, version.ParsedSheets, version.TotalSheets, version.TotalRows)
+	}
+	if version.KeywordRows != 52 || version.VectorRows != 52 || version.VectorSheets != 3 {
+		t.Fatalf("version index coverage = %+v", version)
+	}
+
+	var document models.Document
+	if err := db.First(&document, "id = ?", "doc-a").Error; err != nil {
+		t.Fatalf("load document: %v", err)
+	}
+	if document.IndexMode != IndexModeStandard {
+		t.Fatalf("document index mode = %q, want the aggregate of deep+standard sheets", document.IndexMode)
+	}
+}
+
 type fixedChunker struct{ parts []string }
 
 func (c fixedChunker) Split(string) []string { return c.parts }

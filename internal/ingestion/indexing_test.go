@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
@@ -54,5 +55,25 @@ func TestIndexEstimateAndModeSwitch(t *testing.T) {
 	}
 	if document.IndexMode != IndexModeStandard {
 		t.Fatalf("document index mode = %s", document.IndexMode)
+	}
+}
+
+func TestSetIndexModeRejectsDeepWithoutFullStorage(t *testing.T) {
+	service, db, _ := newReparseFixture(t)
+	ctx := context.Background()
+	principal := ownerPrincipal()
+	if err := db.Model(&models.DocumentVersion{}).Where("id = ?", "ver-1").
+		Update("storage_mode", StorageModeSampled).Error; err != nil {
+		t.Fatalf("mark sampled: %v", err)
+	}
+	if _, err := service.SetIndexMode(ctx, principal, "doc-a", IndexModeDeep); err == nil || !strings.Contains(err.Error(), "deep_index_requires_full_storage") {
+		t.Fatalf("deep switch on sampled version = %v", err)
+	}
+	if err := db.Model(&models.DocumentVersion{}).Where("id = ?", "ver-1").
+		Update("storage_mode", StorageModeFull).Error; err != nil {
+		t.Fatalf("restore full: %v", err)
+	}
+	if _, err := service.SetIndexMode(ctx, principal, "doc-a", IndexModeDeep); err != nil {
+		t.Fatalf("deep switch on full version: %v", err)
 	}
 }

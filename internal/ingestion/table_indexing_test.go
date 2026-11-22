@@ -159,3 +159,107 @@ func TestBuildTableAssetsGroupsBySheet(t *testing.T) {
 		t.Fatalf("rows = %+v", rows)
 	}
 }
+
+func TestStoredStorageModeTiers(t *testing.T) {
+	cases := map[string]string{
+		ParseStatusParsed:    StorageModeFull,
+		ParseStatusFailed:    StorageModeFull,
+		"":                   StorageModeFull,
+		ParseStatusSampled:   StorageModeSampled,
+		ParseStatusTruncated: StorageModeSampled,
+		ParseStatusSkipped:   StorageModeSampled,
+		ParseStatusMetadata:  StorageModeMetadata,
+	}
+	for status, want := range cases {
+		if got := (SheetMeta{ParseStatus: status}).StoredStorageMode(); got != want {
+			t.Fatalf("StoredStorageMode(%q) = %q, want %q", status, got, want)
+		}
+	}
+}
+
+func TestSheetMetaInfoDerivesCoverageDefaults(t *testing.T) {
+	info := sheetMetaInfo(SheetMeta{
+		Name: "huge", Header: []string{"a", "b"}, DeclaredRows: 7, ParsedRows: 3, ColumnCount: 2,
+		SampleRows: []string{"a | 1", "b | 2"},
+	})
+	if info.totalRows != 7 || info.parsedRows != 3 || info.rowCount != 3 {
+		t.Fatalf("rows = %+v", info)
+	}
+	if info.storageMode != StorageModeFull || info.parseStatus != ParseStatusParsed {
+		t.Fatalf("defaults = %+v", info)
+	}
+	if info.headerRow != 0 || info.rowStart != 1 || info.rowEnd != 3 {
+		t.Fatalf("row window = %+v", info)
+	}
+	if len(info.samples) != 2 || len(info.header) != 2 {
+		t.Fatalf("copied header/samples = %+v", info)
+	}
+	explicit := sheetMetaInfo(SheetMeta{Name: "s", HeaderRow: 4, ParsedRows: 2, TotalRows: 2, ParseStatus: ParseStatusSampled})
+	if explicit.headerRow != 4 || explicit.rowStart != 5 || explicit.rowEnd != 6 || explicit.storageMode != StorageModeSampled {
+		t.Fatalf("explicit header row window = %+v", explicit)
+	}
+	fallback := sheetMetaInfo(SheetMeta{Name: "s", ParsedRows: 5})
+	if fallback.totalRows != 5 {
+		t.Fatalf("total rows fallback = %+v", fallback)
+	}
+}
+
+func TestTableAssetSummaryIncludesCoverage(t *testing.T) {
+	summary := tableAssetSummary(models.TableAsset{
+		Sheet: "huge", Header: `["a","b"]`, SampleRows: `["a | 1","b | 2"]`,
+		TotalRows: 50000, ColumnCount: 2, StorageMode: StorageModeSampled, ParsedRows: 50,
+	})
+	for _, want := range []string{"表: huge", "列: a, b", "行数: 50000", "存储: sampled，已解析 50 行", "a | 1", "b | 2"} {
+		if !contains(summary, want) {
+			t.Fatalf("summary %q missing %q", summary, want)
+		}
+	}
+}
+
+func TestCoverageHelpers(t *testing.T) {
+	if got := summarySourcePath(""); got != "sheet:default!summary" {
+		t.Fatalf("summarySourcePath(empty) = %q", got)
+	}
+	lines := sampleLines([][]string{{"a", "1"}, {"b", "2"}})
+	if len(lines) != 2 || lines[0] != "a | 1" || lines[1] != "b | 2" {
+		t.Fatalf("sampleLines = %v", lines)
+	}
+	if explicitIndexMode("") || explicitIndexMode("bogus") || !explicitIndexMode(IndexModeStandard) {
+		t.Fatalf("explicitIndexMode misclassified")
+	}
+	if got := aggregateAssetMode(nil, IndexModeLexical); got != IndexModeLexical {
+		t.Fatalf("aggregate fallback = %q", got)
+	}
+	consistent := []models.TableAsset{{IndexMode: IndexModeLexical}, {IndexMode: ""}, {IndexMode: IndexModeLexical}}
+	if got := aggregateAssetMode(consistent, IndexModeDeep); got != IndexModeLexical {
+		t.Fatalf("aggregate consistent = %q", got)
+	}
+	if got := mergeStorageMode(StorageModeFull, StorageModeSampled); got != StorageModeSampled {
+		t.Fatalf("merge full+sampled = %q", got)
+	}
+	if got := mergeStorageMode(StorageModeSampled, StorageModeMetadata); got != StorageModeMetadata {
+		t.Fatalf("merge sampled+metadata = %q", got)
+	}
+	if got := mergeStorageMode(StorageModeMetadata, StorageModeFull); got != StorageModeMetadata {
+		t.Fatalf("merge metadata+full = %q", got)
+	}
+}
+
+func TestResolveSheetIndexModeTiers(t *testing.T) {
+	profile := tableDocProfile{rows: 100, maxCols: 2}
+	cases := []struct {
+		asset models.TableAsset
+		want  string
+	}{
+		{models.TableAsset{TotalRows: 100, ColumnCount: 2, StorageMode: StorageModeFull}, IndexModeDeep},
+		{models.TableAsset{RowCount: 50, ColumnCount: 2}, IndexModeDeep},
+		{models.TableAsset{TotalRows: 20000, ColumnCount: 2, StorageMode: StorageModeFull}, IndexModeStandard},
+		{models.TableAsset{TotalRows: 200000, ColumnCount: 2, StorageMode: StorageModeFull}, IndexModeLexical},
+		{models.TableAsset{TotalRows: 10, ColumnCount: 500, StorageMode: StorageModeFull}, IndexModeLexical},
+	}
+	for _, item := range cases {
+		if got := resolveSheetIndexMode("", item.asset, profile); got != item.want {
+			t.Fatalf("resolveSheetIndexMode(%+v) = %q, want %q", item.asset, got, item.want)
+		}
+	}
+}

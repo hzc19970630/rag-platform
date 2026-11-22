@@ -282,30 +282,13 @@ func tableAssetSummary(asset models.TableAsset) string {
 	return strings.TrimSpace(builder.String())
 }
 
-func tableAssetRow(version models.DocumentVersion, blockIndex int, info tableMetaInfo, mode string) models.TableAsset {
-	header, _ := json.Marshal(info.header)
-	columns, _ := json.Marshal(info.header)
-	samples, _ := json.Marshal(info.samples)
-	stats, _ := json.Marshal(map[string]any{"rows": info.rowCount, "columns": info.columnCount})
-	return models.TableAsset{
-		ID: stableID("tbl", version.ID, fmt.Sprint(blockIndex)), TenantID: version.TenantID,
-		KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID,
-		Sheet: info.sheet, SourcePath: "", Header: string(header), Columns: string(columns),
-		RowStart: info.rowStart, RowEnd: info.rowEnd, RowCount: info.rowCount, ColumnCount: info.columnCount,
-		SampleRows: string(samples), Stats: string(stats), IndexMode: mode,
-		StorageMode: info.storageMode, ParseStatus: info.parseStatus, Truncated: info.truncated,
-		TotalRows: info.totalRows, ParsedRows: info.parsedRows, HeaderRow: info.headerRow,
-	}
-}
-
 func buildTableAssets(version models.DocumentVersion, blocks []DocumentBlock, sheets []SheetMeta) (map[int]string, []models.TableAsset) {
 	type group struct {
-		asset      models.TableAsset
-		rows       int
-		samples    [][]string
-		rowStart   int
-		rowEnd     int
-		firstIndex int
+		asset    models.TableAsset
+		rows     int
+		samples  [][]string
+		rowStart int
+		rowEnd   int
 	}
 	groups := map[string]*group{}
 	order := make([]string, 0)
@@ -355,9 +338,6 @@ func buildTableAssets(version models.DocumentVersion, blocks []DocumentBlock, sh
 			sheet = "default"
 		}
 		current := ensure(sheet)
-		if current.firstIndex == 0 {
-			current.firstIndex = index
-		}
 		if len(current.asset.Header) == 0 || current.asset.Header == "[]" {
 			current.asset.Header = jsonOrEmpty(info.header)
 			current.asset.Columns = jsonOrEmpty(info.header)
