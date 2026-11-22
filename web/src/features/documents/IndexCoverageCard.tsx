@@ -1,9 +1,10 @@
-import { App, Alert, Button, Card, Descriptions, Space, Tag, Typography } from "antd";
+import { App, Alert, Button, Card, Collapse, Descriptions, Space, Table, Tag, Typography } from "antd";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, jsonInit } from "../../api/client";
 import { queryKeys, useDocumentIndexEstimate, useDocumentStatus } from "../../api/hooks";
+import { tableParseStatusLabel, tableStorageLabel } from "../../utils/enums";
 
 const LABELS: Record<string, string> = {
   standard: "indexCoverage.modeStandard",
@@ -21,6 +22,10 @@ export function IndexCoverageCard({ documentId, canWrite }: { documentId: string
   const estimate = useDocumentIndexEstimate(documentId, ready);
   const data = estimate.data;
   if (!data || data.tableCount === 0) return null;
+
+  const fullStorage = !data.storageMode || data.storageMode === "full";
+  const coverageKnown = data.coverageKnown !== false;
+  const hasCoverageGap = Boolean(data.parseTruncated) || !fullStorage;
 
   async function apply(mode: string) {
     setBusy(mode);
@@ -53,41 +58,133 @@ export function IndexCoverageCard({ documentId, canWrite }: { documentId: string
     });
   }
 
+  const sheetColumns = [
+    {
+      title: t("indexCoverage.sheet"),
+      dataIndex: "sheet",
+      key: "sheet",
+      render: (value: string) => <Typography.Text>{value || t("indexCoverage.defaultSheet")}</Typography.Text>,
+    },
+    {
+      title: t("indexCoverage.parseStatus"),
+      dataIndex: "parseStatus",
+      key: "parseStatus",
+      render: (value: string) => <Tag>{tableParseStatusLabel(t, value || "parsed")}</Tag>,
+    },
+    {
+      title: t("indexCoverage.rows"),
+      key: "rows",
+      render: (_: unknown, row: { parsedRows: number; totalRows: number }) =>
+        `${row.parsedRows}/${row.totalRows}`,
+    },
+    {
+      title: t("indexCoverage.mode"),
+      dataIndex: "indexMode",
+      key: "indexMode",
+      render: (value: string) => t(LABELS[value] ?? "indexCoverage.modeStandard"),
+    },
+  ];
+
   return (
     <Card
       className="detail-card"
       title={t("indexCoverage.title")}
-      extra={<Tag>{t(LABELS[data.indexMode] ?? "indexCoverage.modeStandard")}</Tag>}
+      extra={
+        <Space size={4} wrap>
+          <Tag>{t(LABELS[data.indexMode] ?? "indexCoverage.modeStandard")}</Tag>
+          <Tag color={fullStorage ? "green" : "orange"}>
+            {tableStorageLabel(t, data.storageMode || "full")}
+          </Tag>
+        </Space>
+      }
     >
       <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-        <Descriptions.Item label={t("indexCoverage.coverage")}>
-          {t("indexCoverage.coverageValue", {
+        <Descriptions.Item label={t("indexCoverage.parseCoverage")}>
+          {coverageKnown
+            ? t("indexCoverage.parseCoverageValue", {
+                parsedSheets: data.parsedSheets,
+                totalSheets: data.totalSheets,
+                parsedRows: data.parsedRows,
+                totalRows: data.totalRows,
+              })
+            : t("indexCoverage.coverageUnknown")}
+        </Descriptions.Item>
+        <Descriptions.Item label={t("indexCoverage.vectorCoverage")}>
+          {t("indexCoverage.vectorCoverageValue", {
             vectorRows: data.vectorRows,
-            totalRows: data.totalRows,
+            parsedRows: data.parsedRows,
             vectorSheets: data.vectorSheets,
             totalSheets: data.totalSheets,
           })}
         </Descriptions.Item>
+        <Descriptions.Item label={t("indexCoverage.keywordRows")}>{data.keywordRows}</Descriptions.Item>
         <Descriptions.Item label={t("indexCoverage.vectorTokens")}>{data.currentVectorTokens}</Descriptions.Item>
         <Descriptions.Item label={t("indexCoverage.tables")}>{data.tableCount}</Descriptions.Item>
       </Descriptions>
-      {data.vectorRows < data.totalRows && (
+      {data.parsedRows < data.totalRows && fullStorage && (
         <Typography.Text type="secondary">{t("indexCoverage.keywordHint")}</Typography.Text>
+      )}
+      {hasCoverageGap && (
+        <Alert
+          style={{ marginTop: 12 }}
+          type="warning"
+          showIcon
+          message={t("indexCoverage.coverageGapTitle")}
+          description={t("indexCoverage.coverageGapBody", {
+            storageMode: tableStorageLabel(t, data.storageMode || "full"),
+          })}
+        />
+      )}
+      {data.sheets.length > 0 && (
+        <Collapse
+          style={{ marginTop: 12 }}
+          size="small"
+          items={[
+            {
+              key: "sheets",
+              label: t("indexCoverage.sheetDetails"),
+              children: (
+                <Table
+                  size="small"
+                  rowKey="sheet"
+                  pagination={data.sheets.length > 12 ? { pageSize: 12 } : false}
+                  columns={sheetColumns}
+                  dataSource={data.sheets}
+                />
+              ),
+            },
+          ]}
+        />
       )}
       {canWrite && (
         <Space style={{ marginTop: 12 }} wrap>
-          <Button size="small" loading={busy === "standard"} disabled={data.indexMode === "standard"} onClick={() => void apply("standard")}>
+          <Button
+            size="small"
+            loading={busy === "standard"}
+            disabled={!fullStorage || data.indexMode === "standard"}
+            onClick={() => void apply("standard")}
+          >
             {t("indexCoverage.useStandard")}
           </Button>
-          <Button size="small" loading={busy === "deep"} disabled={data.indexMode === "deep"} onClick={confirmDeep}>
+          <Button
+            size="small"
+            loading={busy === "deep"}
+            disabled={!fullStorage || data.indexMode === "deep"}
+            onClick={confirmDeep}
+          >
             {t("indexCoverage.useDeep")}
           </Button>
-          <Button size="small" loading={busy === "lexical"} disabled={data.indexMode === "lexical"} onClick={() => void apply("lexical")}>
+          <Button
+            size="small"
+            loading={busy === "lexical"}
+            disabled={!fullStorage || data.indexMode === "lexical"}
+            onClick={() => void apply("lexical")}
+          >
             {t("indexCoverage.useLexical")}
           </Button>
         </Space>
       )}
-      {data.tpmBudget === 0 && (
+      {fullStorage && data.tpmBudget === 0 && (
         <Alert style={{ marginTop: 12 }} type="info" showIcon message={t("indexCoverage.noTPM")} />
       )}
     </Card>

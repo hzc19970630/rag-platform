@@ -40,6 +40,10 @@ type TableQueryResult struct {
 	TotalRows   int            `json:"totalRows"`
 	MatchedRows int            `json:"matchedRows"`
 	Rows        []TableRowView `json:"rows"`
+	SourceRows  int64          `json:"sourceRows,omitempty"`
+	StorageMode string         `json:"storageMode,omitempty"`
+	ParseStatus string         `json:"parseStatus,omitempty"`
+	Truncated   bool           `json:"truncated,omitempty"`
 }
 
 // QueryTable answers deterministic filters and TopN over a table asset. It does
@@ -66,6 +70,12 @@ func (s *Service) queryTable(ctx context.Context, principal authz.Principal, kno
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
 		Where("id = ? AND knowledge_base_id = ?", query.AssetID, knowledgeBaseID).First(&asset).Error; err != nil {
 		return TableQueryResult{}, apperror.ErrNotFound
+	}
+	if asset.StorageMode != "" && asset.StorageMode != StorageModeFull {
+		return TableQueryResult{}, apperror.Invalidf(
+			"table_rows_not_indexed: sheet %s is %s; use an external query for full rows",
+			asset.Sheet, asset.StorageMode,
+		)
 	}
 	var rows []models.TableRow
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
@@ -109,6 +119,8 @@ func (s *Service) queryTable(ctx context.Context, principal authz.Principal, kno
 	return TableQueryResult{
 		AssetID: asset.ID, Sheet: asset.Sheet, Header: header,
 		TotalRows: int(asset.RowCount), MatchedRows: totalMatched, Rows: filtered,
+		SourceRows: asset.TotalRows, StorageMode: asset.StorageMode,
+		ParseStatus: asset.ParseStatus, Truncated: asset.Truncated,
 	}, nil
 }
 

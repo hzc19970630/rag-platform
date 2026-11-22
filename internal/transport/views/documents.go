@@ -40,6 +40,13 @@ func DocumentVersion(row models.DocumentVersion) httpapi.DocumentVersion {
 		Status:          row.Status,
 		ACLVersion:      row.ACLVersion,
 		IndexMode:       row.IndexMode,
+		StorageMode:     row.StorageMode,
+		ParseStatus:     row.ParseStatus,
+		ParseTruncated:  row.ParseTruncated,
+		ParsedSheets:    row.ParsedSheets,
+		ParsedRows:      row.ParsedRows,
+		KeywordRows:     row.KeywordRows,
+		CoverageKnown:   row.CoverageKnown,
 		VectorRows:      row.VectorRows,
 		TotalRows:       row.TotalRows,
 		VectorSheets:    row.VectorSheets,
@@ -60,6 +67,8 @@ func TableAsset(row models.TableAsset) httpapi.TableAsset {
 		ID: row.ID, DocumentID: row.DocumentID, DocumentVersionID: row.DocumentVersionID,
 		Sheet: row.Sheet, Header: header, RowStart: row.RowStart, RowEnd: row.RowEnd,
 		RowCount: row.RowCount, ColumnCount: row.ColumnCount, IndexMode: row.IndexMode,
+		StorageMode: row.StorageMode, ParseStatus: row.ParseStatus, Truncated: row.Truncated,
+		TotalRows: row.TotalRows, ParsedRows: row.ParsedRows, HeaderRow: row.HeaderRow,
 	}
 }
 
@@ -79,16 +88,28 @@ func TableQueryResult(view ingestion.TableQueryResult) httpapi.TableQueryResult 
 	return httpapi.TableQueryResult{
 		AssetID: view.AssetID, Sheet: view.Sheet, Header: view.Header,
 		TotalRows: view.TotalRows, MatchedRows: view.MatchedRows, Rows: rows,
+		SourceRows: view.SourceRows, StorageMode: view.StorageMode, ParseStatus: view.ParseStatus, Truncated: view.Truncated,
 	}
 }
 
 func DocumentIndexEstimate(view ingestion.IndexEstimate) httpapi.DocumentIndexEstimate {
+	sheets := make([]httpapi.SheetCoverage, 0, len(view.Sheets))
+	for _, sheet := range view.Sheets {
+		sheets = append(sheets, httpapi.SheetCoverage{
+			Sheet: sheet.Sheet, StorageMode: sheet.StorageMode, ParseStatus: sheet.ParseStatus,
+			IndexMode: sheet.IndexMode, TotalRows: sheet.TotalRows, ParsedRows: sheet.ParsedRows,
+			ColumnCount: sheet.ColumnCount, Truncated: sheet.Truncated,
+		})
+	}
 	return httpapi.DocumentIndexEstimate{
 		DocumentID: view.DocumentID, DocumentVersionID: view.DocumentVersionID, IndexMode: view.IndexMode,
-		TableCount: view.TableCount, TotalRows: view.TotalRows, VectorRows: view.VectorRows,
-		TotalSheets: view.TotalSheets, VectorSheets: view.VectorSheets,
-		CurrentVectorTokens: view.CurrentVectorTokens, DeepEstimatedTokens: view.DeepEstimatedTokens,
-		DeepEstimatedMinutes: view.DeepEstimatedMinutes, TPMBudget: view.TPMBudget,
+		StorageMode: view.StorageMode, ParseStatus: view.ParseStatus, ParseTruncated: view.ParseTruncated,
+		CoverageKnown: view.CoverageKnown, TableCount: view.TableCount,
+		TotalRows: view.TotalRows, ParsedRows: view.ParsedRows, KeywordRows: view.KeywordRows,
+		VectorRows: view.VectorRows, TotalSheets: view.TotalSheets, ParsedSheets: view.ParsedSheets,
+		VectorSheets: view.VectorSheets, CurrentVectorTokens: view.CurrentVectorTokens,
+		DeepEstimatedTokens: view.DeepEstimatedTokens, DeepEstimatedMinutes: view.DeepEstimatedMinutes,
+		TPMBudget: view.TPMBudget, Sheets: sheets,
 	}
 }
 

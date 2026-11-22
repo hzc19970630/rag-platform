@@ -14,6 +14,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/circuitbreaker"
 	"github.com/hzc19970630/rag-platform/internal/platform/observability"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/platform/token"
 	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
@@ -307,6 +308,10 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 	if err != nil {
 		return EvidenceSet{}, err
 	}
+	for index := range authorized {
+		authorized[index].EvidenceKind = evidenceKind(authorized[index].SourcePath)
+	}
+	coverage := s.coverageNotices(ctx, scope, input.KnowledgeBaseID)
 
 	if duplicates > 0 {
 		s.metrics.Inc("evidence_dropped_total", metrics.Labels("reason", "duplicate_in_document"))
@@ -334,7 +339,46 @@ func (s *Service) Retrieve(ctx context.Context, scope authz.AuthorizationScope, 
 		RecallLatencyMS:           time.Since(started).Milliseconds(),
 		RerankApplied:             rerankApplied,
 		DroppedByAuthorization:    dropped,
+		Coverage:                  coverage,
 	}, nil
+}
+
+func evidenceKind(sourcePath string) string {
+	switch {
+	case strings.Contains(sourcePath, "!summary"):
+		return EvidenceKindSummary
+	case strings.Contains(sourcePath, "!truncated"):
+		return EvidenceKindCoverage
+	case strings.HasPrefix(sourcePath, "sheet:"):
+		return EvidenceKindRow
+	default:
+		return ""
+	}
+}
+
+// coverageNotices keeps the answer honest when some sheets are sampled or
+// metadata-only. It is scoped by the caller's tenant and bounded to recent
+// versions so the online query does not scan the whole knowledge base.
+func (s *Service) coverageNotices(ctx context.Context, scope authz.AuthorizationScope, knowledgeBaseID string) []CoverageNotice {
+	if s.db == nil || knowledgeBaseID == "" {
+		return nil
+	}
+	var versions []models.DocumentVersion
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), scope.TenantID).
+		Where("knowledge_base_id = ? AND status = ? AND (storage_mode <> ? OR parse_truncated = ?)",
+			knowledgeBaseID, "EVIDENCE_READY", "full", true).
+		Order("updated_at DESC").Limit(20).Find(&versions).Error; err != nil {
+		return nil
+	}
+	notices := make([]CoverageNotice, 0, len(versions))
+	for _, version := range versions {
+		notices = append(notices, CoverageNotice{
+			DocumentID: version.DocumentID, StorageMode: version.StorageMode,
+			ParseTruncated: version.ParseTruncated, ParsedSheets: version.ParsedSheets,
+			TotalSheets: version.TotalSheets, ParsedRows: version.ParsedRows, TotalRows: version.TotalRows,
+		})
+	}
+	return notices
 }
 
 // rerank applies the resolved model when the adapter supports per-request model

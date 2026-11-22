@@ -13,6 +13,8 @@ import {
   QUEUE_VALUES,
   SOURCE_VALUES,
   STATUS_VALUES,
+  TABLE_PARSE_STATUS_VALUES,
+  TABLE_STORAGE_VALUES,
   enumLabel,
   enumLabelKey,
   statusLabel,
@@ -61,6 +63,12 @@ describe("enum registry", () => {
       }
       for (const status of EMBEDDING_MIGRATION_STATUS_VALUES) {
         expect(i18n.exists(enumLabelKey("embedding_migration_status", status), { lng: language }), `${language} embedding_migration_status.${status}`).toBe(true);
+      }
+      for (const storage of TABLE_STORAGE_VALUES) {
+        expect(i18n.exists(enumLabelKey("table_storage", storage), { lng: language }), `${language} table_storage.${storage}`).toBe(true);
+      }
+      for (const status of TABLE_PARSE_STATUS_VALUES) {
+        expect(i18n.exists(enumLabelKey("table_parse_status", status), { lng: language }), `${language} table_parse_status.${status}`).toBe(true);
       }
     }
   });

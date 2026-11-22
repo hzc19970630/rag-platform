@@ -25,6 +25,10 @@ const (
 	ChannelParent   = "parent"
 	ChannelNeighbor = "neighbor"
 	ChannelReranked = "reranked"
+
+	EvidenceKindRow      = "table_row"
+	EvidenceKindSummary  = "table_summary"
+	EvidenceKindCoverage = "coverage_notice"
 )
 
 // QueryPlan is the fixed first-phase plan. It records what was searched and the
@@ -124,22 +128,36 @@ type Candidate struct {
 	KeywordScore      float64  `json:"keywordScore,omitempty"`
 	Channels          []string `json:"channels"`
 	RerankScore       *float64 `json:"rerankScore,omitempty"`
+	// EvidenceKind distinguishes exact table rows from table summaries and
+	// coverage markers. Summaries help locate a sheet but are not row evidence.
+	EvidenceKind string `json:"evidenceKind,omitempty"`
+}
+
+type CoverageNotice struct {
+	DocumentID     string `json:"documentId"`
+	StorageMode    string `json:"storageMode"`
+	ParseTruncated bool   `json:"parseTruncated"`
+	ParsedSheets   int    `json:"parsedSheets"`
+	TotalSheets    int    `json:"totalSheets"`
+	ParsedRows     int64  `json:"parsedRows"`
+	TotalRows      int64  `json:"totalRows"`
 }
 
 // EvidenceSet is the authorized evidence handed to generation and to citation
 // validation. Only items that survived the final authorization re-check appear
 // here.
 type EvidenceSet struct {
-	SchemaVersion             string      `json:"schemaVersion"`
-	RequestID                 string      `json:"requestId"`
-	AuthorizationScopeVersion string      `json:"authorizationScopeVersion"`
-	Query                     string      `json:"query"`
-	Plan                      QueryPlan   `json:"plan"`
-	Items                     []Candidate `json:"items"`
-	TokenEstimate             int         `json:"tokenEstimate"`
-	RecallLatencyMS           int64       `json:"recallLatencyMs"`
-	RerankApplied             bool        `json:"rerankApplied"`
-	DroppedByAuthorization    int         `json:"droppedByAuthorization"`
+	SchemaVersion             string           `json:"schemaVersion"`
+	RequestID                 string           `json:"requestId"`
+	AuthorizationScopeVersion string           `json:"authorizationScopeVersion"`
+	Query                     string           `json:"query"`
+	Plan                      QueryPlan        `json:"plan"`
+	Items                     []Candidate      `json:"items"`
+	TokenEstimate             int              `json:"tokenEstimate"`
+	RecallLatencyMS           int64            `json:"recallLatencyMs"`
+	RerankApplied             bool             `json:"rerankApplied"`
+	DroppedByAuthorization    int              `json:"droppedByAuthorization"`
+	Coverage                  []CoverageNotice `json:"coverage,omitempty"`
 }
 
 // Relevance reports whether any evidence survived, which the generation layer

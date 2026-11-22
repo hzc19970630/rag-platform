@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultParserVersion must stay in sync with services/docreader/main.py.
-const DefaultParserVersion = "docreader-m2-v3"
+const DefaultParserVersion = "docreader-b38-v1"
 
 type Config struct {
 	APIAddr string

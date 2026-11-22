@@ -108,6 +108,7 @@ func resultFromResponse(response *docreaderv1.ParseDocumentResponse) ports.Parse
 		ParserVersion:     response.ParserVersion,
 		ErrorCode:         response.ErrorCode,
 		ErrorMessage:      response.ErrorMessage,
+		StorageMode:       response.StorageMode,
 		Truncated:         response.Truncated,
 		TotalRows:         response.TotalRows,
 		IndexedRows:       response.IndexedRows,
@@ -116,6 +117,14 @@ func resultFromResponse(response *docreaderv1.ParseDocumentResponse) ports.Parse
 	}
 	for _, item := range response.Blocks {
 		result.Blocks = append(result.Blocks, blockFromProto(item))
+	}
+	for _, item := range response.Sheets {
+		result.Sheets = append(result.Sheets, ports.SheetMeta{
+			Name: item.Name, Header: item.Header, DeclaredRows: item.DeclaredRows,
+			TotalRows: item.TotalRows, ParsedRows: item.ParsedRows, ColumnCount: int(item.ColumnCount),
+			HeaderRow: int(item.HeaderRow), ParseStatus: item.ParseStatus, Truncated: item.Truncated,
+			SampleRows: item.SampleRows, SourcePath: item.SourcePath, StatsSource: item.StatsSource,
+		})
 	}
 	return result
 }

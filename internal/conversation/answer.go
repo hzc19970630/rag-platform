@@ -358,11 +358,33 @@ func (s *Service) generate(ctx context.Context, query string, registry *Registry
 	if err != nil {
 		return model.ChatResponse{}, err
 	}
+	systemInstruction += coverageInstruction(evidence)
 	contextTemplate, ok := s.prompts.Raw(prompts.ContextTemplate)
 	if !ok {
 		return model.ChatResponse{}, fmt.Errorf("context template is not configured")
 	}
 	return s.chat.Complete(ctx, model.ChatRequest{SystemInstruction: systemInstruction, ContextTemplate: contextTemplate, Query: query, Evidence: items, History: history, Model: chatModel})
+}
+
+func coverageInstruction(evidence retrieval.EvidenceSet) string {
+	var builder strings.Builder
+	for _, candidate := range evidence.Items {
+		if candidate.EvidenceKind == retrieval.EvidenceKindSummary {
+			builder.WriteString("\n\nTable summaries are for locating a sheet only. Do not treat sample rows or metadata in a summary as proof about all rows.")
+			break
+		}
+	}
+	if len(evidence.Coverage) > 0 {
+		builder.WriteString("\n\nCoverage warning: some documents are only partially indexed. State the limitation and do not claim full-table coverage.")
+		for _, notice := range evidence.Coverage {
+			builder.WriteString(fmt.Sprintf(
+				"\n- document %s: storage=%s, sheets=%d/%d, rows=%d/%d, truncated=%t",
+				notice.DocumentID, notice.StorageMode, notice.ParsedSheets, notice.TotalSheets,
+				notice.ParsedRows, notice.TotalRows, notice.ParseTruncated,
+			))
+		}
+	}
+	return builder.String()
 }
 
 // resolveCitations expands cited indexes into full citations and re-checks each

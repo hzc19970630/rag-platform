@@ -47,7 +47,7 @@ func TestLoadFromAppliesDefaults(t *testing.T) {
 	if cfg.StreamChunkBytes != 2048*1024 || cfg.ParseTimeoutSeconds != 300 {
 		t.Fatalf("stream/parse defaults: %d/%d", cfg.StreamChunkBytes, cfg.ParseTimeoutSeconds)
 	}
-	if cfg.ParserVersion != "docreader-m2-v3" {
+	if cfg.ParserVersion != DefaultParserVersion {
 		t.Fatalf("ParserVersion default: %q", cfg.ParserVersion)
 	}
 	if cfg.EmbeddingChunkWarningThreshold != 5000 || cfg.EmbeddingMaxChunksPerDocument != 0 {

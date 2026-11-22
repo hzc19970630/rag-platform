@@ -30,7 +30,7 @@ def _env_int(name, default):
         return default
 
 
-PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-m2-v3")
+PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-b38-v1")
 SCHEMA_VERSION = "NormalizedDocumentV1"
 
 WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -51,12 +51,16 @@ MAX_ARCHIVE_BYTES = _env_int("DOCREADER_MAX_ARCHIVE_BYTES", 2048 * MIB)
 MAX_READ_BYTES = _env_int("DOCREADER_MAX_READ_BYTES", 2048 * MIB)
 MAX_COMPRESSION_RATIO = _env_int("DOCREADER_MAX_COMPRESSION_RATIO", 1000)
 MAX_XML_DEPTH = 64
-MAX_TOTAL_BLOCKS = _env_int("DOCREADER_MAX_TABLE_BLOCKS", 5000)
+MAX_TOTAL_BLOCKS = _env_int("DOCREADER_MAX_TABLE_BLOCKS", 20000)
+MAX_SHEET_BLOCKS = _env_int("DOCREADER_MAX_SHEET_BLOCKS", 2000)
 MAX_BLOCK_CHARS = 8000
 MAX_XLSX_SHEETS = _env_int("DOCREADER_MAX_TABLE_SHEETS", 256)
 MAX_XLSX_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS_PER_SHEET", 50000)
 MAX_TABLE_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS", 500000)
-MAX_TABLE_WINDOW_ROWS = _env_int("DOCREADER_TABLE_WINDOW_ROWS", 200)
+MAX_TABLE_WINDOW_ROWS = max(10, min(_env_int("DOCREADER_TABLE_WINDOW_ROWS", 50), 50))
+TABLE_SAMPLE_ROWS = max(1, min(_env_int("DOCREADER_TABLE_SAMPLE_ROWS", 50), 50))
+STORAGE_FULL_MAX_ROWS = _env_int("DOCREADER_TABLE_STORAGE_FULL_MAX_ROWS", 200000)
+STORAGE_METADATA_MIN_ROWS = _env_int("DOCREADER_TABLE_STORAGE_METADATA_MIN_ROWS", 5000000)
 MAX_XLSX_COLUMNS = 128
 MAX_CELL_CHARS = 4096
 MAX_PPTX_SLIDES = 500
@@ -125,6 +129,8 @@ def _stats_reset():
     _STATS.indexed_rows = 0
     _STATS.total_sheets = 0
     _STATS.indexed_sheets = 0
+    _STATS.sheets = []
+    _STATS.storage_mode = "full"
 
 
 def _stats_add(total_rows=0, indexed_rows=0, total_sheets=0, indexed_sheets=0, truncated=False):
@@ -135,6 +141,23 @@ def _stats_add(total_rows=0, indexed_rows=0, total_sheets=0, indexed_sheets=0, t
     _STATS.truncated = getattr(_STATS, "truncated", False) or truncated
 
 
+def _ensure_sheet_stats():
+    if not hasattr(_STATS, "sheets"):
+        _stats_reset()
+
+
+def _stats_add_sheet(sheet):
+    _ensure_sheet_stats()
+    _STATS.sheets.append(sheet)
+    _STATS.total_rows = getattr(_STATS, "total_rows", 0) + int(sheet.total_rows)
+    _STATS.indexed_rows = getattr(_STATS, "indexed_rows", 0) + int(sheet.parsed_rows)
+    _STATS.total_sheets = getattr(_STATS, "total_sheets", 0) + 1
+    if sheet.parse_status in ("parsed", "truncated", "sampled", "metadata"):
+        _STATS.indexed_sheets = getattr(_STATS, "indexed_sheets", 0) + 1
+    _STATS.truncated = getattr(_STATS, "truncated", False) or bool(sheet.truncated)
+    _STATS.storage_mode = _merge_storage_mode(getattr(_STATS, "storage_mode", "full"), _sheet_storage_mode(sheet))
+
+
 def _stats_snapshot():
     return {
         "truncated": getattr(_STATS, "truncated", False),
@@ -142,7 +165,22 @@ def _stats_snapshot():
         "indexed_rows": getattr(_STATS, "indexed_rows", 0),
         "total_sheets": getattr(_STATS, "total_sheets", 0),
         "indexed_sheets": getattr(_STATS, "indexed_sheets", 0),
+        "sheets": list(getattr(_STATS, "sheets", [])),
+        "storage_mode": getattr(_STATS, "storage_mode", "full"),
     }
+
+
+def _merge_storage_mode(current, candidate):
+    rank = {"full": 0, "sampled": 1, "metadata": 2}
+    return candidate if rank.get(candidate, 0) > rank.get(current, 0) else current
+
+
+def _sheet_storage_mode(sheet):
+    if sheet.parse_status == "metadata":
+        return "metadata"
+    if sheet.parse_status == "sampled" or sheet.truncated:
+        return "sampled"
+    return "full"
 
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 WHITESPACE = re.compile(r"\s+")
@@ -280,13 +318,14 @@ class _OoxmlArchive:
     def has(self, name):
         return name in self.names
 
-    def open_stream(self, name):
+    def open_stream(self, name, count=True):
         if name not in self.names:
             raise ValueError("unsupported_corrupt_document")
         info = self._zip.getinfo(name)
-        self._read_total += info.file_size
-        if self._read_total > MAX_READ_BYTES:
-            raise ValueError("document_too_complex")
+        if count:
+            self._read_total += info.file_size
+            if self._read_total > MAX_READ_BYTES:
+                raise ValueError("document_too_complex")
         return self._zip.open(name)
 
     def read(self, name):
@@ -522,8 +561,8 @@ def _emit_table_blocks(prefix, heading, sheet, headers, rows, start_row, block_b
     return blocks[:block_budget] if block_budget > 0 else blocks
 
 
-def _iter_sheet_rows(archive, target):
-    with archive.open_stream(target) as stream:
+def _iter_sheet_rows(archive, target, count=True):
+    with archive.open_stream(target, count=count) as stream:
         for _, element in ElementTree.iterparse(stream, events=("end",)):
             if element.tag != f"{{{NS_SML}}}row":
                 continue
@@ -544,7 +583,104 @@ def _iter_sheet_rows(archive, target):
             yield row_number, cells
 
 
-def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budget):
+def _sheet_dimension(archive, target):
+    """Read the cheap <dimension> header without scanning the whole sheet."""
+    declared_rows = 0
+    declared_columns = 0
+    with archive.open_stream(target, count=False) as stream:
+        for event, element in ElementTree.iterparse(stream, events=("end",)):
+            if element.tag == f"{{{NS_SML}}}dimension":
+                match = re.match(r"^[A-Z]+([0-9]+)(?::[A-Z]+([0-9]+))?$", element.attrib.get("ref", "").upper())
+                if match:
+                    declared_rows = int(match.group(2) or match.group(1))
+            if element.tag in (f"{{{NS_SML}}}dimension", f"{{{NS_SML}}}sheetData"):
+                break
+    return declared_rows, declared_columns
+
+
+def _count_sheet_rows(archive, target, limit):
+    """Count non-empty rows up to limit; dimension can include formatted blanks."""
+    count = 0
+    for _, cells in _iter_sheet_rows(archive, target, count=False):
+        if cells:
+            count += 1
+        if count >= limit:
+            break
+    return count
+
+
+def _classify_sheet(declared_rows):
+    if declared_rows > STORAGE_METADATA_MIN_ROWS:
+        return "metadata"
+    if declared_rows > STORAGE_FULL_MAX_ROWS or declared_rows > MAX_XLSX_ROWS:
+        return "sampled"
+    return "full"
+
+
+def _sheet_summary_block(prefix, heading, sheet_name, headers, samples, start_row, end_row, parse_status, declared_rows):
+    lines = []
+    if headers:
+        lines.append(" | ".join(headers))
+    lines.extend(" | ".join(row) for row in samples)
+    if parse_status in ("sampled", "metadata", "skipped"):
+        lines.append(
+            "[sheet metadata: storage=%s, total_rows=%d, sample_rows=%d]" %
+            (parse_status, declared_rows, len(samples))
+        )
+    if not lines:
+        return None
+    meta = docreader_pb2.TableMeta(
+        sheet=sheet_name, header=headers, row_start=start_row, row_end=end_row,
+        column_count=len(headers),
+    )
+    return block(
+        f"{prefix}-summary", "table", "\n".join(lines)[:MAX_BLOCK_CHARS], heading, 0,
+        f"sheet:{sheet_name}!summary", table=meta,
+    )
+
+
+def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_rows, parse_status):
+    heading = f"{heading_root} / {sheet_name}"
+    headers = None
+    samples = []
+    indexed = 0
+    start_row = 1
+    for position, (row_number, cells) in enumerate(_iter_sheet_rows(archive, target)):
+        row_number = row_number or position + 1
+        if not cells:
+            continue
+        if headers is None:
+            width = max(column for column, _ in cells) + 1
+            header_values = [""] * width
+            for column, value in cells:
+                header_values[column] = value
+            headers = _normalize_table_headers(header_values)
+            start_row = row_number + 1
+            continue
+        row = [""] * len(headers)
+        for column, value in cells:
+            if column < len(headers):
+                row[column] = _table_cell(value)
+        if indexed < TABLE_SAMPLE_ROWS:
+            samples.append(row)
+        indexed += 1
+        if indexed >= TABLE_SAMPLE_ROWS:
+            break
+    end_row = start_row + len(samples) - 1
+    sheet_block = _sheet_summary_block(
+        prefix, heading, sheet_name, headers or [], samples, start_row, end_row, parse_status, declared_rows,
+    )
+    meta = docreader_pb2.SheetMeta(
+        name=sheet_name, header=headers or [], declared_rows=declared_rows, total_rows=declared_rows,
+        parsed_rows=len(samples), column_count=len(headers or []), header_row=max(start_row - 1, 0),
+        parse_status=parse_status, truncated=True, sample_rows=[" | ".join(row) for row in samples],
+        source_path=f"sheet:{sheet_name}!summary",
+        stats_source="declared" if declared_rows else "sample",
+    )
+    return ([sheet_block] if sheet_block else []), meta
+
+
+def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budget, declared_rows):
     heading = f"{heading_root} / {sheet_name}"
     headers = None
     rows = []
@@ -579,9 +715,21 @@ def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budge
         blocks = [block(f"{prefix}-0", "table", " | ".join(headers), heading, 0, f"sheet:{sheet_name}!A{start_row}:A{start_row}")]
     elif headers is not None and rows:
         blocks = _emit_table_blocks(prefix, heading, sheet_name, headers, rows, start_row, block_budget)
+        if any("!truncated" in item.source_path for item in blocks):
+            truncated = True
     if truncated:
         blocks.append(block(f"{prefix}-truncated", "table", "[truncated: additional rows not indexed]", heading, 0, f"sheet:{sheet_name}!truncated"))
-    return blocks, total, indexed, truncated
+    samples = rows[:TABLE_SAMPLE_ROWS]
+    meta = docreader_pb2.SheetMeta(
+        name=sheet_name, header=headers or [], declared_rows=declared_rows,
+        total_rows=declared_rows or total, parsed_rows=indexed,
+        column_count=len(headers or []), header_row=max(start_row - 1, 0),
+        parse_status="truncated" if truncated else "parsed", truncated=truncated,
+        sample_rows=[" | ".join(row) for row in samples],
+        source_path=f"sheet:{sheet_name}!A{start_row}:{_column_letter(max(len(headers or []) - 1, 0))}{max(start_row + indexed - 1, start_row)}",
+        stats_source="declared" if declared_rows else "scanned",
+    )
+    return blocks, meta
 
 
 def parse_xlsx(source, filename):
@@ -598,25 +746,57 @@ def parse_xlsx(source, filename):
             if not name or not target:
                 raise ValueError("unsupported_corrupt_document")
             sheets.append((name, target[1]))
-        blocks = []
-        total_rows = 0
-        indexed_rows = 0
-        indexed_sheets = 0
-        truncated = len(sheets) > MAX_XLSX_SHEETS
-        for index, (name, target) in enumerate(sheets[:MAX_XLSX_SHEETS]):
-            if len(blocks) >= MAX_TOTAL_BLOCKS or total_rows >= MAX_TABLE_ROWS:
-                truncated = True
+
+        # Classify before parsing. A single huge sheet must not consume the
+        # document budget or force every other sheet into keyword-only mode.
+        planned = []
+        for name, target in sheets[:MAX_XLSX_SHEETS]:
+            declared_rows, _ = _sheet_dimension(archive, target)
+            effective_rows = declared_rows
+            if declared_rows > MAX_XLSX_ROWS:
+                # A workbook dimension may include formatted-but-empty rows.
+                # Only pay for a pre-scan when the declaration would otherwise
+                # push the sheet into a lower storage tier.
+                actual_rows = _count_sheet_rows(archive, target, MAX_XLSX_ROWS)
+                effective_rows = actual_rows if actual_rows < MAX_XLSX_ROWS else max(declared_rows, actual_rows)
+            planned.append({"name": name, "target": target, "declared": effective_rows, "mode": _classify_sheet(effective_rows)})
+        full_rows = sum(item["declared"] for item in planned if item["mode"] == "full")
+        for item in sorted([item for item in planned if item["mode"] == "full"], key=lambda value: value["declared"], reverse=True):
+            if full_rows <= STORAGE_FULL_MAX_ROWS:
                 break
-            sheet_blocks, sheet_total, sheet_indexed, sheet_truncated = _sheet_blocks(
-                archive, stem, name, target, f"sheet-{index}", MAX_TOTAL_BLOCKS - len(blocks),
-            )
+            item["mode"] = "sampled"
+            full_rows -= item["declared"]
+
+        blocks = []
+        index = 0
+        parsed_total = 0
+        for item in planned:
+            name, target, mode = item["name"], item["target"], item["mode"]
+            declared_rows = item["declared"]
+            if mode == "full" and (len(blocks) >= MAX_TOTAL_BLOCKS or parsed_total >= MAX_TABLE_ROWS):
+                mode = "metadata"
+            if mode == "full":
+                sheet_blocks, meta = _sheet_blocks(
+                    archive, stem, name, target, f"sheet-{index}", MAX_SHEET_BLOCKS, declared_rows,
+                )
+                if not sheet_blocks:
+                    meta.parse_status = "metadata"
+                    meta.truncated = True
+            else:
+                sheet_blocks, meta = _sheet_summary(
+                    archive, stem, name, target, f"sheet-{index}", declared_rows, mode,
+                )
             blocks.extend(sheet_blocks)
-            total_rows += sheet_total
-            indexed_rows += sheet_indexed
-            if sheet_blocks:
-                indexed_sheets += 1
-            truncated = truncated or sheet_truncated
-    _stats_add(total_rows=total_rows, indexed_rows=indexed_rows, total_sheets=len(sheets), indexed_sheets=indexed_sheets, truncated=truncated)
+            _stats_add_sheet(meta)
+            parsed_total += int(meta.parsed_rows)
+            index += 1
+        for name, _ in sheets[MAX_XLSX_SHEETS:]:
+            _stats_add_sheet(docreader_pb2.SheetMeta(
+                name=name, parse_status="skipped", truncated=True, stats_source="skipped",
+            ))
+            _STATS.truncated = True
+        if len(sheets) > MAX_XLSX_SHEETS:
+            _STATS.truncated = True
     return blocks, ""
 
 
@@ -1198,6 +1378,7 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
             title=title or request.filename, language="und", parser_version=PARSER_VERSION, blocks=blocks,
             truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
             total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
+            sheets=stats["sheets"], storage_mode=stats["storage_mode"],
         )
 
     def ParseDocumentStream(self, request_iterator, context):
@@ -1222,6 +1403,7 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
                 mime_type=meta[2], title=title or meta[1], language="und", parser_version=PARSER_VERSION, blocks=blocks,
                 truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
                 total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
+                sheets=stats["sheets"], storage_mode=stats["storage_mode"],
             )
         finally:
             state.close()
@@ -1254,6 +1436,7 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
                 mime_type=meta[2], title=title or meta[1], language="und", parser_version=PARSER_VERSION,
                 truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
                 total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
+                sheets=stats["sheets"], storage_mode=stats["storage_mode"],
             ))
         finally:
             state.close()

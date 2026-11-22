@@ -1,4 +1,4 @@
-.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint coverage coverage-gate nightly acceptance b15a-acceptance b15c-acceptance b6a-acceptance b30-acceptance b34-acceptance d3-acceptance b23-acceptance d3-dataplane d3-dataplane-validate m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
+.PHONY: deps quickstart quickstart-check quickstart-down dev-up dev-down logs migrate seed api-test web-install web-build test lint coverage coverage-gate nightly acceptance b15a-acceptance b15c-acceptance b6a-acceptance b30-acceptance b34-acceptance b38-acceptance d3-acceptance b23-acceptance d3-dataplane d3-dataplane-validate m0-acceptance m1-acceptance m2-acceptance m3-acceptance m4-acceptance m5-acceptance m6-acceptance m7-acceptance m7-eval m7-eval-validate m8-capacity m8-capacity-validate m13-dataplane m13-dataplane-validate m3-eval m3-eval-validate eval-validation-tests eval-validate eval-suite eval-public vector-recall-probe embed-index embed-check embed-rebuild embed-verify embed-acceptance m13-rls-setup m13-rls-acceptance m13-async-acceptance m13-backup-drill m13-pitr-drill m13-object-storage-drill m13-recovery-drills backup-postgres backup-basebackup m13-pitr-check m13-object-storage-check m13-object-storage-probe mcp-build mcp-test mcp-e2e openapi openapi-check observability-check
 
 # One-off Go container for test/lint. The module and build caches are named
 # volumes so modules are only downloaded once; override GO_PROXY if you are
@@ -155,6 +155,9 @@ b30-acceptance:
 
 b34-acceptance:
 	./scripts/b34_acceptance.sh
+
+b38-acceptance:
+	./scripts/b38_acceptance.sh
 
 d3-acceptance:
 	./scripts/d3_acceptance.sh

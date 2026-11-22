@@ -5,6 +5,20 @@ import (
 	"testing"
 )
 
+func TestEvidenceKindSeparatesSummaryAndRows(t *testing.T) {
+	cases := map[string]string{
+		"sheet:Sheet1!summary":   EvidenceKindSummary,
+		"sheet:Sheet1!truncated": EvidenceKindCoverage,
+		"sheet:Sheet1!A2:N51":    EvidenceKindRow,
+		"page:2":                 "",
+	}
+	for path, want := range cases {
+		if got := evidenceKind(path); got != want {
+			t.Fatalf("evidenceKind(%q) = %q, want %q", path, got, want)
+		}
+	}
+}
+
 func baseParams() Params {
 	return Params{
 		TopK: 8, EmbeddingTopK: 20, KeywordTopK: 20,

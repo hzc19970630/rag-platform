@@ -2322,6 +2322,7 @@ export interface components {
             document: components["schemas"]["Document"];
         };
         DocumentIndexEstimate: {
+            coverageKnown?: boolean;
             /** Format: int64 */
             currentVectorTokens?: number;
             deepEstimatedMinutes?: number;
@@ -2330,6 +2331,15 @@ export interface components {
             documentId?: string;
             documentVersionId?: string;
             indexMode?: string;
+            /** Format: int64 */
+            keywordRows?: number;
+            parseStatus?: string;
+            parseTruncated?: boolean;
+            /** Format: int64 */
+            parsedRows?: number;
+            parsedSheets?: number;
+            sheets?: components["schemas"]["SheetCoverage"][];
+            storageMode?: string;
             /** Format: int64 */
             tableCount?: number;
             /** Format: int64 */
@@ -2397,6 +2407,7 @@ export interface components {
             /** Format: int64 */
             aclVersion?: number;
             contentHash?: string;
+            coverageKnown?: boolean;
             /** Format: date-time */
             createdAt?: string;
             documentId?: string;
@@ -2406,10 +2417,18 @@ export interface components {
             estimatedTokens?: number;
             id?: string;
             indexMode?: string;
+            /** Format: int64 */
+            keywordRows?: number;
             knowledgeBaseId?: string;
+            parseStatus?: string;
+            parseTruncated?: boolean;
+            /** Format: int64 */
+            parsedRows?: number;
+            parsedSheets?: number;
             /** Format: int64 */
             sizeBytes?: number;
             status?: string;
+            storageMode?: string;
             tenantId?: string;
             /** Format: int64 */
             totalRows?: number;
@@ -3251,6 +3270,18 @@ export interface components {
             sessionOverride?: string;
             tagIds?: string[];
         };
+        SheetCoverage: {
+            columnCount?: number;
+            indexMode?: string;
+            parseStatus?: string;
+            /** Format: int64 */
+            parsedRows?: number;
+            sheet?: string;
+            storageMode?: string;
+            /** Format: int64 */
+            totalRows?: number;
+            truncated?: boolean;
+        };
         StageRun: {
             attempts?: number;
             /** Format: date-time */
@@ -3287,12 +3318,20 @@ export interface components {
             documentId?: string;
             documentVersionId?: string;
             header?: string[];
+            headerRow?: number;
             id?: string;
             indexMode?: string;
+            parseStatus?: string;
+            /** Format: int64 */
+            parsedRows?: number;
             rowCount?: number;
             rowEnd?: number;
             rowStart?: number;
             sheet?: string;
+            storageMode?: string;
+            /** Format: int64 */
+            totalRows?: number;
+            truncated?: boolean;
         };
         TableAssetList: {
             items?: components["schemas"]["TableAsset"][];
@@ -3313,9 +3352,14 @@ export interface components {
             assetId?: string;
             header?: string[];
             matchedRows?: number;
+            parseStatus?: string;
             rows?: components["schemas"]["TableRow"][];
             sheet?: string;
+            /** Format: int64 */
+            sourceRows?: number;
+            storageMode?: string;
             totalRows?: number;
+            truncated?: boolean;
         };
         TableRow: {
             cells?: {

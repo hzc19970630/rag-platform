@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/contracts/model"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
+	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -310,4 +312,20 @@ func openConversationTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("migrate messages: %v", err)
 	}
 	return db
+}
+
+func TestCoverageInstructionWarnsAboutSummaryAndSampledSheets(t *testing.T) {
+	evidence := retrieval.EvidenceSet{
+		Items: []retrieval.Candidate{{EvidenceKind: retrieval.EvidenceKindSummary}},
+		Coverage: []retrieval.CoverageNotice{{
+			DocumentID: "doc-a", StorageMode: "sampled", ParsedSheets: 2, TotalSheets: 5,
+			ParsedRows: 100, TotalRows: 1000, ParseTruncated: true,
+		}},
+	}
+	note := coverageInstruction(evidence)
+	for _, want := range []string{"Table summaries", "Coverage warning", "doc-a", "2/5", "100/1000"} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("coverage note %q missing %q", note, want)
+		}
+	}
 }

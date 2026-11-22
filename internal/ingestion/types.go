@@ -66,11 +66,31 @@ type NormalizedDocument struct {
 	Language      string          `json:"language"`
 	ParserVersion string          `json:"parser_version"`
 	Blocks        []DocumentBlock `json:"blocks"`
+	Sheets        []SheetMeta     `json:"sheets,omitempty"`
+	StorageMode   string          `json:"storage_mode,omitempty"`
 	Truncated     bool            `json:"truncated,omitempty"`
 	TotalRows     int64           `json:"total_rows,omitempty"`
 	IndexedRows   int64           `json:"indexed_rows,omitempty"`
 	TotalSheets   int             `json:"total_sheets,omitempty"`
 	IndexedSheets int             `json:"indexed_sheets,omitempty"`
+}
+
+// SheetMeta is the per-sheet catalog entry. It exists even when the sheet is
+// only sampled or catalogued, so missing rows are visible instead of silently
+// disappearing from coverage.
+type SheetMeta struct {
+	Name         string   `json:"name"`
+	Header       []string `json:"header,omitempty"`
+	DeclaredRows int64    `json:"declared_rows,omitempty"`
+	TotalRows    int64    `json:"total_rows,omitempty"`
+	ParsedRows   int64    `json:"parsed_rows,omitempty"`
+	ColumnCount  int      `json:"column_count,omitempty"`
+	HeaderRow    int      `json:"header_row,omitempty"`
+	ParseStatus  string   `json:"parse_status,omitempty"`
+	Truncated    bool     `json:"truncated,omitempty"`
+	SampleRows   []string `json:"sample_rows,omitempty"`
+	SourcePath   string   `json:"source_path,omitempty"`
+	StatsSource  string   `json:"stats_source,omitempty"`
 }
 
 type TableMeta struct {
@@ -108,6 +128,8 @@ type ParseResult struct {
 	ErrorCode         string
 	ErrorMessage      string
 	Blocks            []DocumentBlock
+	Sheets            []SheetMeta
+	StorageMode       string
 	Truncated         bool
 	TotalRows         int64
 	IndexedRows       int64

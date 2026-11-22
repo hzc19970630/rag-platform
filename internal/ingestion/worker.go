@@ -328,7 +328,7 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if len(result.Blocks) == 0 {
 		return apperror.Terminalf("empty_document", "parser returned no text blocks")
 	}
-	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks, Truncated: result.Truncated, TotalRows: result.TotalRows, IndexedRows: result.IndexedRows, TotalSheets: result.TotalSheets, IndexedSheets: result.IndexedSheets}
+	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks, Truncated: result.Truncated, TotalRows: result.TotalRows, IndexedRows: result.IndexedRows, TotalSheets: result.TotalSheets, IndexedSheets: result.IndexedSheets, Sheets: result.Sheets, StorageMode: result.StorageMode}
 	data, err := json.Marshal(normalized)
 	if err != nil {
 		return fmt.Errorf("marshal normalized document: %w", err)
@@ -485,43 +485,55 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	if err := w.db.WithContext(ctx).First(&document, "id = ?", version.DocumentID).Error; err != nil {
 		return fmt.Errorf("load document: %w", err)
 	}
-	indexMode := document.IndexMode
+	documentMode := document.IndexMode
 	if version.IndexMode != "" {
-		indexMode = version.IndexMode
+		documentMode = version.IndexMode
 	}
-	indexMode = resolveIndexMode(indexMode, normalized.Blocks)
+	indexMode := resolveIndexMode(documentMode, normalized.Blocks)
 	rows := make([]chunkRow, 0, len(normalized.Blocks)*2)
-	blockAsset, assets := buildTableAssets(version, normalized.Blocks)
+	blockAsset, assets := buildTableAssets(version, normalized.Blocks, normalized.Sheets)
+	profile := tableProfile(normalized.Blocks)
+	assetByID := make(map[string]models.TableAsset, len(assets))
 	for index := range assets {
-		assets[index].IndexMode = indexMode
+		assets[index].IndexMode = resolveSheetIndexMode(documentMode, assets[index], profile)
+		assetByID[assets[index].ID] = assets[index]
 	}
+	if !explicitIndexMode(documentMode) {
+		indexMode = aggregateAssetMode(assets, indexMode)
+	}
+	emittedSummary := map[string]bool{}
 	tableRows := make([]models.TableRow, 0)
 	coverage := struct {
-		totalRows    int64
-		vectorRows   int64
-		sheets       map[string]bool
-		vectorSheets map[string]bool
-		vectorChars  int64
-	}{sheets: map[string]bool{}, vectorSheets: map[string]bool{}}
+		totalRows      int64
+		parsedRows     int64
+		parsedSheets   int
+		totalSheets    int
+		keywordRows    int64
+		vectorRows     int64
+		vectorSheets   map[string]bool
+		vectorChars    int64
+		storageMode    string
+		parseTruncated bool
+		coverageKnown  bool
+	}{vectorSheets: map[string]bool{}, storageMode: StorageModeFull}
 	childOrdinal := 0
 	type plannedChunk struct {
-		content string
-		role    string
+		content    string
+		role       string
+		sourcePath string
 	}
 	for blockIndex, block := range normalized.Blocks {
 		info, isTable := tableMetaFor(block)
 		assetID := blockAsset[blockIndex]
-		if isTable {
+		asset := assetByID[assetID]
+		fullStorage := asset.StorageMode == "" || asset.StorageMode == StorageModeFull
+		if isTable && fullStorage {
 			if len(tableRows) < maxPersistedTableRows {
 				rowsForAsset := tableRowModels(version, assetID, info)
 				if remaining := maxPersistedTableRows - len(tableRows); len(rowsForAsset) > remaining {
 					rowsForAsset = rowsForAsset[:remaining]
 				}
 				tableRows = append(tableRows, rowsForAsset...)
-			}
-			coverage.totalRows += int64(info.rowCount)
-			if info.sheet != "" {
-				coverage.sheets[info.sheet] = true
 			}
 		}
 		parentID := stableID("parent", version.ID, fmt.Sprint(blockIndex), block.Text)
@@ -531,19 +543,41 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 			for _, content := range chunker.Split(block.Text) {
 				planned = append(planned, plannedChunk{content: cleanText(content), role: IndexRoleBoth})
 			}
+		} else if !fullStorage {
+			// Sampled/metadata sheets have one summary representation only. It
+			// can help retrieve the sheet, but it is not row evidence.
+			if !emittedSummary[assetID] {
+				summary := block.Text
+				if !strings.Contains(block.SourcePath, "!summary") {
+					summary = tableAssetSummary(asset)
+				}
+				if summary != "" {
+					planned = append(planned, plannedChunk{content: cleanTableText(summary), role: IndexRoleBoth, sourcePath: summarySourcePath(asset.Sheet)})
+					coverage.vectorRows += asset.ParsedRows
+					coverage.vectorChars += int64(len([]rune(summary)))
+					if asset.Sheet != "" {
+						coverage.vectorSheets[asset.Sheet] = true
+					}
+					emittedSummary[assetID] = true
+				}
+			}
 		} else {
 			contents := []string{block.Text}
 			if splitter, ok := chunker.(TableSplitter); ok {
 				contents = splitter.SplitTable(block.Text)
 			}
-			switch indexMode {
+			mode := asset.IndexMode
+			if mode == "" {
+				mode = indexMode
+			}
+			switch mode {
 			case IndexModeDeep:
 				for _, content := range contents {
 					planned = append(planned, plannedChunk{content: cleanTableText(content), role: IndexRoleBoth})
 				}
 				coverage.vectorRows += int64(info.rowCount)
-				if info.sheet != "" {
-					coverage.vectorSheets[info.sheet] = true
+				if asset.Sheet != "" {
+					coverage.vectorSheets[asset.Sheet] = true
 				}
 				for _, content := range contents {
 					coverage.vectorChars += int64(len([]rune(content)))
@@ -553,14 +587,17 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 					planned = append(planned, plannedChunk{content: cleanTableText(content), role: IndexRoleKeyword})
 				}
 			default:
-				summary := tableSummaryText(info)
-				if summary != "" {
-					planned = append(planned, plannedChunk{content: summary, role: IndexRoleBoth})
-					coverage.vectorRows += int64(len(info.samples))
-					if info.sheet != "" {
-						coverage.vectorSheets[info.sheet] = true
+				if !emittedSummary[assetID] {
+					summary := tableSummaryText(info)
+					if summary != "" {
+						planned = append(planned, plannedChunk{content: summary, role: IndexRoleBoth, sourcePath: summarySourcePath(asset.Sheet)})
+						coverage.vectorRows += int64(len(info.samples))
+						if asset.Sheet != "" {
+							coverage.vectorSheets[asset.Sheet] = true
+						}
+						coverage.vectorChars += int64(len([]rune(summary)))
+						emittedSummary[assetID] = true
 					}
-					coverage.vectorChars += int64(len([]rune(summary)))
 				}
 				for _, content := range contents {
 					planned = append(planned, plannedChunk{content: cleanTableText(content), role: IndexRoleKeyword})
@@ -571,9 +608,51 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 			if item.content == "" {
 				continue
 			}
-			rows = append(rows, chunkRow{ID: stableID("chunk", version.ID, fmt.Sprint(childOrdinal), item.content), ParentID: parentID, Content: item.content, ContentHash: hashString(item.content), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: childOrdinal, IndexRole: item.role, TableAssetID: assetID})
+			sourcePath := block.SourcePath
+			if item.sourcePath != "" {
+				sourcePath = item.sourcePath
+			}
+			rows = append(rows, chunkRow{ID: stableID("chunk", version.ID, fmt.Sprint(childOrdinal), item.content), ParentID: parentID, Content: item.content, ContentHash: hashString(item.content), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: sourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: childOrdinal, IndexRole: item.role, TableAssetID: assetID})
 			childOrdinal++
 		}
+	}
+	coverage.totalSheets = len(normalized.Sheets)
+	if coverage.totalSheets == 0 {
+		coverage.totalSheets = len(assets)
+	}
+	coverage.coverageKnown = len(normalized.Sheets) > 0
+	coverage.storageMode = normalized.StorageMode
+	for _, asset := range assets {
+		rowsTotal := asset.TotalRows
+		if rowsTotal == 0 {
+			rowsTotal = int64(asset.RowCount)
+		}
+		parsedRows := asset.ParsedRows
+		if parsedRows == 0 && (asset.StorageMode == "" || asset.StorageMode == StorageModeFull) {
+			parsedRows = int64(asset.RowCount)
+		}
+		coverage.totalRows += rowsTotal
+		coverage.parsedRows += parsedRows
+		coverage.keywordRows += parsedRows
+		if asset.ParseStatus != ParseStatusSkipped && asset.ParseStatus != ParseStatusFailed {
+			coverage.parsedSheets++
+		}
+		if asset.Truncated {
+			coverage.parseTruncated = true
+		}
+		coverage.storageMode = mergeStorageMode(coverage.storageMode, asset.StorageMode)
+	}
+	coverage.parseTruncated = coverage.parseTruncated || normalized.Truncated
+	coverage.vectorRows = min(coverage.vectorRows, coverage.parsedRows)
+	if coverage.storageMode == "" {
+		coverage.storageMode = StorageModeFull
+	}
+	parseStatus := ParseStatusParsed
+	if coverage.parseTruncated {
+		parseStatus = "partial"
+	}
+	if coverage.storageMode == StorageModeMetadata && coverage.parsedRows == 0 {
+		parseStatus = ParseStatusMetadata
 	}
 	if len(rows) == 0 {
 		return apperror.Terminalf("empty_document", "chunker returned no chunks")
@@ -637,9 +716,14 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		result := tx.Model(&models.DocumentVersion{}).
 			Where("id = ? AND status <> ?", version.ID, StatusCancelled).
 			Updates(statusFields(StatusChunked, map[string]any{
-				"index_mode": indexMode, "vector_rows": coverage.vectorRows, "total_rows": coverage.totalRows,
-				"vector_sheets": len(coverage.vectorSheets), "total_sheets": len(coverage.sheets),
+				"index_mode": indexMode, "storage_mode": coverage.storageMode,
+				"parse_status": parseStatus, "parse_truncated": coverage.parseTruncated,
+				"parsed_sheets": coverage.parsedSheets, "total_sheets": coverage.totalSheets,
+				"parsed_rows": coverage.parsedRows, "keyword_rows": coverage.keywordRows,
+				"total_rows": coverage.totalRows, "vector_rows": coverage.vectorRows,
+				"vector_sheets": len(coverage.vectorSheets),
 				"vector_tokens": estimateTokens(int(coverage.vectorChars)), "estimated_tokens": estimateTokens(int(coverage.vectorChars)),
+				"coverage_known": coverage.coverageKnown,
 			}))
 		if result.Error != nil {
 			return result.Error

@@ -48,6 +48,27 @@ message ParseDocumentResponse {
   int64 indexed_rows = 13;
   int32 total_sheets = 14;
   int32 indexed_sheets = 15;
+  // Per-sheet catalog. Every source sheet appears here even when its rows are
+  // not indexed, so coverage can distinguish "not parsed" from "not vectorized".
+  repeated SheetMeta sheets = 16;
+  // full = all rows indexed, sampled = metadata/sample only, metadata = catalog
+  // only. Mirrors the B38 storage tiers.
+  string storage_mode = 17;
+}
+
+message SheetMeta {
+  string name = 1;
+  repeated string header = 2;
+  int64 declared_rows = 3;
+  int64 total_rows = 4;
+  int64 parsed_rows = 5;
+  int32 column_count = 6;
+  int32 header_row = 7;
+  string parse_status = 8;
+  bool truncated = 9;
+  repeated string sample_rows = 10;
+  string source_path = 11;
+  string stats_source = 12;
 }
 
 message TableMeta {

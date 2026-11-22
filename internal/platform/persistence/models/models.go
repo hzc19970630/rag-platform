@@ -264,6 +264,13 @@ type DocumentVersion struct {
 	Status          string    `gorm:"size:32;not null" json:"status"`
 	ACLVersion      int64     `gorm:"not null" json:"aclVersion"`
 	IndexMode       string    `gorm:"size:16;not null;default:''" json:"indexMode"`
+	StorageMode     string    `gorm:"size:16;not null;default:'full'" json:"storageMode"`
+	ParseStatus     string    `gorm:"size:16;not null;default:''" json:"parseStatus"`
+	ParseTruncated  bool      `gorm:"not null;default:false" json:"parseTruncated"`
+	ParsedSheets    int       `gorm:"not null;default:0" json:"parsedSheets"`
+	ParsedRows      int64     `gorm:"not null;default:0" json:"parsedRows"`
+	KeywordRows     int64     `gorm:"not null;default:0" json:"keywordRows"`
+	CoverageKnown   bool      `gorm:"not null;default:false" json:"coverageKnown"`
 	VectorRows      int64     `gorm:"not null;default:0" json:"vectorRows"`
 	TotalRows       int64     `gorm:"not null;default:0" json:"totalRows"`
 	VectorSheets    int       `gorm:"not null;default:0" json:"vectorSheets"`

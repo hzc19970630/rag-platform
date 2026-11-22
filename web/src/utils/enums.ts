@@ -4,7 +4,7 @@ import type { TFunction } from "i18next";
 // enum values to i18n keys themselves: adding a backend state or capability is
 // a change to this file plus the two translation blocks, nothing else.
 
-export type EnumGroup = "status" | "role" | "capability" | "source" | "connector_type" | "provider_kind" | "audit_action" | "audit_resource" | "api_key_status" | "queue" | "embedding_migration_status";
+export type EnumGroup = "status" | "role" | "capability" | "source" | "connector_type" | "provider_kind" | "audit_action" | "audit_resource" | "api_key_status" | "queue" | "embedding_migration_status" | "table_storage" | "table_parse_status";
 export type EnumTone = "success" | "warning" | "error" | "default";
 
 export const STATUS_VALUES = [
@@ -64,6 +64,11 @@ export const AUDIT_RESOURCE_VALUES = [
 export const EMBEDDING_MIGRATION_STATUS_VALUES = [
   "pending", "building_index", "reembedding", "verifying", "ready",
   "cutover", "finalized", "rolled_back", "cancelled", "failed",
+] as const;
+
+export const TABLE_STORAGE_VALUES = ["full", "sampled", "metadata"] as const;
+export const TABLE_PARSE_STATUS_VALUES = [
+  "parsed", "truncated", "sampled", "metadata", "skipped", "failed", "partial",
 ] as const;
 
 export type StatusValue = (typeof STATUS_VALUES)[number];
@@ -154,6 +159,14 @@ export function embeddingMigrationStatusLabel(t: TFunction, status: string): str
 
 export function embeddingMigrationStatusTone(status: string): EnumTone {
   return EMBEDDING_MIGRATION_TONES[status] ?? "default";
+}
+
+export function tableStorageLabel(t: TFunction, value: string): string {
+  return enumLabel(t, "table_storage", value);
+}
+
+export function tableParseStatusLabel(t: TFunction, value: string): string {
+  return enumLabel(t, "table_parse_status", value);
 }
 
 export function enumLabelKey(group: EnumGroup, value: string): string {

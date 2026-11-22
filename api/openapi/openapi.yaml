@@ -793,6 +793,8 @@ components:
       type: object
     DocumentIndexEstimate:
       properties:
+        coverageKnown:
+          type: boolean
         currentVectorTokens:
           format: int64
           type: integer
@@ -806,6 +808,24 @@ components:
         documentVersionId:
           type: string
         indexMode:
+          type: string
+        keywordRows:
+          format: int64
+          type: integer
+        parseStatus:
+          type: string
+        parseTruncated:
+          type: boolean
+        parsedRows:
+          format: int64
+          type: integer
+        parsedSheets:
+          type: integer
+        sheets:
+          items:
+            $ref: '#/components/schemas/SheetCoverage'
+          type: array
+        storageMode:
           type: string
         tableCount:
           format: int64
@@ -936,6 +956,8 @@ components:
           type: integer
         contentHash:
           type: string
+        coverageKnown:
+          type: boolean
         createdAt:
           format: date-time
           type: string
@@ -952,12 +974,26 @@ components:
           type: string
         indexMode:
           type: string
+        keywordRows:
+          format: int64
+          type: integer
         knowledgeBaseId:
           type: string
+        parseStatus:
+          type: string
+        parseTruncated:
+          type: boolean
+        parsedRows:
+          format: int64
+          type: integer
+        parsedSheets:
+          type: integer
         sizeBytes:
           format: int64
           type: integer
         status:
+          type: string
+        storageMode:
           type: string
         tenantId:
           type: string
@@ -2595,6 +2631,27 @@ components:
             type: string
           type: array
       type: object
+    SheetCoverage:
+      properties:
+        columnCount:
+          type: integer
+        indexMode:
+          type: string
+        parseStatus:
+          type: string
+        parsedRows:
+          format: int64
+          type: integer
+        sheet:
+          type: string
+        storageMode:
+          type: string
+        totalRows:
+          format: int64
+          type: integer
+        truncated:
+          type: boolean
+      type: object
     StageRun:
       properties:
         attempts:
@@ -2664,10 +2721,17 @@ components:
           items:
             type: string
           type: array
+        headerRow:
+          type: integer
         id:
           type: string
         indexMode:
           type: string
+        parseStatus:
+          type: string
+        parsedRows:
+          format: int64
+          type: integer
         rowCount:
           type: integer
         rowEnd:
@@ -2676,6 +2740,13 @@ components:
           type: integer
         sheet:
           type: string
+        storageMode:
+          type: string
+        totalRows:
+          format: int64
+          type: integer
+        truncated:
+          type: boolean
       type: object
     TableAssetList:
       properties:
@@ -2720,14 +2791,23 @@ components:
           type: array
         matchedRows:
           type: integer
+        parseStatus:
+          type: string
         rows:
           items:
             $ref: '#/components/schemas/TableRow'
           type: array
         sheet:
           type: string
+        sourceRows:
+          format: int64
+          type: integer
+        storageMode:
+          type: string
         totalRows:
           type: integer
+        truncated:
+          type: boolean
       type: object
     TableRow:
       properties:

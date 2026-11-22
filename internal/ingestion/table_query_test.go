@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
@@ -55,5 +56,14 @@ func TestQueryTableFiltersAndSorts(t *testing.T) {
 	}
 	if _, err := service.QueryTable(ctx, principal, "kb-other", TableQuery{AssetID: "asset-1"}); err == nil {
 		t.Fatalf("cross-knowledge-base query must fail")
+	}
+	if err := db.Create(&models.TableAsset{
+		ID: "asset-sampled", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
+		Sheet: "huge", Header: `["name","qty"]`, RowCount: 10, TotalRows: 500000, StorageMode: StorageModeSampled,
+	}).Error; err != nil {
+		t.Fatalf("seed sampled asset: %v", err)
+	}
+	if _, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-sampled"}); err == nil || !strings.Contains(err.Error(), "table_rows_not_indexed") {
+		t.Fatalf("sampled query error = %v", err)
 	}
 }

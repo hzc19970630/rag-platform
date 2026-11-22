@@ -14,19 +14,38 @@ import (
 
 // IndexEstimate is the pre-flight view for switching a document's table index
 // mode. Minutes are zero when no TPM budget is configured.
+type SheetCoverage struct {
+	Sheet       string `json:"sheet"`
+	StorageMode string `json:"storageMode"`
+	ParseStatus string `json:"parseStatus"`
+	IndexMode   string `json:"indexMode"`
+	TotalRows   int64  `json:"totalRows"`
+	ParsedRows  int64  `json:"parsedRows"`
+	ColumnCount int    `json:"columnCount"`
+	Truncated   bool   `json:"truncated"`
+}
+
 type IndexEstimate struct {
-	DocumentID           string  `json:"documentId"`
-	DocumentVersionID    string  `json:"documentVersionId"`
-	IndexMode            string  `json:"indexMode"`
-	TableCount           int64   `json:"tableCount"`
-	TotalRows            int64   `json:"totalRows"`
-	VectorRows           int64   `json:"vectorRows"`
-	TotalSheets          int     `json:"totalSheets"`
-	VectorSheets         int     `json:"vectorSheets"`
-	CurrentVectorTokens  int64   `json:"currentVectorTokens"`
-	DeepEstimatedTokens  int64   `json:"deepEstimatedTokens"`
-	DeepEstimatedMinutes float64 `json:"deepEstimatedMinutes"`
-	TPMBudget            int64   `json:"tpmBudget"`
+	DocumentID           string          `json:"documentId"`
+	DocumentVersionID    string          `json:"documentVersionId"`
+	IndexMode            string          `json:"indexMode"`
+	StorageMode          string          `json:"storageMode"`
+	ParseStatus          string          `json:"parseStatus"`
+	ParseTruncated       bool            `json:"parseTruncated"`
+	CoverageKnown        bool            `json:"coverageKnown"`
+	TableCount           int64           `json:"tableCount"`
+	TotalRows            int64           `json:"totalRows"`
+	ParsedRows           int64           `json:"parsedRows"`
+	KeywordRows          int64           `json:"keywordRows"`
+	VectorRows           int64           `json:"vectorRows"`
+	TotalSheets          int             `json:"totalSheets"`
+	ParsedSheets         int             `json:"parsedSheets"`
+	VectorSheets         int             `json:"vectorSheets"`
+	CurrentVectorTokens  int64           `json:"currentVectorTokens"`
+	DeepEstimatedTokens  int64           `json:"deepEstimatedTokens"`
+	DeepEstimatedMinutes float64         `json:"deepEstimatedMinutes"`
+	TPMBudget            int64           `json:"tpmBudget"`
+	Sheets               []SheetCoverage `json:"sheets"`
 }
 
 // IndexEstimate describes what a deep index would cost for the current version.
@@ -37,13 +56,30 @@ func (s *Service) IndexEstimate(ctx context.Context, principal authz.Principal, 
 	}
 	estimate := IndexEstimate{
 		DocumentID: document.ID, DocumentVersionID: version.ID, IndexMode: version.IndexMode,
-		TotalRows: version.TotalRows, VectorRows: version.VectorRows,
-		TotalSheets: version.TotalSheets, VectorSheets: version.VectorSheets,
+		StorageMode: version.StorageMode, ParseStatus: version.ParseStatus, ParseTruncated: version.ParseTruncated,
+		CoverageKnown: version.CoverageKnown, TotalRows: version.TotalRows, ParsedRows: version.ParsedRows,
+		KeywordRows: version.KeywordRows, VectorRows: version.VectorRows,
+		TotalSheets: version.TotalSheets, ParsedSheets: version.ParsedSheets, VectorSheets: version.VectorSheets,
 		CurrentVectorTokens: version.VectorTokens, TPMBudget: s.embeddingTPM,
 	}
+	if estimate.StorageMode == "" {
+		estimate.StorageMode = StorageModeFull
+	}
+	if estimate.ParseStatus == "" {
+		estimate.ParseStatus = ParseStatusParsed
+	}
+	var assets []models.TableAsset
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.TableAsset{}).
-		Where("document_version_id = ?", version.ID).Count(&estimate.TableCount).Error; err != nil {
+		Where("document_version_id = ?", version.ID).Order("sheet, id").Find(&assets).Error; err != nil {
 		return IndexEstimate{}, err
+	}
+	estimate.TableCount = int64(len(assets))
+	for _, asset := range assets {
+		estimate.Sheets = append(estimate.Sheets, SheetCoverage{
+			Sheet: asset.Sheet, StorageMode: asset.StorageMode, ParseStatus: asset.ParseStatus,
+			IndexMode: asset.IndexMode, TotalRows: asset.TotalRows, ParsedRows: asset.ParsedRows,
+			ColumnCount: asset.ColumnCount, Truncated: asset.Truncated,
+		})
 	}
 	var chars int64
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Chunk{}).
@@ -78,6 +114,19 @@ func (s *Service) SetIndexMode(ctx context.Context, principal authz.Principal, d
 	}
 	if _, err := s.authorizedKnowledgeBase(ctx, principal, document.KnowledgeBaseID, "write"); err != nil {
 		return UploadResult{}, err
+	}
+	if mode == IndexModeDeep && document.LatestVersionID != "" {
+		var version models.DocumentVersion
+		if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
+			Where("id = ?", document.LatestVersionID).First(&version).Error; err != nil {
+			return UploadResult{}, fmt.Errorf("load document version: %w", err)
+		}
+		if version.StorageMode != "" && version.StorageMode != StorageModeFull {
+			return UploadResult{}, apperror.Invalidf(
+				"deep_index_requires_full_storage: current document is %s; external query is required for all rows",
+				version.StorageMode,
+			)
+		}
 	}
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).Model(&models.Document{}).
 		Where("id = ?", document.ID).Update("index_mode", mode).Error; err != nil {

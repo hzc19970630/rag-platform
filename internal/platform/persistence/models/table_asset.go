@@ -22,6 +22,12 @@ type TableAsset struct {
 	SampleRows        string    `gorm:"type:jsonb;not null;default:'[]'" json:"-"`
 	Stats             string    `gorm:"type:jsonb;not null;default:'{}'" json:"-"`
 	IndexMode         string    `gorm:"size:16;not null;default:''" json:"indexMode"`
+	StorageMode       string    `gorm:"size:16;not null;default:'full'" json:"storageMode"`
+	ParseStatus       string    `gorm:"size:16;not null;default:'parsed'" json:"parseStatus"`
+	Truncated         bool      `gorm:"not null;default:false" json:"truncated"`
+	TotalRows         int64     `gorm:"not null;default:0" json:"totalRows"`
+	ParsedRows        int64     `gorm:"not null;default:0" json:"parsedRows"`
+	HeaderRow         int       `gorm:"not null;default:0" json:"headerRow"`
 	CreatedAt         time.Time `gorm:"not null" json:"createdAt"`
 	UpdatedAt         time.Time `gorm:"not null" json:"updatedAt"`
 }
