@@ -48,7 +48,7 @@ if [[ -n "${1:-}" ]]; then
 fi
 
 echo "starting dependencies..."
-"${compose[@]}" up -d --build --wait postgres redis minio docreader
+"${compose[@]}" up -d --build --wait postgres redis minio docreader tablehouse
 
 echo "running migrations and seed..."
 "${compose[@]}" run --rm --no-deps --build migrate

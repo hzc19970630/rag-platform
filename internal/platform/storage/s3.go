@@ -291,3 +291,38 @@ func (s *S3Store) Delete(ctx context.Context, key string) error {
 	}
 	return nil
 }
+
+// DeletePrefix removes every object under a prefix. The prefix is matched after
+// trimming a leading slash; an empty prefix would address the whole bucket and
+// is rejected.
+func (s *S3Store) DeletePrefix(ctx context.Context, prefix string) error {
+	prefix = strings.TrimPrefix(strings.TrimSpace(prefix), "/")
+	if prefix == "" {
+		return fmt.Errorf("delete prefix: empty prefix")
+	}
+	keys := make([]string, 0, 64)
+	for object := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if object.Err != nil {
+			return fmt.Errorf("list prefix %s: %w", prefix, object.Err)
+		}
+		keys = append(keys, object.Key)
+	}
+	for start := 0; start < len(keys); start += 500 {
+		end := start + 500
+		if end > len(keys) {
+			end = len(keys)
+		}
+		batch := keys[start:end]
+		objects := make(chan minio.ObjectInfo, len(batch))
+		for _, key := range batch {
+			objects <- minio.ObjectInfo{Key: key}
+		}
+		close(objects)
+		for removal := range s.client.RemoveObjects(ctx, s.bucket, objects, minio.RemoveObjectsOptions{}) {
+			if removal.Err != nil {
+				return fmt.Errorf("delete object %s: %w", removal.ObjectName, removal.Err)
+			}
+		}
+	}
+	return nil
+}

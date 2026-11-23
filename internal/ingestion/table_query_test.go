@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -12,30 +11,40 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
 
-func TestQueryTableFiltersAndSorts(t *testing.T) {
+type fakeTableReader struct {
+	result ColumnarTableResult
+	err    error
+	last   ColumnarTableQuery
+	target TableMaterializeTarget
+	sheet  string
+}
+
+func (f *fakeTableReader) QueryTable(_ context.Context, target TableMaterializeTarget, sheet string, query ColumnarTableQuery) (ColumnarTableResult, error) {
+	f.target = target
+	f.sheet = sheet
+	f.last = query
+	return f.result, f.err
+}
+
+func TestQueryTableUsesColumnarBackend(t *testing.T) {
 	service, db, _ := newReparseFixture(t)
 	ctx := context.Background()
 	principal := ownerPrincipal()
+	reader := &fakeTableReader{result: ColumnarTableResult{
+		MatchedRows: 2,
+		Rows: []TableRowView{
+			{RowNumber: 2, Cells: map[string]string{"name": "tape", "qty": "5"}},
+			{RowNumber: 4, Cells: map[string]string{"name": "box", "qty": "3"}},
+		},
+	}}
+	service.SetTablehouse(reader)
 	if err := db.Create(&models.TableAsset{
 		ID: "asset-1", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
 		Sheet: "Sheet1", Header: `["name","qty"]`, RowCount: 3, ColumnCount: 2,
+		StorageURI: "tablehouse/tenant=tenant-a/kb=kb-a/doc=doc-a/ver=ver-1/sheet=Sheet1", StorageFormat: "parquet",
+		MaterializedRows: 3, MaterializeStatus: MaterializeStatusReady,
 	}).Error; err != nil {
 		t.Fatalf("seed asset: %v", err)
-	}
-	rows := []map[string]string{
-		{"name": "pen", "qty": "2"},
-		{"name": "tape", "qty": "5"},
-		{"name": "box", "qty": "3"},
-	}
-	for index, cells := range rows {
-		encoded, _ := json.Marshal(cells)
-		if err := db.Create(&models.TableRow{
-			ID: "row-" + string(rune('a'+index)), TenantID: "tenant-a", KnowledgeBaseID: "kb-a",
-			DocumentID: "doc-a", DocumentVersionID: "ver-1", TableAssetID: "asset-1",
-			RowNumber: index + 2, Cells: string(encoded),
-		}).Error; err != nil {
-			t.Fatalf("seed row: %v", err)
-		}
 	}
 	result, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{
 		AssetID: "asset-1", Filters: []TableFilter{{Column: "qty", Op: "gte", Value: "3"}},
@@ -47,27 +56,59 @@ func TestQueryTableFiltersAndSorts(t *testing.T) {
 	if result.MatchedRows != 2 || len(result.Rows) != 2 {
 		t.Fatalf("result = %+v", result)
 	}
-	if result.Rows[0].Cells["name"] != "tape" || result.Rows[1].Cells["name"] != "box" {
-		t.Fatalf("rows = %+v", result.Rows)
-	}
 	if result.Header[0] != "name" || result.Header[1] != "qty" {
 		t.Fatalf("header = %v", result.Header)
 	}
-	limited, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-1", Limit: 1})
-	if err != nil || len(limited.Rows) != 1 || limited.MatchedRows != 3 {
-		t.Fatalf("limited = %+v, %v", limited, err)
+	if result.SourceRows != 0 {
+		t.Fatalf("source rows = %d", result.SourceRows)
 	}
-	if _, err := service.QueryTable(ctx, principal, "kb-other", TableQuery{AssetID: "asset-1"}); err == nil {
+	if reader.sheet != "Sheet1" || reader.target.DocumentID != "doc-a" || reader.target.VersionID != "ver-1" {
+		t.Fatalf("backend target = %+v sheet=%q", reader.target, reader.sheet)
+	}
+	if len(reader.last.Filters) != 1 || reader.last.Filters[0].Column != "qty" || reader.last.OrderBy != "qty" || !reader.last.Desc || reader.last.Limit != 10 {
+		t.Fatalf("backend query = %+v", reader.last)
+	}
+}
+
+func TestQueryTableRejectsLegacyAndFailedAssets(t *testing.T) {
+	service, db, _ := newReparseFixture(t)
+	ctx := context.Background()
+	principal := ownerPrincipal()
+	service.SetTablehouse(&fakeTableReader{})
+	for _, asset := range []models.TableAsset{
+		{ID: "asset-legacy", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1", Sheet: "Sheet1", Header: `["name"]`, RowCount: 1},
+		{
+			ID: "asset-failed", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
+			Sheet: "huge", Header: `["name"]`, RowCount: 10, MaterializeStatus: MaterializeStatusFailed, MaterializeError: "sheet row limit exceeded",
+		},
+	} {
+		if err := db.Create(&asset).Error; err != nil {
+			t.Fatalf("seed asset %s: %v", asset.ID, err)
+		}
+	}
+	if _, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-legacy"}); err == nil || !strings.Contains(err.Error(), "table_needs_reparse") {
+		t.Fatalf("legacy query error = %v", err)
+	}
+	if _, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-failed"}); err == nil || !strings.Contains(err.Error(), "table_materialize_failed") {
+		t.Fatalf("failed query error = %v", err)
+	}
+	if _, err := service.QueryTable(ctx, principal, "kb-other", TableQuery{AssetID: "asset-legacy"}); err == nil {
 		t.Fatalf("cross-knowledge-base query must fail")
 	}
+}
+
+func TestQueryTableWithoutBackendIsNotReady(t *testing.T) {
+	service, db, _ := newReparseFixture(t)
+	ctx := context.Background()
+	principal := ownerPrincipal()
 	if err := db.Create(&models.TableAsset{
-		ID: "asset-sampled", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
-		Sheet: "huge", Header: `["name","qty"]`, RowCount: 10, TotalRows: 500000, StorageMode: StorageModeSampled,
+		ID: "asset-1", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
+		Sheet: "Sheet1", Header: `["name"]`, RowCount: 1, StorageURI: "tablehouse/x", MaterializeStatus: MaterializeStatusReady,
 	}).Error; err != nil {
-		t.Fatalf("seed sampled asset: %v", err)
+		t.Fatalf("seed asset: %v", err)
 	}
-	if _, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-sampled"}); err == nil || !strings.Contains(err.Error(), "table_rows_not_indexed") {
-		t.Fatalf("sampled query error = %v", err)
+	if _, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-1"}); !errors.Is(err, apperror.ErrNotReady) {
+		t.Fatalf("query without backend error = %v", err)
 	}
 }
 
@@ -75,17 +116,16 @@ func TestQueryTableHidesSoftDeletedDocument(t *testing.T) {
 	service, db, _ := newReparseFixture(t)
 	ctx := context.Background()
 	principal := ownerPrincipal()
+	service.SetTablehouse(&fakeTableReader{result: ColumnarTableResult{
+		MatchedRows: 1,
+		Rows:        []TableRowView{{RowNumber: 2, Cells: map[string]string{"name": "pen"}}},
+	}})
 	if err := db.Create(&models.TableAsset{
 		ID: "asset-deleted", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
 		Sheet: "Sheet1", Header: `["name"]`, RowCount: 1, ColumnCount: 1,
+		StorageURI: "tablehouse/tenant=tenant-a/kb=kb-a/doc=doc-a/ver=ver-1/sheet=Sheet1", MaterializeStatus: MaterializeStatusReady,
 	}).Error; err != nil {
 		t.Fatalf("seed asset: %v", err)
-	}
-	if err := db.Create(&models.TableRow{
-		ID: "row-a", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a",
-		DocumentVersionID: "ver-1", TableAssetID: "asset-deleted", RowNumber: 2, Cells: `{"name":"pen"}`,
-	}).Error; err != nil {
-		t.Fatalf("seed row: %v", err)
 	}
 	if _, err := service.QueryTable(ctx, principal, "kb-a", TableQuery{AssetID: "asset-deleted"}); err != nil {
 		t.Fatalf("live query: %v", err)

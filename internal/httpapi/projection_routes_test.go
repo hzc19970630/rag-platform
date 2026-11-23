@@ -58,6 +58,15 @@ func (httpOpsStore) PlatformSnapshot(context.Context, time.Time, int) (ops.Platf
 	return ops.PlatformSnapshot{}, nil
 }
 
+type httpTableReader struct{}
+
+func (httpTableReader) QueryTable(context.Context, ingestion.TableMaterializeTarget, string, ingestion.ColumnarTableQuery) (ingestion.ColumnarTableResult, error) {
+	return ingestion.ColumnarTableResult{
+		MatchedRows: 1,
+		Rows:        []ingestion.TableRowView{{RowNumber: 2, Cells: map[string]string{"name": "pen", "qty": "2"}}},
+	}, nil
+}
+
 func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -190,6 +199,7 @@ func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 		"norm-a": []byte(`{"schema_version":"NormalizedDocumentV1","title":"Doc","language":"en","parser_version":"p1","blocks":[{"block_id":"b1","kind":"text","text":"hello","heading_path":"H","source_path":"a.md"}]}`),
 	}}
 	ingestionService := ingestion.NewService(db, authzService, objects, nil, 1<<20, 30, ingestion.Quota{})
+	ingestionService.SetTablehouse(httpTableReader{})
 	cipher, err := secrets.NewCipher("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 	if err != nil {
 		t.Fatalf("create cipher: %v", err)
@@ -353,15 +363,11 @@ func TestKnowledgeBaseRoutes(t *testing.T) {
 	router, db := newProjectionHTTPRouter(t)
 	if err := db.Create(&models.TableAsset{
 		ID: "asset-http", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-a",
-		Sheet: "Sheet1", Header: `["name","qty"]`, RowCount: 1, ColumnCount: 2,
+		Sheet: "Sheet1", Header: `["name","qty"]`, RowCount: 1, ColumnCount: 2, MaterializedRows: 1,
+		StorageURI: "tablehouse/tenant=tenant-a/kb=kb-a/doc=doc-a/ver=ver-a/sheet=Sheet1", StorageFormat: "parquet",
+		MaterializeStatus: ingestion.MaterializeStatusReady,
 	}).Error; err != nil {
 		t.Fatalf("seed table asset: %v", err)
-	}
-	if err := db.Create(&models.TableRow{
-		ID: "row-http", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-a",
-		TableAssetID: "asset-http", RowNumber: 2, Cells: `{"name":"pen","qty":"2"}`,
-	}).Error; err != nil {
-		t.Fatalf("seed table row: %v", err)
 	}
 	cases := []struct {
 		method string

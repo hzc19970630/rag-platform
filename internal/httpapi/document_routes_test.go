@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"strings"
 	"testing"
 )
 
@@ -47,6 +48,15 @@ func (o *httpDocObjects) Open(_ context.Context, key string) (io.ReadCloser, err
 
 func (o *httpDocObjects) Delete(_ context.Context, key string) error {
 	delete(o.data, key)
+	return nil
+}
+
+func (o *httpDocObjects) DeletePrefix(_ context.Context, prefix string) error {
+	for key := range o.data {
+		if strings.HasPrefix(key, prefix) {
+			delete(o.data, key)
+		}
+	}
 	return nil
 }
 

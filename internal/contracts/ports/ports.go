@@ -33,6 +33,18 @@ type (
 	ChunkDocument       = ingestion.ChunkDocument
 	MultipartPart       = ingestion.MultipartPart
 	MultipartStore      = ingestion.MultipartStore
+
+	TableMaterializer      = ingestion.TableMaterializer
+	TableRowBatch          = ingestion.TableRowBatch
+	TableMaterializeTarget = ingestion.TableMaterializeTarget
+	TableMaterializeResult = ingestion.TableMaterializeResult
+	TableSheetError        = ingestion.TableSheetError
+	TableFilter            = ingestion.TableFilter
+	TableRowView           = ingestion.TableRowView
+
+	ColumnarTableQuery  = ingestion.ColumnarTableQuery
+	ColumnarTableResult = ingestion.ColumnarTableResult
+	ColumnarTableReader = ingestion.ColumnarTableReader
 )
 
 const (
@@ -45,6 +57,10 @@ const (
 	SchemaSourceObject = ingestion.SchemaSourceObject
 	StatusEmbedded     = ingestion.StatusEmbedded
 	StatusCancelled    = ingestion.StatusCancelled
+
+	MaterializeStatusReady   = ingestion.MaterializeStatusReady
+	MaterializeStatusPartial = ingestion.MaterializeStatusPartial
+	MaterializeStatusFailed  = ingestion.MaterializeStatusFailed
 )
 
 func SortCandidates(candidates []Candidate) {

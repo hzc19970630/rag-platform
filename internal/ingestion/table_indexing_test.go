@@ -152,11 +152,15 @@ func TestBuildTableAssetsGroupsBySheet(t *testing.T) {
 	if assets[0].RowCount != 3 || assets[0].RowStart != 2 || assets[0].RowEnd != 4 {
 		t.Fatalf("sheet S1 asset = %+v", assets[0])
 	}
-	rows := tableRowModels(version, assets[0].ID, tableMetaInfo{
-		header: []string{"a", "b"}, rowStart: 2, rows: [][]string{{"x", "1"}, {"y", "2"}},
+	applyMaterialize(assets, map[string]TableMaterializeResult{
+		"S1": {Rows: 3, Bytes: 1024, Status: MaterializeStatusReady, URI: "tablehouse/s1", ColumnTypes: []string{"string", "int"}, ContentHash: "h1"},
+		"S2": {Status: MaterializeStatusFailed, Error: "bad sheet"},
 	})
-	if len(rows) != 2 || rows[0].ID == rows[1].ID || rows[0].TableAssetID != assets[0].ID {
-		t.Fatalf("rows = %+v", rows)
+	if assets[0].MaterializeStatus != MaterializeStatusReady || assets[0].MaterializedRows != 3 || assets[0].ByteSize != 1024 || assets[0].StorageURI != "tablehouse/s1" || assets[0].StorageFormat != "parquet" || assets[0].MaterializedAt == nil {
+		t.Fatalf("S1 materialize = %+v", assets[0])
+	}
+	if assets[1].MaterializeStatus != MaterializeStatusFailed || assets[1].MaterializeError != "bad sheet" || assets[1].StorageURI != "" || assets[1].MaterializedAt != nil {
+		t.Fatalf("S2 materialize = %+v", assets[1])
 	}
 }
 

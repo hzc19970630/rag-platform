@@ -174,6 +174,36 @@ jobs:
           format: cyclonedx
           output: rag-platform-docreader-${{ env.VERSION }}.cdx.json
 
+      - name: Build tablehouse image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/tablehouse/Dockerfile
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_PREFIX }}/tablehouse:${{ env.VERSION }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.SHORT_SHA }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+
+      - name: Trivy tablehouse image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/tablehouse:${{ env.VERSION }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate tablehouse SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE_PREFIX }}/tablehouse:${{ env.VERSION }}
+          format: cyclonedx
+          output: rag-platform-tablehouse-${{ env.VERSION }}.cdx.json
+
       - name: Build mcp image
         uses: docker/build-push-action@v6
         with:
@@ -208,7 +238,7 @@ jobs:
       - name: Publish images
         run: |
           set -euo pipefail
-          for image in api docreader mcp; do
+          for image in api docreader tablehouse mcp; do
             docker tag "${IMAGE_PREFIX}/${image}:${VERSION}" "${IMAGE_PREFIX}/${image}:sha-${SHORT_SHA}"
             docker push "${IMAGE_PREFIX}/${image}:${VERSION}"
             docker push "${IMAGE_PREFIX}/${image}:sha-${SHORT_SHA}"
@@ -226,6 +256,7 @@ jobs:
           set -euo pipefail
           cosign sign --yes "${IMAGE_PREFIX}/api@${API_DIGEST}"
           cosign sign --yes "${IMAGE_PREFIX}/docreader@${DOCREADER_DIGEST}"
+          cosign sign --yes "${IMAGE_PREFIX}/tablehouse@${TABLEHOUSE_DIGEST}"
           cosign sign --yes "${IMAGE_PREFIX}/mcp@${MCP_DIGEST}"
 
       - name: Build web dist
@@ -245,6 +276,7 @@ jobs:
           built_at=${BUILD_DATE}
           api=${IMAGE_PREFIX}/api:${VERSION}@${API_DIGEST}
           docreader=${IMAGE_PREFIX}/docreader:${VERSION}@${DOCREADER_DIGEST}
+          tablehouse=${IMAGE_PREFIX}/tablehouse:${VERSION}@${TABLEHOUSE_DIGEST}
           mcp=${IMAGE_PREFIX}/mcp:${VERSION}@${MCP_DIGEST}
           web=rag-platform-web-${VERSION}.tar.gz
           mcp_binaries=rag-mcp-${VERSION}-<os>-<arch> (windows binaries use .exe)
@@ -264,6 +296,7 @@ jobs:
             rag-platform-web-"${VERSION}".tar.gz
             rag-platform-api-"${VERSION}".cdx.json
             rag-platform-docreader-"${VERSION}".cdx.json
+            rag-platform-tablehouse-"${VERSION}".cdx.json
             rag-platform-mcp-"${VERSION}".cdx.json
             rag-mcp-"${VERSION}"-*
           )

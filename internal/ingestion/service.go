@@ -44,6 +44,8 @@ type Service struct {
 	embeddingTPM  int64
 	charsPerToken int
 	metrics       metrics.Recorder
+	tables        ColumnarTableReader
+	tablePrefix   string
 }
 
 // ProjectionInvalidator hides derived content immediately after a document
@@ -66,6 +68,18 @@ func (s *Service) SetQuotaResolver(resolver QuotaResolver) {
 
 func (s *Service) SetProjectionInvalidator(invalidator ProjectionInvalidator) {
 	s.projection = invalidator
+}
+
+// SetTablehouse wires the columnar copy reader used by /tables/query. Nil
+// leaves table queries returning not_ready.
+func (s *Service) SetTablehouse(reader ColumnarTableReader) {
+	s.tables = reader
+}
+
+// SetTablehousePrefix wires the object-storage prefix of the columnar copy so
+// document purge can remove it. Empty disables prefix cleanup.
+func (s *Service) SetTablehousePrefix(prefix string) {
+	s.tablePrefix = strings.Trim(strings.TrimSpace(prefix), "/")
 }
 
 // SetMetrics wires the process metrics recorder for table queries and mode

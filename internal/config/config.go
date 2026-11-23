@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultParserVersion must stay in sync with services/docreader/main.py.
-const DefaultParserVersion = "docreader-b38-v1"
+const DefaultParserVersion = "docreader-b39-v1"
 
 type Config struct {
 	APIAddr string
@@ -49,7 +49,12 @@ type Config struct {
 	RedisAddr                      string
 	RedisPassword                  string
 	DocreaderAddr                  string
-	S3Endpoint                     string
+	// TablehouseURL enables the columnar table copy and query backend. Empty
+	// keeps block-only parsing and makes table queries return not_ready.
+	TablehouseURL             string
+	TablehousePrefix          string
+	TablehouseQueryTimeoutSec int
+	S3Endpoint                string
 	// S3PublicEndpoint is the browser-reachable storage host used only to sign
 	// upload part URLs. Empty means uploads flow through the API (proxy mode).
 	S3PublicEndpoint    string
@@ -271,6 +276,9 @@ func LoadFrom(lookup Lookup) Config {
 		RedisAddr:                      value(lookup, "REDIS_ADDR", "redis:6379"),
 		RedisPassword:                  value(lookup, "REDIS_PASSWORD", ""),
 		DocreaderAddr:                  value(lookup, "DOCREADER_GRPC_ADDR", "docreader:50051"),
+		TablehouseURL:                  strings.TrimSpace(value(lookup, "TABLEHOUSE_URL", "")),
+		TablehousePrefix:               value(lookup, "TABLEHOUSE_S3_PREFIX", "tablehouse"),
+		TablehouseQueryTimeoutSec:      int(reader.positive("TABLEHOUSE_QUERY_TIMEOUT_SECONDS", 10)),
 		S3Endpoint:                     value(lookup, "S3_ENDPOINT", "minio:9000"),
 		S3PublicEndpoint:               strings.TrimSpace(value(lookup, "S3_PUBLIC_ENDPOINT", "")),
 		S3Region:                       value(lookup, "S3_REGION", "us-east-1"),

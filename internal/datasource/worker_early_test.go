@@ -67,6 +67,17 @@ func (o *dsObjects) Delete(_ context.Context, key string) error {
 	return nil
 }
 
+func (o *dsObjects) DeletePrefix(_ context.Context, prefix string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for key := range o.data {
+		if strings.HasPrefix(key, prefix) {
+			delete(o.data, key)
+		}
+	}
+	return nil
+}
+
 func seedWorkerConnector(t *testing.T, db *gorm.DB, id, manifestURL, connectorType, credentialRef string, enabled bool) {
 	t.Helper()
 	now := time.Now()

@@ -55,6 +55,7 @@ type PipelineWorker struct {
 	leaseOwner         inboxlease.Owner
 	leaseTTL           time.Duration
 	formats            formats.Registry
+	materializer       TableMaterializer
 }
 
 // ChunkingResolver resolves the chunking policy for one tenant. The worker
@@ -134,6 +135,12 @@ func (w *PipelineWorker) SetEmbeddingTimeout(timeout time.Duration) {
 
 func (w *PipelineWorker) SetMetrics(registry *observability.Registry) {
 	w.metrics = registry
+}
+
+// SetTableMaterializer wires the columnar copy writer. When unset (tests,
+// deployments without tablehouse) the parser keeps its block-only behavior.
+func (w *PipelineWorker) SetTableMaterializer(materializer TableMaterializer) {
+	w.materializer = materializer
 }
 
 func (w *PipelineWorker) recordParseMetrics(source SourceObject, result ParseResult, err error, elapsed time.Duration) {
@@ -294,8 +301,25 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	}
 	parseStarted := time.Now()
 	var result ParseResult
+	materialized := map[string]TableMaterializeResult{}
 	blockStreaming, blockStreamOK := w.reader.(BlockStreamingDocumentReader)
-	if blockStreamOK && w.streamChunkBytes > 0 {
+	rowStreaming, rowStreamOK := w.reader.(RowStreamingDocumentReader)
+	target := TableMaterializeTarget{
+		TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID,
+		DocumentID: version.DocumentID, VersionID: version.ID,
+	}
+	if w.materializer != nil && rowStreamOK && w.streamChunkBytes > 0 {
+		if err := w.materializer.ClearVersion(parseCtx, target); err != nil {
+			return fmt.Errorf("tablehouse clear: %w", err)
+		}
+		body, openErr := w.objects.Open(parseCtx, version.SourceObjectKey)
+		if openErr != nil {
+			return openErr
+		}
+		defer body.Close()
+		result, err = rowStreaming.ParseBlocksStreamRows(parseCtx, source, body, version.SizeBytes, w.streamChunkBytes,
+			w.rowForwarder(parseCtx, target, materialized))
+	} else if blockStreamOK && w.streamChunkBytes > 0 {
 		body, openErr := w.objects.Open(parseCtx, version.SourceObjectKey)
 		if openErr != nil {
 			return openErr
@@ -329,6 +353,9 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 		return apperror.Terminalf("empty_document", "parser returned no text blocks")
 	}
 	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks, Truncated: result.Truncated, TotalRows: result.TotalRows, IndexedRows: result.IndexedRows, TotalSheets: result.TotalSheets, IndexedSheets: result.IndexedSheets, Sheets: result.Sheets, StorageMode: result.StorageMode}
+	if len(materialized) > 0 {
+		normalized.Materialize = materialized
+	}
 	data, err := json.Marshal(normalized)
 	if err != nil {
 		return fmt.Errorf("marshal normalized document: %w", err)
@@ -347,6 +374,52 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 		return apperror.ErrVersionSuperseded
 	}
 	return nil
+}
+
+// rowForwarder sends parser row batches to the columnar store. A rejected
+// sheet is recorded and skipped without failing the document; a transport
+// failure returns an error so the parse stage retries and clears the copy.
+func (w *PipelineWorker) rowForwarder(ctx context.Context, target TableMaterializeTarget, results map[string]TableMaterializeResult) func(TableRowBatch) error {
+	failed := map[string]bool{}
+	return func(batch TableRowBatch) error {
+		sheet := batch.Sheet
+		if sheet == "" {
+			sheet = "default"
+		}
+		if failed[sheet] {
+			return nil
+		}
+		started := time.Now()
+		result, err := w.materializer.WriteBatch(ctx, target, batch)
+		status := "ok"
+		if err != nil {
+			status = "error"
+		}
+		if w.metrics != nil {
+			w.metrics.Inc("ingestion_table_materialize_total", metrics.Labels("status", status))
+			w.metrics.Observe("ingestion_table_materialize_duration", time.Since(started), nil)
+		}
+		if err != nil {
+			var sheetErr *TableSheetError
+			if errors.As(err, &sheetErr) {
+				failed[sheet] = true
+				results[sheet] = TableMaterializeResult{Status: MaterializeStatusFailed, Error: sheetErr.Message}
+				slog.Warn("table_materialize_sheet_failed", "document_version_id", target.VersionID, "sheet", sheet, "error", sheetErr.Message)
+				return nil
+			}
+			return err
+		}
+		if result.Status != "" {
+			results[sheet] = result
+		} else if previous, ok := results[sheet]; !ok {
+			results[sheet] = result
+		} else {
+			previous.Rows = result.Rows
+			previous.URI = result.URI
+			results[sheet] = previous
+		}
+		return nil
+	}
 }
 
 func (w *PipelineWorker) normalize(ctx context.Context, task Task) error {
@@ -492,6 +565,7 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	indexMode := resolveIndexMode(documentMode, normalized.Blocks)
 	rows := make([]chunkRow, 0, len(normalized.Blocks)*2)
 	blockAsset, assets := buildTableAssets(version, normalized.Blocks, normalized.Sheets)
+	applyMaterialize(assets, normalized.Materialize)
 	profile := tableProfile(normalized.Blocks)
 	assetByID := make(map[string]models.TableAsset, len(assets))
 	for index := range assets {
@@ -502,7 +576,6 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		indexMode = aggregateAssetMode(assets, indexMode)
 	}
 	emittedSummary := map[string]bool{}
-	tableRows := make([]models.TableRow, 0)
 	coverage := struct {
 		totalRows      int64
 		parsedRows     int64
@@ -527,15 +600,6 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		assetID := blockAsset[blockIndex]
 		asset := assetByID[assetID]
 		fullStorage := asset.StorageMode == "" || asset.StorageMode == StorageModeFull
-		if isTable && fullStorage {
-			if len(tableRows) < maxPersistedTableRows {
-				rowsForAsset := tableRowModels(version, assetID, info)
-				if remaining := maxPersistedTableRows - len(tableRows); len(rowsForAsset) > remaining {
-					rowsForAsset = rowsForAsset[:remaining]
-				}
-				tableRows = append(tableRows, rowsForAsset...)
-			}
-		}
 		parentID := stableID("parent", version.ID, fmt.Sprint(blockIndex), block.Text)
 		rows = append(rows, chunkRow{ID: parentID, Content: block.Text, ContentHash: hashString(block.Text), HeadingPath: block.HeadingPath, PageNumber: block.PageNumber, SourcePath: block.SourcePath, StartOffset: block.StartOffset, EndOffset: block.EndOffset, Ordinal: blockIndex, IndexRole: IndexRoleBoth, TableAssetID: assetID})
 		planned := make([]plannedChunk, 0, 2)
@@ -553,7 +617,9 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 				}
 				if summary != "" {
 					planned = append(planned, plannedChunk{content: cleanTableText(summary), role: IndexRoleBoth, sourcePath: summarySourcePath(asset.Sheet)})
-					coverage.vectorRows += asset.ParsedRows
+					// The summary vector covers the sample rows, not every parsed
+					// row; full-row materialization must not inflate vector coverage.
+					coverage.vectorRows += int64(max(len(info.samples), 1))
 					coverage.vectorChars += int64(len([]rune(summary)))
 					if asset.Sheet != "" {
 						coverage.vectorSheets[asset.Sheet] = true
@@ -696,14 +762,6 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		if len(assets) > 0 {
 			if err := tx.Create(&assets).Error; err != nil {
 				return fmt.Errorf("insert table assets: %w", err)
-			}
-		}
-		if err := tx.Where("document_version_id = ?", version.ID).Delete(&models.TableRow{}).Error; err != nil {
-			return err
-		}
-		if len(tableRows) > 0 {
-			if err := tx.CreateInBatches(&tableRows, 500).Error; err != nil {
-				return fmt.Errorf("insert table rows: %w", err)
 			}
 		}
 		if err := insertChunks(tx, version, rows, time.Now()); err != nil {

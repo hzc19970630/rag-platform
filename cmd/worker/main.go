@@ -91,6 +91,9 @@ func main() {
 	pipeline.SetChunkingResolver(app.TenantChunkingResolver(application.TenantConfig))
 	pipeline.SetEmbeddingResolver(application.Embedding)
 	pipeline.SetProjectionTrigger(application.Projection)
+	if application.Tablehouse != nil {
+		pipeline.SetTableMaterializer(application.Tablehouse)
+	}
 
 	rootCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()

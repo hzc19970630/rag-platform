@@ -91,7 +91,30 @@ message DocumentBlock {
   TableMeta table = 9;
 }
 
+message TableRow {
+  repeated string cells = 1;
+}
+
+// TableRowBatch carries full sheet rows for the columnar copy. Rows never enter
+// the block stream or the normalized document; the worker forwards each batch
+// to the tablehouse materializer.
+message TableRowBatch {
+  string sheet = 1;
+  repeated string header = 2;
+  // Per-column logical types: int, float, date, bool, string.
+  repeated string column_types = 3;
+  int64 row_start = 4;
+  repeated TableRow rows = 5;
+  // Rows parsed for this sheet up to and including this batch.
+  int64 parsed_rows = 6;
+  bool sheet_done = 7;
+  bool truncated = 8;
+  // Sheet-level content hash makes a retried materialization idempotent.
+  string content_hash = 9;
+}
+
 message ParseDocumentEvent {
   repeated DocumentBlock blocks = 1;
   ParseDocumentResponse summary = 2;
+  repeated TableRowBatch table_rows = 3;
 }

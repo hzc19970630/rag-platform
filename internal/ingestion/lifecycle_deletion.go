@@ -279,6 +279,12 @@ func (s *Service) purgeDocument(ctx context.Context, tenantID, documentID string
 			}
 		}
 	}
+	if s.tablePrefix != "" && len(versions) > 0 {
+		prefix := fmt.Sprintf("%s/tenant=%s/kb=%s/doc=%s/", s.tablePrefix, tenantID, versions[0].KnowledgeBaseID, documentID)
+		if err := s.objects.DeletePrefix(ctx, prefix); err != nil {
+			return err
+		}
+	}
 	err := tenantdb.InTx(ctx, s.db, tenantID, func(tx *gorm.DB) error {
 		if len(versionIDs) > 0 {
 			if err := tenantdb.MustScoped(tx, tenantID).Where("document_version_id IN ?", versionIDs).Delete(&models.Chunk{}).Error; err != nil {

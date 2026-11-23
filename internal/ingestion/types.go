@@ -1,6 +1,8 @@
 package ingestion
 
 import (
+	"time"
+
 	"github.com/hzc19970630/rag-platform/contracts/tasks"
 	"github.com/hzc19970630/rag-platform/internal/contracts/evidence"
 	"github.com/hzc19970630/rag-platform/internal/status"
@@ -73,7 +75,59 @@ type NormalizedDocument struct {
 	IndexedRows   int64           `json:"indexed_rows,omitempty"`
 	TotalSheets   int             `json:"total_sheets,omitempty"`
 	IndexedSheets int             `json:"indexed_sheets,omitempty"`
+	// Materialize records the Parquet copy written during parsing, keyed by
+	// sheet name. The chunk stage applies it to table assets; it never enters
+	// the block stream.
+	Materialize map[string]TableMaterializeResult `json:"materialize,omitempty"`
 }
+
+// TableRowBatch is one bounded slice of full sheet rows produced by docreader.
+type TableRowBatch struct {
+	Sheet       string
+	Header      []string
+	ColumnTypes []string
+	RowStart    int64
+	Rows        [][]string
+	ParsedRows  int64
+	SheetDone   bool
+	Truncated   bool
+	ContentHash string
+}
+
+// TableMaterializeTarget identifies the Parquet copy location.
+type TableMaterializeTarget struct {
+	TenantID        string
+	KnowledgeBaseID string
+	DocumentID      string
+	VersionID       string
+}
+
+// TableMaterializeResult is the materializer's outcome for one sheet.
+type TableMaterializeResult struct {
+	Rows        int64      `json:"rows,omitempty"`
+	Bytes       int64      `json:"bytes,omitempty"`
+	Status      string     `json:"status,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	URI         string     `json:"uri,omitempty"`
+	ColumnTypes []string   `json:"column_types,omitempty"`
+	ContentHash string     `json:"content_hash,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+}
+
+const (
+	MaterializeStatusReady   = "ready"
+	MaterializeStatusPartial = "partial"
+	MaterializeStatusFailed  = "failed"
+)
+
+// TableSheetError is a per-sheet materializer rejection (invalid identifier,
+// row valve). The worker records it and keeps the rest of the document.
+type TableSheetError struct {
+	Status  int
+	Message string
+}
+
+func (e *TableSheetError) Error() string { return e.Message }
 
 // SheetMeta is the per-sheet catalog entry. It exists even when the sheet is
 // only sampled or catalogued, so missing rows are visible instead of silently

@@ -222,6 +222,97 @@ func (c *Client) ParseBlocksStream(ctx context.Context, source ports.SourceObjec
 	return result, nil
 }
 
+// ParseBlocksStreamRows forwards full-row batches to onRows as they arrive.
+// The block events and summary are handled exactly like ParseBlocksStream.
+func (c *Client) ParseBlocksStreamRows(ctx context.Context, source ports.SourceObject, content io.Reader, sizeBytes, chunkBytes int64, onRows func(ports.TableRowBatch) error) (ports.ParseResult, error) {
+	if chunkBytes <= 0 {
+		chunkBytes = 2 << 20
+	}
+	stream, err := c.reader.ParseDocumentBlocks(ctx)
+	if err != nil {
+		return ports.ParseResult{}, fmt.Errorf("docreader block stream: %w", err)
+	}
+	if err := stream.Send(&docreaderv1.ParseDocumentChunk{
+		SchemaVersion:     ports.SchemaSourceObject,
+		DocumentVersionId: source.DocumentVersionID,
+		Filename:          source.Filename,
+		MimeType:          source.MimeType,
+	}); err != nil {
+		return ports.ParseResult{}, fmt.Errorf("docreader block stream metadata: %w", err)
+	}
+	buffer := make([]byte, chunkBytes)
+	var sent int64
+	for {
+		read, readErr := content.Read(buffer)
+		if read > 0 {
+			if sizeBytes > 0 && sent+int64(read) > sizeBytes {
+				return ports.ParseResult{}, fmt.Errorf("docreader block stream exceeds declared size")
+			}
+			if err := stream.Send(&docreaderv1.ParseDocumentChunk{Content: buffer[:read]}); err != nil {
+				result, drainErr := drainBlockStream(stream)
+				if drainErr == nil {
+					return result, nil
+				}
+				if !errors.Is(drainErr, io.EOF) {
+					return ports.ParseResult{}, fmt.Errorf("docreader block stream response: %w", drainErr)
+				}
+				return ports.ParseResult{}, fmt.Errorf("docreader block stream content: %w", err)
+			}
+			sent += int64(read)
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return ports.ParseResult{}, fmt.Errorf("read source for docreader: %w", readErr)
+		}
+	}
+	if err := stream.CloseSend(); err != nil {
+		return ports.ParseResult{}, fmt.Errorf("docreader block stream close: %w", err)
+	}
+	blocks := make([]ports.DocumentBlock, 0, 4096)
+	var summary *docreaderv1.ParseDocumentResponse
+	for {
+		event, recvErr := stream.Recv()
+		if recvErr == io.EOF {
+			break
+		}
+		if recvErr != nil {
+			return ports.ParseResult{}, fmt.Errorf("docreader block stream response: %w", recvErr)
+		}
+		for _, item := range event.TableRows {
+			if err := onRows(rowBatchFromProto(item)); err != nil {
+				return ports.ParseResult{}, err
+			}
+		}
+		for _, item := range event.Blocks {
+			blocks = append(blocks, blockFromProto(item))
+		}
+		if event.Summary != nil {
+			summary = event.Summary
+		}
+	}
+	if summary == nil {
+		return ports.ParseResult{}, fmt.Errorf("docreader block stream returned no summary")
+	}
+	result := resultFromResponse(summary)
+	result.Blocks = append(blocks, result.Blocks...)
+	return result, nil
+}
+
+func rowBatchFromProto(item *docreaderv1.TableRowBatch) ports.TableRowBatch {
+	batch := ports.TableRowBatch{
+		Sheet: item.Sheet, Header: item.Header, ColumnTypes: item.ColumnTypes,
+		RowStart: item.RowStart, ParsedRows: item.ParsedRows, SheetDone: item.SheetDone,
+		Truncated: item.Truncated, ContentHash: item.ContentHash,
+	}
+	batch.Rows = make([][]string, 0, len(item.Rows))
+	for _, row := range item.Rows {
+		batch.Rows = append(batch.Rows, row.Cells)
+	}
+	return batch
+}
+
 // drainBlockStream collects events after the upload side closes early. The
 // summary carries the parser error code; io.EOF means the server closed
 // without one.

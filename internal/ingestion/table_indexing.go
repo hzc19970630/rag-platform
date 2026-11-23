@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
@@ -37,7 +38,6 @@ const (
 	maxTableSheets        = 20
 	sampleRowsPerTable    = 20
 	charsPerTokenEstimate = 2
-	maxPersistedTableRows = 200000
 )
 
 // tableDocProfile is the aggregated shape used to pick a default document mode.
@@ -57,7 +57,6 @@ type tableMetaInfo struct {
 	totalRows   int64
 	parsedRows  int64
 	samples     [][]string
-	rows        [][]string
 	storageMode string
 	parseStatus string
 	truncated   bool
@@ -95,13 +94,12 @@ func tableMetaFor(block DocumentBlock) (tableMetaInfo, bool) {
 			continue
 		}
 		if row := splitTableLine(line); len(row) > 0 {
-			info.rows = append(info.rows, row)
+			info.rowCount++
 			if len(info.samples) < sampleRowsPerTable {
 				info.samples = append(info.samples, row)
 			}
 		}
 	}
-	info.rowCount = len(info.rows)
 	info.totalRows = int64(info.rowCount)
 	info.parsedRows = int64(info.rowCount)
 	if info.rowEnd == 0 {
@@ -416,25 +414,33 @@ func sampleLines(rows [][]string) []string {
 	return lines
 }
 
-func tableRowModels(version models.DocumentVersion, assetID string, info tableMetaInfo) []models.TableRow {
-	rows := make([]models.TableRow, 0, len(info.rows))
-	for index, row := range info.rows {
-		cells := map[string]string{}
-		for column, value := range row {
-			if column < len(info.header) {
-				cells[info.header[column]] = value
-			}
+// applyMaterialize copies the parse stage's columnar copy results onto the
+// sheet assets. Sheets without a final result keep empty materialize fields,
+// which the query path reports as needing a reparse.
+func applyMaterialize(assets []models.TableAsset, materialized map[string]TableMaterializeResult) {
+	for index := range assets {
+		sheet := assets[index].Sheet
+		if sheet == "" {
+			sheet = "default"
 		}
-		encoded, _ := json.Marshal(cells)
-		rowNumber := info.rowStart + index
-		rows = append(rows, models.TableRow{
-			ID: stableID("trow", assetID, fmt.Sprint(rowNumber)), TenantID: version.TenantID,
-			KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID,
-			DocumentVersionID: version.ID, TableAssetID: assetID,
-			RowNumber: rowNumber, Cells: string(encoded),
-		})
+		result, ok := materialized[sheet]
+		if !ok || result.Status == "" {
+			continue
+		}
+		assets[index].MaterializeStatus = result.Status
+		assets[index].MaterializeError = result.Error
+		assets[index].StorageURI = result.URI
+		assets[index].StorageFormat = "parquet"
+		assets[index].MaterializedRows = result.Rows
+		assets[index].ByteSize = result.Bytes
+		if result.Status != MaterializeStatusFailed {
+			now := time.Now().UTC()
+			assets[index].MaterializedAt = &now
+		}
+		if len(result.ColumnTypes) > 0 {
+			assets[index].SchemaJSON = fmt.Sprintf(`{"columnTypes":%s,"contentHash":%q}`, jsonOrEmpty(result.ColumnTypes), result.ContentHash)
+		}
 	}
-	return rows
 }
 
 func explicitIndexMode(mode string) bool {

@@ -3,9 +3,7 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
-	"sort"
-	"strconv"
-	"strings"
+	"fmt"
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/apperror"
@@ -31,6 +29,28 @@ type TableQuery struct {
 type TableRowView struct {
 	RowNumber int               `json:"rowNumber"`
 	Cells     map[string]string `json:"cells"`
+}
+
+// ColumnarTableQuery is the server-built filter plan sent to tablehouse. User
+// SQL is not part of P0.
+type ColumnarTableQuery struct {
+	Filters []TableFilter `json:"filters,omitempty"`
+	OrderBy string        `json:"orderBy,omitempty"`
+	Desc    bool          `json:"desc,omitempty"`
+	Limit   int           `json:"limit"`
+}
+
+// ColumnarTableResult is the backend's answer. TotalRows comes from the sheet
+// manifest and is informational; the handler uses the asset metadata.
+type ColumnarTableResult struct {
+	Rows        []TableRowView
+	MatchedRows int
+	TotalRows   int
+}
+
+// ColumnarTableReader executes filter plans over the Parquet copy.
+type ColumnarTableReader interface {
+	QueryTable(ctx context.Context, target TableMaterializeTarget, sheet string, query ColumnarTableQuery) (ColumnarTableResult, error)
 }
 
 type TableQueryResult struct {
@@ -77,41 +97,21 @@ func (s *Service) queryTable(ctx context.Context, principal authz.Principal, kno
 		Where(liveTableAsset).First(&asset).Error; err != nil {
 		return TableQueryResult{}, apperror.ErrNotFound
 	}
-	if asset.StorageMode != "" && asset.StorageMode != StorageModeFull {
-		return TableQueryResult{}, apperror.Invalidf(
-			"table_rows_not_indexed: sheet %s is %s; use an external query for full rows",
-			asset.Sheet, asset.StorageMode,
-		)
+	if asset.MaterializeStatus == MaterializeStatusFailed {
+		message := asset.MaterializeError
+		if message == "" {
+			message = "materialization failed"
+		}
+		return TableQueryResult{}, apperror.Invalidf("table_materialize_failed: sheet %s: %s", asset.Sheet, message)
 	}
-	var rows []models.TableRow
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("table_asset_id = ?", asset.ID).Order("row_number").Find(&rows).Error; err != nil {
-		return TableQueryResult{}, err
+	if asset.StorageURI == "" {
+		return TableQueryResult{}, apperror.Invalidf("table_needs_reparse: sheet %s has no columnar copy; reparse the document", asset.Sheet)
+	}
+	if s.tables == nil {
+		return TableQueryResult{}, fmt.Errorf("%w: table query backend is not configured", apperror.ErrNotReady)
 	}
 	var header []string
 	_ = json.Unmarshal([]byte(asset.Header), &header)
-	filtered := make([]TableRowView, 0, len(rows))
-	for _, row := range rows {
-		cells := map[string]string{}
-		if err := json.Unmarshal([]byte(row.Cells), &cells); err != nil {
-			continue
-		}
-		if !matchesFilters(cells, query.Filters) {
-			continue
-		}
-		filtered = append(filtered, TableRowView{RowNumber: row.RowNumber, Cells: cells})
-	}
-	if query.OrderBy != "" {
-		desc := query.Desc
-		sort.SliceStable(filtered, func(i, j int) bool {
-			less := compareCells(filtered[i].Cells[query.OrderBy], filtered[j].Cells[query.OrderBy]) < 0
-			if desc {
-				return !less
-			}
-			return less
-		})
-	}
-	totalMatched := len(filtered)
 	limit := query.Limit
 	if limit <= 0 {
 		limit = 50
@@ -119,75 +119,27 @@ func (s *Service) queryTable(ctx context.Context, principal authz.Principal, kno
 	if limit > 500 {
 		limit = 500
 	}
-	if len(filtered) > limit {
-		filtered = filtered[:limit]
+	backend, err := s.tables.QueryTable(ctx, TableMaterializeTarget{
+		TenantID: asset.TenantID, KnowledgeBaseID: asset.KnowledgeBaseID,
+		DocumentID: asset.DocumentID, VersionID: asset.DocumentVersionID,
+	}, asset.Sheet, ColumnarTableQuery{Filters: query.Filters, OrderBy: query.OrderBy, Desc: query.Desc, Limit: limit})
+	if err != nil {
+		return TableQueryResult{}, err
+	}
+	total := int(asset.MaterializedRows)
+	if total == 0 {
+		total = int(asset.RowCount)
+	}
+	rows := backend.Rows
+	if rows == nil {
+		rows = []TableRowView{}
 	}
 	return TableQueryResult{
 		AssetID: asset.ID, Sheet: asset.Sheet, Header: header,
-		TotalRows: int(asset.RowCount), MatchedRows: totalMatched, Rows: filtered,
+		TotalRows: total, MatchedRows: backend.MatchedRows, Rows: rows,
 		SourceRows: asset.TotalRows, StorageMode: asset.StorageMode,
 		ParseStatus: asset.ParseStatus, Truncated: asset.Truncated,
 	}, nil
-}
-
-func matchesFilters(cells map[string]string, filters []TableFilter) bool {
-	for _, filter := range filters {
-		value := strings.TrimSpace(cells[filter.Column])
-		want := strings.TrimSpace(filter.Value)
-		switch strings.ToLower(strings.TrimSpace(filter.Op)) {
-		case "eq":
-			if value != want {
-				return false
-			}
-		case "ne":
-			if value == want {
-				return false
-			}
-		case "contains":
-			if !strings.Contains(strings.ToLower(value), strings.ToLower(want)) {
-				return false
-			}
-		case "gt", "gte", "lt", "lte":
-			comparison := compareCells(value, want)
-			switch strings.ToLower(filter.Op) {
-			case "gt":
-				if comparison <= 0 {
-					return false
-				}
-			case "gte":
-				if comparison < 0 {
-					return false
-				}
-			case "lt":
-				if comparison >= 0 {
-					return false
-				}
-			case "lte":
-				if comparison > 0 {
-					return false
-				}
-			}
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func compareCells(left, right string) int {
-	leftNumber, leftErr := strconv.ParseFloat(strings.TrimSpace(left), 64)
-	rightNumber, rightErr := strconv.ParseFloat(strings.TrimSpace(right), 64)
-	if leftErr == nil && rightErr == nil {
-		switch {
-		case leftNumber < rightNumber:
-			return -1
-		case leftNumber > rightNumber:
-			return 1
-		default:
-			return 0
-		}
-	}
-	return strings.Compare(strings.ToLower(left), strings.ToLower(right))
 }
 
 // ListTableAssets returns the parsed table schemas for one knowledge base.

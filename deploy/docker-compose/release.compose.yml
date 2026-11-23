@@ -3,13 +3,17 @@
 #   RAG_VERSION=v0.1.0 docker compose --env-file .env \
 #     -f deploy/docker-compose/docker-compose.yml \
 #     -f deploy/docker-compose/release.compose.yml \
-#     up -d --no-build postgres redis minio docreader worker api
+#     up -d --no-build postgres redis minio docreader tablehouse worker api
 #
 # The web frontend ships as a static dist tarball, not an image, so the `web`
 # service from the base file stays development-only. See docs/releases.md.
 services:
   docreader:
     image: ${RAG_DOCREADER_IMAGE:-ghcr.io/hzc19970630/rag-platform/docreader:${RAG_VERSION:?set RAG_VERSION or RAG_DOCREADER_IMAGE}}
+    build: !reset null
+
+  tablehouse:
+    image: ${RAG_TABLEHOUSE_IMAGE:-ghcr.io/hzc19970630/rag-platform/tablehouse:${RAG_VERSION:?set RAG_VERSION or RAG_TABLEHOUSE_IMAGE}}
     build: !reset null
 
   api:

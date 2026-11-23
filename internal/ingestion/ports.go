@@ -18,6 +18,9 @@ type ObjectStore interface {
 	// documents use this so a large object is not read whole into memory.
 	Open(ctx context.Context, key string) (io.ReadCloser, error)
 	Delete(ctx context.Context, key string) error
+	// DeletePrefix removes every object under one prefix. Purge uses it for the
+	// columnar copy; an empty prefix is rejected so a bug cannot wipe a bucket.
+	DeletePrefix(ctx context.Context, prefix string) error
 }
 
 // MultipartPart is one uploaded part of an incomplete object.
@@ -57,6 +60,20 @@ type StreamingDocumentReader interface {
 // large response, which removes the single-message cap for big tables.
 type BlockStreamingDocumentReader interface {
 	ParseBlocksStream(ctx context.Context, source SourceObject, content io.Reader, sizeBytes, chunkBytes int64) (ParseResult, error)
+}
+
+// RowStreamingDocumentReader is the B39 variant: the parser also emits full
+// sheet rows so they can be copied to the columnar store without entering the
+// normalized document. onRows runs inline; returning an error aborts parsing.
+type RowStreamingDocumentReader interface {
+	ParseBlocksStreamRows(ctx context.Context, source SourceObject, content io.Reader, sizeBytes, chunkBytes int64, onRows func(TableRowBatch) error) (ParseResult, error)
+}
+
+// TableMaterializer writes full table rows to the columnar copy (tablehouse).
+// WriteBatch returns the sheet result once the batch closes a sheet.
+type TableMaterializer interface {
+	ClearVersion(ctx context.Context, target TableMaterializeTarget) error
+	WriteBatch(ctx context.Context, target TableMaterializeTarget, batch TableRowBatch) (TableMaterializeResult, error)
 }
 
 // Embedder is the shared model port. Callers validate Dimension against stored

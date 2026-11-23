@@ -6,6 +6,7 @@ import io
 import json
 import os
 import posixpath
+import queue
 import re
 import sys
 import tempfile
@@ -30,7 +31,7 @@ def _env_int(name, default):
         return default
 
 
-PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-b38-v1")
+PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-b39-v1")
 SCHEMA_VERSION = "NormalizedDocumentV1"
 
 WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -56,7 +57,9 @@ MAX_SHEET_BLOCKS = _env_int("DOCREADER_MAX_SHEET_BLOCKS", 2000)
 MAX_BLOCK_CHARS = 8000
 MAX_XLSX_SHEETS = _env_int("DOCREADER_MAX_TABLE_SHEETS", 256)
 MAX_XLSX_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS_PER_SHEET", 50000)
-MAX_TABLE_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS", 500000)
+MAX_TABLE_ROWS = _env_int("DOCREADER_MAX_TABLE_ROWS", 2000000)
+TABLE_ROW_BATCH_ROWS = max(1, _env_int("DOCREADER_TABLE_ROW_BATCH_ROWS", 5000))
+TABLE_ROW_BATCH_CHARS = 4 * MIB
 MAX_TABLE_WINDOW_ROWS = max(10, min(_env_int("DOCREADER_TABLE_WINDOW_ROWS", 50), 50))
 TABLE_SAMPLE_ROWS = max(1, min(_env_int("DOCREADER_TABLE_SAMPLE_ROWS", 50), 50))
 STORAGE_FULL_MAX_ROWS = _env_int("DOCREADER_TABLE_STORAGE_FULL_MAX_ROWS", 200000)
@@ -516,6 +519,118 @@ def _normalize_table_headers(values):
     return headers
 
 
+_ROW_INT = re.compile(r"^[+-]?\d+$")
+_ROW_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$")
+
+
+def _row_float(value):
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _infer_column_type(values):
+    """Infer a logical type from the first row batch of one sheet.
+
+    Rows are stored as text so displayed values stay byte-identical; the type
+    only drives numeric/date comparison and manifest metadata.
+    """
+    non_empty = [value for value in values if value]
+    if not non_empty:
+        return "string"
+    if all(_ROW_INT.match(value) for value in non_empty):
+        return "int"
+    if all(_row_float(value) for value in non_empty):
+        return "float"
+    if all(_ROW_DATE.match(value) for value in non_empty):
+        return "date"
+    if all(value.upper() in ("TRUE", "FALSE") for value in non_empty):
+        return "bool"
+    return "string"
+
+
+def _row_batch_message(batch):
+    return docreader_pb2.TableRowBatch(
+        sheet=batch["sheet"], header=batch["header"], column_types=batch["column_types"],
+        row_start=batch["row_start"],
+        rows=[docreader_pb2.TableRow(cells=row) for row in batch["rows"]],
+        parsed_rows=batch["parsed_rows"], sheet_done=batch["sheet_done"],
+        truncated=batch["truncated"], content_hash=batch["content_hash"],
+    )
+
+
+class SheetRowSink:
+    """Streams every parsed sheet row in bounded batches.
+
+    The block/vector budgets stay unchanged: this channel exists so full rows
+    reach the columnar copy without entering the normalized document.
+    """
+
+    def __init__(self, emit, sheet, budget=None):
+        self.emit = emit
+        self.sheet = sheet
+        self.budget = budget if budget is not None else [MAX_TABLE_ROWS]
+        self.header = []
+        self.column_types = []
+        self.pending = []
+        self.pending_start = 0
+        self.pending_chars = 0
+        self.parsed = 0
+        self.hasher = hashlib.sha256()
+
+    def set_header(self, header):
+        self.header = list(header)
+        self.column_types = []
+        self.hasher.update(("|".join(self.header) + "\n").encode("utf-8"))
+
+    def add(self, row_number, row):
+        """Queue one row. Returns False when the safety valve is exhausted."""
+        if self.budget[0] <= 0:
+            return False
+        if not self.pending:
+            self.pending_start = row_number
+        self.pending.append(list(row))
+        self.pending_chars += len(row) + sum(len(cell) for cell in row)
+        self.parsed += 1
+        self.budget[0] -= 1
+        if len(self.pending) >= TABLE_ROW_BATCH_ROWS or self.pending_chars >= TABLE_ROW_BATCH_CHARS:
+            self._flush(False, False)
+        return True
+
+    def finish(self, truncated):
+        self._flush(True, truncated)
+
+    def _flush(self, done, truncated):
+        if not self.pending and not done:
+            return
+        if not self.header:
+            self.pending = []
+            self.pending_chars = 0
+            return
+        if not self.column_types:
+            self.column_types = [
+                _infer_column_type([row[index] if index < len(row) else "" for row in self.pending])
+                for index in range(len(self.header))
+            ] if self.pending else ["string"] * len(self.header)
+        for row in self.pending:
+            self.hasher.update(("\x1f".join(row) + "\n").encode("utf-8"))
+        self.emit({
+            "sheet": self.sheet,
+            "header": self.header,
+            "column_types": self.column_types,
+            "row_start": self.pending_start,
+            "rows": self.pending,
+            "parsed_rows": self.parsed,
+            "sheet_done": done,
+            "truncated": truncated,
+            "content_hash": self.hasher.hexdigest() if done else "",
+        })
+        self.pending = []
+        self.pending_chars = 0
+
+
 def _emit_table_blocks(prefix, heading, sheet, headers, rows, start_row, block_budget):
     blocks = []
     current = []
@@ -639,12 +754,14 @@ def _sheet_summary_block(prefix, heading, sheet_name, headers, samples, start_ro
     )
 
 
-def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_rows, parse_status):
+def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_rows, parse_status, row_sink=None, row_budget=None):
     heading = f"{heading_root} / {sheet_name}"
     headers = None
     samples = []
     indexed = 0
     start_row = 1
+    truncated = False
+    sink = SheetRowSink(row_sink, sheet_name, row_budget) if row_sink else None
     for position, (row_number, cells) in enumerate(_iter_sheet_rows(archive, target)):
         row_number = row_number or position + 1
         if not cells:
@@ -656,23 +773,32 @@ def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_r
                 header_values[column] = value
             headers = _normalize_table_headers(header_values)
             start_row = row_number + 1
+            if sink is not None:
+                sink.set_header(headers)
             continue
         row = [""] * len(headers)
         for column, value in cells:
             if column < len(headers):
                 row[column] = _table_cell(value)
-        if indexed < TABLE_SAMPLE_ROWS:
+        if len(samples) < TABLE_SAMPLE_ROWS:
             samples.append(row)
         indexed += 1
-        if indexed >= TABLE_SAMPLE_ROWS:
+        if sink is not None:
+            if not sink.add(row_number, row):
+                truncated = True
+                break
+        elif indexed >= TABLE_SAMPLE_ROWS:
             break
+    if sink is not None:
+        sink.finish(truncated)
+        indexed = sink.parsed
     end_row = start_row + len(samples) - 1
     sheet_block = _sheet_summary_block(
         prefix, heading, sheet_name, headers or [], samples, start_row, end_row, parse_status, declared_rows,
     )
     meta = docreader_pb2.SheetMeta(
         name=sheet_name, header=headers or [], declared_rows=declared_rows, total_rows=declared_rows,
-        parsed_rows=len(samples), column_count=len(headers or []), header_row=max(start_row - 1, 0),
+        parsed_rows=indexed, column_count=len(headers or []), header_row=max(start_row - 1, 0),
         parse_status=parse_status, truncated=True, sample_rows=[" | ".join(row) for row in samples],
         source_path=f"sheet:{sheet_name}!summary",
         stats_source="declared" if declared_rows else "sample",
@@ -680,7 +806,7 @@ def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_r
     return ([sheet_block] if sheet_block else []), meta
 
 
-def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budget, declared_rows):
+def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budget, declared_rows, row_sink=None, row_budget=None):
     heading = f"{heading_root} / {sheet_name}"
     headers = None
     rows = []
@@ -688,6 +814,9 @@ def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budge
     total = 0
     start_row = 1
     truncated = False
+    row_truncated = False
+    blocks_open = True
+    sink = SheetRowSink(row_sink, sheet_name, row_budget) if row_sink else None
     for position, (row_number, cells) in enumerate(_iter_sheet_rows(archive, target)):
         row_number = row_number or position + 1
         if not cells:
@@ -700,16 +829,28 @@ def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budge
                 header_values[column] = value
             headers = _normalize_table_headers(header_values)
             start_row = row_number + 1
+            if sink is not None:
+                sink.set_header(headers)
             continue
         row = [""] * len(headers)
         for column, value in cells:
             if column < len(headers):
                 row[column] = _table_cell(value)
+        if sink is not None and not sink.add(row_number, row):
+            truncated = True
+            row_truncated = True
+            break
+        if not blocks_open:
+            continue
         rows.append(row)
         indexed += 1
         if indexed >= MAX_XLSX_ROWS or total >= MAX_TABLE_ROWS:
             truncated = True
-            break
+            if sink is None:
+                break
+            blocks_open = False
+    if sink is not None:
+        sink.finish(row_truncated)
     blocks = []
     if headers is not None and not rows:
         blocks = [block(f"{prefix}-0", "table", " | ".join(headers), heading, 0, f"sheet:{sheet_name}!A{start_row}:A{start_row}")]
@@ -722,7 +863,7 @@ def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budge
     samples = rows[:TABLE_SAMPLE_ROWS]
     meta = docreader_pb2.SheetMeta(
         name=sheet_name, header=headers or [], declared_rows=declared_rows,
-        total_rows=declared_rows or total, parsed_rows=indexed,
+        total_rows=declared_rows or total, parsed_rows=sink.parsed if sink is not None else indexed,
         column_count=len(headers or []), header_row=max(start_row - 1, 0),
         parse_status="truncated" if truncated else "parsed", truncated=truncated,
         sample_rows=[" | ".join(row) for row in samples],
@@ -732,8 +873,9 @@ def _sheet_blocks(archive, heading_root, sheet_name, target, prefix, block_budge
     return blocks, meta
 
 
-def parse_xlsx(source, filename):
+def parse_xlsx(source, filename, row_sink=None):
     stem = os.path.splitext(os.path.basename(filename))[0] or "workbook"
+    row_budget = [MAX_TABLE_ROWS]
     with _OoxmlArchive(source) as archive:
         workbook = archive.read_xml("xl/workbook.xml")
         relationships = _relationships(archive, "xl/workbook.xml", "xl")
@@ -778,6 +920,7 @@ def parse_xlsx(source, filename):
             if mode == "full":
                 sheet_blocks, meta = _sheet_blocks(
                     archive, stem, name, target, f"sheet-{index}", MAX_SHEET_BLOCKS, declared_rows,
+                    row_sink=row_sink, row_budget=row_budget,
                 )
                 if not sheet_blocks:
                     meta.parse_status = "metadata"
@@ -785,10 +928,11 @@ def parse_xlsx(source, filename):
             else:
                 sheet_blocks, meta = _sheet_summary(
                     archive, stem, name, target, f"sheet-{index}", declared_rows, mode,
+                    row_sink=row_sink, row_budget=row_budget,
                 )
             blocks.extend(sheet_blocks)
             _stats_add_sheet(meta)
-            parsed_total += int(meta.parsed_rows)
+            parsed_total += min(int(meta.parsed_rows), MAX_XLSX_ROWS)
             index += 1
         for name, _ in sheets[MAX_XLSX_SHEETS:]:
             _stats_add_sheet(docreader_pb2.SheetMeta(
@@ -820,7 +964,7 @@ def _open_csv_text(source):
     return io.TextIOWrapper(stream, encoding=encoding, newline="", errors="replace"), delimiter
 
 
-def parse_csv(source, filename):
+def parse_csv(source, filename, row_sink=None):
     text = None
     try:
         text, delimiter = _open_csv_text(source)
@@ -832,6 +976,9 @@ def parse_csv(source, filename):
         total = 0
         indexed = 0
         truncated = False
+        row_truncated = False
+        blocks_open = True
+        sink = SheetRowSink(row_sink, stem) if row_sink else None
         blocks = []
 
         def flush():
@@ -856,22 +1003,36 @@ def parse_csv(source, filename):
                 total += 1
                 if headers is None:
                     headers = _normalize_table_headers(values)
+                    if sink is not None:
+                        sink.set_header(headers)
+                    continue
+                row = [_table_cell(values[index] if index < len(values) else "") for index in range(len(headers))]
+                if sink is not None and not sink.add(total, row):
+                    truncated = True
+                    row_truncated = True
+                    break
+                if not blocks_open:
                     continue
                 if indexed >= MAX_TABLE_ROWS:
                     truncated = True
-                    break
-                row = [_table_cell(values[index] if index < len(values) else "") for index in range(len(headers))]
+                    if sink is None:
+                        break
+                    blocks_open = False
+                    continue
                 if not window:
                     window_start = 2 + indexed
                 window.append(row)
                 indexed += 1
                 if len(window) >= MAX_TABLE_WINDOW_ROWS:
                     flush()
-                    if truncated:
+                    if truncated and sink is None:
                         break
         except csv.Error as error:
             raise ValueError("unsupported_corrupt_document") from error
         flush()
+        if sink is not None:
+            sink.finish(row_truncated)
+            indexed = sink.parsed
         if headers is None:
             raise ValueError("empty_document")
         if not indexed:
@@ -1216,15 +1377,15 @@ def parse_html(source, filename):
     return extractor.blocks, extractor.title
 
 
-def parse_content(filename, mime_type, source):
+def parse_content(filename, mime_type, source, row_sink=None):
     lowered = filename.lower()
     mime_type = (mime_type or "").lower()
     if lowered.endswith(".xls") or lowered.endswith(".ppt"):
         raise ValueError("unsupported_legacy_office")
     if lowered.endswith(".xlsx") or mime_type == SHEET_MIME:
-        return parse_xlsx(source, filename)
+        return parse_xlsx(source, filename, row_sink=row_sink)
     if lowered.endswith(".csv") or mime_type in ("text/csv", "application/csv"):
-        return parse_csv(source, filename)
+        return parse_csv(source, filename, row_sink=row_sink)
     if lowered.endswith(".pptx") or mime_type == SLIDE_MIME:
         return parse_pptx(source, filename)
     if lowered.endswith(".html") or lowered.endswith(".htm") or mime_type in ("text/html", "application/xhtml+xml"):
@@ -1409,24 +1570,55 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
             state.close()
 
     def ParseDocumentBlocks(self, request_iterator, context):
-        _stats_reset()
         started = time.monotonic()
         state, error_response = _receive_spool_upload(request_iterator)
         if error_response is not None:
             yield docreader_pb2.ParseDocumentEvent(summary=error_response)
             return
-        try:
-            meta = state.meta
+        meta = state.meta
+        batches = queue.Queue(maxsize=4)
+        cancelled = threading.Event()
+        result = {}
+
+        def emit(batch):
+            if cancelled.is_set():
+                raise RuntimeError("client disconnected")
+            batches.put(("rows", batch))
+
+        def produce():
+            # Stats are thread-local, so reset and snapshot inside this thread.
+            _stats_reset()
             try:
-                blocks, title = parse_content(meta[1], meta[2], state.spool_path)
+                blocks, title = parse_content(meta[1], meta[2], state.spool_path, row_sink=emit)
+                result["blocks"] = blocks
+                result["title"] = title
+                result["stats"] = _stats_snapshot()
             except ValueError as error:
-                code = str(error)
-                yield docreader_pb2.ParseDocumentEvent(summary=state.response(code, code))
+                result["error"] = (str(error), str(error))
+            except Exception as error:  # noqa: BLE001 - surface parser failures to the client
+                result["error"] = ("parser_error", str(error)[:500])
+            finally:
+                batches.put(("done", None))
+
+        producer = threading.Thread(target=produce, name="parse-blocks", daemon=True)
+        producer.start()
+        try:
+            while True:
+                kind, payload = batches.get()
+                if kind == "done":
+                    break
+                if not context.is_active():
+                    cancelled.set()
+                    continue
+                yield docreader_pb2.ParseDocumentEvent(table_rows=[_row_batch_message(payload)])
+            producer.join()
+            if "error" in result:
+                code, message = result["error"]
+                yield docreader_pb2.ParseDocumentEvent(summary=state.response(code, message))
                 return
-            except Exception as error:
-                yield docreader_pb2.ParseDocumentEvent(summary=state.response("parser_error", str(error)[:500]))
-                return
-            stats = _stats_snapshot()
+            blocks = result["blocks"]
+            title = result["title"]
+            stats = result["stats"]
             _log_parse(meta[1], started, blocks, stats)
             batch = max(1, DOCREADER_BLOCK_BATCH)
             for start in range(0, len(blocks), batch):
@@ -1439,6 +1631,14 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
                 sheets=stats["sheets"], storage_mode=stats["storage_mode"],
             ))
         finally:
+            cancelled.set()
+            # Drain so a producer blocked on a full queue can observe the
+            # cancellation and exit before the spool file is closed.
+            while producer.is_alive():
+                try:
+                    batches.get(timeout=0.2)
+                except queue.Empty:
+                    continue
             state.close()
 
 

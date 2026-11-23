@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,117 @@ type stubReader struct {
 
 func (r *stubReader) Parse(context.Context, SourceObject, []byte) (ParseResult, error) {
 	return r.result, r.err
+}
+
+type rowStreamingReader struct {
+	result  ParseResult
+	batches []TableRowBatch
+}
+
+func (r *rowStreamingReader) Parse(context.Context, SourceObject, []byte) (ParseResult, error) {
+	return r.result, nil
+}
+
+func (r *rowStreamingReader) ParseBlocksStreamRows(_ context.Context, _ SourceObject, _ io.Reader, _, _ int64, onRows func(TableRowBatch) error) (ParseResult, error) {
+	for _, batch := range r.batches {
+		if err := onRows(batch); err != nil {
+			return ParseResult{}, err
+		}
+	}
+	return r.result, nil
+}
+
+type recordingMaterializer struct {
+	cleared      []TableMaterializeTarget
+	batches      map[string]int
+	transportErr map[string]error
+	sheetErr     map[string]string
+}
+
+func (m *recordingMaterializer) ClearVersion(_ context.Context, target TableMaterializeTarget) error {
+	m.cleared = append(m.cleared, target)
+	return nil
+}
+
+func (m *recordingMaterializer) WriteBatch(_ context.Context, target TableMaterializeTarget, batch TableRowBatch) (TableMaterializeResult, error) {
+	m.batches[batch.Sheet]++
+	if err := m.transportErr[batch.Sheet]; err != nil {
+		return TableMaterializeResult{}, err
+	}
+	if message, ok := m.sheetErr[batch.Sheet]; ok {
+		return TableMaterializeResult{}, &TableSheetError{Status: 400, Message: message}
+	}
+	result := TableMaterializeResult{
+		Rows: batch.ParsedRows, URI: "tablehouse/tenant=" + target.TenantID + "/ver=" + target.VersionID + "/sheet=" + batch.Sheet,
+		ColumnTypes: batch.ColumnTypes, ContentHash: batch.ContentHash,
+	}
+	if batch.SheetDone {
+		result.Status = MaterializeStatusReady
+	}
+	return result, nil
+}
+
+func TestParseStageStreamsRowsToTablehouse(t *testing.T) {
+	worker, db, objects, _, _ := newWorkerFixture(t)
+	reader := &rowStreamingReader{
+		result: ParseResult{
+			Title: "Workbook", ParserVersion: "v1",
+			Blocks: []DocumentBlock{{Kind: "table", Text: "name | qty\npen | 2", Table: &TableMeta{Sheet: "Sheet1", Header: []string{"name", "qty"}, RowStart: 2, RowEnd: 2, ColumnCount: 2}}},
+		},
+		batches: []TableRowBatch{
+			{Sheet: "Sheet1", Header: []string{"name", "qty"}, ColumnTypes: []string{"string", "int"}, ParsedRows: 1, Rows: [][]string{{"pen", "2"}}},
+			{Sheet: "Sheet1", ParsedRows: 2, SheetDone: true, ContentHash: "hash-1", Rows: [][]string{{"tape", "5"}}},
+			{Sheet: "Broken", Header: []string{"id"}, ColumnTypes: []string{"string"}, ParsedRows: 1, Rows: [][]string{{"x"}}},
+			{Sheet: "Broken", ParsedRows: 2, SheetDone: true, Rows: [][]string{{"y"}}},
+		},
+	}
+	materializer := &recordingMaterializer{
+		batches:  map[string]int{},
+		sheetErr: map[string]string{"Broken": "sheet row limit exceeded"},
+	}
+	worker.reader = reader
+	worker.SetTableMaterializer(materializer)
+	worker.SetParseTransport(1024, time.Second)
+	if err := runStage(t, worker, db, StageParse); err != nil {
+		t.Fatalf("parse stage: %v", err)
+	}
+	if len(materializer.cleared) != 1 || materializer.cleared[0].VersionID != "ver-1" || materializer.cleared[0].KnowledgeBaseID != "kb-a" {
+		t.Fatalf("clear calls = %+v", materializer.cleared)
+	}
+	if materializer.batches["Sheet1"] != 2 {
+		t.Fatalf("sheet1 batches = %d", materializer.batches["Sheet1"])
+	}
+	if materializer.batches["Broken"] != 1 {
+		t.Fatalf("broken sheet batches = %d, want 1 (skipped after rejection)", materializer.batches["Broken"])
+	}
+	var version models.DocumentVersion
+	if err := db.First(&version, "id = ?", "ver-1").Error; err != nil {
+		t.Fatalf("load version: %v", err)
+	}
+	var normalized NormalizedDocument
+	if err := json.Unmarshal(objects.data[version.NormalizedKey], &normalized); err != nil {
+		t.Fatalf("decode normalized: %v", err)
+	}
+	good, ok := normalized.Materialize["Sheet1"]
+	if !ok || good.Status != MaterializeStatusReady || good.Rows != 2 || good.URI == "" || good.ContentHash != "hash-1" {
+		t.Fatalf("sheet1 materialize = %+v", normalized.Materialize)
+	}
+	broken, ok := normalized.Materialize["Broken"]
+	if !ok || broken.Status != MaterializeStatusFailed || broken.Error != "sheet row limit exceeded" || broken.URI != "" {
+		t.Fatalf("broken materialize = %+v", normalized.Materialize)
+	}
+}
+
+func TestRowForwarderPropagatesTransportErrors(t *testing.T) {
+	worker := &PipelineWorker{}
+	materializer := &recordingMaterializer{
+		batches:      map[string]int{},
+		transportErr: map[string]error{"Sheet1": errors.New("connection refused")},
+	}
+	worker.SetTableMaterializer(materializer)
+	if err := worker.rowForwarder(context.Background(), TableMaterializeTarget{}, map[string]TableMaterializeResult{})(TableRowBatch{Sheet: "Sheet1"}); err == nil {
+		t.Fatalf("transport error must abort the parse stage")
+	}
 }
 
 type recordingIndexWriter struct {
@@ -351,6 +463,17 @@ func TestChunkStageRecordsPerSheetCoverage(t *testing.T) {
 			{Kind: "table", SourcePath: "sheet:catalog!A1:B1", Text: "id | v",
 				Table: &TableMeta{Sheet: "catalog", Header: []string{"id", "v"}, RowStart: 2, RowEnd: 1, ColumnCount: 2}},
 		},
+		Materialize: map[string]TableMaterializeResult{
+			"small": {
+				Rows: 2, Bytes: 512, Status: MaterializeStatusReady, URI: "tablehouse/tenant=t/kb=kb/doc=doc/ver=ver-1/sheet=small",
+				ColumnTypes: []string{"string", "int"}, ContentHash: "hash-small",
+			},
+			"huge": {
+				Rows: 50000, Bytes: 4096, Status: MaterializeStatusPartial, URI: "tablehouse/tenant=t/kb=kb/doc=doc/ver=ver-1/sheet=huge",
+				ColumnTypes: []string{"string", "int"}, ContentHash: "hash-huge",
+			},
+			"catalog": {Status: MaterializeStatusFailed, Error: "sheet row limit exceeded"},
+		},
 	}
 	data, err := json.Marshal(normalized)
 	if err != nil {
@@ -389,12 +512,22 @@ func TestChunkStageRecordsPerSheetCoverage(t *testing.T) {
 		t.Fatalf("catalog asset = %+v", catalog)
 	}
 
+	if small.MaterializeStatus != MaterializeStatusReady || small.MaterializedRows != 2 || small.StorageURI == "" || small.StorageFormat != "parquet" || small.MaterializedAt == nil {
+		t.Fatalf("small materialize = %+v", small)
+	}
+	if huge.MaterializeStatus != MaterializeStatusPartial || huge.MaterializedRows != 50000 {
+		t.Fatalf("huge materialize = %+v", huge)
+	}
+	if catalog.MaterializeStatus != MaterializeStatusFailed || catalog.MaterializeError != "sheet row limit exceeded" || catalog.StorageURI != "" {
+		t.Fatalf("catalog materialize = %+v", catalog)
+	}
+
 	var tableRows int64
 	if err := db.Model(&models.TableRow{}).Where("document_version_id = ?", "ver-1").Count(&tableRows).Error; err != nil {
 		t.Fatalf("count rows: %v", err)
 	}
-	if tableRows != 2 {
-		t.Fatalf("persisted table rows = %d, want only the full sheet's 2 rows", tableRows)
+	if tableRows != 0 {
+		t.Fatalf("persisted table rows = %d, want 0 after B39", tableRows)
 	}
 
 	var summaries int64
@@ -416,7 +549,7 @@ func TestChunkStageRecordsPerSheetCoverage(t *testing.T) {
 	if version.ParsedSheets != 3 || version.TotalSheets != 3 || version.ParsedRows != 52 || version.TotalRows != 6050002 {
 		t.Fatalf("version rows = parsed %d/%d sheets %d/%d total %d", version.ParsedRows, version.TotalRows, version.ParsedSheets, version.TotalSheets, version.TotalRows)
 	}
-	if version.KeywordRows != 52 || version.VectorRows != 52 || version.VectorSheets != 3 {
+	if version.KeywordRows != 52 || version.VectorRows != 4 || version.VectorSheets != 3 {
 		t.Fatalf("version index coverage = %+v", version)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -70,6 +71,17 @@ func (m *memoryObjects) Delete(_ context.Context, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.data, key)
+	return nil
+}
+
+func (m *memoryObjects) DeletePrefix(_ context.Context, prefix string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for key := range m.data {
+		if strings.HasPrefix(key, prefix) {
+			delete(m.data, key)
+		}
+	}
 	return nil
 }
 

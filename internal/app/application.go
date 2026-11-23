@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/authz"
@@ -32,6 +33,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/platform/search"
 	"github.com/hzc19970630/rag-platform/internal/platform/secrets"
 	"github.com/hzc19970630/rag-platform/internal/platform/storage"
+	"github.com/hzc19970630/rag-platform/internal/platform/tablehouse"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantdb"
 	"github.com/hzc19970630/rag-platform/internal/platform/tenantquota"
 	"github.com/hzc19970630/rag-platform/internal/platform/vector"
@@ -55,13 +57,16 @@ type Application struct {
 	KnowledgeBase *knowledgebase.Service
 	Ingestion     *ingestion.Service
 	Index         ingestion.EvidenceIndexWriter
-	DataSources   *datasource.Service
-	Projection    *knowledgeprojection.Service
-	Secrets       *secrets.Cipher
-	Tasks         *ingestion.TaskInspector
-	Retrieval     *retrieval.Service
-	Conversation  *conversation.Service
-	Models        *modelregistry.Registry
+	// Tablehouse is nil when TABLEHOUSE_URL is unset; table queries then
+	// return not_ready and parsing keeps its block-only behavior.
+	Tablehouse   *tablehouse.Client
+	DataSources  *datasource.Service
+	Projection   *knowledgeprojection.Service
+	Secrets      *secrets.Cipher
+	Tasks        *ingestion.TaskInspector
+	Retrieval    *retrieval.Service
+	Conversation *conversation.Service
+	Models       *modelregistry.Registry
 	// Embedding resolves the exact vector space and adapter for a knowledge
 	// base. Ingestion, retrieval and projection share this resolver.
 	Embedding embedding.Resolver
@@ -248,6 +253,18 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	ingestionService.SetIndexingBudget(cfg.Embedding.TPMBudget, cfg.Embedding.CharsPerToken)
 	ingestionService.SetMetrics(recorder)
 	ingestionService.SetQuotaResolver(quotaResolver)
+	var tables *tablehouse.Client
+	if strings.TrimSpace(cfg.TablehouseURL) != "" {
+		tables, err = tablehouse.New(cfg.TablehouseURL, time.Duration(cfg.TablehouseQueryTimeoutSec)*time.Second)
+		if err != nil {
+			_ = reader.Close()
+			_ = publisher.Close()
+			closeAll()
+			return nil, err
+		}
+		ingestionService.SetTablehouse(tables)
+		ingestionService.SetTablehousePrefix(cfg.TablehousePrefix)
+	}
 	knowledgeBaseService.SetUploadAborter(ingestionService)
 	ingestionService.SetUploadSupport(ingestion.UploadSupport{
 		Multipart:          objects,
@@ -416,7 +433,7 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Presets: presetResolver, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, Tablehouse: tables, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Presets: presetResolver, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {
