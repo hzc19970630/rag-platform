@@ -437,11 +437,11 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 
 ### 10.2 大表格与流式解析（B34）
 
-- `PARSER_VERSION=docreader-b38-v1`。worker 通过 client-streaming `ParseDocumentStream` 分帧（`DOCREADER_STREAM_CHUNK_KB`，默认 2MiB）发送源文件，docreader 写入只读容器内 `/spool` tmpfs（`DOCREADER_SPOOL_MB` 默认 384MiB，`DOCREADER_SPOOL_CONCURRENCY` 默认 2）；spool 计入 docreader 2GiB 内存限制，请求结束/取消后立即删除。
+- `PARSER_VERSION=docreader-b39-v1`。worker 通过 client-streaming `ParseDocumentStream` 分帧（`DOCREADER_STREAM_CHUNK_KB`，默认 2MiB）发送源文件，docreader 写入只读容器内 `/spool` tmpfs（`DOCREADER_SPOOL_MB` 默认 384MiB，`DOCREADER_SPOOL_CONCURRENCY` 默认 2）；spool 计入 docreader 2GiB 内存限制，请求结束/取消后立即删除。
 - 单文件上限 `DOCREADER_MAX_FILE_MB`（默认 150MB）是 API 上传校验、worker 尺寸声明与 docreader 接收/解析共用的唯一值。api/worker 通过 `env_file` 读取根 `.env`；docreader 是解析不可信文档的沙箱，只接收 `DOCREADER_*` 白名单变量，由 Compose 插值读取该值，因此启动栈时需带 `--env-file .env`（`scripts/*.sh` 与 quickstart 均已如此）。docreader 会额外做启动校验，要求 `DOCREADER_SPOOL_MB ≥ DOCREADER_MAX_FILE_MB × DOCREADER_SPOOL_CONCURRENCY`（默认 150×2=300MiB，384MiB 留有余量），不满足时直接启动失败而不是在上传中途报错。`/healthz` 同时返回 `max_file_mb`、`spool_mb`、`spool_concurrency` 便于核对。
-- 表格预算：`DOCREADER_MAX_ARCHIVE_BYTES`（默认 2GiB）、`DOCREADER_MAX_PART_BYTES`（64MiB）、`DOCREADER_MAX_READ_BYTES`（2GiB）、`DOCREADER_MAX_TABLE_ROWS_PER_SHEET`（5 万）、`DOCREADER_MAX_TABLE_ROWS`（50 万）、`DOCREADER_TABLE_WINDOW_ROWS`（10–50，默认 50）、`DOCREADER_TABLE_SAMPLE_ROWS`（默认 50）、`DOCREADER_MAX_TABLE_BLOCKS`（进程安全阀，默认 2 万）、`DOCREADER_MAX_SHEET_BLOCKS`（单 sheet 预算，默认 2000）、`DOCREADER_TABLE_STORAGE_FULL_MAX_ROWS`（A 档全量入库上限，默认 20 万）、`DOCREADER_TABLE_STORAGE_METADATA_MIN_ROWS`（C 档仅元数据阈值，默认 500 万）。条目数/压缩比/单部件仍为硬拒绝；行/表/块超预算为软截断并写 `[truncated]`。多 sheet 文档按 sheet 独立预算，单个超大 sheet 不再耗尽整个工作簿的 block 配额。
+- 表格预算：`DOCREADER_MAX_ARCHIVE_BYTES`（默认 2GiB）、`DOCREADER_MAX_PART_BYTES`（64MiB）、`DOCREADER_MAX_READ_BYTES`（2GiB）、`DOCREADER_MAX_TABLE_ROWS_PER_SHEET`（5 万）、`DOCREADER_MAX_TABLE_ROWS`（全局行安全阀，默认 200 万）、`DOCREADER_TABLE_ROW_BATCH_ROWS`（行批次，默认 5000）、`DOCREADER_TABLE_WINDOW_ROWS`（10–50，默认 50）、`DOCREADER_TABLE_SAMPLE_ROWS`（默认 50）、`DOCREADER_MAX_TABLE_BLOCKS`（进程安全阀，默认 2 万）、`DOCREADER_MAX_SHEET_BLOCKS`（单 sheet 预算，默认 2000）、`DOCREADER_TABLE_STORAGE_FULL_MAX_ROWS`（A 档全量入库上限，默认 20 万）、`DOCREADER_TABLE_STORAGE_METADATA_MIN_ROWS`（C 档仅元数据阈值，默认 500 万）。条目数/压缩比/单部件仍为硬拒绝；行/表/块超预算为软截断并写 `[truncated]`。多 sheet 文档按 sheet 独立预算，单个超大 sheet 不再耗尽整个工作簿的 block 配额。
 - xlsx 使用 `iterparse` 逐行解析；CSV 支持 UTF-8/GB18030 与分隔符嗅探。表格 block `kind=table` 的文本为“首行表头 + `a | b | c` 行”，单元格内管道与换行会被转义/压平；入库切块时每个 chunk 重复表头并保留 sheet/行范围。
-- 多 sheet 覆盖与存储档位（B38）：每个源 sheet 都有目录项，`parse_status` 为 `parsed/truncated/sampled/metadata/skipped/failed`。A 档（默认 ≤20 万行）全部行进入 `table_rows` 与关键词行组，只对摘要/列/20 行样本做 embedding；B 档（20 万–500 万行）只保留 schema/统计/样本，明细依赖外部只读查询；C 档（>500 万行）仅元数据。文档版本分开记录 `parsed_sheets/total_sheets`、`parsed_rows/total_rows`、`keyword_rows`、`vector_rows/vector_sheets`；B/C 的 `/tables/query` 返回 `table_rows_not_indexed`，检索答案会收到 coverage 警告，摘要行不得当作行证据。旧版本未重解析时 `coverage_known=false`，不能沿用旧的 `total_sheets` 判断完整覆盖。
+- 多 sheet 覆盖与存储档位（B38/B39）：每个源 sheet 都有目录项，`parse_status` 为 `parsed/truncated/sampled/metadata/skipped/failed`。档位只决定 block/向量预算：A 档（默认 ≤20 万行）全部行进入关键词行组，B 档（20 万–500 万行）只保留 schema/统计/样本块，C 档（>500 万行）仅元数据；原始行一律由 B39 写入 tablehouse Parquet，Postgres 不再写 `table_rows`。文档版本分开记录 `parsed_sheets/total_sheets`、`parsed_rows/total_rows`、`keyword_rows`、`vector_rows/vector_sheets`；B39 起 `parsed_rows` 为实际扫描/落库行数，`/tables/query` 对已 materialize 的 sheet 一律走列式副本，不再返回 `table_rows_not_indexed`。摘要行仍不得当作行证据。旧版本未重解析时 `coverage_known=false`，且查询返回 `table_needs_reparse`。
 - 解析预算独立于入库任务：`DOCREADER_PARSE_TIMEOUT_SECONDS`（默认 300s）。升级 parser 版本后，旧文档需通过 reparse/重建获得表格行为。
 - 可观察：docreader 每次成功解析输出 `parse_complete` 日志（blocks、truncated、total/indexed rows/sheets、elapsed_ms），worker 输出 `document_parsed` 日志；解析统计同时通过 `GET /documents/:id/content` 暴露给文档页。
 - blocks 返回：worker 优先使用 bidi `ParseDocumentBlocks`，docreader 每 `DOCREADER_BLOCK_BATCH`（默认 200）块发送一次，最后发送统计摘要；单条 gRPC 消息不再包含整份文档的全部 blocks。
@@ -464,12 +464,24 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 
 - 默认不整表向量化。按规模选模式：≤2,000 行且 ≤50 列为 `deep`；≤50,000 行、≤100 列且 ≤20 sheet 为 `standard`；更大或更宽为 `lexical`。
 - `standard` 向量化表名/sheet/表头/列说明/统计摘要/样本行，原始行 chunk 的 `index_role=keyword`，只进入 BM25/结构化查询；`deep` 全部行 `both`；`lexical` 全部 `keyword`。
-- `table_assets` 按 sheet 聚合表资产（表头/列数/行范围/样本/行数），`table_rows` 保存原始单元格供确定性筛选/TopN；行数上限 `maxPersistedTableRows`（20 万）。
+- `table_assets` 按 sheet 聚合表资产（表头/列数/行范围/样本/行数）；原始行由 B39 的 Parquet 副本承载（见 10.5），Postgres 不再受 20 万行 `maxPersistedTableRows` 限制。
 - 文档版本记录 `index_mode`、`vector_rows/total_rows`、`vector_sheets/total_sheets`、`vector_tokens/estimated_tokens`；文档页“索引覆盖”卡片显示覆盖并提供标准/深度/仅全文切换。
 - API：`GET /documents/:id/index-estimate` 返回深度索引 tokens/预计分钟（需 `EMBEDDING_TPM_BUDGET`）；`POST /documents/:id/index-mode` 切换模式并 reparse；`GET /knowledge-bases/:id/tables`、`POST /knowledge-bases/:id/tables/query` 提供列过滤/TopN。
 - embedding：按 token 预算组批（`EMBEDDING_BATCH_MAX_TOKENS`）、TPM 配速（`EMBEDDING_TPM_BUDGET`）、429 `Retry-After` 退避、独立 `EMBEDDING_STAGE_TIMEOUT_SECONDS`；已 embedded 的 chunk 在重跑时跳过，支持断点续跑。
 - 指标：`ingestion_table_query_total/duration`、`ingestion_index_mode_switch_total`；问题类型的命中率对比留待评估集补齐。
 - 升级注意：0040/0041 迁移新增表与列；旧文档保持原切块，重新 reparse 后才应用新策略。
+
+### 10.5 表格列式副本与 tablehouse（B39）
+
+- 行数据与向量化解耦：docreader 在 `ParseDocumentBlocks` 中按 sheet 全量扫描，行批次（`DOCREADER_TABLE_ROW_BATCH_ROWS`，默认 5000）经 worker 转发给 `tablehouse`，写入对象存储；行不透传进 blocks 或 normalized.json。
+- 布局：`s3://<bucket>/tablehouse/tenant=<tid>/kb=<kbid>/doc=<docid>/ver=<verid>/sheet=<sanitized>/part-*.parquet`，zstd、约 `TABLEHOUSE_ROW_GROUP_ROWS`（默认 10 万）行/行组；同目录 `_manifest.json` 记录列名、逻辑类型（int/float/date/bool/string）、行数、分片、内容 hash 与截断标记。单元格按原文存为字符串，类型只用于比较与元数据。
+- `table_assets` 新增 `storage_uri/storage_format/schema_json/materialized_rows/byte_size/materialized_at/materialize_status/materialize_error`；`ready/partial/failed` 如实反映每个 sheet。Postgres 从 B39 起不再写 `table_rows`（表保留用于回滚，不再读取）。
+- 查询：`POST /knowledge-bases/:id/tables/query` 只接受服务端构造的过滤计划（等值/包含/数值或字符串比较 + 排序 + limit），由 tablehouse 在其 S3 前缀上执行；不接受用户 SQL。资产没有 `storage_uri`（升级前解析）返回 `table_needs_reparse`，materialize 失败的 sheet 返回 `table_materialize_failed`，服务不可达或超时返回 503 `not_ready`。
+- 配置（api/worker）：`TABLEHOUSE_URL`（空则禁用，表查询返回 not_ready）、`TABLEHOUSE_S3_PREFIX`（默认 `tablehouse`，删除清理按此拼接）、`TABLEHOUSE_QUERY_TIMEOUT_SECONDS`（默认 10）。配置（tablehouse 容器）：`TABLEHOUSE_MEMORY_MB`（DuckDB 上限，默认 1024）、`TABLEHOUSE_MAX_CONCURRENCY`（默认 2）、`TABLEHOUSE_ROW_GROUP_ROWS`、`TABLEHOUSE_MAX_SHEET_ROWS`；S3 沿用 `S3_*`。tablehouse 只连内网、不连 Postgres，标识符按白名单校验后才拼路径。
+- 失败与重试：tablehouse 不可达时解析阶段返回可重试错误，任务重试前先清空该版本前缀；单个 sheet 被拒（如超过 `TABLEHOUSE_MAX_SHEET_ROWS`）只标记该 sheet 失败并跳过后续批次，不阻断整篇文档。重解析会先清空 `ver=<id>/` 前缀再重写。
+- 清理：`POST /documents/:id/purge`（以及保留期到期清理）在删除源文件/normalized 后按 `tablehouse/tenant=.../kb=.../doc=<id>/` 前缀删除 Parquet；软删除期间前缀保留以便恢复。
+- 可观察：`ingestion_table_materialize_total{status}` 与 `ingestion_table_materialize_duration`（worker）；tablehouse 记录 materialize 行数/字节/耗时与查询失败；`GET /store/stats`（内部）可核对某版本的对象数与字节。
+- 升级注意：0043 迁移只加列；旧文档需 reparse 才能获得列式副本，此前查询返回 `table_needs_reparse`。回滚到 B39 之前的镜像后旧文档恢复 `table_rows` 查询路径。
 
 ## 11. 数据库连接池
 

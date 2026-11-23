@@ -16,15 +16,16 @@
 | --- | --- | --- |
 | API 镜像 | `ghcr.io/hzc19970630/rag-platform/api:<version>` | 多二进制镜像：`api`、`worker`、`migrate`、`seed`、`embedctl` |
 | 解析器镜像 | `ghcr.io/hzc19970630/rag-platform/docreader:<version>` | 数字文档解析 sidecar |
+| 表格列式服务 | `ghcr.io/hzc19970630/rag-platform/tablehouse:<version>` | Parquet materialize 与表格查询 sidecar（B39） |
 | MCP 镜像 | `ghcr.io/hzc19970630/rag-platform/mcp:<version>` | stdio MCP Server，非 root，`docker run -i` 使用 |
 | MCP 二进制 | `rag-mcp-<version>-<os>-<arch>[.exe]` | linux/darwin/windows × amd64/arm64，六份产物 |
 | 前端静态包 | `rag-platform-web-<version>.tar.gz` | `web/dist`，构建时固定 `VITE_API_BASE_URL=/api/v1` |
-| SBOM | `rag-platform-api-<version>.cdx.json`、`rag-platform-docreader-<version>.cdx.json`、`rag-platform-mcp-<version>.cdx.json` | CycloneDX |
-| 清单 | `release-manifest.txt` | 版本、完整 commit、构建时间、三个镜像的 tag@digest 与 MCP 二进制 |
-| 校验和 | `SHA256SUMS`、`SHA256SUMS.cosign.bundle` | 覆盖清单、前端包、三个 SBOM 与 MCP 二进制；bundle 为 cosign 无密钥签名 |
-| 镜像签名 | OCI registry 中的 cosign 签名 | 对 `api`/`docreader`/`mcp` 的 digest 签名 |
+| SBOM | `rag-platform-api-<version>.cdx.json`、`rag-platform-docreader-<version>.cdx.json`、`rag-platform-tablehouse-<version>.cdx.json`、`rag-platform-mcp-<version>.cdx.json` | CycloneDX |
+| 清单 | `release-manifest.txt` | 版本、完整 commit、构建时间、四个镜像的 tag@digest 与 MCP 二进制 |
+| 校验和 | `SHA256SUMS`、`SHA256SUMS.cosign.bundle` | 覆盖清单、前端包、四个 SBOM 与 MCP 二进制；bundle 为 cosign 无密钥签名 |
+| 镜像签名 | OCI registry 中的 cosign 签名 | 对 `api`/`docreader`/`tablehouse`/`mcp` 的 digest 签名 |
 
-镜像同时推送 `sha-<12位提交>` 标签，便于按提交追溯。生产环境应固定 digest，不要依赖浮动标签。GHCR 包首次发布后如仓库公开，需在 GitHub Packages 设置里把三个包改为 public，否则匿名 `docker pull` 会失败。
+镜像同时推送 `sha-<12位提交>` 标签，便于按提交追溯。生产环境应固定 digest，不要依赖浮动标签。GHCR 包首次发布后如仓库公开，需在 GitHub Packages 设置里把四个包改为 public，否则匿名 `docker pull` 会失败。
 
 ## 3. 触发发布
 
@@ -123,6 +124,7 @@ export RAG_VERSION=v0.3.0
 # 或者硬固定 digest：
 # export RAG_API_IMAGE=ghcr.io/hzc19970630/rag-platform/api@sha256:...
 # export RAG_DOCREADER_IMAGE=ghcr.io/hzc19970630/rag-platform/docreader@sha256:...
+# export RAG_TABLEHOUSE_IMAGE=ghcr.io/hzc19970630/rag-platform/tablehouse@sha256:...
 
 BASE_ARGS=(-f deploy/docker-compose/docker-compose.yml -f deploy/docker-compose/release.compose.yml)
 docker compose --env-file .env "${BASE_ARGS[@]}" pull
@@ -130,11 +132,11 @@ docker compose --env-file .env "${BASE_ARGS[@]}" run --rm --no-deps migrate
 # Embedding migration: copy existing vectors into chunk_embeddings before the new API reads them.
 docker compose --env-file .env "${BASE_ARGS[@]}" run --rm --no-deps \
   --entrypoint embedctl api backfill-embeddings
-docker compose --env-file .env "${BASE_ARGS[@]}" up -d --no-build docreader
+docker compose --env-file .env "${BASE_ARGS[@]}" up -d --no-build docreader tablehouse
 docker compose --env-file .env "${BASE_ARGS[@]}" up -d --no-build worker api
 ```
 
-- 顺序固定为 **migrate → backfill-embeddings → docreader → worker → api**。`backfill-embeddings` 把旧 `chunks.embedding` 复制到 `chunk_embeddings`；新版本的向量检索只读变体表，未回填就启动 API 会让旧文档暂时不可向量召回。命令幂等、可重复执行，每批 1000 条，升级中断后重跑即可续传。
+- 顺序固定为 **migrate → backfill-embeddings → docreader/tablehouse → worker → api**。B39 起表格行写入 tablehouse，旧文档需要 reparse 才会生成列式副本；在此之前 `/tables/query` 返回 `table_needs_reparse`。`backfill-embeddings` 把旧 `chunks.embedding` 复制到 `chunk_embeddings`；新版本的向量检索只读变体表，未回填就启动 API 会让旧文档暂时不可向量召回。命令幂等、可重复执行，每批 1000 条，升级中断后重跑即可续传。
 - 迁移 `0031_embedding_variants` 与回填是向前兼容的：旧二进制仍读 `chunks.embedding`，且新版本入库双写该列，因此回退到旧镜像不需要数据库回退（除非已经执行过迁移的 `finalize` 清理）。
 - `seed` 是幂等任务，`api` 的 `depends_on` 会以发布镜像自动执行它；不要手工跳过 migrate 直接启动 api。
 - Web 不在镜像里。升级时解压前端包到版本目录，校验通过后原子切换软链接，例如：
