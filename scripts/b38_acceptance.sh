@@ -116,7 +116,7 @@ assert d["matchedRows"] == 1, d
 assert d["rows"][0]["cells"]["name"] == "Sheet65-row-3", d
 PY
 
-echo "== sampled sheet is explicitly non-queryable"
+echo "== sampled sheet stays queryable through the columnar copy"
 "$python_bin" scripts/generate_xlsx_fixture.py --out "$tmp_dir/sampled.xlsx" --sheets 1 --rows 2 --large-sheet-rows 60000 >/dev/null
 sampled_doc="$(upload_document "$kb" "$tmp_dir/sampled.xlsx" "$tmp_dir/sampled-upload.json")"
 sampled_status="$(wait_version "$sampled_doc" 300 "$tmp_dir/sampled-status.json")"
@@ -138,10 +138,14 @@ assert asset, "sampled asset missing"
 print(asset["id"])
 PY
 )"
-code="$(curl -sS -o "$tmp_dir/sampled-query.json" -w '%{http_code}' -X POST "$base_url/api/v1/knowledge-bases/$kb/tables/query" "${headers[@]}" \
-  -H 'Content-Type: application/json' -d "{\"assetId\":\"$sampled_asset\"}")"
-[[ "$code" == "400" ]] || { echo "sampled query expected 400, got $code"; cat "$tmp_dir/sampled-query.json"; exit 1; }
-grep -q "table_rows_not_indexed" "$tmp_dir/sampled-query.json" || { echo "missing table_rows_not_indexed"; cat "$tmp_dir/sampled-query.json"; exit 1; }
+request POST "/api/v1/knowledge-bases/$kb/tables/query" 200 "$tmp_dir/sampled-query.json" "${headers[@]}" \
+  -H 'Content-Type: application/json' -d "{\"assetId\":\"$sampled_asset\",\"filters\":[{\"column\":\"name\",\"op\":\"eq\",\"value\":\"Huge-row-59000\"}],\"limit\": 5}"
+"$python_bin" - "$tmp_dir/sampled-query.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+assert d["matchedRows"] == 1, d
+assert d["rows"][0]["cells"]["name"] == "Huge-row-59000", d
+PY
 
 if [[ -n "${B38_LARGE_XLSX:-}" ]]; then
   echo "== real large workbook"
