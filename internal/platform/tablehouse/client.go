@@ -174,6 +174,55 @@ func (c *Client) QueryTable(ctx context.Context, target ports.TableMaterializeTa
 	return ports.ColumnarTableResult{Rows: decoded.Rows, MatchedRows: decoded.MatchedRows, TotalRows: decoded.TotalRows}, nil
 }
 
+type sqlRequest struct {
+	targetPayload
+	Sheet   string `json:"sheet"`
+	SQL     string `json:"sql"`
+	Params  []any  `json:"params,omitempty"`
+	Preview bool   `json:"preview,omitempty"`
+	Limit   int    `json:"limit"`
+}
+
+type sqlResponse struct {
+	Columns      []ports.TableSQLColumn `json:"columns"`
+	Rows         [][]any                `json:"rows"`
+	RowCount     int                    `json:"rowCount"`
+	ReturnedRows int                    `json:"returnedRows"`
+	Truncated    bool                   `json:"truncated"`
+	ElapsedMs    int64                  `json:"elapsedMs"`
+}
+
+// RunTableSQL executes one read-only statement against a materialized sheet.
+// tablehouse owns statement analysis, relation/column validation and the
+// row/time/memory valves; a rejected statement comes back as a TableSheetError.
+func (c *Client) RunTableSQL(ctx context.Context, target ports.TableMaterializeTarget, sheet string, query ports.ColumnarSQLQuery) (ports.ColumnarSQLResult, error) {
+	body, err := json.Marshal(sqlRequest{
+		targetPayload: payload(target),
+		Sheet:         sheet,
+		SQL:           query.SQL,
+		Params:        query.Params,
+		Preview:       query.Preview,
+		Limit:         query.Limit,
+	})
+	if err != nil {
+		return ports.ColumnarSQLResult{}, err
+	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, c.queryTimeout)
+	defer cancel()
+	response, err := c.post(timeoutCtx, "/sql", body)
+	if err != nil {
+		return ports.ColumnarSQLResult{}, err
+	}
+	var decoded sqlResponse
+	if err := json.Unmarshal(response, &decoded); err != nil {
+		return ports.ColumnarSQLResult{}, fmt.Errorf("decode tablehouse sql: %w", err)
+	}
+	return ports.ColumnarSQLResult{
+		Columns: decoded.Columns, Rows: decoded.Rows, RowCount: decoded.RowCount,
+		ReturnedRows: decoded.ReturnedRows, Truncated: decoded.Truncated, ElapsedMs: decoded.ElapsedMs,
+	}, nil
+}
+
 func (c *Client) post(ctx context.Context, path string, body []byte) ([]byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, bytes.NewReader(body))
 	if err != nil {

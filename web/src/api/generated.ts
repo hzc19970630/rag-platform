@@ -535,6 +535,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{id}/tables/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/documents/{id}/tables/rebuild */
+        post: operations["post_documents_id_tables_rebuild"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{id}/versions": {
         parameters: {
             query?: never;
@@ -1082,6 +1099,23 @@ export interface paths {
         put?: never;
         /** POST /api/v1/knowledge-bases/{id}/tables/query */
         post: operations["post_knowledge_bases_id_tables_query"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/tables/sql": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/tables/sql */
+        post: operations["post_knowledge_bases_id_tables_sql"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2333,6 +2367,14 @@ export interface components {
             indexMode?: string;
             /** Format: int64 */
             keywordRows?: number;
+            /** Format: int64 */
+            materializeBytes?: number;
+            materializeFailedSheets?: number;
+            materializeMissingSheets?: number;
+            materializePartialSheets?: number;
+            materializeReadySheets?: number;
+            /** Format: int64 */
+            materializeRows?: number;
             parseStatus?: string;
             parseTruncated?: boolean;
             /** Format: int64 */
@@ -3271,8 +3313,16 @@ export interface components {
             tagIds?: string[];
         };
         SheetCoverage: {
+            /** Format: int64 */
+            byteSize?: number;
             columnCount?: number;
             indexMode?: string;
+            materializeError?: string;
+            materializeStatus?: string;
+            /** Format: date-time */
+            materializedAt?: string;
+            /** Format: int64 */
+            materializedRows?: number;
             parseStatus?: string;
             /** Format: int64 */
             parsedRows?: number;
@@ -3314,13 +3364,22 @@ export interface components {
             type: string;
         };
         TableAsset: {
+            /** Format: int64 */
+            byteSize?: number;
             columnCount?: number;
+            columnTypes?: string[];
             documentId?: string;
             documentVersionId?: string;
             header?: string[];
             headerRow?: number;
             id?: string;
             indexMode?: string;
+            materializeError?: string;
+            materializeStatus?: string;
+            /** Format: date-time */
+            materializedAt?: string;
+            /** Format: int64 */
+            materializedRows?: number;
             parseStatus?: string;
             /** Format: int64 */
             parsedRows?: number;
@@ -3328,6 +3387,7 @@ export interface components {
             rowEnd?: number;
             rowStart?: number;
             sheet?: string;
+            sqlColumns?: string[];
             storageMode?: string;
             /** Format: int64 */
             totalRows?: number;
@@ -3366,6 +3426,30 @@ export interface components {
                 [key: string]: string;
             };
             rowNumber?: number;
+        };
+        TableSQLColumn: {
+            name?: string;
+            type?: string;
+        };
+        TableSQLRequest: {
+            assetId: string;
+            limit?: number;
+            params?: unknown[];
+            preview?: boolean;
+            sql: string;
+        };
+        TableSQLResult: {
+            assetId?: string;
+            columns?: components["schemas"]["TableSQLColumn"][];
+            /** Format: int64 */
+            elapsedMs?: number;
+            preview?: boolean;
+            returnedRows?: number;
+            rowCount?: number;
+            rows?: unknown[][];
+            sheet?: string;
+            sql?: string;
+            truncated?: boolean;
         };
         Tag: {
             /** Format: date-time */
@@ -4583,6 +4667,32 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    post_documents_id_tables_rebuild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
     get_documents_id_versions: {
         parameters: {
             query?: never;
@@ -5681,6 +5791,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TableQueryResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_tables_sql: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TableSQLRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableSQLResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

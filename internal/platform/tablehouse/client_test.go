@@ -112,6 +112,52 @@ func TestQueryTableDecodesRows(t *testing.T) {
 	}
 }
 
+func TestRunTableSQLSendsBoundedQuery(t *testing.T) {
+	var received sqlRequest
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/sql" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"columns":  []map[string]string{{"name": "total", "type": "NUMBER"}},
+			"rows":     [][]any{{3}},
+			"rowCount": 1, "returnedRows": 1, "truncated": false, "elapsedMs": 12,
+		})
+	})
+	result, err := client.RunTableSQL(context.Background(), ports.TableMaterializeTarget{
+		TenantID: "t", KnowledgeBaseID: "kb", DocumentID: "doc", VersionID: "v",
+	}, "Sheet1", ports.ColumnarSQLQuery{
+		SQL: `SELECT count(*) AS total FROM t WHERE "名称" = ?`, Params: []any{"pen"}, Preview: true, Limit: 25,
+	})
+	if err != nil {
+		t.Fatalf("run sql: %v", err)
+	}
+	if received.Tenant != "t" || received.Sheet != "Sheet1" || received.SQL == "" || !received.Preview || received.Limit != 25 {
+		t.Fatalf("request = %+v", received)
+	}
+	if len(received.Params) != 1 || received.Params[0] != "pen" {
+		t.Fatalf("params = %+v", received.Params)
+	}
+	if len(result.Columns) != 1 || result.Columns[0].Name != "total" || result.RowCount != 1 || result.ElapsedMs != 12 {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestRunTableSQLMapsRejection(t *testing.T) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"only SELECT statements are allowed"}`))
+	})
+	_, err := client.RunTableSQL(context.Background(), ports.TableMaterializeTarget{}, "Sheet1", ports.ColumnarSQLQuery{SQL: "DELETE FROM t"})
+	var sheetErr *ports.TableSheetError
+	if !errors.As(err, &sheetErr) || sheetErr.Status != http.StatusBadRequest || sheetErr.Message == "" {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestClearVersionRejectsEmptyURL(t *testing.T) {
 	if _, err := New("  ", time.Second); err == nil {
 		t.Fatalf("empty URL must fail")

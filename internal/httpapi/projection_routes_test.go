@@ -67,6 +67,16 @@ func (httpTableReader) QueryTable(context.Context, ingestion.TableMaterializeTar
 	}, nil
 }
 
+func (httpTableReader) RunTableSQL(context.Context, ingestion.TableMaterializeTarget, string, ingestion.ColumnarSQLQuery) (ingestion.ColumnarSQLResult, error) {
+	return ingestion.ColumnarSQLResult{
+		Columns:      []ingestion.TableSQLColumn{{Name: "n", Type: "NUMBER"}},
+		Rows:         [][]any{{1}},
+		RowCount:     1,
+		ReturnedRows: 1,
+		ElapsedMs:    1,
+	}, nil
+}
+
 func newProjectionHTTPRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
@@ -394,6 +404,7 @@ func TestKnowledgeBaseRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/documents/doc-a/index-mode", `{"mode":"bogus"}`, http.StatusBadRequest},
 		{http.MethodPost, "/api/v1/documents/doc-a/index-mode", `{"mode":"standard"}`, http.StatusAccepted},
 		{http.MethodGet, "/api/v1/knowledge-bases/kb-a/tables", "", http.StatusOK},
+		{http.MethodPost, "/api/v1/documents/doc-a/tables/rebuild", "", http.StatusAccepted},
 		{http.MethodGet, "/api/v1/uploads/missing", "", http.StatusInternalServerError},
 		{http.MethodDelete, "/api/v1/uploads/missing", "", http.StatusInternalServerError},
 		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/uploads", `{"filename":"a.txt","sizeBytes":1,"mimeType":"text/plain"}`, http.StatusInternalServerError},
@@ -401,6 +412,9 @@ func TestKnowledgeBaseRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/uploads/missing/complete", `{}`, http.StatusInternalServerError},
 		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/query", `{"assetId":"missing"}`, http.StatusNotFound},
 		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/query", `{"assetId":"asset-http"}`, http.StatusOK},
+		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/sql", `{"assetId":"missing","sql":"SELECT 1"}`, http.StatusNotFound},
+		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/sql", `{"assetId":"asset-http","sql":"SELECT 1"}`, http.StatusOK},
+		{http.MethodPost, "/api/v1/knowledge-bases/kb-a/tables/sql", `{"assetId":"asset-http"}`, http.StatusBadRequest},
 
 		{http.MethodDelete, "/api/v1/knowledge-bases/kb-a", "", http.StatusNoContent},
 		{http.MethodGet, "/api/v1/knowledge-bases/kb-a", "", http.StatusForbidden},

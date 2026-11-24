@@ -110,6 +110,21 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 		}
 		c.JSON(http.StatusOK, views.TableQueryResult(result))
 	})
+	protected.POST("/knowledge-bases/:id/tables/sql", func(c *gin.Context) {
+		var input httpapi.TableSQLRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		result, err := deps.Ingestion.QueryTableSQL(c.Request.Context(), accessContext(c).Principal, c.Param("id"), ingestion.TableSQLQuery{
+			AssetID: input.AssetID, SQL: input.SQL, Params: input.Params, Preview: input.Preview, Limit: input.Limit,
+		})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.TableSQLResult(result))
+	})
 
 	documents := protected.Group("/documents/:id")
 	documents.GET("/preview", func(c *gin.Context) {
@@ -193,6 +208,14 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 	})
 	documents.POST("/reparse", func(c *gin.Context) {
 		result, err := deps.Ingestion.Reparse(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusAccepted, views.UploadResult(result))
+	})
+	documents.POST("/tables/rebuild", func(c *gin.Context) {
+		result, err := deps.Ingestion.RebuildTables(c.Request.Context(), accessContext(c).Principal, c.Param("id"))
 		if err != nil {
 			writeError(c, err)
 			return

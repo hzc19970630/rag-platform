@@ -579,22 +579,29 @@ type TableFilter struct {
 }
 
 type TableAsset struct {
-	ID                string   `json:"id"`
-	DocumentID        string   `json:"documentId"`
-	DocumentVersionID string   `json:"documentVersionId"`
-	Sheet             string   `json:"sheet"`
-	Header            []string `json:"header"`
-	RowStart          int      `json:"rowStart"`
-	RowEnd            int      `json:"rowEnd"`
-	RowCount          int      `json:"rowCount"`
-	ColumnCount       int      `json:"columnCount"`
-	IndexMode         string   `json:"indexMode"`
-	StorageMode       string   `json:"storageMode"`
-	ParseStatus       string   `json:"parseStatus"`
-	Truncated         bool     `json:"truncated"`
-	TotalRows         int64    `json:"totalRows"`
-	ParsedRows        int64    `json:"parsedRows"`
-	HeaderRow         int      `json:"headerRow"`
+	ID                string     `json:"id"`
+	DocumentID        string     `json:"documentId"`
+	DocumentVersionID string     `json:"documentVersionId"`
+	Sheet             string     `json:"sheet"`
+	Header            []string   `json:"header"`
+	SQLColumns        []string   `json:"sqlColumns"`
+	ColumnTypes       []string   `json:"columnTypes"`
+	RowStart          int        `json:"rowStart"`
+	RowEnd            int        `json:"rowEnd"`
+	RowCount          int        `json:"rowCount"`
+	ColumnCount       int        `json:"columnCount"`
+	IndexMode         string     `json:"indexMode"`
+	StorageMode       string     `json:"storageMode"`
+	ParseStatus       string     `json:"parseStatus"`
+	Truncated         bool       `json:"truncated"`
+	TotalRows         int64      `json:"totalRows"`
+	ParsedRows        int64      `json:"parsedRows"`
+	HeaderRow         int        `json:"headerRow"`
+	MaterializeStatus string     `json:"materializeStatus"`
+	MaterializeError  string     `json:"materializeError"`
+	MaterializedRows  int64      `json:"materializedRows"`
+	ByteSize          int64      `json:"byteSize"`
+	MaterializedAt    *time.Time `json:"materializedAt,omitempty"`
 }
 
 type TableAssetList struct {
@@ -614,6 +621,32 @@ type TableRow struct {
 	Cells     map[string]string `json:"cells"`
 }
 
+type TableSQLRequest struct {
+	AssetID string `json:"assetId" binding:"required"`
+	SQL     string `json:"sql" binding:"required"`
+	Params  []any  `json:"params,omitempty"`
+	Preview bool   `json:"preview,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+type TableSQLColumn struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type TableSQLResult struct {
+	AssetID      string           `json:"assetId"`
+	Sheet        string           `json:"sheet"`
+	SQL          string           `json:"sql"`
+	Preview      bool             `json:"preview"`
+	Columns      []TableSQLColumn `json:"columns"`
+	Rows         [][]any          `json:"rows"`
+	RowCount     int              `json:"rowCount"`
+	ReturnedRows int              `json:"returnedRows"`
+	Truncated    bool             `json:"truncated"`
+	ElapsedMs    int64            `json:"elapsedMs"`
+}
+
 type TableQueryResult struct {
 	AssetID     string     `json:"assetId"`
 	Sheet       string     `json:"sheet"`
@@ -628,37 +661,48 @@ type TableQueryResult struct {
 }
 
 type SheetCoverage struct {
-	Sheet       string `json:"sheet"`
-	StorageMode string `json:"storageMode"`
-	ParseStatus string `json:"parseStatus"`
-	IndexMode   string `json:"indexMode"`
-	TotalRows   int64  `json:"totalRows"`
-	ParsedRows  int64  `json:"parsedRows"`
-	ColumnCount int    `json:"columnCount"`
-	Truncated   bool   `json:"truncated"`
+	Sheet             string     `json:"sheet"`
+	StorageMode       string     `json:"storageMode"`
+	ParseStatus       string     `json:"parseStatus"`
+	IndexMode         string     `json:"indexMode"`
+	TotalRows         int64      `json:"totalRows"`
+	ParsedRows        int64      `json:"parsedRows"`
+	ColumnCount       int        `json:"columnCount"`
+	Truncated         bool       `json:"truncated"`
+	MaterializeStatus string     `json:"materializeStatus"`
+	MaterializeError  string     `json:"materializeError"`
+	MaterializedRows  int64      `json:"materializedRows"`
+	ByteSize          int64      `json:"byteSize"`
+	MaterializedAt    *time.Time `json:"materializedAt,omitempty"`
 }
 
 type DocumentIndexEstimate struct {
-	DocumentID           string          `json:"documentId"`
-	DocumentVersionID    string          `json:"documentVersionId"`
-	IndexMode            string          `json:"indexMode"`
-	StorageMode          string          `json:"storageMode"`
-	ParseStatus          string          `json:"parseStatus"`
-	ParseTruncated       bool            `json:"parseTruncated"`
-	CoverageKnown        bool            `json:"coverageKnown"`
-	TableCount           int64           `json:"tableCount"`
-	TotalRows            int64           `json:"totalRows"`
-	ParsedRows           int64           `json:"parsedRows"`
-	KeywordRows          int64           `json:"keywordRows"`
-	VectorRows           int64           `json:"vectorRows"`
-	TotalSheets          int             `json:"totalSheets"`
-	ParsedSheets         int             `json:"parsedSheets"`
-	VectorSheets         int             `json:"vectorSheets"`
-	CurrentVectorTokens  int64           `json:"currentVectorTokens"`
-	DeepEstimatedTokens  int64           `json:"deepEstimatedTokens"`
-	DeepEstimatedMinutes float64         `json:"deepEstimatedMinutes"`
-	TPMBudget            int64           `json:"tpmBudget"`
-	Sheets               []SheetCoverage `json:"sheets"`
+	DocumentID               string          `json:"documentId"`
+	DocumentVersionID        string          `json:"documentVersionId"`
+	IndexMode                string          `json:"indexMode"`
+	StorageMode              string          `json:"storageMode"`
+	ParseStatus              string          `json:"parseStatus"`
+	ParseTruncated           bool            `json:"parseTruncated"`
+	CoverageKnown            bool            `json:"coverageKnown"`
+	TableCount               int64           `json:"tableCount"`
+	TotalRows                int64           `json:"totalRows"`
+	ParsedRows               int64           `json:"parsedRows"`
+	KeywordRows              int64           `json:"keywordRows"`
+	VectorRows               int64           `json:"vectorRows"`
+	TotalSheets              int             `json:"totalSheets"`
+	ParsedSheets             int             `json:"parsedSheets"`
+	VectorSheets             int             `json:"vectorSheets"`
+	CurrentVectorTokens      int64           `json:"currentVectorTokens"`
+	DeepEstimatedTokens      int64           `json:"deepEstimatedTokens"`
+	DeepEstimatedMinutes     float64         `json:"deepEstimatedMinutes"`
+	TPMBudget                int64           `json:"tpmBudget"`
+	MaterializeReadySheets   int             `json:"materializeReadySheets"`
+	MaterializePartialSheets int             `json:"materializePartialSheets"`
+	MaterializeFailedSheets  int             `json:"materializeFailedSheets"`
+	MaterializeMissingSheets int             `json:"materializeMissingSheets"`
+	MaterializeRows          int64           `json:"materializeRows"`
+	MaterializeBytes         int64           `json:"materializeBytes"`
+	Sheets                   []SheetCoverage `json:"sheets"`
 }
 
 type DocumentIndexModeRequest struct {

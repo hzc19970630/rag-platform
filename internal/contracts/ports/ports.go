@@ -45,6 +45,10 @@ type (
 	ColumnarTableQuery  = ingestion.ColumnarTableQuery
 	ColumnarTableResult = ingestion.ColumnarTableResult
 	ColumnarTableReader = ingestion.ColumnarTableReader
+
+	TableSQLColumn    = ingestion.TableSQLColumn
+	ColumnarSQLQuery  = ingestion.ColumnarSQLQuery
+	ColumnarSQLResult = ingestion.ColumnarSQLResult
 )
 
 const (

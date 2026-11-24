@@ -216,6 +216,8 @@ var Routes = []Route{
 		Success: ok((*Chunk)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/documents/{id}/reparse", OperationID: "post_documents_id_reparse", Tag: "documents",
 		Success: accepted((*DocumentView)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/documents/{id}/tables/rebuild", OperationID: "post_documents_id_tables_rebuild", Tag: "documents",
+		Success: accepted((*DocumentView)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/documents/{id}/versions/{versionID}/activate", OperationID: "post_documents_id_versions_versionID_activate", Tag: "documents",
 		Success: ok((*DocumentView)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/documents/{id}/restore", OperationID: "post_documents_id_restore", Tag: "documents",
@@ -246,6 +248,8 @@ var Routes = []Route{
 		Success: ok((*TableAssetList)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/query", OperationID: "post_knowledge_bases_id_tables_query", Tag: "documents",
 		Request: jsonBody((*TableQueryRequest)(nil)), Success: ok((*TableQueryResult)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/sql", OperationID: "post_knowledge_bases_id_tables_sql", Tag: "documents",
+		Request: jsonBody((*TableSQLRequest)(nil)), Success: ok((*TableSQLResult)(nil)), Errors: commonErrors},
 
 	// conversations
 	{Method: http.MethodPost, Path: "/api/v1/search", OperationID: "post_search", Tag: "conversations",

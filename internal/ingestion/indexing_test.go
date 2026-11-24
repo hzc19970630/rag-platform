@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 )
@@ -13,9 +14,11 @@ func TestIndexEstimateAndModeSwitch(t *testing.T) {
 	service.SetIndexingBudget(600, 2)
 	ctx := context.Background()
 	principal := ownerPrincipal()
+	now := time.Now().UTC()
 	if err := db.Create(&models.TableAsset{
 		ID: "tbl-1", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
 		Sheet: "Sheet1", RowCount: 100, ColumnCount: 2,
+		MaterializeStatus: MaterializeStatusReady, MaterializedRows: 100, ByteSize: 2048, MaterializedAt: &now,
 	}).Error; err != nil {
 		t.Fatalf("seed table asset: %v", err)
 	}
@@ -42,6 +45,13 @@ func TestIndexEstimateAndModeSwitch(t *testing.T) {
 	}
 	if estimate.DeepEstimatedTokens <= 0 || estimate.DeepEstimatedMinutes < 1 {
 		t.Fatalf("estimate tokens/minutes = %+v", estimate)
+	}
+	if estimate.MaterializeReadySheets != 1 || estimate.MaterializeMissingSheets != 0 ||
+		estimate.MaterializeRows != 100 || estimate.MaterializeBytes != 2048 {
+		t.Fatalf("materialize summary = %+v", estimate)
+	}
+	if sheet := estimate.Sheets[0]; sheet.MaterializeStatus != MaterializeStatusReady || sheet.MaterializedRows != 100 || sheet.ByteSize != 2048 {
+		t.Fatalf("sheet materialize coverage = %+v", sheet)
 	}
 	if _, err := service.SetIndexMode(ctx, principal, "doc-a", "bogus"); err == nil {
 		t.Fatalf("unsupported mode must fail")

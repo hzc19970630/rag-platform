@@ -125,6 +125,66 @@ func newReparseFixture(t *testing.T) (*Service, *gorm.DB, *memoryObjects) {
 	return NewService(db, authorizer, objects, nil, 1<<20, 30, Quota{}), db, objects
 }
 
+// RebuildTables is the coverage-card repair path: it must start a parse run so
+// the worker can clear the version prefix and rematerialize every sheet.
+func TestRebuildTablesStartsParse(t *testing.T) {
+	service, _, _ := newReparseFixture(t)
+	principal := authz.Principal{SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session"}
+	result, err := service.RebuildTables(context.Background(), principal, "doc-a")
+	if err != nil {
+		t.Fatalf("rebuild tables: %v", err)
+	}
+	if result.Pipeline.ID == "" || len(result.Stages) == 0 || result.Stages[0].Stage != StageParse {
+		t.Fatalf("rebuild did not start a parse run: %+v", result)
+	}
+}
+
+// A completed rebuild must not block the next one: unlike Reparse, the rebuild
+// endpoint exists to retry a finished sheet, so it reuses the target version
+// but starts a fresh run. While a run is still active it is coalesced.
+func TestRebuildTablesRestartsAfterCompletion(t *testing.T) {
+	service, db, _ := newReparseFixture(t)
+	principal := authz.Principal{SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session"}
+	ctx := context.Background()
+	first, err := service.RebuildTables(ctx, principal, "doc-a")
+	if err != nil {
+		t.Fatalf("first rebuild: %v", err)
+	}
+	active, err := service.RebuildTables(ctx, principal, "doc-a")
+	if err != nil {
+		t.Fatalf("active rebuild: %v", err)
+	}
+	if active.Pipeline.ID != first.Pipeline.ID {
+		t.Fatalf("active rebuild created a second run: %s vs %s", active.Pipeline.ID, first.Pipeline.ID)
+	}
+	if err := db.Model(&models.PipelineRun{}).Where("id = ?", first.Pipeline.ID).Update("status", StatusEvidenceReady).Error; err != nil {
+		t.Fatalf("finish pipeline: %v", err)
+	}
+	if err := db.Model(&models.DocumentVersion{}).Where("id = ?", first.Version.ID).Update("status", StatusEvidenceReady).Error; err != nil {
+		t.Fatalf("finish version: %v", err)
+	}
+	if err := db.Model(&models.Document{}).Where("id = ?", "doc-a").Update("status", StatusEvidenceReady).Error; err != nil {
+		t.Fatalf("finish document: %v", err)
+	}
+	second, err := service.RebuildTables(ctx, principal, "doc-a")
+	if err != nil {
+		t.Fatalf("second rebuild: %v", err)
+	}
+	if second.Pipeline.ID == first.Pipeline.ID {
+		t.Fatalf("completed rebuild was reused instead of restarted")
+	}
+	if second.Version.ID != first.Version.ID {
+		t.Fatalf("rebuild changed the target version: %s vs %s", second.Version.ID, first.Version.ID)
+	}
+	var old models.PipelineRun
+	if err := db.First(&old, "id = ?", first.Pipeline.ID).Error; err != nil {
+		t.Fatalf("reload old pipeline: %v", err)
+	}
+	if old.Status != StatusCancelled {
+		t.Fatalf("old pipeline status = %s, want CANCELLED", old.Status)
+	}
+}
+
 // Retried reparse requests must reuse the run they already started. Before the
 // fix every call allocated a new version and pipeline, so three retries left
 // three runs behind.

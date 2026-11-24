@@ -28,8 +28,8 @@ type TableAsset struct {
 	TotalRows         int64  `gorm:"not null;default:0" json:"totalRows"`
 	ParsedRows        int64  `gorm:"not null;default:0" json:"parsedRows"`
 	HeaderRow         int    `gorm:"not null;default:0" json:"headerRow"`
-	// B39 columnar copy metadata. The tables API contract stays unchanged in
-	// P0; P1 exposes materialization coverage to the UI.
+	// B39 columnar copy metadata. P1 exposes these fields through the coverage
+	// API and the document index-coverage card.
 	StorageURI        string     `gorm:"size:1024;not null;default:''" json:"-"`
 	StorageFormat     string     `gorm:"size:16;not null;default:''" json:"-"`
 	SchemaJSON        string     `gorm:"type:jsonb;not null;default:'{}'" json:"-"`

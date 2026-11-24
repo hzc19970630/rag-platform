@@ -1,12 +1,14 @@
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, time as clock_time, timezone
+from decimal import Decimal
 
 import duckdb
 import pyarrow as pa
@@ -47,11 +49,17 @@ QUERY_TIMEOUT_SECONDS = max(1, _env_int("TABLEHOUSE_QUERY_TIMEOUT_SECONDS", 10))
 MEMORY_MB = max(128, _env_int("TABLEHOUSE_MEMORY_MB", 1024))
 MAX_CONCURRENCY = max(1, _env_int("TABLEHOUSE_MAX_CONCURRENCY", 2))
 MAX_SHEET_ROWS = max(1, _env_int("TABLEHOUSE_MAX_SHEET_ROWS", 5000000))
+SQL_MAX_ROWS = max(1, _env_int("TABLEHOUSE_SQL_MAX_ROWS", 500))
+SQL_MAX_LENGTH = max(200, _env_int("TABLEHOUSE_SQL_MAX_LENGTH", 8000))
+SQL_TIMEOUT_SECONDS = max(1, _env_int("TABLEHOUSE_SQL_TIMEOUT_SECONDS", QUERY_TIMEOUT_SECONDS))
+SQL_MAX_PARAMS = 32
 SCHEMA_VERSION = 1
 
 ROW_NUMBER_FIELD = "__row_number"
 IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 INT_VALUE = re.compile(r"^[+-]?\d+$")
+LEADING_COMMENTS = re.compile(r"^(?:\s+|--[^\n]*(?:\n|$)|/\*.*?\*/)*", re.S)
+SELECT_STATEMENT = re.compile(r"^(?i:select|with)\b")
 
 FILESYSTEM = S3FileSystem(
     access_key=os.getenv("S3_ACCESS_KEY", os.getenv("MINIO_ROOT_USER", "rag-local")),
@@ -298,6 +306,132 @@ def _rows_response(header, manifest, matched, table):
     return {"header": header, "totalRows": manifest.get("rows", 0), "matchedRows": matched, "rows": rows}
 
 
+def _sql_columns(header):
+    # The same rule runs in Go to expose sqlColumns on the catalog API, so the
+    # SQL-facing names stay stable even when a sheet repeats a header cell.
+    names = []
+    seen = set()
+    for index, raw in enumerate(header):
+        name = str(raw).strip() or f"column_{index + 1}"
+        candidate = name
+        suffix = 2
+        while candidate.lower() in seen or candidate.lower() == ROW_NUMBER_FIELD:
+            candidate = f"{name}_{suffix}"
+            suffix += 1
+        seen.add(candidate.lower())
+        names.append(candidate)
+    return names
+
+
+def _json_value(value):
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return None if math.isnan(value) or math.isinf(value) else value
+    if isinstance(value, Decimal):
+        return float(value) if value.is_finite() else str(value)
+    if isinstance(value, (datetime, date, clock_time)):
+        return value.isoformat()
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).hex()
+    return str(value)
+
+
+def _validate_sql(raw):
+    sql = (raw or "").strip()
+    if not sql:
+        raise RequestError(400, "sql is required")
+    if len(sql) > SQL_MAX_LENGTH:
+        raise RequestError(400, "sql is too long")
+    try:
+        statements = duckdb.extract_statements(sql)
+    except Exception as error:  # noqa: BLE001 - parser errors are caller errors
+        raise RequestError(400, f"invalid sql: {str(error)[:160]}") from error
+    if len(statements) != 1:
+        raise RequestError(400, "exactly one statement is allowed")
+    statement = statements[0]
+    if statement.type != duckdb.StatementType.SELECT:
+        raise RequestError(400, "only SELECT statements are allowed")
+    # DuckDB rewrites PRAGMA into a SELECT over a pragma_* table function, so
+    # the leading keyword must be checked on the original text.
+    if not SELECT_STATEMENT.match(LEADING_COMMENTS.sub("", sql)):
+        raise RequestError(400, "only SELECT statements are allowed")
+    return statement.query.strip().rstrip(";").strip()
+
+
+def _sql_params(body):
+    params = body.get("params") or []
+    if not isinstance(params, list):
+        raise RequestError(400, "params must be a list")
+    if len(params) > SQL_MAX_PARAMS:
+        raise RequestError(400, f"at most {SQL_MAX_PARAMS} parameters are allowed")
+    for value in params:
+        if isinstance(value, (dict, list)):
+            raise RequestError(400, "parameter values must be scalars")
+    return params
+
+
+def _sql_connection(manifest, dataset):
+    columns = _sql_columns(manifest.get("header") or [])
+    selects = [f"{_quote(f'c{index}')} AS {_quote(name)}" for index, name in enumerate(columns)]
+    selects.append(_quote(ROW_NUMBER_FIELD))
+    connection = duckdb.connect()
+    connection.register("__sheet", dataset)
+    connection.execute(f"CREATE VIEW t AS SELECT {', '.join(selects)} FROM __sheet")
+    connection.execute(f"SET memory_limit='{MEMORY_MB}MB'")
+    connection.execute("SET threads=2")
+    connection.execute("SET temp_directory='/tmp'")
+    connection.execute("SET autoinstall_known_extensions=false")
+    connection.execute("SET autoload_known_extensions=false")
+    connection.execute("SET disabled_filesystems='LocalFileSystem,HTTPFileSystem,S3FileSystem'")
+    connection.execute("SET enable_external_access=false")
+    return connection
+
+
+def _run_sql(body):
+    prefix = _prefix(body)
+    sheet = body.get("sheet") or "default"
+    manifest = _read_manifest(prefix, sheet)
+    if manifest is None or not manifest.get("parts"):
+        raise RequestError(404, "table parquet not materialized")
+    sql = _validate_sql(body.get("sql"))
+    params = _sql_params(body)
+    preview = bool(body.get("preview"))
+    try:
+        limit = int(body.get("limit") or 100)
+    except (TypeError, ValueError):
+        limit = 100
+    limit = max(1, min(limit, SQL_MAX_ROWS))
+    dataset = ds.dataset(
+        _object_path(_sheet_prefix(prefix, sheet)),
+        filesystem=FILESYSTEM, format="parquet", exclude_invalid_files=True,
+    )
+    connection = _sql_connection(manifest, dataset)
+    started = time.monotonic()
+    timer = threading.Timer(SQL_TIMEOUT_SECONDS, connection.interrupt)
+    timer.start()
+    try:
+        cursor = connection.execute(f"SELECT * FROM ({sql}) AS __q LIMIT 0", params)
+        columns = [{"name": item[0], "type": str(item[1] or "").upper()} for item in cursor.description or []]
+        total = int(connection.execute(f"SELECT count(*) FROM ({sql}) AS __q", params).fetchone()[0] or 0)
+        rows = []
+        if not preview:
+            result = connection.execute(f"SELECT * FROM ({sql}) AS __q LIMIT {limit}", params)
+            rows = [[_json_value(value) for value in row] for row in result.fetchall()]
+        return {
+            "columns": columns, "rows": rows, "preview": preview,
+            "rowCount": total, "returnedRows": len(rows), "truncated": total > limit,
+            "elapsedMs": int((time.monotonic() - started) * 1000),
+        }
+    except duckdb.InterruptException as error:
+        raise RequestError(504, "query timeout") from error
+    except duckdb.Error as error:
+        raise RequestError(400, f"invalid sql: {str(error)[:200]}") from error
+    finally:
+        timer.cancel()
+        connection.close()
+
+
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
@@ -360,17 +494,21 @@ def _clear_version(body):
     with STATE_LOCK:
         for key in [key for key in SHEET_STATE if key.startswith(prefix + "/")]:
             SHEET_STATE.pop(key, None)
-    selector = _object_path(prefix)
-    removed = 0
+    selector = _object_path(prefix) + "/"
     try:
         listing = FILESYSTEM.get_file_info(FileSelector(selector, recursive=True))
     except OSError:
         listing = []
+    removed = 0
     if isinstance(listing, list):
-        for item in listing:
-            if item.type.name == "File":
-                FILESYSTEM.delete_file(item.path)
-                removed += 1
+        removed = sum(1 for item in listing if item.type.name == "File")
+    # Deleting files one by one leaves the zero-byte directory markers that
+    # pyarrow creates alongside each sheet; a recursive delete removes the whole
+    # version prefix so repeated rebuilds do not accumulate objects.
+    try:
+        FILESYSTEM.delete_dir(selector)
+    except FileNotFoundError:
+        pass
     return {"status": "cleared", "removed": removed}
 
 
@@ -414,6 +552,21 @@ def query(body: dict):
             return JSONResponse(status_code=429, content={"error": "tablehouse busy"})
         try:
             return _query(body)
+        finally:
+            QUERY_SLOTS.release()
+    except RequestError as error:
+        return JSONResponse(status_code=error.status, content={"error": error.message})
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse(status_code=500, content={"error": f"query failed: {str(error)[:200]}"})
+
+
+@app.post("/sql")
+def sql_query(body: dict):
+    try:
+        if not QUERY_SLOTS.acquire(blocking=False):
+            return JSONResponse(status_code=429, content={"error": "tablehouse busy"})
+        try:
+            return _run_sql(body)
         finally:
             QUERY_SLOTS.release()
     except RequestError as error:

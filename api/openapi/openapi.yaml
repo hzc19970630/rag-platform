@@ -812,6 +812,20 @@ components:
         keywordRows:
           format: int64
           type: integer
+        materializeBytes:
+          format: int64
+          type: integer
+        materializeFailedSheets:
+          type: integer
+        materializeMissingSheets:
+          type: integer
+        materializePartialSheets:
+          type: integer
+        materializeReadySheets:
+          type: integer
+        materializeRows:
+          format: int64
+          type: integer
         parseStatus:
           type: string
         parseTruncated:
@@ -2633,10 +2647,23 @@ components:
       type: object
     SheetCoverage:
       properties:
+        byteSize:
+          format: int64
+          type: integer
         columnCount:
           type: integer
         indexMode:
           type: string
+        materializeError:
+          type: string
+        materializeStatus:
+          type: string
+        materializedAt:
+          format: date-time
+          type: string
+        materializedRows:
+          format: int64
+          type: integer
         parseStatus:
           type: string
         parsedRows:
@@ -2711,8 +2738,15 @@ components:
       type: object
     TableAsset:
       properties:
+        byteSize:
+          format: int64
+          type: integer
         columnCount:
           type: integer
+        columnTypes:
+          items:
+            type: string
+          type: array
         documentId:
           type: string
         documentVersionId:
@@ -2727,6 +2761,16 @@ components:
           type: string
         indexMode:
           type: string
+        materializeError:
+          type: string
+        materializeStatus:
+          type: string
+        materializedAt:
+          format: date-time
+          type: string
+        materializedRows:
+          format: int64
+          type: integer
         parseStatus:
           type: string
         parsedRows:
@@ -2740,6 +2784,10 @@ components:
           type: integer
         sheet:
           type: string
+        sqlColumns:
+          items:
+            type: string
+          type: array
         storageMode:
           type: string
         totalRows:
@@ -2817,6 +2865,59 @@ components:
           type: object
         rowNumber:
           type: integer
+      type: object
+    TableSQLColumn:
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+      type: object
+    TableSQLRequest:
+      properties:
+        assetId:
+          type: string
+        limit:
+          type: integer
+        params:
+          items: {}
+          type: array
+        preview:
+          type: boolean
+        sql:
+          type: string
+      required:
+        - assetId
+        - sql
+      type: object
+    TableSQLResult:
+      properties:
+        assetId:
+          type: string
+        columns:
+          items:
+            $ref: '#/components/schemas/TableSQLColumn'
+          type: array
+        elapsedMs:
+          format: int64
+          type: integer
+        preview:
+          type: boolean
+        returnedRows:
+          type: integer
+        rowCount:
+          type: integer
+        rows:
+          items:
+            items: {}
+            type: array
+          type: array
+        sheet:
+          type: string
+        sql:
+          type: string
+        truncated:
+          type: boolean
       type: object
     Tag:
       properties:
@@ -4255,6 +4356,33 @@ paths:
       summary: GET /api/v1/documents/{id}/status
       tags:
         - documents
+  /api/v1/documents/{id}/tables/rebuild:
+    post:
+      operationId: post_documents_id_tables_rebuild
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentView'
+          description: Accepted
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/documents/{id}/tables/rebuild
+      tags:
+        - documents
   /api/v1/documents/{id}/versions:
     get:
       operationId: get_documents_id_versions
@@ -5421,6 +5549,39 @@ paths:
         "500":
           $ref: '#/components/responses/InternalError'
       summary: POST /api/v1/knowledge-bases/{id}/tables/query
+      tags:
+        - documents
+  /api/v1/knowledge-bases/{id}/tables/sql:
+    post:
+      operationId: post_knowledge_bases_id_tables_sql
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableSQLRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableSQLResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/tables/sql
       tags:
         - documents
   /api/v1/knowledge-bases/{id}/tags:

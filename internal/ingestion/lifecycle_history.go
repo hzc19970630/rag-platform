@@ -186,8 +186,154 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 	return s.loadResult(ctx, principal.TenantID, document.ID, versionID, pipelineID)
 }
 
-// findPipelineByIdempotencyKey loads the run a prior request created under the
-// same document + target version + stage key, so a retry can reuse it.
+// RebuildTables regenerates a document's columnar copy from the same source
+// object. Rows live only in the Parquet copy, so a failed or missing sheet
+// cannot be retried without parsing again. Unlike Reparse, a completed prior
+// run does not satisfy the request: every rebuild starts a new pipeline on the
+// target version, and the worker clears the version prefix before writing.
+func (s *Service) RebuildTables(ctx context.Context, principal authz.Principal, documentID string) (UploadResult, error) {
+	document, err := s.loadActiveDocument(ctx, principal, documentID, "write")
+	if err != nil {
+		return UploadResult{}, err
+	}
+	if document.LatestVersionID == "" {
+		return UploadResult{}, apperror.ErrNotReady
+	}
+	var current models.DocumentVersion
+	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).First(&current, "id = ?", document.LatestVersionID).Error; err != nil {
+		return UploadResult{}, fmt.Errorf("load current version: %w", err)
+	}
+	if current.ContentHash == "" || current.SourceObjectKey == "" {
+		return UploadResult{}, apperror.ErrNotReady
+	}
+	versionID := stableID("ver", document.ID, current.ContentHash)
+	if active, found, err := findActivePipeline(s.db.WithContext(ctx), principal.TenantID, document.ID, versionID); err != nil {
+		return UploadResult{}, err
+	} else if found {
+		return s.loadResult(ctx, principal.TenantID, active.DocumentID, active.DocumentVersionID, active.ID)
+	}
+	knowledgeBase, err := s.authorizedKnowledgeBase(ctx, principal, document.KnowledgeBaseID, "write")
+	if err != nil {
+		return UploadResult{}, err
+	}
+	pipelineID, err := newID("pipe")
+	if err != nil {
+		return UploadResult{}, err
+	}
+	stageKey := pipelineID + ":" + StageParse
+	now := time.Now().UTC()
+	pipeline := models.PipelineRun{
+		ID: pipelineID, PipelineType: PipelineTypeEvidence, TenantID: principal.TenantID,
+		KnowledgeBaseID: document.KnowledgeBaseID, DocumentID: document.ID, DocumentVersionID: versionID,
+		RequestID: "rebuild:" + versionID, TraceID: "rebuild:" + versionID,
+		IdempotencyKey: "rebuild:" + document.ID + ":" + versionID + ":" + pipelineID, Status: StatusStored,
+	}
+	stage := models.StageRun{PipelineRunID: pipelineID, Stage: StageParse, Status: StagePending, IdempotencyKey: stageKey}
+	version := models.DocumentVersion{
+		ID: versionID, DocumentID: document.ID, TenantID: principal.TenantID, KnowledgeBaseID: document.KnowledgeBaseID,
+		ContentHash: current.ContentHash, SizeBytes: current.SizeBytes, SourceObjectKey: current.SourceObjectKey,
+		Status: StatusStored, ACLVersion: knowledgeBase.ACLVersion,
+	}
+	var reused *models.PipelineRun
+	err = tenantdb.InTx(ctx, s.db, principal.TenantID, func(tx *gorm.DB) error {
+		if err := lockTenantQuota(tx, principal.TenantID); err != nil {
+			return err
+		}
+		// A concurrent rebuild may have committed while this request waited for
+		// the tenant lock. Reusing its run keeps one rebuild per target version.
+		if active, found, err := findActivePipeline(tx, principal.TenantID, document.ID, versionID); err != nil {
+			return err
+		} else if found {
+			reused = &active
+			return nil
+		}
+		if err := cancelOtherPipelines(tx, principal.TenantID, document.ID, versionID); err != nil {
+			return err
+		}
+		// The previous evidence run for this version is replaced; leaving it
+		// READY would make reconcile see two finished runs for one version.
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.PipelineRun{}).
+			Where("document_id = ? AND document_version_id = ? AND status = ?", document.ID, versionID, StatusEvidenceReady).
+			Updates(map[string]any{
+				"status": StatusCancelled, "error_code": "superseded", "error_message": "superseded by table rebuild", "updated_at": now,
+			}).Error; err != nil {
+			return err
+		}
+		if current.ID != versionID {
+			if err := supersedeVersion(tx, principal.TenantID, current.ID, "superseded by table rebuild"); err != nil {
+				return err
+			}
+		}
+		var existing models.DocumentVersion
+		loadErr := tenantdb.MustScoped(tx, principal.TenantID).Where("document_id = ?", document.ID).First(&existing, "id = ?", versionID).Error
+		switch {
+		case loadErr == nil:
+			if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.DocumentVersion{}).Where("id = ?", versionID).Updates(map[string]any{
+				"status": StatusStored, "error_code": "", "error_message": "", "acl_version": knowledgeBase.ACLVersion, "updated_at": now,
+			}).Error; err != nil {
+				return err
+			}
+			existing.Status = StatusStored
+			existing.ACLVersion = knowledgeBase.ACLVersion
+			version = existing
+		case errors.Is(loadErr, gorm.ErrRecordNotFound):
+			var count int64
+			if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.DocumentVersion{}).Where("document_id = ?", document.ID).Count(&count).Error; err != nil {
+				return err
+			}
+			version.Version = int(count) + 1
+			if err := tx.Create(&version).Error; err != nil {
+				return err
+			}
+		default:
+			return loadErr
+		}
+		if err := tenantdb.MustScoped(tx, principal.TenantID).Model(&models.Document{}).Where("id = ?", document.ID).Updates(map[string]any{
+			"status": StatusStored, "latest_version_id": versionID, "updated_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&pipeline).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&stage).Error; err != nil {
+			return err
+		}
+		task := s.taskFor(principal, document, version, pipeline, stage, StageParse)
+		task.TraceParent = observability.InjectTraceParent(ctx)
+		payload, marshalErr := json.Marshal(task)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		return tx.Create(&models.OutboxEvent{
+			TenantID: principal.TenantID, AggregateType: "document_version", AggregateID: versionID,
+			EventType: "document.parse", IdempotencyKey: stageKey, Payload: string(payload),
+		}).Error
+	})
+	if err != nil {
+		return UploadResult{}, fmt.Errorf("rebuild tables: %w", err)
+	}
+	if reused != nil {
+		return s.loadResult(ctx, principal.TenantID, reused.DocumentID, reused.DocumentVersionID, reused.ID)
+	}
+	return s.loadResult(ctx, principal.TenantID, document.ID, versionID, pipelineID)
+}
+
+// findActivePipeline returns an unfinished run for one target version. Terminal
+// runs are ignored so an explicit rebuild can start again after completion.
+func findActivePipeline(db *gorm.DB, tenantID, documentID, versionID string) (models.PipelineRun, bool, error) {
+	var pipeline models.PipelineRun
+	err := db.Where("tenant_id = ? AND document_id = ? AND document_version_id = ? AND status NOT IN ?",
+		tenantID, documentID, versionID, terminalPipelineStatuses).
+		Order("created_at DESC").First(&pipeline).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.PipelineRun{}, false, nil
+	}
+	if err != nil {
+		return models.PipelineRun{}, false, fmt.Errorf("load active pipeline: %w", err)
+	}
+	return pipeline, true, nil
+}
 
 // findPipelineByIdempotencyKey loads the run a prior request created under the
 // same document + target version + stage key, so a retry can reuse it.

@@ -2,6 +2,9 @@ package views
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
+
 	"github.com/hzc19970630/rag-platform/contracts/httpapi"
 	"github.com/hzc19970630/rag-platform/internal/ingestion"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
@@ -63,13 +66,47 @@ func DocumentVersion(row models.DocumentVersion) httpapi.DocumentVersion {
 func TableAsset(row models.TableAsset) httpapi.TableAsset {
 	var header []string
 	_ = json.Unmarshal([]byte(row.Header), &header)
+	var schema struct {
+		ColumnTypes []string `json:"columnTypes"`
+	}
+	_ = json.Unmarshal([]byte(row.SchemaJSON), &schema)
+	columnTypes := make([]string, len(header))
+	for index := range columnTypes {
+		columnTypes[index] = "string"
+		if index < len(schema.ColumnTypes) && schema.ColumnTypes[index] != "" {
+			columnTypes[index] = schema.ColumnTypes[index]
+		}
+	}
 	return httpapi.TableAsset{
 		ID: row.ID, DocumentID: row.DocumentID, DocumentVersionID: row.DocumentVersionID,
-		Sheet: row.Sheet, Header: header, RowStart: row.RowStart, RowEnd: row.RowEnd,
+		Sheet: row.Sheet, Header: header, SQLColumns: sqlColumnNames(header), ColumnTypes: columnTypes,
+		RowStart: row.RowStart, RowEnd: row.RowEnd,
 		RowCount: row.RowCount, ColumnCount: row.ColumnCount, IndexMode: row.IndexMode,
 		StorageMode: row.StorageMode, ParseStatus: row.ParseStatus, Truncated: row.Truncated,
 		TotalRows: row.TotalRows, ParsedRows: row.ParsedRows, HeaderRow: row.HeaderRow,
+		MaterializeStatus: row.MaterializeStatus, MaterializeError: row.MaterializeError,
+		MaterializedRows: row.MaterializedRows, ByteSize: row.ByteSize, MaterializedAt: row.MaterializedAt,
 	}
+}
+
+// sqlColumnNames is the Go twin of tablehouse's _sql_columns. Both sides must
+// agree so a generated statement binds to the same Parquet columns.
+func sqlColumnNames(header []string) []string {
+	names := make([]string, len(header))
+	seen := make(map[string]bool, len(header))
+	for index, raw := range header {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			name = fmt.Sprintf("column_%d", index+1)
+		}
+		candidate := name
+		for suffix := 2; seen[strings.ToLower(candidate)] || strings.EqualFold(candidate, "__row_number"); suffix++ {
+			candidate = fmt.Sprintf("%s_%d", name, suffix)
+		}
+		seen[strings.ToLower(candidate)] = true
+		names[index] = candidate
+	}
+	return names
 }
 
 func TableAssets(rows []models.TableAsset) []httpapi.TableAsset {
@@ -92,6 +129,22 @@ func TableQueryResult(view ingestion.TableQueryResult) httpapi.TableQueryResult 
 	}
 }
 
+func TableSQLResult(view ingestion.TableSQLResult) httpapi.TableSQLResult {
+	columns := make([]httpapi.TableSQLColumn, 0, len(view.Columns))
+	for _, column := range view.Columns {
+		columns = append(columns, httpapi.TableSQLColumn{Name: column.Name, Type: column.Type})
+	}
+	rows := view.Rows
+	if rows == nil {
+		rows = [][]any{}
+	}
+	return httpapi.TableSQLResult{
+		AssetID: view.AssetID, Sheet: view.Sheet, SQL: view.SQL, Preview: view.Preview,
+		Columns: columns, Rows: rows, RowCount: view.RowCount, ReturnedRows: view.ReturnedRows,
+		Truncated: view.Truncated, ElapsedMs: view.ElapsedMs,
+	}
+}
+
 func DocumentIndexEstimate(view ingestion.IndexEstimate) httpapi.DocumentIndexEstimate {
 	sheets := make([]httpapi.SheetCoverage, 0, len(view.Sheets))
 	for _, sheet := range view.Sheets {
@@ -99,6 +152,8 @@ func DocumentIndexEstimate(view ingestion.IndexEstimate) httpapi.DocumentIndexEs
 			Sheet: sheet.Sheet, StorageMode: sheet.StorageMode, ParseStatus: sheet.ParseStatus,
 			IndexMode: sheet.IndexMode, TotalRows: sheet.TotalRows, ParsedRows: sheet.ParsedRows,
 			ColumnCount: sheet.ColumnCount, Truncated: sheet.Truncated,
+			MaterializeStatus: sheet.MaterializeStatus, MaterializeError: sheet.MaterializeError,
+			MaterializedRows: sheet.MaterializedRows, ByteSize: sheet.ByteSize, MaterializedAt: sheet.MaterializedAt,
 		})
 	}
 	return httpapi.DocumentIndexEstimate{
@@ -109,7 +164,11 @@ func DocumentIndexEstimate(view ingestion.IndexEstimate) httpapi.DocumentIndexEs
 		VectorRows: view.VectorRows, TotalSheets: view.TotalSheets, ParsedSheets: view.ParsedSheets,
 		VectorSheets: view.VectorSheets, CurrentVectorTokens: view.CurrentVectorTokens,
 		DeepEstimatedTokens: view.DeepEstimatedTokens, DeepEstimatedMinutes: view.DeepEstimatedMinutes,
-		TPMBudget: view.TPMBudget, Sheets: sheets,
+		TPMBudget:              view.TPMBudget,
+		MaterializeReadySheets: view.MaterializeReadySheets, MaterializePartialSheets: view.MaterializePartialSheets,
+		MaterializeFailedSheets: view.MaterializeFailedSheets, MaterializeMissingSheets: view.MaterializeMissingSheets,
+		MaterializeRows: view.MaterializeRows, MaterializeBytes: view.MaterializeBytes,
+		Sheets: sheets,
 	}
 }
 

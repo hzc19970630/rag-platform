@@ -4,7 +4,7 @@ import type { TFunction } from "i18next";
 // enum values to i18n keys themselves: adding a backend state or capability is
 // a change to this file plus the two translation blocks, nothing else.
 
-export type EnumGroup = "status" | "role" | "capability" | "source" | "connector_type" | "provider_kind" | "audit_action" | "audit_resource" | "api_key_status" | "queue" | "embedding_migration_status" | "table_storage" | "table_parse_status";
+export type EnumGroup = "status" | "role" | "capability" | "source" | "connector_type" | "provider_kind" | "audit_action" | "audit_resource" | "api_key_status" | "queue" | "embedding_migration_status" | "table_storage" | "table_parse_status" | "table_materialize";
 export type EnumTone = "success" | "warning" | "error" | "default";
 
 export const STATUS_VALUES = [
@@ -47,7 +47,7 @@ export const QUEUE_VALUES = ["ingestion", "interactive", "projection", "maintena
 
 export const AUDIT_ACTION_VALUES = [
   "read", "create", "update", "delete", "discard", "login", "manage_members", "purge", "retry", "revoke",
-  "rollback", "update_tenant_config", "update_tenant_quota", "write", "cancel",
+  "rollback", "update_tenant_config", "update_tenant_quota", "write", "cancel", "table_query",
   "add_member", "update_member", "remove_member",
   "model_provider_created", "model_provider_updated", "model_provider_deleted", "model_provider_tested",
   "wiki_retry", "graph_retry", "wiki_cancel", "graph_cancel",
@@ -58,7 +58,7 @@ export const AUDIT_ACTION_VALUES = [
 export const AUDIT_RESOURCE_VALUES = [
   "api_key", "connector", "dead_letter", "document", "folder", "graph_run", "graph_snapshot",
   "indexing_strategy", "path", "retrieval_config", "session", "tag", "tenant", "tenant_config", "wiki_page",
-  "embedding_migration", "membership", "model_binding", "model_provider", "pipeline", "upload_session",
+  "embedding_migration", "membership", "model_binding", "model_provider", "pipeline", "upload_session", "table_asset",
 ] as const;
 
 export const EMBEDDING_MIGRATION_STATUS_VALUES = [
@@ -167,6 +167,23 @@ export function tableStorageLabel(t: TFunction, value: string): string {
 
 export function tableParseStatusLabel(t: TFunction, value: string): string {
   return enumLabel(t, "table_parse_status", value);
+}
+
+export function tableMaterializeLabel(t: TFunction, value: string): string {
+  return enumLabel(t, "table_materialize", value || "missing");
+}
+
+export function tableMaterializeTone(value: string): EnumTone {
+  switch (value) {
+    case "ready":
+      return "success";
+    case "partial":
+      return "warning";
+    case "failed":
+      return "error";
+    default:
+      return "default";
+  }
 }
 
 export function enumLabelKey(group: EnumGroup, value: string): string {
