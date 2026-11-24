@@ -466,7 +466,7 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - `standard` 向量化表名/sheet/表头/列说明/统计摘要/样本行，原始行 chunk 的 `index_role=keyword`，只进入 BM25/结构化查询；`deep` 全部行 `both`；`lexical` 全部 `keyword`。
 - `table_assets` 按 sheet 聚合表资产（表头/列数/行范围/样本/行数）；原始行由 B39 的 Parquet 副本承载（见 10.5），Postgres 不再受 20 万行 `maxPersistedTableRows` 限制。
 - 文档版本记录 `index_mode`、`vector_rows/total_rows`、`vector_sheets/total_sheets`、`vector_tokens/estimated_tokens`；文档页“索引覆盖”卡片显示覆盖并提供标准/深度/仅全文切换。
-- API：`GET /documents/:id/index-estimate` 返回深度索引 tokens/预计分钟（需 `EMBEDDING_TPM_BUDGET`）；`POST /documents/:id/index-mode` 切换模式并 reparse；`GET /knowledge-bases/:id/tables`、`POST /knowledge-bases/:id/tables/query` 提供列过滤/TopN。
+- API：`GET /documents/:id/index-estimate` 返回深度索引 tokens/预计分钟（需 `EMBEDDING_TPM_BUDGET`）与列式副本覆盖；`POST /documents/:id/index-mode` 切换模式并 reparse；`POST /documents/:id/tables/rebuild` 强制重建列式副本；`GET /knowledge-bases/:id/tables`、`POST /knowledge-bases/:id/tables/query` 提供列过滤/TopN。
 - embedding：按 token 预算组批（`EMBEDDING_BATCH_MAX_TOKENS`）、TPM 配速（`EMBEDDING_TPM_BUDGET`）、429 `Retry-After` 退避、独立 `EMBEDDING_STAGE_TIMEOUT_SECONDS`；已 embedded 的 chunk 在重跑时跳过，支持断点续跑。
 - 指标：`ingestion_table_query_total/duration`、`ingestion_index_mode_switch_total`；问题类型的命中率对比留待评估集补齐。
 - 升级注意：0040/0041 迁移新增表与列；旧文档保持原切块，重新 reparse 后才应用新策略。
@@ -476,12 +476,16 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - 行数据与向量化解耦：docreader 在 `ParseDocumentBlocks` 中按 sheet 全量扫描，行批次（`DOCREADER_TABLE_ROW_BATCH_ROWS`，默认 5000）经 worker 转发给 `tablehouse`，写入对象存储；行不透传进 blocks 或 normalized.json。
 - 布局：`s3://<bucket>/tablehouse/tenant=<tid>/kb=<kbid>/doc=<docid>/ver=<verid>/sheet=<sanitized>/part-*.parquet`，zstd、约 `TABLEHOUSE_ROW_GROUP_ROWS`（默认 10 万）行/行组；同目录 `_manifest.json` 记录列名、逻辑类型（int/float/date/bool/string）、行数、分片、内容 hash 与截断标记。单元格按原文存为字符串，类型只用于比较与元数据。
 - `table_assets` 新增 `storage_uri/storage_format/schema_json/materialized_rows/byte_size/materialized_at/materialize_status/materialize_error`；`ready/partial/failed` 如实反映每个 sheet。Postgres 从 B39 起不再写 `table_rows`（表保留用于回滚，不再读取）。
-- 查询：`POST /knowledge-bases/:id/tables/query` 只接受服务端构造的过滤计划（等值/包含/数值或字符串比较 + 排序 + limit），由 tablehouse 在其 S3 前缀上执行；不接受用户 SQL。资产没有 `storage_uri`（升级前解析）返回 `table_needs_reparse`，materialize 失败的 sheet 返回 `table_materialize_failed`，服务不可达或超时返回 503 `not_ready`。
-- 配置（api/worker）：`TABLEHOUSE_URL`（空则禁用，表查询返回 not_ready）、`TABLEHOUSE_S3_PREFIX`（默认 `tablehouse`，删除清理按此拼接）、`TABLEHOUSE_QUERY_TIMEOUT_SECONDS`（默认 10）。配置（tablehouse 容器）：`TABLEHOUSE_MEMORY_MB`（DuckDB 上限，默认 1024）、`TABLEHOUSE_MAX_CONCURRENCY`（默认 2）、`TABLEHOUSE_ROW_GROUP_ROWS`、`TABLEHOUSE_MAX_SHEET_ROWS`；S3 沿用 `S3_*`。tablehouse 只连内网、不连 Postgres，标识符按白名单校验后才拼路径。
+- 查询：`POST /knowledge-bases/:id/tables/query` 只接受服务端构造的过滤计划（等值/包含/数值或字符串比较 + 排序 + limit），由 tablehouse 在其 S3 前缀上执行。`POST /knowledge-bases/:id/tables/sql` 提供只读 SQL（B39-P2）：单条 `SELECT`，只允许访问关系 `t`（每个 sheet 一个视图，列名取 `sqlColumns`，`__row_number` 为源行号），支持位置参数 `params`、`preview` 计数（执行前展示 SQL 与结果行数）与 `limit`（默认 100、上限 500）；tablehouse 关闭外部文件访问、限制 DuckDB 内存/线程/超时并复用查询并发闸门，拒绝写操作、多语句、`PRAGMA` 与越权列。资产没有 `storage_uri`（升级前解析）返回 `table_needs_reparse`，materialize 失败的 sheet 返回 `table_materialize_failed`，SQL 被拒返回 400 `table_sql_rejected`，服务不可达或超时返回 `not_ready`；每次 SQL 查询（含 preview 与被拒）写 `table_query` 审计，资源类型 `table_asset`。
+- SQL 列：`GET /knowledge-bases/:id/tables` 的每个资产返回 `sqlColumns` 与 `columnTypes`。`sqlColumns` 是去重后的 SQL 列名（空表头为 `column_<n>`，重复名追加 `_2`…，`__row_number` 保留给行号）；Parquet 单元格按字符串存储，聚合前需按 `columnTypes` 做 `TRY_CAST`（如 `sum(TRY_CAST("金额" AS DOUBLE))`）。
+- 覆盖清单：`GET /documents/:id/index-estimate` 与 `GET /knowledge-bases/:id/tables` 返回每个 sheet 的 `materialize_status/materialize_error/materialized_rows/byte_size/materialized_at`；`index-estimate` 另汇总 `materialize_ready/partial/failed/missing_sheets`、`materialize_rows/bytes`。文档页“索引覆盖”展示列式副本就绪/部分/失败/待重建状态、物化行数与体积，失败时列出原因。未写入副本的旧资产计为 `missing`（`materialize_status` 为空），不冒充已覆盖。
+- 重建：`POST /documents/:id/tables/rebuild` 在不改变源对象的前提下强制新建解析/物化流水线，用于失败 sheet 重试与 B39 之前旧资产的补建。目标版本沿用内容 hash（同一版本原地重置），worker 先清空 `ver=<id>/` 前缀再写，重复重建不会累积分片；进行中的重复请求合并为同一 run，完成后旧 run 标记 `CANCELLED`。与 `POST /documents/:id/reparse` 不同，已完成的重建不会因幂等复用而变成空操作。
+- 配置（api/worker）：`TABLEHOUSE_URL`（空则禁用，表查询返回 not_ready）、`TABLEHOUSE_S3_PREFIX`（默认 `tablehouse`，删除清理按此拼接）、`TABLEHOUSE_QUERY_TIMEOUT_SECONDS`（默认 10）。配置（tablehouse 容器）：`TABLEHOUSE_MEMORY_MB`（DuckDB 上限，默认 1024）、`TABLEHOUSE_MAX_CONCURRENCY`（默认 2）、`TABLEHOUSE_ROW_GROUP_ROWS`、`TABLEHOUSE_MAX_SHEET_ROWS`、`TABLEHOUSE_SQL_MAX_ROWS`（默认 500）、`TABLEHOUSE_SQL_MAX_LENGTH`（默认 8000）、`TABLEHOUSE_SQL_TIMEOUT_SECONDS`（默认同查询超时）；S3 沿用 `S3_*`。tablehouse 只连内网、不连 Postgres，标识符按白名单校验后才拼路径。
+- 可观察（SQL）：`ingestion_table_sql_query_total{status,mode}` 与 `ingestion_table_sql_query_duration{mode}`；审计动作 `table_query`、资源 `table_asset`，`reason` 记录 preview/execute、拒绝原因与被截断的 SQL。
 - 失败与重试：tablehouse 不可达时解析阶段返回可重试错误，任务重试前先清空该版本前缀；单个 sheet 被拒（如超过 `TABLEHOUSE_MAX_SHEET_ROWS`）只标记该 sheet 失败并跳过后续批次，不阻断整篇文档。重解析会先清空 `ver=<id>/` 前缀再重写。
 - 清理：`POST /documents/:id/purge`（以及保留期到期清理）在删除源文件/normalized 后按 `tablehouse/tenant=.../kb=.../doc=<id>/` 前缀删除 Parquet；软删除期间前缀保留以便恢复。
 - 可观察：`ingestion_table_materialize_total{status}` 与 `ingestion_table_materialize_duration`（worker）；tablehouse 记录 materialize 行数/字节/耗时与查询失败；`GET /store/stats`（内部）可核对某版本的对象数与字节。
-- 升级注意：0043 迁移只加列；旧文档需 reparse 才能获得列式副本，此前查询返回 `table_needs_reparse`。回滚到 B39 之前的镜像后旧文档恢复 `table_rows` 查询路径。
+- 升级注意：0043 迁移只加列；旧文档需通过 `POST /documents/:id/tables/rebuild`（首次 Reparse 亦可）获得列式副本，此前查询返回 `table_needs_reparse`。回滚到 B39 之前的镜像后旧文档恢复 `table_rows` 查询路径。
 
 ## 11. 数据库连接池
 

@@ -136,7 +136,7 @@ docker compose --env-file .env "${BASE_ARGS[@]}" up -d --no-build docreader tabl
 docker compose --env-file .env "${BASE_ARGS[@]}" up -d --no-build worker api
 ```
 
-- 顺序固定为 **migrate → backfill-embeddings → docreader/tablehouse → worker → api**。B39 起表格行写入 tablehouse，旧文档需要 reparse 才会生成列式副本；在此之前 `/tables/query` 返回 `table_needs_reparse`。`backfill-embeddings` 把旧 `chunks.embedding` 复制到 `chunk_embeddings`；新版本的向量检索只读变体表，未回填就启动 API 会让旧文档暂时不可向量召回。命令幂等、可重复执行，每批 1000 条，升级中断后重跑即可续传。
+- 顺序固定为 **migrate → backfill-embeddings → docreader/tablehouse → worker → api**。B39 起表格行写入 tablehouse，旧文档需要通过 `POST /documents/:id/tables/rebuild`（首次 Reparse 亦可）生成列式副本；在此之前 `/tables/query` 返回 `table_needs_reparse`。`backfill-embeddings` 把旧 `chunks.embedding` 复制到 `chunk_embeddings`；新版本的向量检索只读变体表，未回填就启动 API 会让旧文档暂时不可向量召回。命令幂等、可重复执行，每批 1000 条，升级中断后重跑即可续传。
 - 迁移 `0031_embedding_variants` 与回填是向前兼容的：旧二进制仍读 `chunks.embedding`，且新版本入库双写该列，因此回退到旧镜像不需要数据库回退（除非已经执行过迁移的 `finalize` 清理）。
 - `seed` 是幂等任务，`api` 的 `depends_on` 会以发布镜像自动执行它；不要手工跳过 migrate 直接启动 api。
 - Web 不在镜像里。升级时解压前端包到版本目录，校验通过后原子切换软链接，例如：
