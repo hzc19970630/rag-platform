@@ -248,6 +248,10 @@ var Routes = []Route{
 		Success: ok((*TableAssetList)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/query", OperationID: "post_knowledge_bases_id_tables_query", Tag: "documents",
 		Request: jsonBody((*TableQueryRequest)(nil)), Success: ok((*TableQueryResult)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/ask", OperationID: "post_knowledge_bases_id_tables_ask", Tag: "documents",
+		Request: jsonBody((*TableAskRequest)(nil)), Success: ok((*TableAskResult)(nil)), Errors: commonErrors},
+	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/ask/sql", OperationID: "post_knowledge_bases_id_tables_ask_sql", Tag: "documents",
+		Request: jsonBody((*TableAskSQLRequest)(nil)), Success: ok((*TableAskSQLResult)(nil)), Errors: commonErrors},
 	{Method: http.MethodPost, Path: "/api/v1/knowledge-bases/{id}/tables/sql", OperationID: "post_knowledge_bases_id_tables_sql", Tag: "documents",
 		Request: jsonBody((*TableSQLRequest)(nil)), Success: ok((*TableSQLResult)(nil)), Errors: commonErrors},
 

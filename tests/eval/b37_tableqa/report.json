@@ -1,0 +1,801 @@
+{
+  "generatedAt": "2026-11-25T17:05:19.679605+00:00",
+  "baseUrl": "http://localhost:8082",
+  "tenant": "dev-tenant",
+  "fixture": {
+    "sheets": [
+      {
+        "name": "订单",
+        "rows": 300
+      },
+      {
+        "name": "库存",
+        "rows": 200
+      }
+    ]
+  },
+  "modes": {
+    "standard": {
+      "indexMode": "standard",
+      "storageMode": "full",
+      "parsedRows": 500,
+      "vectorRows": 40,
+      "ask": {
+        "cases": [
+          {
+            "id": "count",
+            "question": "订单一共有多少行",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "count",
+            "column": null,
+            "confidence": 1,
+            "latencyMs": 61.5,
+            "error": null,
+            "notes": [],
+            "values": [
+              300
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "sum",
+            "question": "订单的数量总和是多少",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "sum",
+            "column": "数量",
+            "confidence": 1,
+            "latencyMs": 96.3,
+            "error": null,
+            "notes": [],
+            "values": [
+              1650
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "avg",
+            "question": "订单的平均金额是多少",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "avg",
+            "column": "金额",
+            "confidence": 1,
+            "latencyMs": 138.4,
+            "error": null,
+            "notes": [],
+            "values": [
+              301
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "max",
+            "question": "订单最高的金额是多少",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "max",
+            "column": "金额",
+            "confidence": 1,
+            "latencyMs": 131.8,
+            "error": null,
+            "notes": [],
+            "values": [
+              600
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "top-desc",
+            "question": "订单金额最高的前3条",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "top",
+            "column": "金额",
+            "confidence": 1,
+            "latencyMs": 67.7,
+            "error": null,
+            "notes": [
+              "ordered by 金额 descending"
+            ],
+            "values": [
+              "A-0300",
+              "A-0299",
+              "A-0298"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              301,
+              300,
+              299
+            ],
+            "returnedRows": 3,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "top-asc",
+            "question": "库存量最低的3个商品",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "top",
+            "column": "库存量",
+            "confidence": 1,
+            "latencyMs": 66.1,
+            "error": null,
+            "notes": [
+              "ordered by 库存量 ascending"
+            ],
+            "values": [
+              "商品-0001",
+              "商品-0002",
+              "商品-0003"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4
+            ],
+            "returnedRows": 3,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "lookup-order",
+            "question": "订单 A-0100 的金额是多少",
+            "expectedRoute": "lookup",
+            "route": "lookup",
+            "operation": "rows",
+            "column": null,
+            "confidence": 0.75,
+            "latencyMs": 106.9,
+            "error": null,
+            "notes": [],
+            "values": [],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              101
+            ],
+            "returnedRows": 1,
+            "answerCorrect": true,
+            "lookupHit": true
+          },
+          {
+            "id": "lookup-inventory",
+            "question": "商品-0150 在哪个仓库",
+            "expectedRoute": "lookup",
+            "route": "lookup",
+            "operation": "rows",
+            "column": null,
+            "confidence": 0.75,
+            "latencyMs": 72.3,
+            "error": null,
+            "notes": [],
+            "values": [],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              151,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "returnedRows": 20,
+            "answerCorrect": true,
+            "lookupHit": true
+          },
+          {
+            "id": "explain-order",
+            "question": "订单这张表有哪些列",
+            "expectedRoute": "explain",
+            "route": "explain",
+            "operation": "",
+            "column": null,
+            "confidence": 0.97,
+            "latencyMs": 5.6,
+            "error": null,
+            "notes": [],
+            "values": [
+              "订单号",
+              "客户",
+              "数量",
+              "金额",
+              "状态"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [],
+            "returnedRows": 0,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "explain-inventory",
+            "question": "库存表是什么",
+            "expectedRoute": "explain",
+            "route": "explain",
+            "operation": "",
+            "column": null,
+            "confidence": 0.85,
+            "latencyMs": 5.4,
+            "error": null,
+            "notes": [],
+            "values": [
+              "商品",
+              "仓库",
+              "库存量",
+              "单价"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [],
+            "returnedRows": 0,
+            "answerCorrect": true,
+            "lookupHit": null
+          }
+        ],
+        "routingAccuracy": 1.0,
+        "answerAccuracy": 1.0,
+        "traceabilityRate": 1.0,
+        "lookupHitRate": 1.0,
+        "citationRowAccuracy": 1.0,
+        "latencyP50Ms": 67.7,
+        "latencyP95Ms": 138.4,
+        "feedback": "not_collected"
+      },
+      "search": {
+        "cases": [
+          {
+            "id": "search-order-row",
+            "question": "A-0100 金额",
+            "key": "A-0100",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 1616,
+            "recallLatencyMs": 186,
+            "latencyMs": 190.2
+          },
+          {
+            "id": "search-inventory-row",
+            "question": "商品-0150 仓库",
+            "key": "商品-0150",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 1451,
+            "recallLatencyMs": 268,
+            "latencyMs": 272.3
+          },
+          {
+            "id": "search-order-last",
+            "question": "A-0300 金额",
+            "key": "A-0300",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 1723,
+            "recallLatencyMs": 164,
+            "latencyMs": 179.5
+          },
+          {
+            "id": "search-customer",
+            "question": "张三 订单",
+            "key": "张三",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 2145,
+            "recallLatencyMs": 197,
+            "latencyMs": 200.4
+          }
+        ],
+        "hitAtK": 1.0,
+        "tokenEstimateAvg": 1733.75,
+        "latencyP50Ms": 190.2,
+        "latencyP95Ms": 272.3
+      }
+    },
+    "deep": {
+      "indexMode": "deep",
+      "storageMode": "full",
+      "parsedRows": 500,
+      "vectorRows": 500,
+      "ask": {
+        "cases": [
+          {
+            "id": "count",
+            "question": "订单一共有多少行",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "count",
+            "column": null,
+            "confidence": 1,
+            "latencyMs": 55.3,
+            "error": null,
+            "notes": [],
+            "values": [
+              300
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "sum",
+            "question": "订单的数量总和是多少",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "sum",
+            "column": "数量",
+            "confidence": 1,
+            "latencyMs": 79.9,
+            "error": null,
+            "notes": [],
+            "values": [
+              1650
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "avg",
+            "question": "订单的平均金额是多少",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "avg",
+            "column": "金额",
+            "confidence": 1,
+            "latencyMs": 91.3,
+            "error": null,
+            "notes": [],
+            "values": [
+              301
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "max",
+            "question": "订单最高的金额是多少",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "max",
+            "column": "金额",
+            "confidence": 1,
+            "latencyMs": 78.1,
+            "error": null,
+            "notes": [],
+            "values": [
+              600
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11
+            ],
+            "returnedRows": 10,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "top-desc",
+            "question": "订单金额最高的前3条",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "top",
+            "column": "金额",
+            "confidence": 1,
+            "latencyMs": 72.2,
+            "error": null,
+            "notes": [
+              "ordered by 金额 descending"
+            ],
+            "values": [
+              "A-0300",
+              "A-0299",
+              "A-0298"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              301,
+              300,
+              299
+            ],
+            "returnedRows": 3,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "top-asc",
+            "question": "库存量最低的3个商品",
+            "expectedRoute": "aggregate",
+            "route": "aggregate",
+            "operation": "top",
+            "column": "库存量",
+            "confidence": 1,
+            "latencyMs": 72.1,
+            "error": null,
+            "notes": [
+              "ordered by 库存量 ascending"
+            ],
+            "values": [
+              "商品-0001",
+              "商品-0002",
+              "商品-0003"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              2,
+              3,
+              4
+            ],
+            "returnedRows": 3,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "lookup-order",
+            "question": "订单 A-0100 的金额是多少",
+            "expectedRoute": "lookup",
+            "route": "lookup",
+            "operation": "rows",
+            "column": null,
+            "confidence": 0.75,
+            "latencyMs": 65.9,
+            "error": null,
+            "notes": [],
+            "values": [],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              101
+            ],
+            "returnedRows": 1,
+            "answerCorrect": true,
+            "lookupHit": true
+          },
+          {
+            "id": "lookup-inventory",
+            "question": "商品-0150 在哪个仓库",
+            "expectedRoute": "lookup",
+            "route": "lookup",
+            "operation": "rows",
+            "column": null,
+            "confidence": 0.75,
+            "latencyMs": 59.9,
+            "error": null,
+            "notes": [],
+            "values": [],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [
+              151,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15,
+              16,
+              17,
+              18,
+              19,
+              20
+            ],
+            "returnedRows": 20,
+            "answerCorrect": true,
+            "lookupHit": true
+          },
+          {
+            "id": "explain-order",
+            "question": "订单这张表有哪些列",
+            "expectedRoute": "explain",
+            "route": "explain",
+            "operation": "",
+            "column": null,
+            "confidence": 0.97,
+            "latencyMs": 26.9,
+            "error": null,
+            "notes": [],
+            "values": [
+              "订单号",
+              "客户",
+              "数量",
+              "金额",
+              "状态"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [],
+            "returnedRows": 0,
+            "answerCorrect": true,
+            "lookupHit": null
+          },
+          {
+            "id": "explain-inventory",
+            "question": "库存表是什么",
+            "expectedRoute": "explain",
+            "route": "explain",
+            "operation": "",
+            "column": null,
+            "confidence": 0.85,
+            "latencyMs": 4.1,
+            "error": null,
+            "notes": [],
+            "values": [
+              "商品",
+              "仓库",
+              "库存量",
+              "单价"
+            ],
+            "traceable": true,
+            "routingCorrect": true,
+            "rowNumbers": [],
+            "returnedRows": 0,
+            "answerCorrect": true,
+            "lookupHit": null
+          }
+        ],
+        "routingAccuracy": 1.0,
+        "answerAccuracy": 1.0,
+        "traceabilityRate": 1.0,
+        "lookupHitRate": 1.0,
+        "citationRowAccuracy": 1.0,
+        "latencyP50Ms": 65.9,
+        "latencyP95Ms": 91.3,
+        "feedback": "not_collected"
+      },
+      "search": {
+        "cases": [
+          {
+            "id": "search-order-row",
+            "question": "A-0100 金额",
+            "key": "A-0100",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 2038,
+            "recallLatencyMs": 162,
+            "latencyMs": 166.0
+          },
+          {
+            "id": "search-inventory-row",
+            "question": "商品-0150 仓库",
+            "key": "商品-0150",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 1789,
+            "recallLatencyMs": 253,
+            "latencyMs": 268.6
+          },
+          {
+            "id": "search-order-last",
+            "question": "A-0300 金额",
+            "key": "A-0300",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 2145,
+            "recallLatencyMs": 163,
+            "latencyMs": 191.0
+          },
+          {
+            "id": "search-customer",
+            "question": "张三 订单",
+            "key": "张三",
+            "hitAtK": true,
+            "hitRank": 1,
+            "evidenceKinds": [
+              ""
+            ],
+            "tokenEstimate": 2145,
+            "recallLatencyMs": 191,
+            "latencyMs": 214.3
+          }
+        ],
+        "hitAtK": 1.0,
+        "tokenEstimateAvg": 2029.25,
+        "latencyP50Ms": 191.0,
+        "latencyP95Ms": 268.6
+      }
+    }
+  },
+  "documentId": "doc-16ba9743d134593e4bb33d52",
+  "assets": [
+    {
+      "sheet": "库存",
+      "rows": 200,
+      "indexMode": "deep"
+    },
+    {
+      "sheet": "订单",
+      "rows": 300,
+      "indexMode": "deep"
+    }
+  ],
+  "delta": {
+    "ask.routingAccuracy": 0.0,
+    "ask.answerAccuracy": 0.0,
+    "ask.lookupHitRate": 0.0,
+    "ask.traceabilityRate": 0.0,
+    "ask.latencyP95Ms": -47.1,
+    "search.hitAtK": 0.0,
+    "search.tokenEstimateAvg": 295.5,
+    "search.latencyP95Ms": -3.7
+  },
+  "observations": [
+    "routing/answer/lookup rates are index-mode independent on A-tier tables because /tables/ask reads table_rows directly",
+    "search hit@10 delta 0.000, average evidence tokens delta 295.5, search p95 delta -3.7ms"
+  ],
+  "gate": {
+    "routingAccuracy": 1.0,
+    "answerAccuracy": 1.0,
+    "routingPassed": true,
+    "answerPassed": true,
+    "passed": true
+  }
+}

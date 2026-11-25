@@ -188,7 +188,7 @@ export function DocumentPage() {
       )}
       {focused.error && <Alert type="warning" showIcon message={t("document.citationLoadFailed")} />}
 
-      <IndexCoverageCard documentId={documentId} canWrite={canWrite} />
+      <IndexCoverageCard documentId={documentId} knowledgeBaseId={data.document.knowledgeBaseId} canWrite={canWrite} />
 
       <Card className="detail-card" title={t("document.versions")} extra={<Tag>{versions.data?.items.length ?? 0}</Tag>}>
         {versions.isLoading && <LoadingBlock />}

@@ -1,0 +1,161 @@
+{
+  "fixture": {
+    "sheets": [
+      {
+        "name": "订单",
+        "rows": 300
+      },
+      {
+        "name": "库存",
+        "rows": 200
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "count",
+      "question": "订单一共有多少行",
+      "route": "aggregate",
+      "operation": "count",
+      "expect": {
+        "value": 300,
+        "column": null
+      }
+    },
+    {
+      "id": "sum",
+      "question": "订单的数量总和是多少",
+      "route": "aggregate",
+      "operation": "sum",
+      "expect": {
+        "value": 1650,
+        "column": "数量"
+      }
+    },
+    {
+      "id": "avg",
+      "question": "订单的平均金额是多少",
+      "route": "aggregate",
+      "operation": "avg",
+      "expect": {
+        "value": 301,
+        "column": "金额"
+      }
+    },
+    {
+      "id": "max",
+      "question": "订单最高的金额是多少",
+      "route": "aggregate",
+      "operation": "max",
+      "expect": {
+        "value": 600,
+        "column": "金额"
+      }
+    },
+    {
+      "id": "top-desc",
+      "question": "订单金额最高的前3条",
+      "route": "aggregate",
+      "operation": "top",
+      "expect": {
+        "keys": [
+          "A-0300",
+          "A-0299",
+          "A-0298"
+        ],
+        "keyColumn": "订单号"
+      }
+    },
+    {
+      "id": "top-asc",
+      "question": "库存量最低的3个商品",
+      "route": "aggregate",
+      "operation": "top",
+      "expect": {
+        "keys": [
+          "商品-0001",
+          "商品-0002",
+          "商品-0003"
+        ],
+        "keyColumn": "商品"
+      }
+    },
+    {
+      "id": "lookup-order",
+      "question": "订单 A-0100 的金额是多少",
+      "route": "lookup",
+      "operation": "rows",
+      "expect": {
+        "key": "A-0100",
+        "rowNumber": 101,
+        "cells": {
+          "金额": "200"
+        }
+      }
+    },
+    {
+      "id": "lookup-inventory",
+      "question": "商品-0150 在哪个仓库",
+      "route": "lookup",
+      "operation": "rows",
+      "expect": {
+        "key": "商品-0150",
+        "rowNumber": 151,
+        "cells": {
+          "仓库": "南仓"
+        }
+      }
+    },
+    {
+      "id": "explain-order",
+      "question": "订单这张表有哪些列",
+      "route": "explain",
+      "operation": null,
+      "expect": {
+        "header": [
+          "订单号",
+          "客户",
+          "数量",
+          "金额",
+          "状态"
+        ]
+      }
+    },
+    {
+      "id": "explain-inventory",
+      "question": "库存表是什么",
+      "route": "explain",
+      "operation": null,
+      "expect": {
+        "header": [
+          "商品",
+          "仓库",
+          "库存量",
+          "单价"
+        ]
+      }
+    }
+  ],
+  "search": [
+    {
+      "id": "search-order-row",
+      "question": "A-0100 金额",
+      "key": "A-0100"
+    },
+    {
+      "id": "search-inventory-row",
+      "question": "商品-0150 仓库",
+      "key": "商品-0150"
+    },
+    {
+      "id": "search-order-last",
+      "question": "A-0300 金额",
+      "key": "A-0300"
+    },
+    {
+      "id": "search-customer",
+      "question": "张三 订单",
+      "key": "张三"
+    }
+  ]
+}

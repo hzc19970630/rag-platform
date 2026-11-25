@@ -63,6 +63,23 @@ func (s *Service) ListVersions(ctx context.Context, principal authz.Principal, d
 // random id. The pipeline key is "document + target version + stage"; a retry
 // finds that run and returns it instead of superseding the version again.
 func (s *Service) Reparse(ctx context.Context, principal authz.Principal, documentID string) (UploadResult, error) {
+	return s.reparseVersion(ctx, principal, documentID, "")
+}
+
+// reparseForIndexMode makes the target version depend on the requested mode and
+// the version it replaces. Without that variant, a content-identical reparse
+// reuses the previous run and a standard-to-deep switch silently keeps
+// standard coverage; without the source version, switching back would reuse a
+// superseded version instead of activating the requested mode.
+func (s *Service) reparseForIndexMode(ctx context.Context, principal authz.Principal, documentID, mode, fromVersionID string) (UploadResult, error) {
+	variant := "index-mode:" + mode
+	if fromVersionID != "" {
+		variant += ":" + fromVersionID
+	}
+	return s.reparseVersion(ctx, principal, documentID, variant)
+}
+
+func (s *Service) reparseVersion(ctx context.Context, principal authz.Principal, documentID, variant string) (UploadResult, error) {
 	document, err := s.loadActiveDocument(ctx, principal, documentID, "write")
 	if err != nil {
 		return UploadResult{}, err
@@ -85,7 +102,11 @@ func (s *Service) Reparse(ctx context.Context, principal authz.Principal, docume
 		return UploadResult{}, apperror.ErrNotReady
 	}
 	hash := contentHash(content)
-	versionID := stableID("ver", document.ID, hash)
+	versionSeed := []string{document.ID, hash}
+	if variant != "" {
+		versionSeed = append(versionSeed, variant)
+	}
+	versionID := stableID("ver", versionSeed...)
 	idempotencyKey := "reparse:" + document.ID + ":" + versionID + ":" + StageParse
 	if existing, found, err := findPipelineByIdempotencyKey(s.db.WithContext(ctx), principal.TenantID, idempotencyKey); err != nil {
 		return UploadResult{}, err

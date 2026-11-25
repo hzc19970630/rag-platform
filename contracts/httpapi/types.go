@@ -647,6 +647,68 @@ type TableSQLResult struct {
 	ElapsedMs    int64            `json:"elapsedMs"`
 }
 
+type TableAskRequest struct {
+	Question string        `json:"question" binding:"required"`
+	AssetID  string        `json:"assetId"`
+	Filters  []TableFilter `json:"filters"`
+	Limit    int           `json:"limit"`
+}
+
+type TableAskResult struct {
+	Route        string     `json:"route"`
+	Operation    string     `json:"operation"`
+	Confidence   float64    `json:"confidence"`
+	MatchedRules []string   `json:"matchedRules"`
+	AssetID      string     `json:"assetId"`
+	DocumentID   string     `json:"documentId"`
+	Sheet        string     `json:"sheet"`
+	Header       []string   `json:"header"`
+	Column       string     `json:"column,omitempty"`
+	TopN         int        `json:"topN,omitempty"`
+	Desc         bool       `json:"desc,omitempty"`
+	Value        *float64   `json:"value,omitempty"`
+	Rows         []TableRow `json:"rows"`
+	Sample       []string   `json:"sample,omitempty"`
+	MatchedRows  int        `json:"matchedRows"`
+	TotalRows    int        `json:"totalRows"`
+	SourceRows   int64      `json:"sourceRows,omitempty"`
+	IndexMode    string     `json:"indexMode,omitempty"`
+	StorageMode  string     `json:"storageMode,omitempty"`
+	ParseStatus  string     `json:"parseStatus,omitempty"`
+	Truncated    bool       `json:"truncated,omitempty"`
+	NeedsColumn  bool       `json:"needsColumn,omitempty"`
+	Notes        []string   `json:"notes,omitempty"`
+}
+
+type TableAskSQLRequest struct {
+	Question string `json:"question" binding:"required"`
+	AssetID  string `json:"assetId"`
+	Preview  bool   `json:"preview"`
+}
+
+type TableAskSQLPlan struct {
+	Operation  string        `json:"operation"`
+	Column     string        `json:"column,omitempty"`
+	Filters    []TableFilter `json:"filters,omitempty"`
+	OrderBy    string        `json:"orderBy,omitempty"`
+	Desc       bool          `json:"desc,omitempty"`
+	Limit      int           `json:"limit,omitempty"`
+	Confidence float64       `json:"confidence"`
+}
+
+type TableAskSQLResult struct {
+	Preview        bool             `json:"preview"`
+	SQL            string           `json:"sql"`
+	Plan           *TableAskSQLPlan `json:"plan,omitempty"`
+	EstimatedRows  int64            `json:"estimatedRows"`
+	Fallback       bool             `json:"fallback"`
+	FallbackReason string           `json:"fallbackReason,omitempty"`
+	Result         *TableAskResult  `json:"result,omitempty"`
+	MatchedRows    int              `json:"matchedRows"`
+	ElapsedMs      int64            `json:"elapsedMs"`
+	Notes          []string         `json:"notes,omitempty"`
+}
+
 type TableQueryResult struct {
 	AssetID     string     `json:"assetId"`
 	Sheet       string     `json:"sheet"`

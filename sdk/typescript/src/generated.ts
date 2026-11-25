@@ -1088,6 +1088,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge-bases/{id}/tables/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/tables/ask */
+        post: operations["post_knowledge_bases_id_tables_ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge-bases/{id}/tables/ask/sql": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /api/v1/knowledge-bases/{id}/tables/ask/sql */
+        post: operations["post_knowledge_bases_id_tables_ask_sql"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge-bases/{id}/tables/query": {
         parameters: {
             query?: never;
@@ -3362,6 +3396,66 @@ export interface components {
             request_id: string;
             sequence: number;
             type: string;
+        };
+        TableAskRequest: {
+            assetId?: string;
+            filters?: components["schemas"]["TableFilter"][];
+            limit?: number;
+            question: string;
+        };
+        TableAskResult: {
+            assetId?: string;
+            column?: string;
+            confidence?: number;
+            desc?: boolean;
+            documentId?: string;
+            header?: string[];
+            indexMode?: string;
+            matchedRows?: number;
+            matchedRules?: string[];
+            needsColumn?: boolean;
+            notes?: string[];
+            operation?: string;
+            parseStatus?: string;
+            route?: string;
+            rows?: components["schemas"]["TableRow"][];
+            sample?: string[];
+            sheet?: string;
+            /** Format: int64 */
+            sourceRows?: number;
+            storageMode?: string;
+            topN?: number;
+            totalRows?: number;
+            truncated?: boolean;
+            value?: number;
+        };
+        TableAskSQLPlan: {
+            column?: string;
+            confidence?: number;
+            desc?: boolean;
+            filters?: components["schemas"]["TableFilter"][];
+            limit?: number;
+            operation?: string;
+            orderBy?: string;
+        };
+        TableAskSQLRequest: {
+            assetId?: string;
+            preview?: boolean;
+            question: string;
+        };
+        TableAskSQLResult: {
+            /** Format: int64 */
+            elapsedMs?: number;
+            /** Format: int64 */
+            estimatedRows?: number;
+            fallback?: boolean;
+            fallbackReason?: string;
+            matchedRows?: number;
+            notes?: string[];
+            plan?: components["schemas"]["TableAskSQLPlan"];
+            preview?: boolean;
+            result?: components["schemas"]["TableAskResult"];
+            sql?: string;
         };
         TableAsset: {
             /** Format: int64 */
@@ -5761,6 +5855,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TableAssetList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_tables_ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TableAskRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableAskResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    post_knowledge_bases_id_tables_ask_sql: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TableAskSQLRequest"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableAskSQLResult"];
                 };
             };
             400: components["responses"]["BadRequest"];

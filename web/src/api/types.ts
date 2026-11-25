@@ -42,6 +42,14 @@ export type AuditEvent = DeepRequired<Schemas["AuditEvent"]>;
 export type ChunkView = DeepRequired<Schemas["Chunk"]>;
 
 export type ChunkPage = DeepRequired<Schemas["ChunkPage"]>;
+export type TableAssetItem = Schemas["TableAsset"];
+
+export type TableRowView = Schemas["TableRow"];
+
+export type TableAskResult = Schemas["TableAskResult"];
+
+export type TableAskSQLResult = Schemas["TableAskSQLResult"];
+
 
 export type Conversation = DeepRequired<Schemas["Conversation"]>;
 
@@ -83,7 +91,7 @@ type StageRun = {
 export type DocumentIndexEstimate = DeepRequired<Schemas["DocumentIndexEstimate"]>;
 
 export type DocumentStatus = {
-  document: { id: string; filename: string; mimeType: string; status: string };
+  document: { id: string; knowledgeBaseId: string; filename: string; mimeType: string; status: string };
   version: { id: string; status: string; errorCode?: string; errorMessage?: string };
   pipeline: { id: string; status: string; errorCode?: string };
   stages: StageRun[];

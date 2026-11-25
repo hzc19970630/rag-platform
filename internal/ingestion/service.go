@@ -46,6 +46,7 @@ type Service struct {
 	metrics       metrics.Recorder
 	tables        ColumnarTableReader
 	tablePrefix   string
+	tableSQL      TableAskSQLOptions
 }
 
 // ProjectionInvalidator hides derived content immediately after a document

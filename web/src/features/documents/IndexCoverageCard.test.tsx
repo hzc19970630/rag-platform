@@ -14,6 +14,7 @@ vi.mock("../../api/hooks", () => ({
   },
   useDocumentStatus: () => ({ data: { contentReady: true } }),
   useDocumentIndexEstimate: () => ({ data: estimate() }),
+  useTableAssets: () => ({ data: [], isLoading: false }),
 }));
 
 vi.mock("../../api/client", () => ({
@@ -71,7 +72,7 @@ describe("IndexCoverageCard", () => {
 
   it("shows parse and vector coverage separately for a full document", () => {
     estimate.mockReturnValue(estimateFixture());
-    render(<IndexCoverageCard documentId="doc-a" canWrite />, { wrapper });
+    render(<IndexCoverageCard documentId="doc-a" knowledgeBaseId="kb-a" canWrite />, { wrapper });
 
     expect(screen.getByText(/已处理 65\/65 张表/)).toBeInTheDocument();
     expect(screen.getByText(/已向量化 2860\/975065 行/)).toBeInTheDocument();
@@ -95,7 +96,7 @@ describe("IndexCoverageCard", () => {
         },
       ],
     }));
-    render(<IndexCoverageCard documentId="doc-a" canWrite />, { wrapper });
+    render(<IndexCoverageCard documentId="doc-a" knowledgeBaseId="kb-a" canWrite />, { wrapper });
 
     expect(screen.getByText("部分 sheet 的列式副本物化失败")).toBeInTheDocument();
     expect(screen.getByText(/sheet row limit exceeded/)).toBeInTheDocument();
@@ -111,7 +112,7 @@ describe("IndexCoverageCard", () => {
       keywordRows: 197600,
       vectorRows: 2860,
     }));
-    render(<IndexCoverageCard documentId="doc-a" canWrite />, { wrapper });
+    render(<IndexCoverageCard documentId="doc-a" knowledgeBaseId="kb-a" canWrite />, { wrapper });
 
     expect(screen.getByText(/存在未完整索引的内容/)).toBeInTheDocument();
     expect(screen.getByText(/197600\/975065 行/)).toBeInTheDocument();

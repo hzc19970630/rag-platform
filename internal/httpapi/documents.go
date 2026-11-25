@@ -110,6 +110,40 @@ func RegisterDocumentRoutes(protected *gin.RouterGroup, cfg config.Config, deps 
 		}
 		c.JSON(http.StatusOK, views.TableQueryResult(result))
 	})
+	protected.POST("/knowledge-bases/:id/tables/ask", func(c *gin.Context) {
+		var input httpapi.TableAskRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		filters := make([]ingestion.TableFilter, 0, len(input.Filters))
+		for _, filter := range input.Filters {
+			filters = append(filters, ingestion.TableFilter{Column: filter.Column, Op: filter.Op, Value: filter.Value})
+		}
+		result, err := deps.Ingestion.AskTable(c.Request.Context(), accessContext(c).Principal, c.Param("id"), ingestion.TableAskInput{
+			Question: input.Question, AssetID: input.AssetID, Filters: filters, Limit: input.Limit,
+		})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.TableAskResult(result))
+	})
+	protected.POST("/knowledge-bases/:id/tables/ask/sql", func(c *gin.Context) {
+		var input httpapi.TableAskSQLRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			writeError(c, err)
+			return
+		}
+		result, err := deps.Ingestion.AskTableSQL(c.Request.Context(), accessContext(c).Principal, c.Param("id"), ingestion.TableAskSQLInput{
+			Question: input.Question, AssetID: input.AssetID, Preview: input.Preview,
+		})
+		if err != nil {
+			writeError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, views.TableAskSQLResult(result))
+	})
 	protected.POST("/knowledge-bases/:id/tables/sql", func(c *gin.Context) {
 		var input httpapi.TableSQLRequest
 		if err := c.ShouldBindJSON(&input); err != nil {

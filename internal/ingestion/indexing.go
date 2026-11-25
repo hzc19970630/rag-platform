@@ -158,7 +158,7 @@ func (s *Service) SetIndexMode(ctx context.Context, principal authz.Principal, d
 		Where("id = ?", document.ID).Update("index_mode", mode).Error; err != nil {
 		return UploadResult{}, fmt.Errorf("update index mode: %w", err)
 	}
-	result, err := s.Reparse(ctx, principal, document.ID)
+	result, err := s.reparseForIndexMode(ctx, principal, document.ID, mode, document.LatestVersionID)
 	if s.metrics != nil {
 		status := "ok"
 		if err != nil {

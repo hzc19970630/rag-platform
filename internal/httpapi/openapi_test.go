@@ -18,7 +18,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const businessRouteCount = 141
+const businessRouteCount = 143
 
 type openAPIDocument struct {
 	Paths      map[string]map[string]openAPIOperation `yaml:"paths"`
@@ -294,6 +294,8 @@ func TestOpenAPIResponseSchemasMatchContractDTOs(t *testing.T) {
 		{"GET /api/v1/documents/{id}/index-estimate", "DocumentIndexEstimate", contract.DocumentIndexEstimate{}},
 		{"GET /api/v1/knowledge-bases/{id}/tables", "TableAssetList", contract.TableAssetList{}},
 		{"POST /api/v1/knowledge-bases/{id}/tables/query", "TableQueryResult", contract.TableQueryResult{}},
+		{"POST /api/v1/knowledge-bases/{id}/tables/ask", "TableAskResult", contract.TableAskResult{}},
+		{"POST /api/v1/knowledge-bases/{id}/tables/ask/sql", "TableAskSQLResult", contract.TableAskSQLResult{}},
 		{"POST /api/v1/knowledge-bases/{id}/tables/sql", "TableSQLResult", contract.TableSQLResult{}},
 		{"POST /api/v1/documents/{id}/index-mode", "StartResult", contract.StartResult{}},
 		{"POST /api/v1/documents/{id}/tables/rebuild", "DocumentView", contract.DocumentView{}},

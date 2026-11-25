@@ -373,6 +373,12 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	// (projections, titles, the worker) keeps the deployment adapter.
 	routedChatter := newRoutingChatter(chatter, modelCatalog)
 	routedReranker := newRoutingReranker(reranker, modelCatalog)
+	ingestionService.SetTableAskSQLOptions(ingestion.TableAskSQLOptions{
+		Chat: routedChatter, Models: modelCatalog,
+		RenderPrompt: func(schema, question string) (string, error) {
+			return registry.Render(prompts.TableQueryPlan, map[string]string{"schema": schema, "question": question})
+		},
+	})
 	knowledgeBaseService.SetModelCatalog(modelCatalog)
 	wikiGenerator, err := knowledgeprojection.NewGenerator(chatter, registry)
 	if err != nil {

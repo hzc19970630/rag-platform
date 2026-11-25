@@ -284,3 +284,36 @@ func TestConcurrentReparseCreatesOneRun(t *testing.T) {
 		t.Fatalf("concurrent reparses produced %d pipeline runs, want 1", pipelines)
 	}
 }
+
+// An index-mode switch must produce a distinct target version even when the
+// source content is unchanged; otherwise deep indexing reuses the standard run.
+func TestIndexModeReparseCreatesModeSpecificVersion(t *testing.T) {
+	service, _, _ := newReparseFixture(t)
+	principal := authz.Principal{SubjectID: "user-a", TenantID: "tenant-a", CredentialType: "session"}
+	ctx := context.Background()
+
+	standard, err := service.reparseForIndexMode(ctx, principal, "doc-a", IndexModeStandard, "ver-1")
+	if err != nil {
+		t.Fatalf("standard reparse: %v", err)
+	}
+	deep, err := service.reparseForIndexMode(ctx, principal, "doc-a", IndexModeDeep, standard.Version.ID)
+	if err != nil {
+		t.Fatalf("deep reparse: %v", err)
+	}
+	if standard.Version.ID == deep.Version.ID || standard.Pipeline.ID == deep.Pipeline.ID {
+		t.Fatalf("mode switch reused the run: standard=%s deep=%s", standard.Version.ID, deep.Version.ID)
+	}
+	repeat, err := service.reparseForIndexMode(ctx, principal, "doc-a", IndexModeDeep, standard.Version.ID)
+	if err != nil {
+		t.Fatalf("repeat deep reparse: %v", err)
+	}
+	if repeat.Version.ID != deep.Version.ID || repeat.Pipeline.ID != deep.Pipeline.ID {
+		t.Fatalf("repeating a mode switch must reuse its run: got %s/%s want %s/%s",
+			repeat.Version.ID, repeat.Pipeline.ID, deep.Version.ID, deep.Pipeline.ID)
+	}
+	if public, err := service.Reparse(ctx, principal, "doc-a"); err != nil {
+		t.Fatalf("plain reparse: %v", err)
+	} else if public.Version.ID == standard.Version.ID || public.Version.ID == deep.Version.ID {
+		t.Fatalf("plain reparse must keep the content-only target version")
+	}
+}

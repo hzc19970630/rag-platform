@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, jsonInit } from "../../api/client";
 import { queryKeys, useDocumentIndexEstimate, useDocumentStatus } from "../../api/hooks";
+import { TableQaDrawer } from "./TableQaDrawer";
 import { tableMaterializeLabel, tableMaterializeTone, tableParseStatusLabel, tableStorageLabel } from "../../utils/enums";
 
 const LABELS: Record<string, string> = {
@@ -37,11 +38,12 @@ function formatBytes(value: number): string {
   return `${size.toFixed(digits)} ${units[unit]}`;
 }
 
-export function IndexCoverageCard({ documentId, canWrite }: { documentId: string; canWrite: boolean }) {
+export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { documentId: string; knowledgeBaseId: string; canWrite: boolean }) {
   const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState("");
+  const [qaOpen, setQaOpen] = useState(false);
   const status = useDocumentStatus(documentId);
   const ready = Boolean(status.data?.contentReady);
   const estimate = useDocumentIndexEstimate(documentId, ready);
@@ -173,6 +175,11 @@ export function IndexCoverageCard({ documentId, canWrite }: { documentId: string
       title={t("indexCoverage.title")}
       extra={
         <Space size={4} wrap>
+          {knowledgeBaseId && (
+            <Button size="small" onClick={() => setQaOpen(true)}>
+              {t("tableQa.open")}
+            </Button>
+          )}
           <Tag>{t(LABELS[data.indexMode] ?? "indexCoverage.modeStandard")}</Tag>
           <Tag color={fullStorage ? "green" : "orange"}>
             {tableStorageLabel(t, data.storageMode || "full")}
@@ -319,6 +326,7 @@ export function IndexCoverageCard({ documentId, canWrite }: { documentId: string
       {fullStorage && data.tpmBudget === 0 && (
         <Alert style={{ marginTop: 12 }} type="info" showIcon message={t("indexCoverage.noTPM")} />
       )}
+      <TableQaDrawer open={qaOpen} onClose={() => setQaOpen(false)} knowledgeBaseId={knowledgeBaseId} />
     </Card>
   );
 }

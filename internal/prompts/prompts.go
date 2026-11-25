@@ -30,6 +30,10 @@ const (
 	// RelationExtraction drives Relation Projection. Its output is the
 	// RelationProjectionPackageV1 JSON object, never free-form prose.
 	RelationExtraction = "relation_extraction"
+	// TableQueryPlan turns a natural-language table question into the
+	// structured plan the server compiles into a read-only SELECT over the
+	// columnar copy. The model never emits SQL directly.
+	TableQueryPlan = "table_query_plan"
 )
 
 // Required lists the template ids that must exist at startup. A missing or
@@ -44,6 +48,7 @@ var Required = []string{
 	QueryRewriteSystem,
 	WikiGeneration,
 	RelationExtraction,
+	TableQueryPlan,
 }
 
 type template struct {

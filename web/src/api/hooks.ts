@@ -34,6 +34,7 @@ import type {
   TenantQuota,
   TenantConfiguration,
   ConfigHealth,
+  TableAssetItem,
 } from "./types";
 
 export const queryKeys = {
@@ -46,6 +47,7 @@ export const queryKeys = {
     : ["knowledge-bases", id, "documents"] as const,
   folders: (id: string) => ["knowledge-bases", id, "folders"] as const,
   tags: (id: string) => ["knowledge-bases", id, "tags"] as const,
+  tables: (id: string) => ["knowledge-bases", id, "tables"] as const,
   members: (id: string) => ["knowledge-bases", id, "members"] as const,
   configuration: (id: string) => ["knowledge-bases", id, "configuration"] as const,
   projection: (id: string) => ["knowledge-bases", id, "projection"] as const,
@@ -114,6 +116,15 @@ export function useMembers(id: string, enabled = true) {
     queryFn: () => api<{ items: Member[] }>(`/knowledge-bases/${id}/members`),
     select: (data) => data.items,
     enabled,
+  });
+}
+
+export function useTableAssets(id: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.tables(id),
+    queryFn: () => api<{ items: TableAssetItem[] }>(`/knowledge-bases/${id}/tables`),
+    select: (data) => data.items,
+    enabled: Boolean(id) && enabled,
   });
 }
 

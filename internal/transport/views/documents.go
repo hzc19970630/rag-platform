@@ -145,6 +145,46 @@ func TableSQLResult(view ingestion.TableSQLResult) httpapi.TableSQLResult {
 	}
 }
 
+func TableAskResult(view ingestion.TableAskResult) httpapi.TableAskResult {
+	rows := make([]httpapi.TableRow, 0, len(view.Rows))
+	for _, row := range view.Rows {
+		rows = append(rows, httpapi.TableRow{RowNumber: row.RowNumber, Cells: row.Cells})
+	}
+	return httpapi.TableAskResult{
+		Route: view.Route, Operation: view.Operation, Confidence: view.Confidence,
+		MatchedRules: view.MatchedRules, AssetID: view.AssetID, DocumentID: view.DocumentID,
+		Sheet: view.Sheet, Header: view.Header, Column: view.Column, TopN: view.TopN, Desc: view.Desc,
+		Value: view.Value, Rows: rows, Sample: view.Sample, MatchedRows: view.MatchedRows,
+		TotalRows: view.TotalRows, SourceRows: view.SourceRows, IndexMode: view.IndexMode,
+		StorageMode: view.StorageMode, ParseStatus: view.ParseStatus, Truncated: view.Truncated,
+		NeedsColumn: view.NeedsColumn, Notes: view.Notes,
+	}
+}
+
+func TableAskSQLResult(view ingestion.TableAskSQLResult) httpapi.TableAskSQLResult {
+	var plan *httpapi.TableAskSQLPlan
+	if view.Plan != nil {
+		filters := make([]httpapi.TableFilter, 0, len(view.Plan.Filters))
+		for _, filter := range view.Plan.Filters {
+			filters = append(filters, httpapi.TableFilter{Column: filter.Column, Op: filter.Op, Value: filter.Value})
+		}
+		plan = &httpapi.TableAskSQLPlan{
+			Operation: view.Plan.Operation, Column: view.Plan.Column, Filters: filters,
+			OrderBy: view.Plan.OrderBy, Desc: view.Plan.Desc, Limit: view.Plan.Limit, Confidence: view.Plan.Confidence,
+		}
+	}
+	var result *httpapi.TableAskResult
+	if view.Result != nil {
+		converted := TableAskResult(*view.Result)
+		result = &converted
+	}
+	return httpapi.TableAskSQLResult{
+		Preview: view.Preview, SQL: view.SQL, Plan: plan, EstimatedRows: view.EstimatedRows,
+		Fallback: view.Fallback, FallbackReason: view.FallbackReason, Result: result,
+		MatchedRows: view.MatchedRows, ElapsedMs: view.ElapsedMs, Notes: view.Notes,
+	}
+}
+
 func DocumentIndexEstimate(view ingestion.IndexEstimate) httpapi.DocumentIndexEstimate {
 	sheets := make([]httpapi.SheetCoverage, 0, len(view.Sheets))
 	for _, sheet := range view.Sheets {

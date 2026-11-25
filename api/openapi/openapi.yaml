@@ -2736,6 +2736,138 @@ components:
         - sequence
         - type
       type: object
+    TableAskRequest:
+      properties:
+        assetId:
+          type: string
+        filters:
+          items:
+            $ref: '#/components/schemas/TableFilter'
+          type: array
+        limit:
+          type: integer
+        question:
+          type: string
+      required:
+        - question
+      type: object
+    TableAskResult:
+      properties:
+        assetId:
+          type: string
+        column:
+          type: string
+        confidence:
+          type: number
+        desc:
+          type: boolean
+        documentId:
+          type: string
+        header:
+          items:
+            type: string
+          type: array
+        indexMode:
+          type: string
+        matchedRows:
+          type: integer
+        matchedRules:
+          items:
+            type: string
+          type: array
+        needsColumn:
+          type: boolean
+        notes:
+          items:
+            type: string
+          type: array
+        operation:
+          type: string
+        parseStatus:
+          type: string
+        route:
+          type: string
+        rows:
+          items:
+            $ref: '#/components/schemas/TableRow'
+          type: array
+        sample:
+          items:
+            type: string
+          type: array
+        sheet:
+          type: string
+        sourceRows:
+          format: int64
+          type: integer
+        storageMode:
+          type: string
+        topN:
+          type: integer
+        totalRows:
+          type: integer
+        truncated:
+          type: boolean
+        value:
+          type: number
+      type: object
+    TableAskSQLPlan:
+      properties:
+        column:
+          type: string
+        confidence:
+          type: number
+        desc:
+          type: boolean
+        filters:
+          items:
+            $ref: '#/components/schemas/TableFilter'
+          type: array
+        limit:
+          type: integer
+        operation:
+          type: string
+        orderBy:
+          type: string
+      type: object
+    TableAskSQLRequest:
+      properties:
+        assetId:
+          type: string
+        preview:
+          type: boolean
+        question:
+          type: string
+      required:
+        - question
+      type: object
+    TableAskSQLResult:
+      properties:
+        elapsedMs:
+          format: int64
+          type: integer
+        estimatedRows:
+          format: int64
+          type: integer
+        fallback:
+          type: boolean
+        fallbackReason:
+          type: string
+        matchedRows:
+          type: integer
+        notes:
+          items:
+            type: string
+          type: array
+        plan:
+          $ref: '#/components/schemas/TableAskSQLPlan'
+        preview:
+          type: boolean
+        result:
+          $ref: '#/components/schemas/TableAskResult'
+        sql:
+          type: string
+      type: object
     TableAsset:
       properties:
         byteSize:
@@ -5516,6 +5648,72 @@ paths:
         "500":
           $ref: '#/components/responses/InternalError'
       summary: GET /api/v1/knowledge-bases/{id}/tables
+      tags:
+        - documents
+  /api/v1/knowledge-bases/{id}/tables/ask:
+    post:
+      operationId: post_knowledge_bases_id_tables_ask
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableAskRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableAskResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/tables/ask
+      tags:
+        - documents
+  /api/v1/knowledge-bases/{id}/tables/ask/sql:
+    post:
+      operationId: post_knowledge_bases_id_tables_ask_sql
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TableAskSQLRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TableAskSQLResult'
+          description: Success
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "500":
+          $ref: '#/components/responses/InternalError'
+      summary: POST /api/v1/knowledge-bases/{id}/tables/ask/sql
       tags:
         - documents
   /api/v1/knowledge-bases/{id}/tables/query:
