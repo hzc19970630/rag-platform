@@ -52,13 +52,13 @@ export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { d
 
   const fullStorage = !data.storageMode || data.storageMode === "full";
   const coverageKnown = data.coverageKnown !== false;
-  const hasCoverageGap = Boolean(data.parseTruncated) || !fullStorage;
   const totalSheets = data.totalSheets || data.sheets.length;
   const readySheets = data.materializeReadySheets ?? 0;
   const failedSheets = data.materializeFailedSheets ?? 0;
   const missingSheets = data.materializeMissingSheets ?? 0;
   const partialSheets = data.materializePartialSheets ?? 0;
   const needsRebuild = failedSheets > 0 || missingSheets > 0;
+  const hasCoverageGap = Boolean(data.parseTruncated) || failedSheets > 0 || missingSheets > 0 || partialSheets > 0;
   const failedSheetDetails = data.sheets.filter((sheet) => sheet.materializeStatus === "failed");
 
   function invalidateCoverage() {
@@ -240,6 +240,14 @@ export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { d
           description={t("indexCoverage.coverageGapBody", {
             storageMode: tableStorageLabel(t, data.storageMode || "full"),
           })}
+        />
+      )}
+      {!fullStorage && !hasCoverageGap && (
+        <Alert
+          style={{ marginTop: 12 }}
+          type="info"
+          showIcon
+          message={t("indexCoverage.columnarQueryHint")}
         />
       )}
       {failedSheets > 0 && (

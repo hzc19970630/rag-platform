@@ -39,9 +39,16 @@ test("asks a table question, previews SQL and cites rows", async ({ page, api })
     await expect(drawer.getByRole("columnheader", { name: /· 行号/ })).toBeVisible();
     await expect(drawer.getByRole("heading", { name: "10", level: 4 })).toBeVisible();
 
+    await drawer.getByPlaceholder(/例如/).fill("订单的数量总和是多少");
     await drawer.getByRole("button", { name: /预览 SQL/ }).click();
-    await expect(drawer.getByText("已回退到确定性筛选")).toBeVisible({ timeout: 30_000 });
-    await expect(drawer.getByText(/模型计划未通过校验/)).toBeVisible();
+    if (process.env.E2E_EXPECT_SQL_PLAN === "1") {
+      await expect(drawer.getByText(/SELECT SUM\(TRY_CAST\("数量" AS DOUBLE\)\)/)).toBeVisible({ timeout: 60_000 });
+      await drawer.getByRole("button", { name: /执行 SQL/ }).click();
+      await expect(drawer.getByRole("heading", { name: "10", level: 4 })).toBeVisible({ timeout: 30_000 });
+    } else {
+      await expect(drawer.getByText("已回退到确定性筛选")).toBeVisible({ timeout: 30_000 });
+      await expect(drawer.getByText(/模型计划未通过校验/)).toBeVisible();
+    }
 
     await page.setViewportSize({ width: 375, height: 812 });
     const overflow = await page.evaluate(

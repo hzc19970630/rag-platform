@@ -792,6 +792,12 @@ def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_r
     if sink is not None:
         sink.finish(truncated)
         indexed = sink.parsed
+    else:
+        # Without a row sink this path only reads the sample window. It is
+        # truncated only when the sheet actually has more data rows than the
+        # sample budget; a small sampled sheet is fully covered.
+        data_rows = max(int(declared_rows or 0) - 1, 0)
+        truncated = declared_rows <= 0 or indexed < data_rows
     end_row = start_row + len(samples) - 1
     sheet_block = _sheet_summary_block(
         prefix, heading, sheet_name, headers or [], samples, start_row, end_row, parse_status, declared_rows,
@@ -799,7 +805,7 @@ def _sheet_summary(archive, heading_root, sheet_name, target, prefix, declared_r
     meta = docreader_pb2.SheetMeta(
         name=sheet_name, header=headers or [], declared_rows=declared_rows, total_rows=declared_rows,
         parsed_rows=indexed, column_count=len(headers or []), header_row=max(start_row - 1, 0),
-        parse_status=parse_status, truncated=True, sample_rows=[" | ".join(row) for row in samples],
+        parse_status=parse_status, truncated=truncated, sample_rows=[" | ".join(row) for row in samples],
         source_path=f"sheet:{sheet_name}!summary",
         stats_source="declared" if declared_rows else "sample",
     )
