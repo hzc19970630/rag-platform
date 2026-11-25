@@ -57,7 +57,8 @@ function pageData(url: string): unknown {
     };
   }
   if (url.includes("/documents/doc-1/versions")) return { items: [{ id: "ver-1", version: 1, status: "EVIDENCE_READY" }] };
-  if (url.includes("/documents/doc-1/content")) return { content: "hello content", mimeType: "text/markdown", filename: "doc.md" };
+  if (url.includes("/documents/doc-1/index-estimate")) return { tableCount: 0, sheets: [] };
+  if (url.includes("/documents/doc-1/content")) return { blocks: [{ blockId: "b-1", kind: "text", text: "hello content", headingPath: "", pageNumber: 0, sourcePath: "" }], title: "", language: "", truncated: false };
   if (url.includes("/documents/doc-1/chunks")) return { items: [], hasMore: false };
   if (url.includes("/ops/metrics")) return { counters: {}, gauges: {}, timings: {}, queues: {}, operations: { outboxBacklog: 0 } };
   if (url.includes("/ops/dead-letters")) return { items: [] };
@@ -221,6 +222,21 @@ describe("page smoke tests", () => {
     stubFetch();
     const page = renderPage(<DocumentPage />, "/documents/doc-1");
     await waitFor(() => expect(page.container.textContent).toContain("doc.md"));
+  });
+
+  it("lazy loads document content on demand", async () => {
+    const urls: string[] = [];
+    stubFetch((url) => {
+      urls.push(url);
+      return { body: pageData(url) };
+    });
+    const page = renderPage(<DocumentPage />, "/documents/doc-1");
+    await waitFor(() => expect(page.container.textContent).toContain("doc.md"));
+    expect(urls.some((url) => url.includes("/documents/doc-1/content"))).toBe(false);
+
+    fireEvent.click(await screen.findByRole("button", { name: "加载内容预览" }));
+    await waitFor(() => expect(urls.some((url) => url.includes("/documents/doc-1/content"))).toBe(true));
+    expect(await screen.findByText("hello content")).toBeInTheDocument();
   });
 
   it("renders the operations page for administrators", async () => {

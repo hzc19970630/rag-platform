@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, FileSearchOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { Alert, App, Button, Card, Collapse, Flex, List, Space, Table, Tag, Typography, type TableColumnsType } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, openDocumentPreview } from "../api/client";
@@ -36,7 +36,14 @@ export function DocumentPage() {
   const status = useDocumentStatus(documentId);
   const versions = useDocumentVersions(documentId);
   const contentReady = Boolean(status.data && status.data.document.id === documentId && status.data.contentReady);
-  const content = useDocumentContent(documentId, contentReady);
+  const [contentOpen, setContentOpen] = useState(false);
+  const [visibleBlocks, setVisibleBlocks] = useState(40);
+
+  useEffect(() => {
+    setContentOpen(false);
+    setVisibleBlocks(40);
+  }, [documentId]);
+  const content = useDocumentContent(documentId, contentReady && contentOpen);
   const chunks = useChunks(documentId, contentReady);
   const focused = useChunk(chunkId || undefined);
   const [restoring, setRestoring] = useState("");
@@ -207,50 +214,72 @@ export function DocumentPage() {
 
       {contentReady && (
         <>
-          <Card className="detail-card" title={t("document.content")} extra={content.data ? <Tag>{t("document.blockCount", { count: content.data.blocks.length })}</Tag> : undefined}>
-            {content.isLoading && <LoadingBlock />}
-            {content.error && <QueryFallback error={content.error} retry={() => void content.refetch()} />}
-            {content.data && (
+          <Card
+            className="detail-card"
+            title={t("document.content")}
+            extra={contentOpen && content.data ? <Tag>{t("document.blockCount", { count: content.data.blocks.length })}</Tag> : undefined}
+          >
+            {!contentOpen ? (
+              <Space orientation="vertical" size={8}>
+                <Typography.Text type="secondary">{t("document.contentLazyHint")}</Typography.Text>
+                <Button onClick={() => setContentOpen(true)}>{t("document.loadContent")}</Button>
+              </Space>
+            ) : (
               <>
-                {content.data.title && (
-                  <Typography.Paragraph type="secondary">
-                    {t("document.title")}: {content.data.title} · {t("document.language")}: {content.data.language || t("document.unknown")}
-                  </Typography.Paragraph>
-                )}
-                {content.data.truncated && (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    message={t("document.truncatedWarning", {
-                      indexedRows: content.data.indexedRows ?? 0,
-                      totalRows: content.data.totalRows ?? 0,
-                      indexedSheets: content.data.indexedSheets ?? 0,
-                      totalSheets: content.data.totalSheets ?? 0,
-                    })}
-                    className="settings-alert"
-                  />
-                )}
-                {((content.data.totalRows ?? 0) > 0 || (content.data.totalSheets ?? 0) > 0) && (
-                  <Typography.Paragraph type="secondary">
-                    {t("document.parseStats", {
-                      indexedRows: content.data.indexedRows ?? 0,
-                      totalRows: content.data.totalRows ?? 0,
-                      indexedSheets: content.data.indexedSheets ?? 0,
-                      totalSheets: content.data.totalSheets ?? 0,
-                    })}
-                    {content.data.truncated ? ` · ${t("document.truncatedHint")}` : ""}
-                  </Typography.Paragraph>
-                )}
-                <div className="blocks">
-                  {content.data.blocks.map((block) => (
-                    <div className="block" key={block.blockId}>
-                      <Typography.Text type="secondary">
-                        {block.headingPath || t("document.noHeading")} · {t("document.position", { page: block.pageNumber })} · {t(`document.blockKinds.${block.kind}`, { defaultValue: block.kind })}
-                      </Typography.Text>
-                      <Typography.Paragraph>{block.text}</Typography.Paragraph>
+                {content.isLoading && <LoadingBlock />}
+                {content.error && <QueryFallback error={content.error} retry={() => void content.refetch()} />}
+                {content.data && (
+                  <>
+                    {content.data.title && (
+                      <Typography.Paragraph type="secondary">
+                        {t("document.title")}: {content.data.title} · {t("document.language")}: {content.data.language || t("document.unknown")}
+                      </Typography.Paragraph>
+                    )}
+                    {content.data.truncated && (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message={t("document.truncatedWarning", {
+                          indexedRows: content.data.indexedRows ?? 0,
+                          totalRows: content.data.totalRows ?? 0,
+                          indexedSheets: content.data.indexedSheets ?? 0,
+                          totalSheets: content.data.totalSheets ?? 0,
+                        })}
+                        className="settings-alert"
+                      />
+                    )}
+                    {((content.data.totalRows ?? 0) > 0 || (content.data.totalSheets ?? 0) > 0) && (
+                      <Typography.Paragraph type="secondary">
+                        {t("document.parseStats", {
+                          indexedRows: content.data.indexedRows ?? 0,
+                          totalRows: content.data.totalRows ?? 0,
+                          indexedSheets: content.data.indexedSheets ?? 0,
+                          totalSheets: content.data.totalSheets ?? 0,
+                        })}
+                        {content.data.truncated ? ` · ${t("document.truncatedHint")}` : ""}
+                      </Typography.Paragraph>
+                    )}
+                    <div className="blocks">
+                      {content.data.blocks.slice(0, visibleBlocks).map((block) => (
+                        <div className="block" key={block.blockId}>
+                          <Typography.Text type="secondary">
+                            {block.headingPath || t("document.noHeading")} · {t("document.position", { page: block.pageNumber })} · {t(`document.blockKinds.${block.kind}`, { defaultValue: block.kind })}
+                          </Typography.Text>
+                          <Typography.Paragraph>{block.text}</Typography.Paragraph>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                    {content.data.blocks.length > visibleBlocks && (
+                      <Flex justify="center" className="load-more">
+                        <Button
+                          onClick={() => startTransition(() => setVisibleBlocks((current) => Math.min(current + 40, content.data!.blocks.length)))}
+                        >
+                          {t("document.loadMoreBlocks", { shown: visibleBlocks, total: content.data.blocks.length })}
+                        </Button>
+                      </Flex>
+                    )}
+                  </>
+                )}
               </>
             )}
           </Card>
