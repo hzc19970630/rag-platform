@@ -57,7 +57,8 @@ export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { d
   const failedSheets = data.materializeFailedSheets ?? 0;
   const missingSheets = data.materializeMissingSheets ?? 0;
   const partialSheets = data.materializePartialSheets ?? 0;
-  const needsRebuild = failedSheets > 0 || missingSheets > 0;
+  const versionFailed = status.data?.version?.status === "FAILED";
+  const needsRebuild = failedSheets > 0 || missingSheets > 0 || versionFailed;
   const hasCoverageGap = Boolean(data.parseTruncated) || failedSheets > 0 || missingSheets > 0 || partialSheets > 0;
   const failedSheetDetails = data.sheets.filter((sheet) => sheet.materializeStatus === "failed");
 
