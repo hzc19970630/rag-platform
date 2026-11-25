@@ -10,75 +10,75 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestAskTableRoutesAndAnswers(t *testing.T) {
-	service, db, _ := newReparseFixture(t)
-	ctx := context.Background()
-	principal := ownerPrincipal()
-	seedTableAsset(t, db, "asset-orders", "Sheet1", []string{"订单号", "客户", "数量", "金额"}, []map[string]string{
-		{"订单号": "A-100", "客户": "张三", "数量": "2", "金额": "10"},
-		{"订单号": "A-101", "客户": "李四", "数量": "5", "金额": "30"},
-		{"订单号": "A-102", "客户": "张三", "数量": "3", "金额": "20"},
-		{"订单号": "A-103", "客户": "王五", "数量": "n/a", "金额": "5"},
-	})
-	seedTableAsset(t, db, "asset-sheet2", "Sheet2", []string{"订单号", "客户", "数量", "金额"}, []map[string]string{
-		{"订单号": "B-200", "客户": "赵六", "数量": "7", "金额": "70"},
-	})
+func seedColumnarAsset(t *testing.T, db *gorm.DB, assetID, sheet string, header []string, rows int64) {
+	t.Helper()
+	headerJSON, _ := json.Marshal(header)
+	asset := &models.TableAsset{
+		ID: assetID, TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
+		Sheet: sheet, Header: string(headerJSON), RowCount: int(rows), ColumnCount: len(header),
+		StorageMode: StorageModeFull, ParseStatus: ParseStatusParsed,
+		StorageURI: "s3://bucket/tablehouse/" + assetID, MaterializeStatus: MaterializeStatusReady,
+		ParsedRows: rows, TotalRows: rows, MaterializedRows: rows,
+	}
+	if err := db.Create(asset).Error; err != nil {
+		t.Fatalf("seed asset: %v", err)
+	}
+}
 
-	lookup, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "张三的订单在哪里", AssetID: "asset-orders"})
+func newTableAskFixture(t *testing.T) (*Service, *fakeColumnarReader) {
+	t.Helper()
+	service, db, _ := newReparseFixture(t)
+	seedColumnarAsset(t, db, "asset-orders", "订单", []string{"订单号", "客户", "数量", "金额"}, 300)
+	seedColumnarAsset(t, db, "asset-inventory", "库存", []string{"商品", "仓库", "库存量", "单价"}, 200)
+	reader := &fakeColumnarReader{}
+	service.SetTablehouse(reader)
+	return service, reader
+}
+
+func TestAskTableRoutesOverColumnarCopy(t *testing.T) {
+	service, _ := newTableAskFixture(t)
+	principal := ownerPrincipal()
+	ctx := context.Background()
+
+	lookup, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "张三的订单在哪里"})
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}
 	if lookup.Route != "lookup" || lookup.MatchedRows != 2 || len(lookup.Rows) != 2 {
 		t.Fatalf("lookup = %+v", lookup)
 	}
-	if lookup.Rows[0].Cells["客户"] != "张三" {
+	if lookup.Rows[0].Cells["客户"] != "张三" || lookup.Rows[0].RowNumber == 0 {
 		t.Fatalf("lookup rows = %+v", lookup.Rows)
 	}
 
-	sum, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "各订单的数量总和是多少", AssetID: "asset-orders"})
+	sum, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "各订单的数量总和是多少"})
 	if err != nil {
 		t.Fatalf("sum: %v", err)
 	}
-	if sum.Operation != "sum" || sum.Column != "数量" || sum.Value == nil || *sum.Value != 10 || sum.MatchedRows != 3 {
+	if sum.Operation != "sum" || sum.Column != "数量" || sum.Value == nil || *sum.Value != 5 || sum.MatchedRows != 2 {
 		t.Fatalf("sum = %+v", sum)
 	}
-
-	avg, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "平均金额是多少", AssetID: "asset-orders"})
-	if err != nil {
-		t.Fatalf("avg: %v", err)
-	}
-	if avg.Value == nil || *avg.Value != 16.25 {
-		t.Fatalf("avg = %+v", avg)
+	if len(sum.Rows) == 0 {
+		t.Fatal("aggregate must keep sample rows for citations")
 	}
 
-	max, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "最高的金额是多少", AssetID: "asset-orders"})
-	if err != nil {
-		t.Fatalf("max: %v", err)
-	}
-	if max.Operation != "max" || max.Value == nil || *max.Value != 30 {
-		t.Fatalf("max = %+v", max)
-	}
-
-	top, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "金额最高的前2条", AssetID: "asset-orders"})
+	top, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "订单金额最高的前2条"})
 	if err != nil {
 		t.Fatalf("top: %v", err)
 	}
-	if top.Operation != "top" || top.TopN != 2 || len(top.Rows) != 2 {
+	if top.Operation != "top" || len(top.Rows) != 2 || top.Rows[0].Cells["订单号"] != "A-102" {
 		t.Fatalf("top = %+v", top)
 	}
-	if top.Rows[0].Cells["订单号"] != "A-101" || top.Rows[1].Cells["订单号"] != "A-102" {
-		t.Fatalf("top rows = %+v", top.Rows)
-	}
 
-	count, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "一共有多少行", AssetID: "asset-orders"})
+	count, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "订单一共有多少行"})
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if count.Operation != "count" || count.Value == nil || *count.Value != 4 {
+	if count.Operation != "count" || count.Value == nil || *count.Value != 2 {
 		t.Fatalf("count = %+v", count)
 	}
 
-	explain, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "这张表有哪些列", AssetID: "asset-orders"})
+	explain, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "订单这张表有哪些列"})
 	if err != nil {
 		t.Fatalf("explain: %v", err)
 	}
@@ -87,39 +87,26 @@ func TestAskTableRoutesAndAnswers(t *testing.T) {
 	}
 }
 
-func TestAskTableSelectsAndRejectsAssets(t *testing.T) {
+func TestAskTableSelectsAssetsAndRejectsUnavailableCopies(t *testing.T) {
 	service, db, _ := newReparseFixture(t)
-	ctx := context.Background()
+	seedColumnarAsset(t, db, "asset-a", "Sheet1", []string{"订单号", "数量"}, 1)
+	seedColumnarAsset(t, db, "asset-b", "Sheet2", []string{"订单号", "数量"}, 1)
+	service.SetTablehouse(&fakeColumnarReader{})
 	principal := ownerPrincipal()
-	seedTableAsset(t, db, "asset-a", "Sheet1", []string{"订单号", "数量"}, []map[string]string{{"订单号": "A", "数量": "1"}})
-	seedTableAsset(t, db, "asset-b", "Sheet2", []string{"订单号", "数量"}, []map[string]string{{"订单号": "B", "数量": "2"}})
-	if err := db.Create(&models.TableAsset{
-		ID: "asset-stale", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-0",
-		Sheet: "Sheet1", Header: `["订单号","数量"]`, RowCount: 1, StorageMode: StorageModeFull,
-	}).Error; err != nil {
-		t.Fatalf("seed stale asset: %v", err)
-	}
+	ctx := context.Background()
 
-	selected, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "Sheet1 一共有多少行"})
+	selected, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "Sheet2 一共有多少行"})
 	if err != nil {
 		t.Fatalf("select by sheet: %v", err)
 	}
-	if selected.AssetID != "asset-a" {
+	if selected.AssetID != "asset-b" {
 		t.Fatalf("selected = %+v", selected)
 	}
-	bySheet, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "Sheet2 一共有多少行"})
-	if err != nil {
-		t.Fatalf("select by second sheet: %v", err)
-	}
-	if bySheet.AssetID != "asset-b" {
-		t.Fatalf("selected second sheet = %+v", bySheet)
-	}
-
-	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "一共有多少行"}); err == nil || !strings.Contains(err.Error(), "table_asset_required") {
-		t.Fatalf("unqualified question error = %v", err)
-	}
 	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "数量总和是多少"}); err == nil || !strings.Contains(err.Error(), "table_asset_ambiguous") {
-		t.Fatalf("ambiguous question error = %v", err)
+		t.Fatalf("ambiguous error = %v", err)
+	}
+	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "一共有多少行"}); err == nil || !strings.Contains(err.Error(), "table_asset_required") {
+		t.Fatalf("unqualified error = %v", err)
 	}
 	if _, err := service.AskTable(ctx, principal, "kb-other", TableAskInput{Question: "Sheet1 有多少行"}); err == nil {
 		t.Fatalf("cross-knowledge-base question must fail")
@@ -127,53 +114,14 @@ func TestAskTableSelectsAndRejectsAssets(t *testing.T) {
 	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "总和是多少", AssetID: "asset-a"}); err == nil || !strings.Contains(err.Error(), "table_column_required") {
 		t.Fatalf("missing column error = %v", err)
 	}
-	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "客户总和是多少", AssetID: "asset-a"}); err == nil || !strings.Contains(err.Error(), "table_column_required") && !strings.Contains(err.Error(), "table_column_not_numeric") {
-		t.Fatalf("non-numeric column error = %v", err)
-	}
-
 	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: strings.Repeat("表", 1001), AssetID: "asset-a"}); err == nil || !strings.Contains(err.Error(), "table_question_too_long") {
 		t.Fatalf("long question error = %v", err)
 	}
-	if err := db.Create(&models.TableAsset{
-		ID: "asset-sampled", TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
-		Sheet: "huge", Header: `["名称","数量"]`, RowCount: 10, TotalRows: 500000, ParsedRows: 50,
-		StorageMode: StorageModeSampled, ParseStatus: ParseStatusSampled, Truncated: true,
-		SampleRows: `["名称 | 数量","a | 1"]`,
-	}).Error; err != nil {
-		t.Fatalf("seed sampled asset: %v", err)
-	}
-	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "数量总和是多少", AssetID: "asset-sampled"}); err == nil || !strings.Contains(err.Error(), "table_rows_not_indexed") {
-		t.Fatalf("sampled aggregate error = %v", err)
-	}
-	explain, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "这张表有哪些列", AssetID: "asset-sampled"})
-	if err != nil {
-		t.Fatalf("sampled explain: %v", err)
-	}
-	if explain.Route != "explain" || len(explain.Sample) != 2 || len(explain.Notes) == 0 {
-		t.Fatalf("sampled explain = %+v", explain)
-	}
-}
 
-func seedTableAsset(t *testing.T, db *gorm.DB, assetID, sheet string, header []string, rows []map[string]string) {
-	t.Helper()
-	headerJSON, _ := json.Marshal(header)
-	asset := &models.TableAsset{
-		ID: assetID, TenantID: "tenant-a", KnowledgeBaseID: "kb-a", DocumentID: "doc-a", DocumentVersionID: "ver-1",
-		Sheet: sheet, Header: string(headerJSON), RowCount: len(rows), ColumnCount: len(header),
-		StorageMode: StorageModeFull, ParseStatus: ParseStatusParsed,
+	if err := db.Model(&models.TableAsset{}).Where("id = ?", "asset-a").Updates(map[string]any{"storage_uri": "", "materialize_status": ""}).Error; err != nil {
+		t.Fatalf("clear columnar copy: %v", err)
 	}
-	if err := db.Create(asset).Error; err != nil {
-		t.Fatalf("seed asset: %v", err)
-	}
-	for index, cells := range rows {
-		encoded, _ := json.Marshal(cells)
-		row := &models.TableRow{
-			ID: assetID + "-row-" + string(rune('a'+index)), TenantID: "tenant-a", KnowledgeBaseID: "kb-a",
-			DocumentID: "doc-a", DocumentVersionID: "ver-1", TableAssetID: assetID,
-			RowNumber: index + 2, Cells: string(encoded),
-		}
-		if err := db.Create(row).Error; err != nil {
-			t.Fatalf("seed row: %v", err)
-		}
+	if _, err := service.AskTable(ctx, principal, "kb-a", TableAskInput{Question: "Sheet1 一共有多少行"}); err == nil || !strings.Contains(err.Error(), "table_needs_reparse") {
+		t.Fatalf("missing copy error = %v", err)
 	}
 }

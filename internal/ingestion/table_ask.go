@@ -3,8 +3,6 @@ package ingestion
 import (
 	"context"
 	"encoding/json"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,10 +51,9 @@ type TableAskResult struct {
 	Notes        []string       `json:"notes,omitempty"`
 }
 
-// AskTable classifies a table question and executes the deterministic route:
-// lookup scans rows for keyword matches, aggregate counts or computes over one
-// column, and explain returns table metadata without scanning every row. The
-// natural-language Text-to-SQL route is a later B37 step and is not used here.
+// AskTable classifies a table question and executes it over the B39 columnar
+// copy: lookup filters rows, aggregate counts or computes one column, and
+// explain returns table metadata without scanning rows.
 func (s *Service) AskTable(ctx context.Context, principal authz.Principal, knowledgeBaseID string, input TableAskInput) (TableAskResult, error) {
 	started := time.Now()
 	result, err := s.askTable(ctx, principal, knowledgeBaseID, input)
@@ -104,32 +101,17 @@ func (s *Service) askTable(ctx context.Context, principal authz.Principal, knowl
 	if result.Route == tableqa.RouteExplain {
 		return s.explainTable(asset, result)
 	}
-	if s.columnarTable(asset) {
-		return s.askTableColumnar(ctx, principal, knowledgeBaseID, asset, header, plan, input)
+	if asset.MaterializeStatus == MaterializeStatusFailed {
+		message := asset.MaterializeError
+		if message == "" {
+			message = "materialization failed"
+		}
+		return TableAskResult{}, apperror.Invalidf("table_materialize_failed: sheet %s: %s", asset.Sheet, message)
 	}
-	if asset.StorageMode != "" && asset.StorageMode != StorageModeFull {
-		return TableAskResult{}, apperror.Invalidf(
-			"table_rows_not_indexed: sheet %s is %s; use an external query for full rows",
-			asset.Sheet, asset.StorageMode,
-		)
+	if strings.TrimSpace(asset.StorageURI) == "" {
+		return TableAskResult{}, apperror.Invalidf("table_needs_reparse: sheet %s has no columnar copy; reparse the document", asset.Sheet)
 	}
-	rows, err := s.loadTableRows(ctx, principal, asset.ID)
-	if err != nil {
-		return TableAskResult{}, err
-	}
-	rows = filterTableRows(rows, input.Filters)
-	switch result.Operation {
-	case tableqa.OpRows:
-		return lookupRows(question, rows, result, input.Limit)
-	case tableqa.OpCount:
-		return countRows(rows, result, input.Limit)
-	case tableqa.OpSum, tableqa.OpAvg, tableqa.OpMin, tableqa.OpMax:
-		return aggregateRows(rows, result, input.Limit)
-	case tableqa.OpTop:
-		return topRows(rows, result, input.Limit)
-	default:
-		return lookupRows(question, rows, result, input.Limit)
-	}
+	return s.askTableColumnar(ctx, principal, knowledgeBaseID, asset, header, plan, input)
 }
 
 func (s *Service) selectTableAsset(ctx context.Context, principal authz.Principal, knowledgeBaseID, question, assetID string) (models.TableAsset, error) {
@@ -202,203 +184,10 @@ func (s *Service) currentVersionAssets(ctx context.Context, tenantID, knowledgeB
 	return filtered, nil
 }
 
-func (s *Service) loadTableRows(ctx context.Context, principal authz.Principal, assetID string) ([]decodedTableRow, error) {
-	var stored []models.TableRow
-	if err := tenantdb.MustScoped(s.db.WithContext(ctx), principal.TenantID).
-		Where("table_asset_id = ?", assetID).Order("row_number").Find(&stored).Error; err != nil {
-		return nil, err
-	}
-	rows := make([]decodedTableRow, 0, len(stored))
-	for _, row := range stored {
-		cells := map[string]string{}
-		if err := json.Unmarshal([]byte(row.Cells), &cells); err != nil {
-			continue
-		}
-		rows = append(rows, decodedTableRow{number: row.RowNumber, cells: cells})
-	}
-	return rows, nil
-}
-
-type decodedTableRow struct {
-	number int
-	cells  map[string]string
-}
-
 func decodeHeader(raw string) []string {
 	var header []string
 	_ = json.Unmarshal([]byte(raw), &header)
 	return header
-}
-
-func filterTableRows(rows []decodedTableRow, filters []TableFilter) []decodedTableRow {
-	if len(filters) == 0 {
-		return rows
-	}
-	filtered := make([]decodedTableRow, 0, len(rows))
-	for _, row := range rows {
-		if matchesFilters(row.cells, filters) {
-			filtered = append(filtered, row)
-		}
-	}
-	return filtered
-}
-
-func lookupRows(question string, rows []decodedTableRow, result TableAskResult, limit int) (TableAskResult, error) {
-	tokens := tableqa.Tokens(question)
-	type scored struct {
-		row   decodedTableRow
-		score int
-	}
-	matches := make([]scored, 0, len(rows))
-	for _, row := range rows {
-		score := rowKeywordScore(tokens, row.cells)
-		if score > 0 {
-			matches = append(matches, scored{row: row, score: score})
-		}
-	}
-	sort.SliceStable(matches, func(i, j int) bool {
-		if matches[i].score != matches[j].score {
-			return matches[i].score > matches[j].score
-		}
-		return matches[i].row.number < matches[j].row.number
-	})
-	result.MatchedRows = len(matches)
-	limit = normalizeLimit(limit, 20, 200)
-	if len(matches) > limit {
-		matches = matches[:limit]
-	}
-	for _, match := range matches {
-		result.Rows = append(result.Rows, TableRowView{RowNumber: match.row.number, Cells: match.row.cells})
-	}
-	if len(matches) == 0 {
-		result.Notes = append(result.Notes, "no row matched the question keywords")
-	}
-	return result, nil
-}
-
-func countRows(rows []decodedTableRow, result TableAskResult, limit int) (TableAskResult, error) {
-	value := float64(len(rows))
-	result.Value = &value
-	result.MatchedRows = len(rows)
-	result.Notes = append(result.Notes, "counted "+formatRows(len(rows)))
-	limit = normalizeLimit(limit, 10, 50)
-	for index, row := range rows {
-		if index >= limit {
-			break
-		}
-		result.Rows = append(result.Rows, TableRowView{RowNumber: row.number, Cells: row.cells})
-	}
-	return result, nil
-}
-
-func aggregateRows(rows []decodedTableRow, result TableAskResult, limit int) (TableAskResult, error) {
-	if result.Column == "" || result.NeedsColumn {
-		return TableAskResult{}, apperror.Invalidf("table_column_required: the question does not name a numeric column")
-	}
-	type valued struct {
-		row   decodedTableRow
-		value float64
-	}
-	values := make([]valued, 0, len(rows))
-	for _, row := range rows {
-		value, ok := tableqa.ParseNumber(row.cells[result.Column])
-		if !ok {
-			continue
-		}
-		values = append(values, valued{row: row, value: value})
-	}
-	if len(values) == 0 {
-		return TableAskResult{}, apperror.Invalidf("table_column_not_numeric: column %s has no numeric values", result.Column)
-	}
-	var total float64
-	minimum, maximum := values[0].value, values[0].value
-	for _, item := range values {
-		total += item.value
-		if item.value < minimum {
-			minimum = item.value
-		}
-		if item.value > maximum {
-			maximum = item.value
-		}
-	}
-	var answer float64
-	switch result.Operation {
-	case tableqa.OpSum:
-		answer = total
-	case tableqa.OpAvg:
-		answer = total / float64(len(values))
-	case tableqa.OpMin:
-		answer = minimum
-	case tableqa.OpMax:
-		answer = maximum
-	}
-	result.Value = &answer
-	result.MatchedRows = len(values)
-	limit = normalizeLimit(limit, 10, 50)
-	for index, item := range values {
-		if index >= limit {
-			break
-		}
-		result.Rows = append(result.Rows, TableRowView{RowNumber: item.row.number, Cells: item.row.cells})
-	}
-	result.Notes = append(result.Notes, descriptionForAggregate(result, len(values)))
-	return result, nil
-}
-
-func topRows(rows []decodedTableRow, result TableAskResult, limit int) (TableAskResult, error) {
-	if result.Column == "" || result.NeedsColumn {
-		return TableAskResult{}, apperror.Invalidf("table_column_required: the question does not name a column to rank by")
-	}
-	type valued struct {
-		row     decodedTableRow
-		value   float64
-		numeric bool
-	}
-	values := make([]valued, 0, len(rows))
-	for _, row := range rows {
-		value, ok := tableqa.ParseNumber(row.cells[result.Column])
-		values = append(values, valued{row: row, value: value, numeric: ok})
-	}
-	sort.SliceStable(values, func(i, j int) bool {
-		if values[i].numeric != values[j].numeric {
-			return values[i].numeric
-		}
-		if values[i].numeric && values[i].value != values[j].value {
-			if result.Desc {
-				return values[i].value > values[j].value
-			}
-			return values[i].value < values[j].value
-		}
-		left := strings.ToLower(values[i].row.cells[result.Column])
-		right := strings.ToLower(values[j].row.cells[result.Column])
-		if left != right {
-			if result.Desc {
-				return left > right
-			}
-			return left < right
-		}
-		return values[i].row.number < values[j].row.number
-	})
-	topN := result.TopN
-	if topN <= 0 {
-		topN = 10
-	}
-	if limit := normalizeLimit(limit, topN, 100); limit < topN {
-		topN = limit
-	}
-	if len(values) > topN {
-		values = values[:topN]
-	}
-	for _, item := range values {
-		result.Rows = append(result.Rows, TableRowView{RowNumber: item.row.number, Cells: item.row.cells})
-	}
-	result.MatchedRows = len(rows)
-	order := "descending"
-	if !result.Desc {
-		order = "ascending"
-	}
-	result.Notes = append(result.Notes, "ordered by "+result.Column+" "+order)
-	return result, nil
 }
 
 func (s *Service) explainTable(asset models.TableAsset, result TableAskResult) (TableAskResult, error) {
@@ -412,9 +201,6 @@ func (s *Service) explainTable(asset models.TableAsset, result TableAskResult) (
 		sample = sample[:5]
 	}
 	result.Sample = sample
-	if asset.StorageMode != "" && asset.StorageMode != StorageModeFull {
-		result.Notes = append(result.Notes, "storage_mode="+asset.StorageMode+": only metadata and sample rows are available; full rows need an external query")
-	}
 	if asset.Truncated {
 		result.Notes = append(result.Notes, "the sheet was truncated during parsing")
 	}
@@ -446,93 +232,4 @@ func normalizeLimit(limit, fallback, maximum int) int {
 		limit = maximum
 	}
 	return limit
-}
-
-func descriptionForAggregate(result TableAskResult, numericCount int) string {
-	switch result.Operation {
-	case tableqa.OpSum:
-		return "sum of " + result.Column + " over " + formatCount(numericCount) + " numeric cells"
-	case tableqa.OpAvg:
-		return "average of " + result.Column + " over " + formatCount(numericCount) + " numeric cells"
-	case tableqa.OpMin:
-		return "minimum of " + result.Column + " over " + formatCount(numericCount) + " numeric cells"
-	case tableqa.OpMax:
-		return "maximum of " + result.Column + " over " + formatCount(numericCount) + " numeric cells"
-	default:
-		return ""
-	}
-}
-
-func formatCount(value int) string {
-	if value == 1 {
-		return "1 cell"
-	}
-	return strconv.Itoa(value) + " cells"
-}
-
-func formatRows(value int) string {
-	if value == 1 {
-		return "1 row"
-	}
-	return strconv.Itoa(value) + " rows"
-}
-
-func matchesFilters(cells map[string]string, filters []TableFilter) bool {
-	for _, filter := range filters {
-		value := strings.TrimSpace(cells[filter.Column])
-		want := strings.TrimSpace(filter.Value)
-		switch strings.ToLower(strings.TrimSpace(filter.Op)) {
-		case "eq":
-			if value != want {
-				return false
-			}
-		case "ne":
-			if value == want {
-				return false
-			}
-		case "contains":
-			if !strings.Contains(strings.ToLower(value), strings.ToLower(want)) {
-				return false
-			}
-		case "gt", "gte", "lt", "lte":
-			comparison := compareCells(value, want)
-			switch strings.ToLower(filter.Op) {
-			case "gt":
-				if comparison <= 0 {
-					return false
-				}
-			case "gte":
-				if comparison < 0 {
-					return false
-				}
-			case "lt":
-				if comparison >= 0 {
-					return false
-				}
-			case "lte":
-				if comparison > 0 {
-					return false
-				}
-			}
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func compareCells(left, right string) int {
-	leftNumber, leftErr := strconv.ParseFloat(strings.TrimSpace(left), 64)
-	rightNumber, rightErr := strconv.ParseFloat(strings.TrimSpace(right), 64)
-	if leftErr == nil && rightErr == nil {
-		switch {
-		case leftNumber < rightNumber:
-			return -1
-		case leftNumber > rightNumber:
-			return 1
-		default:
-			return 0
-		}
-	}
-	return strings.Compare(strings.ToLower(left), strings.ToLower(right))
 }

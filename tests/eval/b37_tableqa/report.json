@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T17:05:19.679605+00:00",
+  "generatedAt": "2026-11-25T17:20:06.083707+00:00",
   "baseUrl": "http://localhost:8082",
   "tenant": "dev-tenant",
   "fixture": {
@@ -30,7 +30,7 @@
             "operation": "count",
             "column": null,
             "confidence": 1,
-            "latencyMs": 61.5,
+            "latencyMs": 79.9,
             "error": null,
             "notes": [],
             "values": [
@@ -62,7 +62,7 @@
             "operation": "sum",
             "column": "数量",
             "confidence": 1,
-            "latencyMs": 96.3,
+            "latencyMs": 108.4,
             "error": null,
             "notes": [],
             "values": [
@@ -94,7 +94,7 @@
             "operation": "avg",
             "column": "金额",
             "confidence": 1,
-            "latencyMs": 138.4,
+            "latencyMs": 107.9,
             "error": null,
             "notes": [],
             "values": [
@@ -126,7 +126,7 @@
             "operation": "max",
             "column": "金额",
             "confidence": 1,
-            "latencyMs": 131.8,
+            "latencyMs": 82.0,
             "error": null,
             "notes": [],
             "values": [
@@ -158,7 +158,7 @@
             "operation": "top",
             "column": "金额",
             "confidence": 1,
-            "latencyMs": 67.7,
+            "latencyMs": 78.0,
             "error": null,
             "notes": [
               "ordered by 金额 descending"
@@ -187,7 +187,7 @@
             "operation": "top",
             "column": "库存量",
             "confidence": 1,
-            "latencyMs": 66.1,
+            "latencyMs": 72.9,
             "error": null,
             "notes": [
               "ordered by 库存量 ascending"
@@ -216,7 +216,7 @@
             "operation": "rows",
             "column": null,
             "confidence": 0.75,
-            "latencyMs": 106.9,
+            "latencyMs": 94.6,
             "error": null,
             "notes": [],
             "values": [],
@@ -237,7 +237,7 @@
             "operation": "rows",
             "column": null,
             "confidence": 0.75,
-            "latencyMs": 72.3,
+            "latencyMs": 62.3,
             "error": null,
             "notes": [],
             "values": [],
@@ -277,7 +277,7 @@
             "operation": "",
             "column": null,
             "confidence": 0.97,
-            "latencyMs": 5.6,
+            "latencyMs": 26.6,
             "error": null,
             "notes": [],
             "values": [
@@ -302,7 +302,7 @@
             "operation": "",
             "column": null,
             "confidence": 0.85,
-            "latencyMs": 5.4,
+            "latencyMs": 4.8,
             "error": null,
             "notes": [],
             "values": [
@@ -324,8 +324,8 @@
         "traceabilityRate": 1.0,
         "lookupHitRate": 1.0,
         "citationRowAccuracy": 1.0,
-        "latencyP50Ms": 67.7,
-        "latencyP95Ms": 138.4,
+        "latencyP50Ms": 78.0,
+        "latencyP95Ms": 108.4,
         "feedback": "not_collected"
       },
       "search": {
@@ -340,8 +340,8 @@
               ""
             ],
             "tokenEstimate": 1616,
-            "recallLatencyMs": 186,
-            "latencyMs": 190.2
+            "recallLatencyMs": 123,
+            "latencyMs": 126.6
           },
           {
             "id": "search-inventory-row",
@@ -352,9 +352,9 @@
             "evidenceKinds": [
               ""
             ],
-            "tokenEstimate": 1451,
-            "recallLatencyMs": 268,
-            "latencyMs": 272.3
+            "tokenEstimate": 1456,
+            "recallLatencyMs": 177,
+            "latencyMs": 202.0
           },
           {
             "id": "search-order-last",
@@ -365,9 +365,9 @@
             "evidenceKinds": [
               ""
             ],
-            "tokenEstimate": 1723,
-            "recallLatencyMs": 164,
-            "latencyMs": 179.5
+            "tokenEstimate": 1750,
+            "recallLatencyMs": 117,
+            "latencyMs": 120.7
           },
           {
             "id": "search-customer",
@@ -379,14 +379,14 @@
               ""
             ],
             "tokenEstimate": 2145,
-            "recallLatencyMs": 197,
-            "latencyMs": 200.4
+            "recallLatencyMs": 132,
+            "latencyMs": 145.6
           }
         ],
         "hitAtK": 1.0,
-        "tokenEstimateAvg": 1733.75,
-        "latencyP50Ms": 190.2,
-        "latencyP95Ms": 272.3
+        "tokenEstimateAvg": 1741.75,
+        "latencyP50Ms": 126.6,
+        "latencyP95Ms": 202.0
       }
     },
     "deep": {
@@ -404,7 +404,7 @@
             "operation": "count",
             "column": null,
             "confidence": 1,
-            "latencyMs": 55.3,
+            "latencyMs": 51.6,
             "error": null,
             "notes": [],
             "values": [
@@ -436,7 +436,7 @@
             "operation": "sum",
             "column": "数量",
             "confidence": 1,
-            "latencyMs": 79.9,
+            "latencyMs": 84.6,
             "error": null,
             "notes": [],
             "values": [
@@ -468,7 +468,7 @@
             "operation": "avg",
             "column": "金额",
             "confidence": 1,
-            "latencyMs": 91.3,
+            "latencyMs": 73.3,
             "error": null,
             "notes": [],
             "values": [
@@ -500,7 +500,7 @@
             "operation": "max",
             "column": "金额",
             "confidence": 1,
-            "latencyMs": 78.1,
+            "latencyMs": 73.4,
             "error": null,
             "notes": [],
             "values": [
@@ -532,7 +532,7 @@
             "operation": "top",
             "column": "金额",
             "confidence": 1,
-            "latencyMs": 72.2,
+            "latencyMs": 51.1,
             "error": null,
             "notes": [
               "ordered by 金额 descending"
@@ -561,7 +561,7 @@
             "operation": "top",
             "column": "库存量",
             "confidence": 1,
-            "latencyMs": 72.1,
+            "latencyMs": 71.3,
             "error": null,
             "notes": [
               "ordered by 库存量 ascending"
@@ -590,7 +590,7 @@
             "operation": "rows",
             "column": null,
             "confidence": 0.75,
-            "latencyMs": 65.9,
+            "latencyMs": 66.1,
             "error": null,
             "notes": [],
             "values": [],
@@ -611,7 +611,7 @@
             "operation": "rows",
             "column": null,
             "confidence": 0.75,
-            "latencyMs": 59.9,
+            "latencyMs": 59.0,
             "error": null,
             "notes": [],
             "values": [],
@@ -651,7 +651,7 @@
             "operation": "",
             "column": null,
             "confidence": 0.97,
-            "latencyMs": 26.9,
+            "latencyMs": 16.9,
             "error": null,
             "notes": [],
             "values": [
@@ -676,7 +676,7 @@
             "operation": "",
             "column": null,
             "confidence": 0.85,
-            "latencyMs": 4.1,
+            "latencyMs": 6.3,
             "error": null,
             "notes": [],
             "values": [
@@ -698,8 +698,8 @@
         "traceabilityRate": 1.0,
         "lookupHitRate": 1.0,
         "citationRowAccuracy": 1.0,
-        "latencyP50Ms": 65.9,
-        "latencyP95Ms": 91.3,
+        "latencyP50Ms": 59.0,
+        "latencyP95Ms": 84.6,
         "feedback": "not_collected"
       },
       "search": {
@@ -713,9 +713,9 @@
             "evidenceKinds": [
               ""
             ],
-            "tokenEstimate": 2038,
-            "recallLatencyMs": 162,
-            "latencyMs": 166.0
+            "tokenEstimate": 2011,
+            "recallLatencyMs": 105,
+            "latencyMs": 129.6
           },
           {
             "id": "search-inventory-row",
@@ -726,9 +726,9 @@
             "evidenceKinds": [
               ""
             ],
-            "tokenEstimate": 1789,
-            "recallLatencyMs": 253,
-            "latencyMs": 268.6
+            "tokenEstimate": 1813,
+            "recallLatencyMs": 163,
+            "latencyMs": 183.3
           },
           {
             "id": "search-order-last",
@@ -740,8 +740,8 @@
               ""
             ],
             "tokenEstimate": 2145,
-            "recallLatencyMs": 163,
-            "latencyMs": 191.0
+            "recallLatencyMs": 104,
+            "latencyMs": 108.4
           },
           {
             "id": "search-customer",
@@ -753,18 +753,18 @@
               ""
             ],
             "tokenEstimate": 2145,
-            "recallLatencyMs": 191,
-            "latencyMs": 214.3
+            "recallLatencyMs": 126,
+            "latencyMs": 129.1
           }
         ],
         "hitAtK": 1.0,
-        "tokenEstimateAvg": 2029.25,
-        "latencyP50Ms": 191.0,
-        "latencyP95Ms": 268.6
+        "tokenEstimateAvg": 2028.5,
+        "latencyP50Ms": 129.1,
+        "latencyP95Ms": 183.3
       }
     }
   },
-  "documentId": "doc-16ba9743d134593e4bb33d52",
+  "documentId": "doc-c131cc221a3f79453d099e8b",
   "assets": [
     {
       "sheet": "库存",
@@ -782,14 +782,14 @@
     "ask.answerAccuracy": 0.0,
     "ask.lookupHitRate": 0.0,
     "ask.traceabilityRate": 0.0,
-    "ask.latencyP95Ms": -47.1,
+    "ask.latencyP95Ms": -23.8,
     "search.hitAtK": 0.0,
-    "search.tokenEstimateAvg": 295.5,
-    "search.latencyP95Ms": -3.7
+    "search.tokenEstimateAvg": 286.75,
+    "search.latencyP95Ms": -18.7
   },
   "observations": [
-    "routing/answer/lookup rates are index-mode independent on A-tier tables because /tables/ask reads table_rows directly",
-    "search hit@10 delta 0.000, average evidence tokens delta 295.5, search p95 delta -3.7ms"
+    "routing/answer/lookup rates are index-mode independent because /tables/ask executes over the B39 columnar copy",
+    "search hit@10 delta 0.000, average evidence tokens delta 286.75, search p95 delta -18.7ms"
   ],
   "gate": {
     "routingAccuracy": 1.0,

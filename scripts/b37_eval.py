@@ -386,7 +386,7 @@ def main():
             report["modes"]["deep"] = deep
             report["delta"] = delta(standard, deep)
             report["observations"] = [
-                "routing/answer/lookup rates are index-mode independent on A-tier tables because /tables/ask reads table_rows directly",
+                "routing/answer/lookup rates are index-mode independent because /tables/ask executes over the B39 columnar copy",
                 "search hit@10 delta %.3f, average evidence tokens delta %s, search p95 delta %sms"
                 % (
                     (report["delta"].get("search.hitAtK") or 0),

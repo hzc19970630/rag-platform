@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/hzc19970630/rag-platform/internal/apperror"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
 	"github.com/hzc19970630/rag-platform/internal/tableqa"
@@ -40,6 +41,11 @@ func (s *Service) columnarTable(asset models.TableAsset) bool {
 	return s != nil && s.tables != nil && strings.TrimSpace(asset.StorageURI) != ""
 }
 
+func escapeLikeValue(value string) string {
+	replacer := strings.NewReplacer(`!`, `!!`, `%`, `!%`, `_`, `!_`)
+	return replacer.Replace(value)
+}
+
 func columnarWhere(header []string, filters []TableFilter) (string, []any, error) {
 	columns := sqlColumnNames(header)
 	index := make(map[string]int, len(header))
@@ -63,8 +69,8 @@ func columnarWhere(header []string, filters []TableFilter) (string, []any, error
 			clauses = append(clauses, "CAST("+column+" AS VARCHAR) <> ?")
 			params = append(params, value)
 		case "contains":
-			clauses = append(clauses, "LOWER(CAST("+column+" AS VARCHAR)) LIKE ?")
-			params = append(params, "%"+strings.ToLower(value)+"%")
+			clauses = append(clauses, "LOWER(CAST("+column+" AS VARCHAR)) LIKE ? ESCAPE '!'")
+			params = append(params, "%"+escapeLikeValue(strings.ToLower(value))+"%")
 		case "gt", "gte", "lt", "lte":
 			number, err := strconv.ParseFloat(value, 64)
 			if err != nil {
@@ -99,10 +105,10 @@ func columnarKeywordClause(header []string, question string) (string, []any, str
 	orderParts := make([]string, 0, len(tokens))
 	orderParams := make([]any, 0, len(tokens))
 	for _, token := range tokens {
-		pattern := "%" + token + "%"
-		whereClauses = append(whereClauses, expression+" LIKE ?")
+		pattern := "%" + escapeLikeValue(token) + "%"
+		whereClauses = append(whereClauses, expression+" LIKE ? ESCAPE '!'")
 		whereParams = append(whereParams, pattern)
-		orderParts = append(orderParts, "CASE WHEN "+expression+" LIKE ? THEN 1 ELSE 0 END")
+		orderParts = append(orderParts, "CASE WHEN "+expression+" LIKE ? ESCAPE '!' THEN 1 ELSE 0 END")
 		orderParams = append(orderParams, pattern)
 	}
 	return "(" + strings.Join(whereClauses, " OR ") + ")", whereParams, "(" + strings.Join(orderParts, " + ") + ") DESC", orderParams
@@ -200,6 +206,9 @@ func numericCell(value any) (float64, bool) {
 }
 
 func (s *Service) askTableColumnar(ctx context.Context, principal authz.Principal, knowledgeBaseID string, asset models.TableAsset, header []string, plan tableqa.Classification, input TableAskInput) (TableAskResult, error) {
+	if plan.NeedsColumn {
+		return TableAskResult{}, apperror.Invalidf("table_column_required: the question does not name a numeric column")
+	}
 	if plan.Operation == tableqa.OpRows {
 		return s.lookupColumnar(ctx, principal, knowledgeBaseID, asset, header, input, plan)
 	}
