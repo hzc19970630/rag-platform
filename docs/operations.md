@@ -437,10 +437,11 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 
 ### 10.2 大表格与流式解析（B34）
 
-- `PARSER_VERSION=docreader-b39-v1`。worker 通过 client-streaming `ParseDocumentStream` 分帧（`DOCREADER_STREAM_CHUNK_KB`，默认 2MiB）发送源文件，docreader 写入只读容器内 `/spool` tmpfs（`DOCREADER_SPOOL_MB` 默认 384MiB，`DOCREADER_SPOOL_CONCURRENCY` 默认 2）；spool 计入 docreader 2GiB 内存限制，请求结束/取消后立即删除。
+- `PARSER_VERSION=docreader-b40-v1`。worker 通过 client-streaming `ParseDocumentStream` 分帧（`DOCREADER_STREAM_CHUNK_KB`，默认 2MiB）发送源文件，docreader 写入只读容器内 `/spool` tmpfs（`DOCREADER_SPOOL_MB` 默认 384MiB，`DOCREADER_SPOOL_CONCURRENCY` 默认 2）；spool 计入 docreader 2GiB 内存限制，请求结束/取消后立即删除。
 - 单文件上限 `DOCREADER_MAX_FILE_MB`（默认 150MB）是 API 上传校验、worker 尺寸声明与 docreader 接收/解析共用的唯一值。api/worker 通过 `env_file` 读取根 `.env`；docreader 是解析不可信文档的沙箱，只接收 `DOCREADER_*` 白名单变量，由 Compose 插值读取该值，因此启动栈时需带 `--env-file .env`（`scripts/*.sh` 与 quickstart 均已如此）。docreader 会额外做启动校验，要求 `DOCREADER_SPOOL_MB ≥ DOCREADER_MAX_FILE_MB × DOCREADER_SPOOL_CONCURRENCY`（默认 150×2=300MiB，384MiB 留有余量），不满足时直接启动失败而不是在上传中途报错。`/healthz` 同时返回 `max_file_mb`、`spool_mb`、`spool_concurrency` 便于核对。
 - 表格预算：`DOCREADER_MAX_ARCHIVE_BYTES`（默认 2GiB）、`DOCREADER_MAX_PART_BYTES`（64MiB）、`DOCREADER_MAX_READ_BYTES`（2GiB）、`DOCREADER_MAX_TABLE_ROWS_PER_SHEET`（5 万）、`DOCREADER_MAX_TABLE_ROWS`（全局行安全阀，默认 200 万）、`DOCREADER_TABLE_ROW_BATCH_ROWS`（行批次，默认 5000）、`DOCREADER_TABLE_WINDOW_ROWS`（10–50，默认 50）、`DOCREADER_TABLE_SAMPLE_ROWS`（默认 50）、`DOCREADER_MAX_TABLE_BLOCKS`（进程安全阀，默认 2 万）、`DOCREADER_MAX_SHEET_BLOCKS`（单 sheet 预算，默认 2000）、`DOCREADER_TABLE_STORAGE_FULL_MAX_ROWS`（A 档全量入库上限，默认 20 万）、`DOCREADER_TABLE_STORAGE_METADATA_MIN_ROWS`（C 档仅元数据阈值，默认 500 万）。条目数/压缩比/单部件仍为硬拒绝；行/表/块超预算为软截断并写 `[truncated]`。多 sheet 文档按 sheet 独立预算，单个超大 sheet 不再耗尽整个工作簿的 block 配额。
 - xlsx 使用 `iterparse` 逐行解析；CSV 支持 UTF-8/GB18030 与分隔符嗅探。表格 block `kind=table` 的文本为“首行表头 + `a | b | c` 行”，单元格内管道与换行会被转义/压平；入库切块时每个 chunk 重复表头并保留 sheet/行范围。
+- B40 起 docx 的 `w:tbl` 与 pptx 的 `a:tbl` 也按 `kind=table`、表资产与行批次入库；合并单元格横向按左上值铺满、纵向延续，嵌套表与批注转为文本。图片、图表、脚注/尾注/批注（docx）与图片、图表、备注页（pptx，排除页码/页脚占位）分别计入 `skipped_images/skipped_charts/skipped_notes`，在文档页覆盖卡片展示并写入回答 coverage 警告，不作为检索证据；PDF 表格/版面与 OCR 仍归 B7a。
 - 多 sheet 覆盖与存储档位（B38/B39）：每个源 sheet 都有目录项，`parse_status` 为 `parsed/truncated/sampled/metadata/skipped/failed`。档位只决定 block/向量预算：A 档（默认 ≤20 万行）全部行进入关键词行组，B 档（20 万–500 万行）只保留 schema/统计/样本块，C 档（>500 万行）仅元数据；原始行一律由 B39 写入 tablehouse Parquet，Postgres 不再写 `table_rows`。文档版本分开记录 `parsed_sheets/total_sheets`、`parsed_rows/total_rows`、`keyword_rows`、`vector_rows/vector_sheets`；B39 起 `parsed_rows` 为实际扫描/落库行数，`/tables/query` 对已 materialize 的 sheet 一律走列式副本，不再返回 `table_rows_not_indexed`。摘要行仍不得当作行证据。旧版本未重解析时 `coverage_known=false`，且查询返回 `table_needs_reparse`。
 - 解析预算独立于入库任务：`DOCREADER_PARSE_TIMEOUT_SECONDS`（默认 300s）。升级 parser 版本后，旧文档需通过 reparse/重建获得表格行为。
 - 可观察：docreader 每次成功解析输出 `parse_complete` 日志（blocks、truncated、total/indexed rows/sheets、elapsed_ms），worker 输出 `document_parsed` 日志；解析统计同时通过 `GET /documents/:id/content` 暴露给文档页。
@@ -486,6 +487,16 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - 清理：`POST /documents/:id/purge`（以及保留期到期清理）在删除源文件/normalized 后按 `tablehouse/tenant=.../kb=.../doc=<id>/` 前缀删除 Parquet；软删除期间前缀保留以便恢复。
 - 可观察：`ingestion_table_materialize_total{status}` 与 `ingestion_table_materialize_duration`（worker）；tablehouse 记录 materialize 行数/字节/耗时与查询失败；`GET /store/stats`（内部）可核对某版本的对象数与字节。
 - 升级注意：0043 迁移只加列；旧文档需通过 `POST /documents/:id/tables/rebuild`（首次 Reparse 亦可）获得列式副本，此前查询返回 `table_needs_reparse`。回滚到 B39 之前的镜像后旧文档恢复 `table_rows` 查询路径。
+
+### 10.6 问答工具层（B40）
+
+- 工具是只读的一等能力，统一注册在 `internal/agenttools`，schema 由 `internal/agenttools/builtin` 提供给对话与 MCP；首批工具：`search_knowledge`、`list_documents`、`list_tables`、`table_schema`、`table_query`。工具句柄为 `doc://<id>` 与 `asset://<id>`。
+- 默认策略：`CHAT_TOOLS_ENABLED=true`（部署级 kill switch）；知识库 `table_qa_enabled=auto|on|off`（默认 auto）。auto 仅当该知识库当前版本存在未软删的表资产时启用。绑定模型必须声明 `supportsTools`（provider 目录字段）；不支持或关闭时走确定性表格兜底。
+- 有界执行：`CHAT_TOOL_MAX_ROUNDS`（默认 3）、`CHAT_TOOL_MAX_CALLS`（默认 8）、`CHAT_TOOL_TIMEOUT_SECONDS`（默认 20）；工具输出默认 16KB 截断。表问题（规则分类为 lookup/aggregate）首轮使用 `tool_choice=required`，避免模型拿检索到的行片段当全量事实。
+- 授权与审计：工具继承本次会话的知识库授权；`table_query` 复用 `AskTableSQL` 的白名单/参数/行数/超时与 `table_query` 审计；跨知识库、越权资产与软删文档被拒。
+- 事件：SSE 发送 `tool_call`（工具名/callId/参数摘要）与 `tool_result`（isError/truncated/evidence 数/内容长度），事件持久化后可经 `/requests/:id/events` 重放；最终答案的 `citations` 可包含 `tableAssetId/sheet/rowStart/rowEnd` 的表行引用。
+- MCP：`list_tables`、`table_schema`、`table_query` 与对话共用 schema，执行仍走 REST（API key 授权）；MCP 侧需显式传 `knowledgeBaseId`。
+- 解析前置（T0）：docx `w:tbl` 与 pptx `a:tbl` 转为表资产；图片/图表/脚注批注/备注页计入 `skipped_images/skipped_charts/skipped_notes` 并在文档覆盖卡片与回答 coverage 警告中展示，不作为检索证据。
 
 ## 11. 数据库连接池
 
