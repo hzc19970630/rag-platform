@@ -131,6 +131,13 @@ type Candidate struct {
 	// EvidenceKind distinguishes exact table rows from table summaries and
 	// coverage markers. Summaries help locate a sheet but are not row evidence.
 	EvidenceKind string `json:"evidenceKind,omitempty"`
+	// TableAssetID/Sheet/RowStart/RowEnd identify tool-derived row evidence.
+	// The tool executor already enforced KB access, so citation re-checks skip
+	// chunk-level authorization for these candidates.
+	TableAssetID string `json:"tableAssetId,omitempty"`
+	Sheet        string `json:"sheet,omitempty"`
+	RowStart     int    `json:"rowStart,omitempty"`
+	RowEnd       int    `json:"rowEnd,omitempty"`
 }
 
 type CoverageNotice struct {
@@ -141,6 +148,9 @@ type CoverageNotice struct {
 	TotalSheets    int    `json:"totalSheets"`
 	ParsedRows     int64  `json:"parsedRows"`
 	TotalRows      int64  `json:"totalRows"`
+	SkippedImages  int    `json:"skippedImages,omitempty"`
+	SkippedCharts  int    `json:"skippedCharts,omitempty"`
+	SkippedNotes   int    `json:"skippedNotes,omitempty"`
 }
 
 // EvidenceSet is the authorized evidence handed to generation and to citation

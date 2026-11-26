@@ -14,7 +14,7 @@ import (
 )
 
 // DefaultParserVersion must stay in sync with services/docreader/main.py.
-const DefaultParserVersion = "docreader-b39-v1"
+const DefaultParserVersion = "docreader-b40-v1"
 
 type Config struct {
 	APIAddr string
@@ -322,6 +322,10 @@ func LoadFrom(lookup Lookup) Config {
 			HistoryTokenLimit:      int(reader.nonNegative("CHAT_HISTORY_TOKEN_LIMIT", 1200)),
 			QueryRewriteEnabled:    reader.boolean("CHAT_QUERY_REWRITE_ENABLED", true),
 			QueryRewriteTimeoutSec: int(reader.positive("CHAT_QUERY_REWRITE_TIMEOUT_SECONDS", 8)),
+			ToolsEnabled:           reader.boolean("CHAT_TOOLS_ENABLED", true),
+			ToolMaxRounds:          int(reader.positive("CHAT_TOOL_MAX_ROUNDS", 3)),
+			ToolMaxCalls:           int(reader.positive("CHAT_TOOL_MAX_CALLS", 8)),
+			ToolTimeoutSec:         int(reader.positive("CHAT_TOOL_TIMEOUT_SECONDS", 20)),
 		},
 		Answer: AnswerConfig{
 			AsyncEnabled:   reader.boolean("ANSWER_ASYNC_ENABLED", profileBoolDefault(profile, "ANSWER_ASYNC_ENABLED", true)),

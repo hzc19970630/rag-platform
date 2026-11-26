@@ -37,6 +37,14 @@ type StreamedAnswer = {
   status: string;
 };
 
+type ToolCallView = {
+  callId: string;
+  name: string;
+  state: "running" | "done" | "error";
+  evidence?: number;
+  truncated?: boolean;
+};
+
 type ChatRow =
   | { key: string; kind: "loading" }
   | { key: string; kind: "error"; error: unknown }
@@ -59,6 +67,7 @@ export function ChatConversation(props: { conversation: Conversation; compact?: 
   const [states, setStates] = useState<string[]>([]);
   const [pendingUser, setPendingUser] = useState("");
   const [streamed, setStreamed] = useState<StreamedAnswer>();
+  const [toolCalls, setToolCalls] = useState<ToolCallView[]>([]);
   const [streamError, setStreamError] = useState("");
   const [streamPhase, setStreamPhase] = useState<AnswerStreamPhase>();
   const [citationDrawer, setCitationDrawer] = useState<{ title: string; citations: Citation[] }>();
@@ -79,6 +88,7 @@ export function ChatConversation(props: { conversation: Conversation; compact?: 
     setPendingUser("");
     setStates([]);
     setStreamed(undefined);
+    setToolCalls([]);
     setStreamError("");
     setStreamPhase(undefined);
   }, [conversation.id]);
@@ -93,6 +103,7 @@ export function ChatConversation(props: { conversation: Conversation; compact?: 
     setAsking(true);
     setStates([]);
     setStreamed(undefined);
+    setToolCalls([]);
     setStreamError("");
     setPendingUser(query);
     try {
@@ -106,6 +117,22 @@ export function ChatConversation(props: { conversation: Conversation; compact?: 
           if (event.type === "status") {
             const state = String(event.data?.state ?? "");
             if (state) setStates((existing) => (existing.includes(state) ? existing : [...existing, state]));
+          } else if (event.type === "tool_call") {
+            const callId = String(event.data?.callId ?? "");
+            const name = String(event.data?.tool ?? "");
+            if (callId && name) {
+              setToolCalls((existing) => [...existing, { callId, name, state: "running" }]);
+            }
+          } else if (event.type === "tool_result") {
+            const callId = String(event.data?.callId ?? "");
+            setToolCalls((existing) => existing.map((call) => call.callId === callId
+              ? {
+                ...call,
+                state: event.data?.isError ? "error" : "done",
+                evidence: Number(event.data?.evidence ?? 0),
+                truncated: Boolean(event.data?.truncated),
+              }
+              : call));
           } else if (event.type === "answer") {
             setStreamed({
               content: String(event.data?.content ?? ""),
@@ -201,6 +228,20 @@ export function ChatConversation(props: { conversation: Conversation; compact?: 
                           : states.length > 0 ? states.join(" → ") : t("chat.processing")}
                       </Typography.Text>
                     </Flex>
+                    {toolCalls.length > 0 && (
+                      <Space orientation="vertical" size={2} className="chat-tool-calls">
+                        {toolCalls.map((call) => (
+                          <Tag key={call.callId} color={call.state === "error" ? "red" : call.state === "done" ? "green" : "blue"}>
+                            {call.name} · {call.state === "running"
+                              ? t("chat.toolRunning")
+                              : call.state === "error"
+                                ? t("chat.toolFailed")
+                                : t("chat.toolDone", { count: call.evidence ?? 0 })}
+                            {call.truncated ? ` · ${t("chat.toolTruncated")}` : ""}
+                          </Tag>
+                        ))}
+                      </Space>
+                    )}
                     {streamed && (
                       <AnswerText content={streamed.content} citations={streamed.citations} onOpen={openCitation} />
                     )}

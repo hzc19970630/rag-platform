@@ -64,13 +64,14 @@ type Provider struct {
 // CatalogEntry is one routable model. Capability and dimension are validated
 // against what the deployment can actually do.
 type CatalogEntry struct {
-	ID          string           `json:"id"`
-	Model       string           `json:"model"`
-	DisplayName string           `json:"displayName"`
-	Capability  model.Capability `json:"capability"`
-	Version     string           `json:"version"`
-	Dimension   int              `json:"dimension"`
-	Enabled     bool             `json:"enabled"`
+	ID            string           `json:"id"`
+	Model         string           `json:"model"`
+	DisplayName   string           `json:"displayName"`
+	Capability    model.Capability `json:"capability"`
+	Version       string           `json:"version"`
+	Dimension     int              `json:"dimension"`
+	Enabled       bool             `json:"enabled"`
+	SupportsTools bool             `json:"supportsTools"`
 }
 
 // ProviderRoute is the resolved connection for one model. APIKey is decrypted
@@ -85,7 +86,9 @@ type ProviderRoute struct {
 	Version    string
 	Dimension  int
 	Capability model.Capability
-	UpdatedAt  time.Time
+	// SupportsTools is true only for chat entries that accept function schemas.
+	SupportsTools bool
+	UpdatedAt     time.Time
 }
 
 // ProviderInput is the whole-provider write shape. Models replace the entry
@@ -101,12 +104,13 @@ type ProviderInput struct {
 }
 
 type CatalogEntryInput struct {
-	Model       string
-	DisplayName string
-	Capability  string
-	Version     string
-	Dimension   int
-	Enabled     *bool
+	Model         string
+	DisplayName   string
+	Capability    string
+	Version       string
+	Dimension     int
+	Enabled       *bool
+	SupportsTools *bool
 }
 
 type ProviderTestResult struct {
@@ -127,16 +131,17 @@ func newProviderID(prefix string) (string, error) {
 // Source distinguishes a deployment adapter from an administrator entry without
 // exposing credentials.
 type CatalogModel struct {
-	ID          string           `json:"id"`
-	ProviderID  string           `json:"providerId"`
-	Provider    string           `json:"provider"`
-	Model       string           `json:"model"`
-	DisplayName string           `json:"displayName"`
-	Capability  model.Capability `json:"capability"`
-	Version     string           `json:"version"`
-	Dimension   int              `json:"dimension"`
-	Source      string           `json:"source"`
-	Enabled     bool             `json:"enabled"`
+	ID            string           `json:"id"`
+	ProviderID    string           `json:"providerId"`
+	Provider      string           `json:"provider"`
+	Model         string           `json:"model"`
+	DisplayName   string           `json:"displayName"`
+	Capability    model.Capability `json:"capability"`
+	Version       string           `json:"version"`
+	Dimension     int              `json:"dimension"`
+	Source        string           `json:"source"`
+	Enabled       bool             `json:"enabled"`
+	SupportsTools bool             `json:"supportsTools"`
 }
 
 // ListCatalog merges the deployment catalog with the tenant providers so a
@@ -155,6 +160,7 @@ func (r *Registry) ListCatalog(ctx context.Context, tenantID string) ([]CatalogM
 			result = append(result, CatalogModel{
 				Provider: entry.Provider, Model: entry.Name, DisplayName: entry.Name,
 				Capability: capability, Version: entry.Version, Dimension: entry.Dimension, Source: "deployment", Enabled: true,
+				SupportsTools: capability == model.CapabilityChat,
 			})
 		}
 	}
@@ -177,6 +183,7 @@ func (r *Registry) ListCatalog(ctx context.Context, tenantID string) ([]CatalogM
 			ID: entry.ID, ProviderID: entry.ProviderID, Provider: name, Model: entry.Model,
 			DisplayName: entry.DisplayName, Capability: model.Capability(entry.Capability),
 			Version: entry.Version, Dimension: entry.Dimension, Source: "provider", Enabled: entry.Enabled,
+			SupportsTools: entry.SupportsTools,
 		})
 	}
 	return result, nil
@@ -561,9 +568,13 @@ func (r *Registry) buildEntries(ctx context.Context, tenantID, providerID string
 		if err != nil && err != gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("check model name: %w", err)
 		}
+		supportsTools := capability == model.CapabilityChat
+		if input.SupportsTools != nil {
+			supportsTools = *input.SupportsTools && capability == model.CapabilityChat
+		}
 		entries = append(entries, models.ModelCatalogEntry{
 			Model: name, DisplayName: displayName, Capability: string(capability),
-			Version: version, Dimension: dimension, Enabled: enabled,
+			Version: version, Dimension: dimension, Enabled: enabled, SupportsTools: supportsTools,
 		})
 	}
 	return entries, nil
@@ -594,7 +605,7 @@ func catalogEntryView(row models.ModelCatalogEntry) CatalogEntry {
 	return CatalogEntry{
 		ID: row.ID, Model: row.Model, DisplayName: row.DisplayName,
 		Capability: model.Capability(row.Capability), Version: row.Version,
-		Dimension: row.Dimension, Enabled: row.Enabled,
+		Dimension: row.Dimension, Enabled: row.Enabled, SupportsTools: row.SupportsTools,
 	}
 }
 

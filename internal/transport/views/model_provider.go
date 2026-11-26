@@ -13,7 +13,7 @@ func ModelProvider(provider modelregistry.Provider) httpapi.ModelProvider {
 		models = append(models, httpapi.ModelCatalogEntry{
 			ID: entry.ID, ProviderID: provider.ID, Provider: provider.Name,
 			Model: entry.Model, DisplayName: entry.DisplayName, Capability: string(entry.Capability),
-			Version: entry.Version, Dimension: entry.Dimension, Source: "provider", Enabled: entry.Enabled,
+			Version: entry.Version, Dimension: entry.Dimension, Source: "provider", Enabled: entry.Enabled, SupportsTools: entry.SupportsTools,
 		})
 	}
 	return httpapi.ModelProvider{
@@ -38,7 +38,7 @@ func ModelCatalog(models []modelregistry.CatalogModel) httpapi.ModelCatalog {
 		items = append(items, httpapi.ModelCatalogEntry{
 			ID: entry.ID, ProviderID: entry.ProviderID, Provider: entry.Provider,
 			Model: entry.Model, DisplayName: entry.DisplayName, Capability: string(entry.Capability),
-			Version: entry.Version, Dimension: entry.Dimension, Source: entry.Source, Enabled: entry.Enabled,
+			Version: entry.Version, Dimension: entry.Dimension, Source: entry.Source, Enabled: entry.Enabled, SupportsTools: entry.SupportsTools,
 		})
 	}
 	return httpapi.ModelCatalog{Items: items}
@@ -50,7 +50,7 @@ func ModelProviderInput(input httpapi.ModelProviderUpsertRequest) modelregistry.
 	for _, entry := range input.Models {
 		entries = append(entries, modelregistry.CatalogEntryInput{
 			Model: entry.Model, DisplayName: entry.DisplayName, Capability: entry.Capability,
-			Version: entry.Version, Dimension: entry.Dimension, Enabled: entry.Enabled,
+			Version: entry.Version, Dimension: entry.Dimension, Enabled: entry.Enabled, SupportsTools: entry.SupportsTools,
 		})
 	}
 	return modelregistry.ProviderInput{

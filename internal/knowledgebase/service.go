@@ -111,6 +111,8 @@ type UpdateInput struct {
 	// audited; embedding stays locked because it defines the vector contract.
 	ChatModel   *string `json:"chat_model"`
 	RerankModel *string `json:"rerank_model"`
+	// TableQAEnabled is auto|on|off for the built-in tool layer.
+	TableQAEnabled *string `json:"table_qa_enabled"`
 }
 
 // ProjectionLifecycle is the Pipeline B hook. It is separate from Pipeline A:
@@ -376,6 +378,15 @@ func (s *Service) Update(ctx context.Context, principal authz.Principal, id stri
 		// vector/keyword channels affect the next retrieval plan but leave
 		// existing pages, snapshots and their ACL version intact.
 		projectionChanged = previous.WikiEnabled != strategy.WikiEnabled || previous.GraphEnabled != strategy.GraphEnabled
+	}
+	if input.TableQAEnabled != nil {
+		value := strings.ToLower(strings.TrimSpace(*input.TableQAEnabled))
+		switch value {
+		case "auto", "on", "off":
+			row.TableQAEnabled = value
+		default:
+			return models.KnowledgeBase{}, apperror.Invalidf("table_qa_enabled must be auto, on or off")
+		}
 	}
 	if projectionChanged {
 		row.ACLVersion++

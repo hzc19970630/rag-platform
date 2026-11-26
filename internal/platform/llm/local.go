@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -28,7 +29,16 @@ func (c *LocalChatter) Name() string { return "local-extractive" }
 
 var sentenceSplitter = regexp.MustCompile(`[。！？!?\.\n]+`)
 
+// SupportsTools is false: the extractive adapter has no function-calling
+// surface, so callers use the deterministic table fallback.
+func (c *LocalChatter) SupportsTools() bool { return false }
+
+func (c *LocalChatter) SupportsToolCalls(context.Context, string) bool { return false }
+
 func (c *LocalChatter) Complete(ctx context.Context, request model.ChatRequest) (model.ChatResponse, error) {
+	if len(request.Tools) > 0 {
+		return model.ChatResponse{}, fmt.Errorf("%w: local-extractive", model.ErrToolsUnsupported)
+	}
 	terms := queryTerms(request.Query)
 	if len(terms) == 0 || len(request.Evidence) == 0 {
 		return model.ChatResponse{Text: "", Model: c.Name()}, nil

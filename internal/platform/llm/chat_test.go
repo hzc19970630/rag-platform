@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -141,5 +142,119 @@ func TestRemoteChatterSendsHistoryBeforeCurrentQuestion(t *testing.T) {
 	}
 	if !strings.Contains(received.Messages[3].Content, "and then?") {
 		t.Fatalf("current message must carry the question: %q", received.Messages[3].Content)
+	}
+}
+
+func toolSpec() model.ToolSpec {
+	return model.ToolSpec{
+		Name:        "table_query",
+		Description: "Query one table",
+		ReadOnly:    true,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"question": map[string]any{"type": "string"},
+			},
+			"required": []any{"question"},
+		},
+	}
+}
+
+func TestRemoteChatterSendsToolsAndParsesCalls(t *testing.T) {
+	var received chatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&received); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"model":"test","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"table_query","arguments":"{\"question\":\"sum\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":4,"completion_tokens":2}}`))
+	}))
+	defer server.Close()
+
+	chatter, err := NewRemoteChatter(RemoteChatterOptions{BaseURL: server.URL, Model: "test", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("construct adapter: %v", err)
+	}
+	response, err := chatter.Complete(context.Background(), model.ChatRequest{
+		Query: "how much", Tools: []model.ToolSpec{toolSpec()},
+	})
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if len(received.Tools) != 1 || received.Tools[0].Function.Name != "table_query" {
+		t.Fatalf("tools were not sent: %+v", received.Tools)
+	}
+	if received.ToolChoice != "auto" {
+		t.Fatalf("tool_choice = %q, want auto", received.ToolChoice)
+	}
+	if len(response.ToolCalls) != 1 || response.ToolCalls[0].ID != "call_1" || response.ToolCalls[0].Name != "table_query" {
+		t.Fatalf("tool calls = %+v", response.ToolCalls)
+	}
+	if response.ToolCalls[0].Arguments != `{"question":"sum"}` {
+		t.Fatalf("arguments = %q", response.ToolCalls[0].Arguments)
+	}
+}
+
+func TestRemoteChatterFeedsToolHistory(t *testing.T) {
+	var received chatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&received); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"model":"test","choices":[{"message":{"role":"assistant","content":"answer [1]"}}]}`))
+	}))
+	defer server.Close()
+
+	chatter, err := NewRemoteChatter(RemoteChatterOptions{BaseURL: server.URL, Model: "test", Timeout: time.Second})
+	if err != nil {
+		t.Fatalf("construct adapter: %v", err)
+	}
+	_, err = chatter.Complete(context.Background(), model.ChatRequest{
+		Query: "second",
+		History: []model.Turn{
+			{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "call_1", Name: "table_query", Arguments: `{"question":"sum"}`}}},
+			{Role: "tool", ToolCallID: "call_1", Name: "table_query", Content: `{"value":300}`},
+		},
+	})
+	if err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if len(received.Messages) != 4 {
+		t.Fatalf("messages = %d, want system + assistant + tool + user", len(received.Messages))
+	}
+	if received.Messages[1].Role != "assistant" || len(received.Messages[1].ToolCalls) != 1 {
+		t.Fatalf("assistant tool call not replayed: %+v", received.Messages[1])
+	}
+	if received.Messages[2].Role != "tool" || received.Messages[2].ToolCallID != "call_1" || received.Messages[2].Content != `{"value":300}` {
+		t.Fatalf("tool result not replayed: %+v", received.Messages[2])
+	}
+}
+
+func TestRemoteChatterRejectsToolsWhenDisabled(t *testing.T) {
+	disabled := false
+	chatter, err := NewRemoteChatter(RemoteChatterOptions{
+		BaseURL: "https://api.example.com/v1", Model: "text-only", Timeout: time.Second, SupportsTools: &disabled,
+	})
+	if err != nil {
+		t.Fatalf("construct adapter: %v", err)
+	}
+	_, err = chatter.Complete(context.Background(), model.ChatRequest{Query: "q", Tools: []model.ToolSpec{toolSpec()}})
+	if !errors.Is(err, model.ErrToolsUnsupported) {
+		t.Fatalf("err = %v, want tools_not_supported", err)
+	}
+	if chatter.SupportsTools() {
+		t.Fatal("disabled adapter reports tool support")
+	}
+}
+
+func TestLocalChatterDeclaresNoTools(t *testing.T) {
+	chatter := NewLocalChatter()
+	if model.ChatterSupportsTools(chatter) {
+		t.Fatal("local-extractive must not declare tool support")
+	}
+	_, err := chatter.Complete(context.Background(), model.ChatRequest{Query: "q", Tools: []model.ToolSpec{toolSpec()}})
+	if !errors.Is(err, model.ErrToolsUnsupported) {
+		t.Fatalf("err = %v, want tools_not_supported", err)
 	}
 }

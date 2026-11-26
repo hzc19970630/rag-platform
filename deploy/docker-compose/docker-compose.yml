@@ -68,7 +68,7 @@ services:
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     environment:
-      PARSER_VERSION: ${PARSER_VERSION:-docreader-b39-v1}
+      PARSER_VERSION: ${PARSER_VERSION:-docreader-b40-v1}
       DOCREADER_MAX_FILE_MB: ${DOCREADER_MAX_FILE_MB:-150}
       DOCREADER_SPOOL_MB: ${DOCREADER_SPOOL_MB:-384}
       DOCREADER_SPOOL_CONCURRENCY: ${DOCREADER_SPOOL_CONCURRENCY:-2}
@@ -173,7 +173,7 @@ services:
       TENANT_RLS_MODE: ${TENANT_RLS_MODE:-shadow}
       REDIS_ADDR: redis:6379
       DOCREADER_GRPC_ADDR: docreader:50051
-      PARSER_VERSION: ${PARSER_VERSION:-docreader-b39-v1}
+      PARSER_VERSION: ${PARSER_VERSION:-docreader-b40-v1}
       S3_ENDPOINT: minio:9000
       TABLEHOUSE_URL: ${TABLEHOUSE_URL:-http://tablehouse:8088}
       TABLEHOUSE_S3_PREFIX: ${TABLEHOUSE_S3_PREFIX:-tablehouse}

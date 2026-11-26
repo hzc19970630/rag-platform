@@ -40,6 +40,8 @@ const (
 	EventStatus     = "status"
 	EventReferences = "references"
 	EventThinking   = "thinking"
+	EventToolCall   = "tool_call"
+	EventToolResult = "tool_result"
 	EventAnswer     = "answer"
 	EventError      = "error"
 	EventComplete   = "complete"
@@ -103,6 +105,10 @@ type CitationView struct {
 	Quote             string  `json:"quote"`
 	Rank              int     `json:"rank"`
 	Score             float64 `json:"score"`
+	TableAssetID      string  `json:"tableAssetId,omitempty"`
+	Sheet             string  `json:"sheet,omitempty"`
+	RowStart          int     `json:"rowStart,omitempty"`
+	RowEnd            int     `json:"rowEnd,omitempty"`
 }
 
 // Validation captures the citation-validation outcome recorded on the message.

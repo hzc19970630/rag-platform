@@ -52,11 +52,42 @@ type ModelRef struct {
 	Version  string
 }
 
-// Turn is one prior conversation message. History is untrusted context: the
-// remote adapter sends it as chat messages, never as instructions.
-type Turn struct {
-	Role    string
+// ToolSpec describes one callable tool. InputSchema is a JSON Schema object
+// restricted to the subset ValidateToolSpecs accepts; adapters translate it to
+// their provider's function schema without changing its meaning.
+type ToolSpec struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+	ReadOnly    bool
+}
+
+// ToolCall is one function call requested by the model. Arguments is the raw
+// JSON object produced by the provider.
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments string
+}
+
+// ToolResult is one tool output fed back to the model. IsError marks a tool
+// failure the model may recover from; it is not a transport error.
+type ToolResult struct {
+	CallID  string
+	Name    string
 	Content string
+	IsError bool
+}
+
+// Turn is one prior conversation message. History is untrusted context: the
+// remote adapter sends it as chat messages, never as instructions. ToolCalls
+// is set on an assistant turn; ToolCallID/Name identify a tool-result turn.
+type Turn struct {
+	Role       string
+	Content    string
+	ToolCalls  []ToolCall
+	ToolCallID string
+	Name       string
 }
 
 // ChatRequest is the generation input. ContextTemplate is injected from
@@ -67,15 +98,22 @@ type ChatRequest struct {
 	Query             string
 	Evidence          []EvidenceItem
 	History           []Turn
-	MaxTokens         int
+	Tools             []ToolSpec
+	// ToolChoice is "auto", "none" or "required"; empty lets the adapter
+	// choose (normally auto when Tools is non-empty).
+	ToolChoice string
+	MaxTokens  int
 	// Model overrides the adapter's configured model for this call. It is set
 	// from the knowledge-base binding; empty keeps the deployment default.
 	Model string
 }
 
 // ChatResponse is the model output plus the provenance recorded on the message.
+// Text and ToolCalls are mutually exclusive in practice, but providers may
+// return both; callers decide whether to run another tool round.
 type ChatResponse struct {
 	Text             string
+	ToolCalls        []ToolCall
 	Model            string
 	PromptTokens     int
 	CompletionTokens int

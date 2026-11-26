@@ -75,6 +75,9 @@ type NormalizedDocument struct {
 	IndexedRows   int64           `json:"indexed_rows,omitempty"`
 	TotalSheets   int             `json:"total_sheets,omitempty"`
 	IndexedSheets int             `json:"indexed_sheets,omitempty"`
+	SkippedImages int             `json:"skipped_images,omitempty"`
+	SkippedCharts int             `json:"skipped_charts,omitempty"`
+	SkippedNotes  int             `json:"skipped_notes,omitempty"`
 	// Materialize records the Parquet copy written during parsing, keyed by
 	// sheet name. The chunk stage applies it to table assets; it never enters
 	// the block stream.
@@ -189,4 +192,7 @@ type ParseResult struct {
 	IndexedRows       int64
 	TotalSheets       int
 	IndexedSheets     int
+	SkippedImages     int
+	SkippedCharts     int
+	SkippedNotes      int
 }

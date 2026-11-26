@@ -61,6 +61,7 @@ export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { d
   const needsRebuild = failedSheets > 0 || missingSheets > 0 || versionFailed;
   const hasCoverageGap = Boolean(data.parseTruncated) || failedSheets > 0 || missingSheets > 0 || partialSheets > 0;
   const failedSheetDetails = data.sheets.filter((sheet) => sheet.materializeStatus === "failed");
+  const skippedMedia = (data.skippedImages ?? 0) + (data.skippedCharts ?? 0) + (data.skippedNotes ?? 0);
 
   function invalidateCoverage() {
     return Promise.all([
@@ -228,6 +229,15 @@ export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { d
         <Descriptions.Item label={t("indexCoverage.keywordRows")}>{data.keywordRows}</Descriptions.Item>
         <Descriptions.Item label={t("indexCoverage.vectorTokens")}>{data.currentVectorTokens}</Descriptions.Item>
         <Descriptions.Item label={t("indexCoverage.tables")}>{data.tableCount}</Descriptions.Item>
+        {skippedMedia > 0 && (
+          <Descriptions.Item label={t("indexCoverage.skippedMedia")}>
+            {t("indexCoverage.skippedMediaValue", {
+              images: data.skippedImages ?? 0,
+              charts: data.skippedCharts ?? 0,
+              notes: data.skippedNotes ?? 0,
+            })}
+          </Descriptions.Item>
+        )}
       </Descriptions>
       {data.parsedRows < data.totalRows && fullStorage && (
         <Typography.Text type="secondary">{t("indexCoverage.keywordHint")}</Typography.Text>
@@ -249,6 +259,15 @@ export function IndexCoverageCard({ documentId, knowledgeBaseId, canWrite }: { d
           type="info"
           showIcon
           message={t("indexCoverage.columnarQueryHint")}
+        />
+      )}
+      {skippedMedia > 0 && (
+        <Alert
+          style={{ marginTop: 12 }}
+          type="info"
+          showIcon
+          message={t("indexCoverage.skippedMediaTitle")}
+          description={t("indexCoverage.skippedMediaBody")}
         />
       )}
       {failedSheets > 0 && (

@@ -839,6 +839,12 @@ components:
           items:
             $ref: '#/components/schemas/SheetCoverage'
           type: array
+        skippedCharts:
+          type: integer
+        skippedImages:
+          type: integer
+        skippedNotes:
+          type: integer
         storageMode:
           type: string
         tableCount:
@@ -1004,6 +1010,12 @@ components:
           type: integer
         sizeBytes:
           format: int64
+          type: integer
+        skippedCharts:
+          type: integer
+        skippedImages:
+          type: integer
+        skippedNotes:
           type: integer
         status:
           type: string
@@ -1577,6 +1589,8 @@ components:
           type: string
         retrievalConfig:
           type: string
+        tableQaEnabled:
+          type: string
         tenantId:
           type: string
         updatedAt:
@@ -1680,6 +1694,8 @@ components:
           type: string
         retrieval_config:
           $ref: '#/components/schemas/RetrievalConfigOverride'
+        table_qa_enabled:
+          type: string
       type: object
     KnowledgeHit:
       properties:
@@ -1865,6 +1881,8 @@ components:
           type: string
         source:
           type: string
+        supportsTools:
+          type: boolean
         version:
           type: string
       type: object
@@ -1880,6 +1898,8 @@ components:
           type: boolean
         model:
           type: string
+        supports_tools:
+          type: boolean
         version:
           type: string
       required:

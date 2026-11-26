@@ -1,4 +1,4 @@
-import { Alert, Button, Flex, Form, Input, Typography } from "antd";
+import { Alert, Button, Flex, Form, Input, Select, Typography } from "antd";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,16 +17,19 @@ export function BasicSettings({ knowledgeBase, canWrite, onSaved }: Props) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(knowledgeBase.name);
   const [description, setDescription] = useState(knowledgeBase.description);
+  const [tableQaEnabled, setTableQaEnabled] = useState(knowledgeBase.tableQaEnabled ?? "auto");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setName(knowledgeBase.name);
     setDescription(knowledgeBase.description);
+    setTableQaEnabled(knowledgeBase.tableQaEnabled ?? "auto");
     setError("");
   }, [knowledgeBase]);
 
-  const dirty = name !== knowledgeBase.name || description !== knowledgeBase.description;
+  const dirty = name !== knowledgeBase.name || description !== knowledgeBase.description
+    || tableQaEnabled !== (knowledgeBase.tableQaEnabled ?? "auto");
 
   async function save() {
     if (!canWrite || !dirty || saving) return;
@@ -37,7 +40,9 @@ export function BasicSettings({ knowledgeBase, canWrite, onSaved }: Props) {
     setSaving(true);
     setError("");
     try {
-      await api(`/knowledge-bases/${knowledgeBase.id}`, jsonInit({ name: name.trim(), description }, "PATCH"));
+      await api(`/knowledge-bases/${knowledgeBase.id}`, jsonInit({
+        name: name.trim(), description, table_qa_enabled: tableQaEnabled,
+      }, "PATCH"));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBase(knowledgeBase.id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases }),
@@ -79,6 +84,18 @@ export function BasicSettings({ knowledgeBase, canWrite, onSaved }: Props) {
               disabled={!canWrite}
               onChange={(event) => setDescription(event.target.value)}
               aria-label={t("knowledgeBase.descriptionField")}
+            />
+          </Form.Item>
+          <Form.Item label={t("settings.tableQa")} extra={t("settings.tableQaHint")}>
+            <Select
+              value={tableQaEnabled}
+              disabled={!canWrite}
+              onChange={setTableQaEnabled}
+              options={[
+                { value: "auto", label: t("settings.tableQaAuto") },
+                { value: "on", label: t("settings.tableQaOn") },
+                { value: "off", label: t("settings.tableQaOff") },
+              ]}
             />
           </Form.Item>
         </Form>

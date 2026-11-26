@@ -213,7 +213,7 @@ var routeDeadlines = map[string]time.Duration{
 // of the concrete URL while c.FullPath() is available to global middleware.
 func routeDeadline(method, path string) (time.Duration, bool) {
 	switch {
-	case method == http.MethodPost && path == "/api/v1/conversations/sessions/:id/messages",
+	case method == http.MethodPost && path == "/api/v1"+conversationSessionsPath+answerMessagePath,
 		method == http.MethodGet && path == "/api/v1/requests/:requestID/events":
 		return 0, true
 	}

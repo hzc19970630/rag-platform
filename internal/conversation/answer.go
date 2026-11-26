@@ -158,6 +158,16 @@ func (s *Service) execute(ctx context.Context, prepared preparedAnswer, emitEven
 	if err != nil {
 		return s.failAnswer(ctx, emitEvent, conversation, principal, requestID, scope, query, started, answerModel, CodeModelError, err)
 	}
+	toolMode := s.toolsEnabled(ctx, scope, conversation.KnowledgeBaseID, chatModel)
+	if !toolMode && !evidence.Relevance() && s.tableFallback != nil {
+		if content, items, ok := s.tableFallback.Answer(ctx, principal, conversation.KnowledgeBaseID, query); ok {
+			_ = content
+			for _, item := range items {
+				candidate := toolCandidate(principal, conversation.KnowledgeBaseID, "fallback", item)
+				evidence.Items = append(evidence.Items, candidate)
+			}
+		}
+	}
 	registry := NewRegistry(evidence)
 	references := make([]CitationView, 0, len(evidence.Items))
 	for _, index := range registry.Indexes() {
@@ -171,9 +181,9 @@ func (s *Service) execute(ctx context.Context, prepared preparedAnswer, emitEven
 		return AnswerResult{}, err
 	}
 
-	// Insufficient evidence: refuse rather than let the model fill the gap from
-	// its own knowledge.
-	if !evidence.Relevance() {
+	// Insufficient evidence: refuse only when no tool can look for it. With
+	// tools enabled the model gets a chance to discover and query a table.
+	if !evidence.Relevance() && !toolMode {
 		validation := Validation{Valid: false, Reason: CodeInsufficientEvidence, RegisteredIndexes: 0}
 		return s.finishAnswer(ctx, emitEvent, finishInput{
 			conversation: conversation, principal: principal, requestID: requestID, scope: scope,
@@ -187,7 +197,10 @@ func (s *Service) execute(ctx context.Context, prepared preparedAnswer, emitEven
 		return AnswerResult{}, err
 	}
 	generateCtx, cancel := context.WithTimeout(ctx, s.timeout)
-	response, generateErr := s.generate(generateCtx, query, registry, evidence, history, chatModel)
+	response, evidence, generateErr := s.generateAnswer(
+		generateCtx, query, registry, evidence, history, chatModel,
+		principal, scope, conversation.KnowledgeBaseID, toolMode, emitEvent,
+	)
 	cancel()
 	if generateErr != nil {
 		code := CodeModelError
@@ -354,16 +367,23 @@ func (s *Service) generate(ctx context.Context, query string, registry *Registry
 		candidate, _ := registry.Lookup(index)
 		items = append(items, model.EvidenceItem{Index: index, ChunkID: candidate.ChunkID, HeadingPath: candidate.HeadingPath, Text: candidate.Content})
 	}
-	systemInstruction, err := s.prompts.Render(prompts.SystemPrompt, nil)
+	systemInstruction, err := s.systemInstruction(evidence)
 	if err != nil {
 		return model.ChatResponse{}, err
 	}
-	systemInstruction += coverageInstruction(evidence)
 	contextTemplate, ok := s.prompts.Raw(prompts.ContextTemplate)
 	if !ok {
 		return model.ChatResponse{}, fmt.Errorf("context template is not configured")
 	}
 	return s.chat.Complete(ctx, model.ChatRequest{SystemInstruction: systemInstruction, ContextTemplate: contextTemplate, Query: query, Evidence: items, History: history, Model: chatModel})
+}
+
+func (s *Service) systemInstruction(evidence retrieval.EvidenceSet) (string, error) {
+	instruction, err := s.prompts.Render(prompts.SystemPrompt, nil)
+	if err != nil {
+		return "", err
+	}
+	return instruction + coverageInstruction(evidence), nil
 }
 
 func coverageInstruction(evidence retrieval.EvidenceSet) string {
@@ -376,12 +396,20 @@ func coverageInstruction(evidence retrieval.EvidenceSet) string {
 	}
 	if len(evidence.Coverage) > 0 {
 		builder.WriteString("\n\nCoverage warning: some documents are only partially indexed. State the limitation and do not claim full-table coverage.")
+		skippedMedia := false
 		for _, notice := range evidence.Coverage {
 			builder.WriteString(fmt.Sprintf(
-				"\n- document %s: storage=%s, sheets=%d/%d, rows=%d/%d, truncated=%t",
+				"\n- document %s: storage=%s, sheets=%d/%d, rows=%d/%d, truncated=%t, skipped_images=%d, skipped_charts=%d, skipped_notes=%d",
 				notice.DocumentID, notice.StorageMode, notice.ParsedSheets, notice.TotalSheets,
 				notice.ParsedRows, notice.TotalRows, notice.ParseTruncated,
+				notice.SkippedImages, notice.SkippedCharts, notice.SkippedNotes,
 			))
+			if notice.SkippedImages+notice.SkippedCharts+notice.SkippedNotes > 0 {
+				skippedMedia = true
+			}
+		}
+		if skippedMedia {
+			builder.WriteString("\n\nSome images, charts or notes were skipped during parsing. They are not searchable evidence; do not claim to have analyzed them.")
 		}
 	}
 	return builder.String()
@@ -400,10 +428,15 @@ func (s *Service) resolveCitations(ctx context.Context, scope authz.Authorizatio
 		if !ok {
 			return nil, 0, apperror.ErrForbidden
 		}
-		refs = append(refs, authz.ResourceRef{TenantID: scope.TenantID, KnowledgeBaseID: candidate.KnowledgeBaseID, ResourceID: candidate.ChunkID, ResourceType: "chunk"})
 		citation := citationView(index, candidate)
 		citation.Rank = rank + 1
 		views = append(views, citation)
+		// Tool executors already enforced KB access for row evidence; there is
+		// no chunk row to re-check through the chunk authorization port.
+		if candidate.TableAssetID != "" {
+			continue
+		}
+		refs = append(refs, authz.ResourceRef{TenantID: scope.TenantID, KnowledgeBaseID: candidate.KnowledgeBaseID, ResourceID: candidate.ChunkID, ResourceType: "chunk"})
 	}
 	readable, err := s.authz.FilterReadable(ctx, scope, refs)
 	if err != nil {
@@ -415,7 +448,9 @@ func (s *Service) resolveCitations(ctx context.Context, scope authz.Authorizatio
 	}
 	kept := make([]CitationView, 0, len(views))
 	for _, view := range views {
-		if allowed[view.ChunkID] {
+		// Table rows were authorized by the tool executor and have no chunk
+		// row to re-check; chunk citations still go through the ACL filter.
+		if view.TableAssetID != "" || allowed[view.ChunkID] {
 			kept = append(kept, view)
 		}
 	}
@@ -450,6 +485,8 @@ func citationView(index int, candidate retrieval.Candidate) CitationView {
 		DocumentVersionID: candidate.DocumentVersionID, KnowledgeBaseID: candidate.KnowledgeBaseID,
 		HeadingPath: candidate.HeadingPath, PageNumber: candidate.PageNumber, SourcePath: candidate.SourcePath,
 		Quote: truncateRunes(candidate.Content, citationQuoteMaxRunes), Score: candidate.Score,
+		TableAssetID: candidate.TableAssetID, Sheet: candidate.Sheet,
+		RowStart: candidate.RowStart, RowEnd: candidate.RowEnd,
 	}
 }
 

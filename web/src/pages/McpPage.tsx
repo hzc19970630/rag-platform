@@ -48,6 +48,9 @@ export const mcpTools = [
   { name: "get_document_status", access: "read" },
   { name: "search", access: "read" },
   { name: "get_citation", access: "read" },
+  { name: "list_tables", access: "read" },
+  { name: "table_schema", access: "read" },
+  { name: "table_query", access: "read" },
   { name: "ask", access: "generate" },
 ] as const;
 

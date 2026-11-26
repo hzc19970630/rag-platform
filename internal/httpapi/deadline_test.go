@@ -20,7 +20,7 @@ func deadlineRouter(cfg config.Config) *gin.Engine {
 	r := gin.New()
 	r.Use(requestDeadline(cfg))
 	r.GET("/api/v1/slow", report)
-	r.POST("/api/v1/conversations/sessions/:id/messages", report)
+	r.POST("/api/v1"+conversationSessionsPath+answerMessagePath, report)
 	r.GET("/api/v1/requests/:requestID/events", report)
 	r.POST("/api/v1"+documentUploadPath, report)
 	r.POST("/api/v1/ops/reconcile", report)
@@ -52,7 +52,7 @@ func TestRequestDeadlineAppliesByDefault(t *testing.T) {
 
 func TestRequestDeadlineSkipsStreamingRoutes(t *testing.T) {
 	router := deadlineRouter(config.Config{RequestTimeoutSeconds: 60})
-	if deadlineOf(t, router, http.MethodPost, "/api/v1/conversations/sessions/s1/messages") {
+	if deadlineOf(t, router, http.MethodPost, "/api/v1/sessions/s1/messages") {
 		t.Fatalf("answer stream must be exempt from the request deadline")
 	}
 	if deadlineOf(t, router, http.MethodGet, "/api/v1/requests/r1/events") {
@@ -90,7 +90,7 @@ func TestRequestDeadlineExpiryMapsToGatewayTimeout(t *testing.T) {
 }
 
 func TestRouteDeadlineBudgets(t *testing.T) {
-	if budget, ok := routeDeadline(http.MethodPost, "/api/v1/conversations/sessions/:id/messages"); !ok || budget != 0 {
+	if budget, ok := routeDeadline(http.MethodPost, "/api/v1/sessions/:id/messages"); !ok || budget != 0 {
 		t.Fatalf("answer stream budget = %s ok=%v, want exempt", budget, ok)
 	}
 	if budget, ok := routeDeadline(http.MethodPost, "/api/v1"+documentUploadPath); !ok || budget != uploadDeadline {

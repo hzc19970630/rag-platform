@@ -508,7 +508,9 @@ func (r *Registry) routeFor(provider models.ModelProvider, entry models.ModelCat
 	return ProviderRoute{
 		ProviderID: provider.ID, Kind: provider.Kind, BaseURL: provider.BaseURL, APIKey: apiKey,
 		HealthURL: provider.HealthURL, Model: entry.Model, Version: entry.Version,
-		Dimension: entry.Dimension, Capability: model.Capability(entry.Capability), UpdatedAt: provider.UpdatedAt,
+		Dimension: entry.Dimension, Capability: model.Capability(entry.Capability),
+		SupportsTools: entry.SupportsTools && model.Capability(entry.Capability) == model.CapabilityChat,
+		UpdatedAt:     provider.UpdatedAt,
 	}, nil
 }
 

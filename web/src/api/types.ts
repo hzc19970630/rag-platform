@@ -422,6 +422,7 @@ export type ModelCatalogEntry = {
   dimension: number;
   source: string;
   enabled: boolean;
+  supportsTools: boolean;
 };
 
 export type ModelCatalog = { items: ModelCatalogEntry[] };
@@ -455,6 +456,7 @@ export type ModelProviderUpsertRequest = {
     version?: string;
     dimension?: number;
     enabled?: boolean;
+    supports_tools?: boolean;
   }>;
 };
 

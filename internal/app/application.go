@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hzc19970630/rag-platform/internal/agenttools"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/config"
 	"github.com/hzc19970630/rag-platform/internal/confighealth"
@@ -43,6 +44,7 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/retrieval"
 	"github.com/hzc19970630/rag-platform/internal/tenant"
 	"github.com/hzc19970630/rag-platform/internal/tenantconfig"
+	"github.com/hzc19970630/rag-platform/internal/toolruntime"
 	"gorm.io/gorm"
 )
 
@@ -67,6 +69,8 @@ type Application struct {
 	Retrieval    *retrieval.Service
 	Conversation *conversation.Service
 	Models       *modelregistry.Registry
+	// Tools owns the shared tool registry and the KB-level enablement policy.
+	Tools *toolruntime.Runtime
 	// Embedding resolves the exact vector space and adapter for a knowledge
 	// base. Ingestion, retrieval and projection share this resolver.
 	Embedding embedding.Resolver
@@ -427,6 +431,11 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 	qualityService.SetMetrics(recorder)
 	tenantConfigService.SetQualityGate(qualityService)
 	knowledgeBaseService.SetQualityGate(qualityService)
+	toolRegistry := agenttools.NewRegistry()
+	if err := registerBuiltinTools(toolRegistry, ingestionService, retrievalService); err != nil {
+		return nil, fmt.Errorf("register built-in tools: %w", err)
+	}
+	toolRuntime := toolruntime.New(database, toolRegistry, cfg.Chat.ToolsEnabled)
 	conversationService := conversation.NewService(conversation.Options{
 		Stores: conversation.NewPostgresStores(database), Authz: authorization, Retrieval: retrievalService, Chat: routedChatter, Models: modelCatalog,
 		Prompts: registry, Timeout: time.Duration(cfg.Chat.TimeoutSec) * time.Second,
@@ -438,8 +447,13 @@ func Open(cfg config.Config, recorder metrics.Recorder, role Role) (*Application
 		AnswerPublisher:    publisher,
 		AsyncEnabled:       cfg.Answer.AsyncEnabled,
 		AnswerLease:        time.Duration(cfg.Answer.LeaseSeconds) * time.Second,
+		ToolRuntime:        toolRuntime,
+		TableFallback:      tableFallback{tables: ingestionService},
+		ToolMaxRounds:      cfg.Chat.ToolMaxRounds,
+		ToolMaxCalls:       cfg.Chat.ToolMaxCalls,
+		ToolTimeout:        time.Duration(cfg.Chat.ToolTimeoutSec) * time.Second,
 	})
-	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, Tablehouse: tables, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Presets: presetResolver, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
+	return &Application{DB: database, MaintenanceDB: maintenance, Identity: identityService, Authorization: authorization, KnowledgeBase: knowledgeBaseService, Ingestion: ingestionService, Index: indexWriter, Tablehouse: tables, DataSources: dataSourceService, Projection: projectionService, Secrets: credentialCipher, Tasks: ingestion.NewTaskInspector(database, publisher), Retrieval: retrievalService, Conversation: conversationService, Models: modelCatalog, Tools: toolRuntime, Embedding: embeddingResolver, Embeddings: embeddingMigrations, Quality: qualityService, Presets: presetResolver, Prompts: registry, Ops: ops.NewService(ops.NewPostgresStore(database)), Tenant: tenant.NewService(database, authorization, quotaResolver), TenantConfig: tenantConfigService, ConfigHealth: configHealthService, ConfigPreview: configPreviewService, Objects: objects, Queue: publisher, Docreader: reader, Limiter: ratelimit.New(cfg.Limits.RateLimitPerMinute)}, nil
 }
 
 func closeDatabase(database *gorm.DB) {

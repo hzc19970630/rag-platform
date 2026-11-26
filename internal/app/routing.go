@@ -42,6 +42,25 @@ func newRoutingChatter(fallback model.Chatter, routes providerRoutes) *routingCh
 
 func (c *routingChatter) Name() string { return c.fallback.Name() }
 
+// SupportsToolCalls resolves the capability of the model this request names.
+// A deployment alias falls back to the deployment adapter; an unknown tenant
+// model keeps the fallback's capability so the request fails consistently.
+func (c *routingChatter) SupportsToolCalls(ctx context.Context, name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || name == c.fallback.Name() {
+		return model.ChatterSupportsTools(c.fallback)
+	}
+	tenantID, ok := tenantdb.TenantFrom(ctx)
+	if !ok {
+		return model.ChatterSupportsTools(c.fallback)
+	}
+	route, err := c.routes.ProviderForModel(ctx, tenantID, name)
+	if err != nil {
+		return model.ChatterSupportsTools(c.fallback)
+	}
+	return route.SupportsTools
+}
+
 func (c *routingChatter) Complete(ctx context.Context, request model.ChatRequest) (model.ChatResponse, error) {
 	name := strings.TrimSpace(request.Model)
 	if name == "" || name == c.fallback.Name() {
@@ -78,9 +97,10 @@ func (c *routingChatter) adapter(route modelregistry.ProviderRoute) (*llm.Remote
 		return cached, nil
 	}
 	c.mu.Unlock()
+	supportsTools := route.SupportsTools
 	options := llm.RemoteChatterOptions{
 		BaseURL: route.BaseURL, APIKey: route.APIKey, Model: route.Model,
-		Timeout: 60 * time.Second, HealthURL: route.HealthURL,
+		Timeout: 60 * time.Second, HealthURL: route.HealthURL, SupportsTools: &supportsTools,
 	}
 	if options.HealthURL == "" && route.Kind == modelregistry.ProviderKindOllama {
 		options.HealthURL = strings.TrimSuffix(route.BaseURL, "/v1") + "/api/tags"

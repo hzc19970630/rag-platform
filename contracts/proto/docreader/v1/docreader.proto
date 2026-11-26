@@ -54,6 +54,11 @@ message ParseDocumentResponse {
   // full = all rows indexed, sampled = metadata/sample only, metadata = catalog
   // only. Mirrors the B38 storage tiers.
   string storage_mode = 17;
+  // Media the parser could not turn into searchable evidence. They are counted
+  // and surfaced in coverage instead of being dropped silently (B40).
+  int32 skipped_images = 18;
+  int32 skipped_charts = 19;
+  int32 skipped_notes = 20;
 }
 
 message SheetMeta {

@@ -34,6 +34,15 @@ type ChatConfig struct {
 	QueryRewriteEnabled bool
 	// QueryRewriteTimeoutSec bounds one rewrite call.
 	QueryRewriteTimeoutSec int
+	// ToolsEnabled is the deployment-level kill switch for the built-in tool
+	// layer. A knowledge base still needs table assets (or tableQaEnabled=on).
+	ToolsEnabled bool
+	// ToolMaxRounds bounds model/tool alternations; ToolMaxCalls bounds the
+	// number of tool invocations in one answer.
+	ToolMaxRounds int
+	ToolMaxCalls  int
+	// ToolTimeoutSec bounds one tool invocation.
+	ToolTimeoutSec int
 }
 
 // AnswerConfig controls the async answer path: the API enqueues a job and tails

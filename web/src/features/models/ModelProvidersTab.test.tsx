@@ -14,6 +14,7 @@ function catalogEntry(overrides: Partial<ModelCatalogEntry> = {}): ModelCatalogE
     dimension: 0,
     source: "deployment",
     enabled: true,
+    supportsTools: true,
     ...overrides,
   };
 }
@@ -27,7 +28,7 @@ function draft(overrides: Partial<Draft> = {}): Draft {
     apiKeySet: true,
     healthUrl: "",
     enabled: true,
-    models: [{ model: "chat-a", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true }],
+    models: [{ model: "chat-a", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true, supportsTools: true }],
     ...overrides,
   };
 }
@@ -57,22 +58,22 @@ describe("buildProviderRequest", () => {
     const payload = buildProviderRequest(draft({
       apiKey: "sk-typed",
       models: [
-        { model: " ", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true },
-        { model: "embed-a", displayName: "Embed A", capability: "embedding", version: "v3", dimension: 1024, enabled: false },
+        { model: " ", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true, supportsTools: true },
+        { model: "embed-a", displayName: "Embed A", capability: "embedding", version: "v3", dimension: 1024, enabled: false, supportsTools: true },
       ],
     }));
     expect(payload.api_key).toBe("sk-typed");
     expect(payload.models).toEqual([
       {
         model: "embed-a", display_name: "Embed A", capability: "embedding",
-        version: "v3", dimension: 1024, enabled: false,
+        version: "v3", dimension: 1024, enabled: false, supports_tools: false,
       },
     ]);
   });
 
   it("zeroes the dimension for non-embedding capabilities", () => {
     const payload = buildProviderRequest(draft({
-      models: [{ model: "rerank-a", displayName: "", capability: "rerank", version: "", dimension: 768, enabled: true }],
+      models: [{ model: "rerank-a", displayName: "", capability: "rerank", version: "", dimension: 768, enabled: true, supportsTools: true }],
     }));
     expect(payload.models[0].dimension).toBe(0);
   });

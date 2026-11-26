@@ -342,6 +342,7 @@ type KnowledgeBase struct {
 	ACLVersion         int64     `json:"aclVersion"`
 	RetrievalConfig    string    `json:"retrievalConfig"`
 	IndexingStrategy   string    `json:"indexingStrategy"`
+	TableQAEnabled     string    `json:"tableQaEnabled"`
 	PresetName         string    `json:"presetName"`
 	PresetVersion      string    `json:"presetVersion"`
 	CreatedAt          time.Time `json:"createdAt"`
@@ -368,6 +369,7 @@ type KnowledgeBaseUpdateRequest struct {
 	EmbeddingDimension *int                     `json:"embedding_dimension"`
 	ChatModel          *string                  `json:"chat_model"`
 	RerankModel        *string                  `json:"rerank_model"`
+	TableQAEnabled     *string                  `json:"table_qa_enabled"`
 }
 
 type KnowledgeBaseMember struct {
@@ -564,6 +566,9 @@ type DocumentVersion struct {
 	TotalRows       int64     `json:"totalRows"`
 	VectorSheets    int       `json:"vectorSheets"`
 	TotalSheets     int       `json:"totalSheets"`
+	SkippedImages   int       `json:"skippedImages"`
+	SkippedCharts   int       `json:"skippedCharts"`
+	SkippedNotes    int       `json:"skippedNotes"`
 	VectorTokens    int64     `json:"vectorTokens"`
 	EstimatedTokens int64     `json:"estimatedTokens"`
 	ErrorCode       string    `json:"errorCode"`
@@ -754,6 +759,9 @@ type DocumentIndexEstimate struct {
 	TotalSheets              int             `json:"totalSheets"`
 	ParsedSheets             int             `json:"parsedSheets"`
 	VectorSheets             int             `json:"vectorSheets"`
+	SkippedImages            int             `json:"skippedImages"`
+	SkippedCharts            int             `json:"skippedCharts"`
+	SkippedNotes             int             `json:"skippedNotes"`
 	CurrentVectorTokens      int64           `json:"currentVectorTokens"`
 	DeepEstimatedTokens      int64           `json:"deepEstimatedTokens"`
 	DeepEstimatedMinutes     float64         `json:"deepEstimatedMinutes"`
@@ -1690,16 +1698,17 @@ type OpsMetrics map[string]any
 // B13 tenant model catalog. The admin surface manages providers; the catalog
 // endpoint is the read-only merged view used by knowledge-base settings.
 type ModelCatalogEntry struct {
-	ID          string `json:"id"`
-	ProviderID  string `json:"providerId"`
-	Provider    string `json:"provider"`
-	Model       string `json:"model"`
-	DisplayName string `json:"displayName"`
-	Capability  string `json:"capability"`
-	Version     string `json:"version"`
-	Dimension   int    `json:"dimension"`
-	Source      string `json:"source"`
-	Enabled     bool   `json:"enabled"`
+	ID            string `json:"id"`
+	ProviderID    string `json:"providerId"`
+	Provider      string `json:"provider"`
+	Model         string `json:"model"`
+	DisplayName   string `json:"displayName"`
+	Capability    string `json:"capability"`
+	Version       string `json:"version"`
+	Dimension     int    `json:"dimension"`
+	Source        string `json:"source"`
+	Enabled       bool   `json:"enabled"`
+	SupportsTools bool   `json:"supportsTools"`
 }
 
 type ModelCatalog struct {
@@ -1724,12 +1733,13 @@ type ModelProviderList struct {
 }
 
 type ModelCatalogEntryRequest struct {
-	Model       string `json:"model" binding:"required"`
-	DisplayName string `json:"display_name"`
-	Capability  string `json:"capability" binding:"required"`
-	Version     string `json:"version"`
-	Dimension   int    `json:"dimension"`
-	Enabled     *bool  `json:"enabled"`
+	Model         string `json:"model" binding:"required"`
+	DisplayName   string `json:"display_name"`
+	Capability    string `json:"capability" binding:"required"`
+	Version       string `json:"version"`
+	Dimension     int    `json:"dimension"`
+	Enabled       *bool  `json:"enabled"`
+	SupportsTools *bool  `json:"supports_tools"`
 }
 
 // ModelProviderUpsertRequest is a whole-provider write: Models replaces the

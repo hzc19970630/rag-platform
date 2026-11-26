@@ -19,6 +19,7 @@ func KnowledgeBase(row models.KnowledgeBase) httpapi.KnowledgeBase {
 		ACLVersion:         row.ACLVersion,
 		RetrievalConfig:    row.RetrievalConfig,
 		IndexingStrategy:   row.IndexingStrategy,
+		TableQAEnabled:     row.TableQAEnabled,
 		PresetName:         row.PresetName,
 		PresetVersion:      row.PresetVersion,
 		CreatedAt:          row.CreatedAt,
@@ -64,6 +65,7 @@ func UpdateKnowledgeBaseInput(input httpapi.KnowledgeBaseUpdateRequest) knowledg
 		EmbeddingDimension: input.EmbeddingDimension,
 		ChatModel:          input.ChatModel,
 		RerankModel:        input.RerankModel,
+		TableQAEnabled:     input.TableQAEnabled,
 	}
 	if input.RetrievalConfig != nil {
 		override := ParamsOverride(*input.RetrievalConfig)

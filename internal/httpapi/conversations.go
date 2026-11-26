@@ -17,6 +17,12 @@ import (
 	"github.com/hzc19970630/rag-platform/internal/transport/views"
 )
 
+// Shared with routeDeadline so the SSE exemption cannot drift from the registration.
+const (
+	conversationSessionsPath = "/sessions"
+	answerMessagePath        = "/:id/messages"
+)
+
 func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, deps ConversationDeps, mw MiddlewareDeps, logger *slog.Logger) {
 	protected.POST("/search", func(c *gin.Context) {
 		var input httpapi.SearchRequest
@@ -41,7 +47,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 		c.JSON(http.StatusOK, views.EvidenceSet(evidence))
 	})
 
-	sessions := protected.Group("/sessions")
+	sessions := protected.Group(conversationSessionsPath)
 	sessions.POST("", func(c *gin.Context) {
 		var input httpapi.ConversationCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
@@ -86,7 +92,7 @@ func RegisterConversationRoutes(protected *gin.RouterGroup, cfg config.Config, d
 		}
 		c.Status(http.StatusNoContent)
 	})
-	sessions.POST("/:id/messages", func(c *gin.Context) {
+	sessions.POST(answerMessagePath, func(c *gin.Context) {
 		var input httpapi.MessageCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			writeError(c, err)

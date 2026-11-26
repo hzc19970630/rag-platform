@@ -47,6 +47,9 @@ type IndexEstimate struct {
 	TotalSheets              int             `json:"totalSheets"`
 	ParsedSheets             int             `json:"parsedSheets"`
 	VectorSheets             int             `json:"vectorSheets"`
+	SkippedImages            int             `json:"skippedImages"`
+	SkippedCharts            int             `json:"skippedCharts"`
+	SkippedNotes             int             `json:"skippedNotes"`
 	CurrentVectorTokens      int64           `json:"currentVectorTokens"`
 	DeepEstimatedTokens      int64           `json:"deepEstimatedTokens"`
 	DeepEstimatedMinutes     float64         `json:"deepEstimatedMinutes"`
@@ -72,6 +75,7 @@ func (s *Service) IndexEstimate(ctx context.Context, principal authz.Principal, 
 		CoverageKnown: version.CoverageKnown, TotalRows: version.TotalRows, ParsedRows: version.ParsedRows,
 		KeywordRows: version.KeywordRows, VectorRows: version.VectorRows,
 		TotalSheets: version.TotalSheets, ParsedSheets: version.ParsedSheets, VectorSheets: version.VectorSheets,
+		SkippedImages: version.SkippedImages, SkippedCharts: version.SkippedCharts, SkippedNotes: version.SkippedNotes,
 		CurrentVectorTokens: version.VectorTokens, TPMBudget: s.embeddingTPM,
 	}
 	if estimate.StorageMode == "" {

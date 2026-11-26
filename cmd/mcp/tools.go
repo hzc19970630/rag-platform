@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/hzc19970630/rag-platform/internal/agenttools/builtin"
 )
 
 type listKnowledgeBasesInput struct{}
@@ -43,6 +45,21 @@ type documentStatusInput struct {
 
 type citationInput struct {
 	ChunkID string `json:"chunkId" jsonschema:"the chunk id returned in a search result or citation"`
+}
+
+type tableListInput struct {
+	KnowledgeBaseID string `json:"knowledgeBaseId" jsonschema:"the knowledge base whose table assets should be listed"`
+}
+
+type tableSchemaInput struct {
+	KnowledgeBaseID string `json:"knowledgeBaseId" jsonschema:"the knowledge base that owns the table asset"`
+	AssetID         string `json:"assetId" jsonschema:"asset:// handle or asset id returned by list_tables"`
+}
+
+type tableQueryInput struct {
+	KnowledgeBaseID string `json:"knowledgeBaseId" jsonschema:"the knowledge base that owns the table asset"`
+	Question        string `json:"question" jsonschema:"the table question to answer"`
+	AssetID         string `json:"assetId,omitempty" jsonschema:"optional asset:// handle; omit when the question names the sheet"`
 }
 
 func registerTools(server *mcp.Server, api *apiClient) {
@@ -191,5 +208,84 @@ func registerTools(server *mcp.Server, api *apiClient) {
 			return nil, nil, err
 		}
 		return nil, map[string]any{"chunk": chunk}, nil
+	})
+
+	registerTableTools(server, api)
+}
+
+// registerTableTools exposes the same schemas the conversation loop uses. Only
+// the transport differs: MCP calls the REST surface with the API key.
+func registerTableTools(server *mcp.Server, api *apiClient) {
+	specs := map[string]struct {
+		description string
+		schema      any
+	}{}
+	for _, spec := range builtin.Specs() {
+		specs[spec.Name] = struct {
+			description string
+			schema      any
+		}{description: spec.Description, schema: spec.InputSchema}
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name: builtin.ListTables, Description: specs[builtin.ListTables].description,
+		InputSchema: specs[builtin.ListTables].schema,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tableListInput) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.KnowledgeBaseID) == "" {
+			return nil, nil, fmt.Errorf("knowledgeBaseId is required")
+		}
+		var output struct {
+			Items []any `json:"items"`
+		}
+		path := "/knowledge-bases/" + url.PathEscape(in.KnowledgeBaseID) + "/tables"
+		if err := api.doJSON(ctx, http.MethodGet, path, nil, &output); err != nil {
+			return nil, nil, err
+		}
+		return nil, map[string]any{"tables": output.Items}, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{
+		Name: builtin.TableSchema, Description: specs[builtin.TableSchema].description,
+		InputSchema: specs[builtin.TableSchema].schema,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tableSchemaInput) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.KnowledgeBaseID) == "" {
+			return nil, nil, fmt.Errorf("knowledgeBaseId is required")
+		}
+		assetID := strings.TrimPrefix(strings.TrimSpace(in.AssetID), "asset://")
+		if assetID == "" {
+			return nil, nil, fmt.Errorf("assetId is required")
+		}
+		var output struct {
+			Items []map[string]any `json:"items"`
+		}
+		path := "/knowledge-bases/" + url.PathEscape(in.KnowledgeBaseID) + "/tables"
+		if err := api.doJSON(ctx, http.MethodGet, path, nil, &output); err != nil {
+			return nil, nil, err
+		}
+		for _, item := range output.Items {
+			if fmt.Sprint(item["id"]) == assetID {
+				return nil, map[string]any{"table": item}, nil
+			}
+		}
+		return nil, nil, fmt.Errorf("table asset %q not found", assetID)
+	})
+	mcp.AddTool(server, &mcp.Tool{
+		Name: builtin.TableQuery, Description: specs[builtin.TableQuery].description,
+		InputSchema: specs[builtin.TableQuery].schema,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in tableQueryInput) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.KnowledgeBaseID) == "" {
+			return nil, nil, fmt.Errorf("knowledgeBaseId is required")
+		}
+		if strings.TrimSpace(in.Question) == "" {
+			return nil, nil, fmt.Errorf("question is required")
+		}
+		body := map[string]any{
+			"question": in.Question,
+			"assetId":  strings.TrimPrefix(strings.TrimSpace(in.AssetID), "asset://"),
+		}
+		var output any
+		path := "/knowledge-bases/" + url.PathEscape(in.KnowledgeBaseID) + "/tables/ask/sql"
+		if err := api.doJSON(ctx, http.MethodPost, path, body, &output); err != nil {
+			return nil, nil, err
+		}
+		return nil, map[string]any{"tableQuery": output}, nil
 	})
 }

@@ -2415,6 +2415,9 @@ export interface components {
             parsedRows?: number;
             parsedSheets?: number;
             sheets?: components["schemas"]["SheetCoverage"][];
+            skippedCharts?: number;
+            skippedImages?: number;
+            skippedNotes?: number;
             storageMode?: string;
             /** Format: int64 */
             tableCount?: number;
@@ -2503,6 +2506,9 @@ export interface components {
             parsedSheets?: number;
             /** Format: int64 */
             sizeBytes?: number;
+            skippedCharts?: number;
+            skippedImages?: number;
+            skippedNotes?: number;
             status?: string;
             storageMode?: string;
             tenantId?: string;
@@ -2793,6 +2799,7 @@ export interface components {
             presetName?: string;
             presetVersion?: string;
             retrievalConfig?: string;
+            tableQaEnabled?: string;
             tenantId?: string;
             /** Format: date-time */
             updatedAt?: string;
@@ -2844,6 +2851,7 @@ export interface components {
             name?: string;
             rerank_model?: string;
             retrieval_config?: components["schemas"]["RetrievalConfigOverride"];
+            table_qa_enabled?: string;
         };
         KnowledgeHit: {
             content?: string;
@@ -2938,6 +2946,7 @@ export interface components {
             provider?: string;
             providerId?: string;
             source?: string;
+            supportsTools?: boolean;
             version?: string;
         };
         ModelCatalogEntryRequest: {
@@ -2946,6 +2955,7 @@ export interface components {
             display_name?: string;
             enabled?: boolean;
             model: string;
+            supports_tools?: boolean;
             version?: string;
         };
         ModelProvider: {

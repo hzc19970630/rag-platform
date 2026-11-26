@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hzc19970630/rag-platform/contracts/tasks"
+	"github.com/hzc19970630/rag-platform/internal/agenttools"
 	"github.com/hzc19970630/rag-platform/internal/authz"
 	"github.com/hzc19970630/rag-platform/internal/contracts/metrics"
 	"github.com/hzc19970630/rag-platform/internal/platform/persistence/models"
@@ -29,24 +30,42 @@ const localChatName = "local-extractive"
 const terminalPersistTimeout = 15 * time.Second
 
 type Service struct {
-	sessions    SessionStore
-	events      EventStore
-	messages    MessageStore
-	jobs        AnswerJobStore
-	authz       *authz.Service
-	retrieval   *retrieval.Service
-	chat        Chatter
-	models      ChatModelResolver
-	metrics     metrics.Recorder
-	prompts     *prompts.Registry
-	timeout     time.Duration
-	dailyCap    int
-	quotas      QuotaResolver
-	historyTurn int
-	historyMax  int
-	answers     AnswerPublisher
-	async       bool
-	leaseTTL    time.Duration
+	sessions      SessionStore
+	events        EventStore
+	messages      MessageStore
+	jobs          AnswerJobStore
+	authz         *authz.Service
+	retrieval     *retrieval.Service
+	chat          Chatter
+	models        ChatModelResolver
+	metrics       metrics.Recorder
+	prompts       *prompts.Registry
+	timeout       time.Duration
+	dailyCap      int
+	quotas        QuotaResolver
+	historyTurn   int
+	historyMax    int
+	answers       AnswerPublisher
+	async         bool
+	leaseTTL      time.Duration
+	tools         ToolRuntime
+	tableFallback TableFallback
+	toolRounds    int
+	toolCalls     int
+	toolTimeout   time.Duration
+}
+
+// TableFallback answers one table question deterministically when the bound
+// model cannot call tools. Evidence is injected into the normal generation.
+type TableFallback interface {
+	Answer(ctx context.Context, principal authz.Principal, knowledgeBaseID, question string) (string, []agenttools.Evidence, bool)
+}
+
+// ToolRuntime owns the KB-level tool policy and the shared registry. It is nil
+// in deployments that never enable tools.
+type ToolRuntime interface {
+	Enabled(ctx context.Context, scope authz.AuthorizationScope, knowledgeBaseID string) bool
+	Registry() *agenttools.Registry
 }
 
 // ChatModelResolver resolves the knowledge-base chat binding to the model this
@@ -95,6 +114,18 @@ type Options struct {
 	AsyncEnabled bool
 	// AnswerLease bounds how long a claimed job stays reserved for one worker.
 	AnswerLease time.Duration
+	// ToolRuntime enables the built-in tool layer. Nil keeps the legacy
+	// single-pass RAG path.
+	ToolRuntime ToolRuntime
+	// TableFallback keeps table answers available when the model has no
+	// function calling. Nil disables the fallback.
+	TableFallback TableFallback
+	// ToolMaxRounds bounds model/tool alternations; ToolMaxCalls bounds the
+	// tool invocations across the whole answer.
+	ToolMaxRounds int
+	ToolMaxCalls  int
+	// ToolTimeout bounds one tool invocation.
+	ToolTimeout time.Duration
 }
 
 func NewService(options Options) *Service {
@@ -110,25 +141,42 @@ func NewService(options Options) *Service {
 	if lease <= 0 {
 		lease = 5 * time.Minute
 	}
+	toolRounds := options.ToolMaxRounds
+	if toolRounds <= 0 {
+		toolRounds = 3
+	}
+	toolCalls := options.ToolMaxCalls
+	if toolCalls <= 0 {
+		toolCalls = 8
+	}
+	toolTimeout := options.ToolTimeout
+	if toolTimeout <= 0 {
+		toolTimeout = 20 * time.Second
+	}
 	return &Service{
-		sessions:    options.Stores.Sessions,
-		events:      options.Stores.Events,
-		messages:    options.Stores.Messages,
-		jobs:        options.Stores.Jobs,
-		authz:       options.Authz,
-		retrieval:   options.Retrieval,
-		chat:        options.Chat,
-		models:      options.Models,
-		metrics:     recorder,
-		prompts:     options.Prompts,
-		timeout:     timeout,
-		dailyCap:    options.ChatRequestsPerDay,
-		quotas:      options.QuotaResolver,
-		historyTurn: options.HistoryTurns,
-		historyMax:  options.HistoryTokenLimit,
-		answers:     options.AnswerPublisher,
-		async:       options.AsyncEnabled,
-		leaseTTL:    lease,
+		sessions:      options.Stores.Sessions,
+		events:        options.Stores.Events,
+		messages:      options.Stores.Messages,
+		jobs:          options.Stores.Jobs,
+		authz:         options.Authz,
+		retrieval:     options.Retrieval,
+		chat:          options.Chat,
+		models:        options.Models,
+		metrics:       recorder,
+		prompts:       options.Prompts,
+		timeout:       timeout,
+		dailyCap:      options.ChatRequestsPerDay,
+		quotas:        options.QuotaResolver,
+		historyTurn:   options.HistoryTurns,
+		historyMax:    options.HistoryTokenLimit,
+		answers:       options.AnswerPublisher,
+		async:         options.AsyncEnabled,
+		leaseTTL:      lease,
+		tools:         options.ToolRuntime,
+		tableFallback: options.TableFallback,
+		toolRounds:    toolRounds,
+		toolCalls:     toolCalls,
+		toolTimeout:   toolTimeout,
 	}
 }
 

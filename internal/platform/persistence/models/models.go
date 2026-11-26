@@ -117,9 +117,12 @@ type KnowledgeBase struct {
 	// database because it is tenant-scoped, runtime-changeable and auditable.
 	RetrievalConfig string `gorm:"type:jsonb;not null;default:'{}'" json:"retrievalConfig"`
 	// IndexingStrategy holds the vector/keyword/wiki/graph capability switches.
-	IndexingStrategy string    `gorm:"type:jsonb;not null;default:'{}'" json:"indexingStrategy"`
-	CreatedAt        time.Time `gorm:"not null" json:"createdAt"`
-	UpdatedAt        time.Time `gorm:"not null" json:"updatedAt"`
+	IndexingStrategy string `gorm:"type:jsonb;not null;default:'{}'" json:"indexingStrategy"`
+	// TableQAEnabled is auto|on|off. auto enables the tool layer only when the
+	// knowledge base currently has a ready table asset.
+	TableQAEnabled string    `gorm:"column:table_qa_enabled;size:16;not null;default:'auto'" json:"tableQaEnabled"`
+	CreatedAt      time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt      time.Time `gorm:"not null" json:"updatedAt"`
 }
 
 func (KnowledgeBase) TableName() string { return "knowledge_bases" }
@@ -275,6 +278,9 @@ type DocumentVersion struct {
 	TotalRows       int64     `gorm:"not null;default:0" json:"totalRows"`
 	VectorSheets    int       `gorm:"not null;default:0" json:"vectorSheets"`
 	TotalSheets     int       `gorm:"not null;default:0" json:"totalSheets"`
+	SkippedImages   int       `gorm:"not null;default:0" json:"skippedImages"`
+	SkippedCharts   int       `gorm:"not null;default:0" json:"skippedCharts"`
+	SkippedNotes    int       `gorm:"not null;default:0" json:"skippedNotes"`
 	VectorTokens    int64     `gorm:"not null;default:0" json:"vectorTokens"`
 	EstimatedTokens int64     `gorm:"not null;default:0" json:"estimatedTokens"`
 	ErrorCode       string    `gorm:"size:128" json:"errorCode"`
@@ -697,17 +703,20 @@ func (ModelProvider) TableName() string { return "model_providers" }
 // base binding stores only Model, so names are unique per tenant. Dimension is
 // meaningful only for embedding entries.
 type ModelCatalogEntry struct {
-	ID          string    `gorm:"primaryKey;size:64" json:"id"`
-	TenantID    string    `gorm:"size:64;not null;index" json:"tenantId"`
-	ProviderID  string    `gorm:"column:provider_id;size:64;not null;index" json:"providerId"`
-	Model       string    `gorm:"size:128;not null" json:"model"`
-	DisplayName string    `gorm:"column:display_name;size:128;not null;default:''" json:"displayName"`
-	Capability  string    `gorm:"size:16;not null" json:"capability"`
-	Version     string    `gorm:"size:64;not null;default:'deployment'" json:"version"`
-	Dimension   int       `gorm:"not null;default:0" json:"dimension"`
-	Enabled     bool      `gorm:"not null;default:true" json:"enabled"`
-	CreatedAt   time.Time `gorm:"not null" json:"createdAt"`
-	UpdatedAt   time.Time `gorm:"not null" json:"updatedAt"`
+	ID          string `gorm:"primaryKey;size:64" json:"id"`
+	TenantID    string `gorm:"size:64;not null;index" json:"tenantId"`
+	ProviderID  string `gorm:"column:provider_id;size:64;not null;index" json:"providerId"`
+	Model       string `gorm:"size:128;not null" json:"model"`
+	DisplayName string `gorm:"column:display_name;size:128;not null;default:''" json:"displayName"`
+	Capability  string `gorm:"size:16;not null" json:"capability"`
+	Version     string `gorm:"size:64;not null;default:'deployment'" json:"version"`
+	Dimension   int    `gorm:"not null;default:0" json:"dimension"`
+	Enabled     bool   `gorm:"not null;default:true" json:"enabled"`
+	// SupportsTools is meaningful only for chat entries. It is ignored for
+	// embedding and rerank models.
+	SupportsTools bool      `gorm:"column:supports_tools;not null;default:true" json:"supportsTools"`
+	CreatedAt     time.Time `gorm:"not null" json:"createdAt"`
+	UpdatedAt     time.Time `gorm:"not null" json:"updatedAt"`
 }
 
 func (ModelCatalogEntry) TableName() string { return "model_catalog_entries" }

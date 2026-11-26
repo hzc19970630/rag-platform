@@ -40,6 +40,14 @@ func NewRegistry(evidence retrieval.EvidenceSet) *Registry {
 
 func (r *Registry) Len() int { return len(r.order) }
 
+// Add registers one tool-derived candidate and returns its citation index.
+func (r *Registry) Add(candidate retrieval.Candidate) int {
+	index := len(r.order) + 1
+	r.byIndex[index] = candidate
+	r.order = append(r.order, index)
+	return index
+}
+
 func (r *Registry) Lookup(index int) (retrieval.Candidate, bool) {
 	candidate, ok := r.byIndex[index]
 	return candidate, ok

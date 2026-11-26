@@ -114,6 +114,9 @@ func resultFromResponse(response *docreaderv1.ParseDocumentResponse) ports.Parse
 		IndexedRows:       response.IndexedRows,
 		TotalSheets:       int(response.TotalSheets),
 		IndexedSheets:     int(response.IndexedSheets),
+		SkippedImages:     int(response.SkippedImages),
+		SkippedCharts:     int(response.SkippedCharts),
+		SkippedNotes:      int(response.SkippedNotes),
 	}
 	for _, item := range response.Blocks {
 		result.Blocks = append(result.Blocks, blockFromProto(item))

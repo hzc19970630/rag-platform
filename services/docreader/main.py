@@ -31,16 +31,18 @@ def _env_int(name, default):
         return default
 
 
-PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-b39-v1")
+PARSER_VERSION = os.getenv("PARSER_VERSION", "docreader-b40-v1")
 SCHEMA_VERSION = "NormalizedDocumentV1"
 
 WORD_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 SHEET_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 SLIDE_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
+NS_W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS_SML = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 NS_PML = "http://schemas.openxmlformats.org/presentationml/2006/main"
 NS_DML = "http://schemas.openxmlformats.org/drawingml/2006/main"
+NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart"
 NS_OFFICE_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS_PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 
@@ -134,6 +136,15 @@ def _stats_reset():
     _STATS.indexed_sheets = 0
     _STATS.sheets = []
     _STATS.storage_mode = "full"
+    _STATS.skipped_images = 0
+    _STATS.skipped_charts = 0
+    _STATS.skipped_notes = 0
+
+
+def _stats_add_skipped(images=0, charts=0, notes=0):
+    _STATS.skipped_images = getattr(_STATS, "skipped_images", 0) + max(0, int(images))
+    _STATS.skipped_charts = getattr(_STATS, "skipped_charts", 0) + max(0, int(charts))
+    _STATS.skipped_notes = getattr(_STATS, "skipped_notes", 0) + max(0, int(notes))
 
 
 def _stats_add(total_rows=0, indexed_rows=0, total_sheets=0, indexed_sheets=0, truncated=False):
@@ -170,6 +181,9 @@ def _stats_snapshot():
         "indexed_sheets": getattr(_STATS, "indexed_sheets", 0),
         "sheets": list(getattr(_STATS, "sheets", [])),
         "storage_mode": getattr(_STATS, "storage_mode", "full"),
+        "skipped_images": getattr(_STATS, "skipped_images", 0),
+        "skipped_charts": getattr(_STATS, "skipped_charts", 0),
+        "skipped_notes": getattr(_STATS, "skipped_notes", 0),
     }
 
 
@@ -249,21 +263,146 @@ def parse_text(source):
     return blocks, ""
 
 
-def parse_docx(source):
+def _docx_body_nodes(node):
+    for child in node:
+        if child.tag == f"{{{NS_W}}}sdt":
+            content = child.find(f"{{{NS_W}}}sdtContent")
+            if content is not None:
+                yield from _docx_body_nodes(content)
+        elif child.tag in (f"{{{NS_W}}}p", f"{{{NS_W}}}tbl"):
+            yield child
+
+
+def _docx_cell_text(cell):
+    return _collapse("".join(node.text or "" for node in cell.iter(f"{{{NS_W}}}t")))
+
+
+def _docx_row_values(row, previous):
+    values = []
+    column = 0
+    for cell in row.findall(f"{{{NS_W}}}tc"):
+        text = _docx_cell_text(cell)
+        span = 1
+        continued = False
+        properties = cell.find(f"{{{NS_W}}}tcPr")
+        if properties is not None:
+            span_node = properties.find(f"{{{NS_W}}}gridSpan")
+            if span_node is not None:
+                raw = span_node.attrib.get(f"{{{NS_W}}}val") or span_node.attrib.get("val") or "1"
+                try:
+                    span = max(1, int(raw))
+                except ValueError:
+                    span = 1
+            merge = properties.find(f"{{{NS_W}}}vMerge")
+            if merge is not None:
+                raw = merge.attrib.get(f"{{{NS_W}}}val") or merge.attrib.get("val") or "continue"
+                continued = raw == "continue"
+        if continued and column < len(previous):
+            text = previous[column]
+        for _ in range(span):
+            if column >= MAX_XLSX_COLUMNS:
+                break
+            values.append(text)
+            column += 1
+    return values
+
+
+def _docx_media_counts(archive, body):
+    if body is None:
+        return 0, 0, 0
+    images = 0
+    charts = 0
+    for drawing in body.iter(f"{{{NS_W}}}drawing"):
+        if drawing.find(f".//{{{NS_C}}}chart") is not None:
+            charts += 1
+        else:
+            images += 1
+    for tag in ("pict", "object"):
+        images += sum(1 for _ in body.iter(f"{{{NS_W}}}{tag}"))
+    notes = 0
+    for part, tag in (("word/footnotes.xml", "footnote"), ("word/endnotes.xml", "endnote")):
+        if not archive.has(part):
+            continue
+        try:
+            root = archive.read_xml(part)
+        except ValueError:
+            continue
+        for note in root.findall(f"{{{NS_W}}}{tag}"):
+            if note.attrib.get(f"{{{NS_W}}}id") in ("-1", "0"):
+                continue
+            if any((node.text or "").strip() for node in note.iter(f"{{{NS_W}}}t")):
+                notes += 1
+    if archive.has("word/comments.xml"):
+        try:
+            comments = archive.read_xml("word/comments.xml")
+        except ValueError:
+            comments = None
+        if comments is not None:
+            for comment in comments.findall(f"{{{NS_W}}}comment"):
+                if any((node.text or "").strip() for node in comment.iter(f"{{{NS_W}}}t")):
+                    notes += 1
+    return images, charts, notes
+
+
+def parse_docx(source, filename="", row_sink=None):
+    stem = os.path.splitext(os.path.basename(filename))[0] or "document"
     with _OoxmlArchive(source) as archive:
         xml = archive.read("word/document.xml")
-    root = ElementTree.fromstring(xml)
-    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        root = ElementTree.fromstring(xml)
+        body = root.find(f"{{{NS_W}}}body")
+        images, charts, notes = _docx_media_counts(archive, body)
+    _stats_add_skipped(images=images, charts=charts, notes=notes)
     blocks = []
-    for index, paragraph in enumerate(root.findall(".//w:body/w:p", ns)):
-        text = "".join(node.text or "" for node in paragraph.findall(".//w:t", ns)).strip()
-        if not text:
+    title = ""
+    last_heading = ""
+    paragraph_index = 0
+    table_index = 0
+    row_budget = [MAX_TABLE_ROWS]
+    nodes = _docx_body_nodes(body) if body is not None else []
+    for node in nodes:
+        if node.tag == f"{{{NS_W}}}p":
+            paragraph_index += 1
+            text = "".join(item.text or "" for item in node.iter(f"{{{NS_W}}}t")).strip()
+            if not text:
+                continue
+            style = node.find(f"{{{NS_W}}}pPr/{{{NS_W}}}pStyle")
+            style_name = ""
+            if style is not None:
+                style_name = style.attrib.get(f"{{{NS_W}}}val") or style.attrib.get("val") or ""
+            kind = "heading" if style_name.lower().startswith("heading") else "paragraph"
+            if kind == "heading":
+                last_heading = text
+                if not title:
+                    title = text
+            blocks.append(block(f"block-{paragraph_index}", kind, text, "", 0, f"paragraph:{paragraph_index}"))
+            if len(blocks) >= MAX_TOTAL_BLOCKS:
+                break
             continue
-        style = paragraph.find("./w:pPr/w:pStyle", ns)
-        style_name = style.attrib.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val", "") if style is not None else ""
-        kind = "heading" if style_name.lower().startswith("heading") else "paragraph"
-        blocks.append(block(f"block-{index}", kind, text, "", 0, f"paragraph:{index + 1}"))
-    return blocks, ""
+        table_index += 1
+        rows = []
+        previous = []
+        truncated = False
+        for row in node.findall(f"{{{NS_W}}}tr"):
+            values = _docx_row_values(row, previous)
+            previous = values
+            if not any(value for value in values):
+                continue
+            if len(rows) >= MAX_XLSX_ROWS:
+                truncated = True
+                break
+            rows.append(values)
+        if not rows:
+            continue
+        sheet = f"表格 {table_index}"
+        table_blocks, _ = _emit_structured_table(
+            row_sink, row_budget, sheet, last_heading or stem, rows[0], rows[1:],
+            f"docx-table-{table_index}", truncated=truncated,
+            block_budget=max(1, MAX_TOTAL_BLOCKS - len(blocks)),
+        )
+        blocks.extend(table_blocks)
+        if len(blocks) >= MAX_TOTAL_BLOCKS:
+            break
+    return blocks, title
 
 
 def parse_pdf(source):
@@ -676,6 +815,57 @@ def _emit_table_blocks(prefix, heading, sheet, headers, rows, start_row, block_b
     return blocks[:block_budget] if block_budget > 0 else blocks
 
 
+def _pad_table_rows(header, rows):
+    width = len(header)
+    for row in rows:
+        width = max(width, len(row))
+    width = min(max(width, 1), MAX_XLSX_COLUMNS)
+    padded_header = (list(header) + [""] * width)[:width]
+    padded_rows = []
+    for row in rows:
+        values = (list(row) + [""] * width)[:width]
+        if any(_collapse(value) for value in values):
+            padded_rows.append(values)
+    return padded_header, padded_rows
+
+
+def _emit_structured_table(row_sink, row_budget, sheet_name, heading, header_values, rows, prefix, truncated=False, block_budget=None):
+    """Emit one docx/pptx table as blocks, a sheet catalog entry and row batches."""
+    header, data = _pad_table_rows(header_values, rows)
+    headers = _normalize_table_headers(header)
+    normalized = [[_table_cell(value) for value in row] for row in data]
+    sink = SheetRowSink(row_sink, sheet_name, row_budget) if row_sink else None
+    if sink is not None:
+        sink.set_header(headers)
+        kept = []
+        for offset, row in enumerate(normalized):
+            if not sink.add(offset + 2, row):
+                truncated = True
+                break
+            kept.append(row)
+        sink.finish(truncated)
+        normalized = kept
+    if normalized:
+        budget = MAX_SHEET_BLOCKS if block_budget is None else max(1, block_budget)
+        blocks = _emit_table_blocks(prefix, heading, sheet_name, headers, normalized, 2, budget)
+        if any("!truncated" in item.source_path for item in blocks):
+            truncated = True
+    else:
+        blocks = [block(f"{prefix}-header", "table", " | ".join(headers), heading, 0, f"table:{sheet_name}!A1")]
+    declared = len(normalized) + 1
+    meta = docreader_pb2.SheetMeta(
+        name=sheet_name, header=headers, declared_rows=declared, total_rows=declared,
+        parsed_rows=sink.parsed if sink is not None else len(normalized),
+        column_count=len(headers), header_row=1,
+        parse_status="truncated" if truncated else "parsed", truncated=truncated,
+        sample_rows=[" | ".join(row) for row in normalized[:TABLE_SAMPLE_ROWS]],
+        source_path=f"table:{sheet_name}!A1",
+        stats_source="scanned",
+    )
+    _stats_add_sheet(meta)
+    return blocks, meta
+
+
 def _iter_sheet_rows(archive, target, count=True):
     with archive.open_stream(target, count=count) as stream:
         for _, element in ElementTree.iterparse(stream, events=("end",)):
@@ -1061,17 +1251,42 @@ def _slide_paragraphs(tx_body):
     return paragraphs
 
 
-def _table_rows(shape):
+def _drawing_table(shape):
     table = shape.find(f".//{{{NS_DML}}}tbl")
     if table is None:
-        return []
+        return [], False
     rows = []
+    previous = []
+    truncated = False
     for row in table.findall(f"{{{NS_DML}}}tr"):
-        cells = [_collapse("".join(node.text or "" for node in cell.iter(f"{{{NS_DML}}}t"))) for cell in row.findall(f"{{{NS_DML}}}tc")]
-        text = " | ".join(value for value in cells if value)
-        if text:
-            rows.append(text[:MAX_BLOCK_CHARS])
-    return rows
+        if len(rows) >= MAX_XLSX_ROWS:
+            truncated = True
+            break
+        values = []
+        column = 0
+        for cell in row.findall(f"{{{NS_DML}}}tc"):
+            text = _collapse("".join(node.text or "" for node in cell.iter(f"{{{NS_DML}}}t")))
+            span = 1
+            continued = False
+            properties = cell.find(f"{{{NS_DML}}}tcPr")
+            if properties is not None:
+                raw = properties.attrib.get("gridSpan", "1")
+                try:
+                    span = max(1, int(raw))
+                except ValueError:
+                    span = 1
+                continued = (properties.attrib.get("vMerge", "0") or "0").lower() in ("1", "true")
+            if continued and column < len(previous):
+                text = previous[column]
+            for _ in range(span):
+                if column >= MAX_XLSX_COLUMNS:
+                    break
+                values.append(text)
+                column += 1
+        previous = values
+        if any(value for value in values):
+            rows.append(values)
+    return rows, truncated
 
 
 def _nested_shapes(parent, depth=0):
@@ -1124,11 +1339,13 @@ def _slide_record(archive, part):
     root = archive.read_xml(part)
     layout_titles = _layout_title_placeholders(archive, part)
     tree = root.find(f"{{{NS_PML}}}cSld/{{{NS_PML}}}spTree")
-    title_paragraphs, body_paragraphs = [], []
+    title_paragraphs, body_items = [], []
     if tree is not None:
         for shape in list(_nested_shapes(tree))[:MAX_SLIDE_SHAPES]:
             if shape.tag == f"{{{NS_PML}}}graphicFrame":
-                body_paragraphs.extend(_table_rows(shape))
+                rows, truncated = _drawing_table(shape)
+                if rows:
+                    body_items.append(("table", (rows, truncated)))
                 continue
             tx_body = shape.find(f"{{{NS_PML}}}txBody")
             if tx_body is None:
@@ -1139,14 +1356,41 @@ def _slide_record(archive, part):
             if not title_paragraphs and _is_title_shape(shape, layout_titles):
                 title_paragraphs = paragraphs
             else:
-                body_paragraphs.extend(paragraphs)
+                body_items.extend(("paragraph", text) for text in paragraphs)
     items = [("heading", text) for text in title_paragraphs]
-    items.extend(("paragraph", text) for text in body_paragraphs)
+    items.extend(body_items)
     return (title_paragraphs[0] if title_paragraphs else ""), items
 
 
-def parse_pptx(source, filename):
+def _notes_text(root):
+    texts = []
+    for shape in root.iter(f"{{{NS_PML}}}sp"):
+        placeholder = shape.find(f"{{{NS_PML}}}nvSpPr/{{{NS_PML}}}nvPr/{{{NS_PML}}}ph")
+        if placeholder is not None and placeholder.attrib.get("type") in ("sldNum", "hdr", "ftr", "dt"):
+            continue
+        texts.extend(node.text or "" for node in shape.iter(f"{{{NS_DML}}}t"))
+    return "".join(texts).strip()
+
+
+def _pptx_media_counts(archive, parts):
+    images = 0
+    charts = 0
+    notes = 0
+    for part in parts:
+        root = archive.read_xml(part)
+        images += sum(1 for _ in root.iter(f"{{{NS_PML}}}pic"))
+        charts += sum(1 for _ in root.iter(f"{{{NS_C}}}chart"))
+        for rel_type, target in _relationships(archive, part, posixpath.dirname(part)).values():
+            if not rel_type.endswith("/notesSlide") or not archive.has(target):
+                continue
+            if _notes_text(archive.read_xml(target)):
+                notes += 1
+    return images, charts, notes
+
+
+def parse_pptx(source, filename, row_sink=None):
     stem = os.path.splitext(os.path.basename(filename))[0] or "presentation"
+    row_budget = [MAX_TABLE_ROWS]
     with _OoxmlArchive(source) as archive:
         presentation = archive.read_xml("ppt/presentation.xml")
         relationships = _relationships(archive, "ppt/presentation.xml", "ppt")
@@ -1156,6 +1400,7 @@ def parse_pptx(source, filename):
             if not target:
                 raise ValueError("unsupported_corrupt_document")
             parts.append(target[1])
+        images, charts, notes = _pptx_media_counts(archive, parts[:MAX_PPTX_SLIDES])
         records = [(page, _slide_record(archive, part)) for page, part in enumerate(parts[:MAX_PPTX_SLIDES], 1)]
         deck_title = next((title for _, (title, _) in records if title), "")
         heading_root = deck_title or stem
@@ -1164,12 +1409,25 @@ def parse_pptx(source, filename):
             if len(blocks) >= MAX_TOTAL_BLOCKS:
                 break
             heading_path = heading_root if not title or title == heading_root else f"{heading_root} / {title}"
-            for kind, text in items:
+            table_index = 0
+            for kind, payload in items:
                 if len(blocks) >= MAX_TOTAL_BLOCKS:
                     break
-                blocks.append(block(f"slide-{page}-{len(blocks)}", kind, text, heading_path, page, f"slide:{page}"))
+                if kind == "table":
+                    table_index += 1
+                    rows, truncated = payload
+                    sheet = f"第{page}页 表格{table_index}"
+                    table_blocks, _ = _emit_structured_table(
+                        row_sink, row_budget, sheet, heading_path, rows[0], rows[1:],
+                        f"pptx-{page}-{table_index}", truncated=truncated,
+                        block_budget=max(1, MAX_TOTAL_BLOCKS - len(blocks)),
+                    )
+                    blocks.extend(table_blocks)
+                    continue
+                blocks.append(block(f"slide-{page}-{len(blocks)}", kind, payload, heading_path, page, f"slide:{page}"))
         if len(parts) > len(records) or len(blocks) >= MAX_TOTAL_BLOCKS:
             blocks.append(block("slide-truncated", "paragraph", f"[truncated: {max(len(parts) - len(records), 1)} more slides]", heading_root, 0, "slide:truncated"))
+    _stats_add_skipped(images=images, charts=charts, notes=notes)
     return blocks, deck_title
 
 
@@ -1393,13 +1651,13 @@ def parse_content(filename, mime_type, source, row_sink=None):
     if lowered.endswith(".csv") or mime_type in ("text/csv", "application/csv"):
         return parse_csv(source, filename, row_sink=row_sink)
     if lowered.endswith(".pptx") or mime_type == SLIDE_MIME:
-        return parse_pptx(source, filename)
+        return parse_pptx(source, filename, row_sink=row_sink)
     if lowered.endswith(".html") or lowered.endswith(".htm") or mime_type in ("text/html", "application/xhtml+xml"):
         return parse_html(source, filename)
     if lowered.endswith(".pdf") or mime_type == "application/pdf":
         return parse_pdf(source)
     if lowered.endswith(".docx") or mime_type == WORD_MIME:
-        return parse_docx(source)
+        return parse_docx(source, filename, row_sink=row_sink)
     if lowered.endswith(".md") or mime_type in ("text/markdown", "text/x-markdown"):
         return parse_markdown(source)
     if lowered.endswith(".txt") or mime_type.startswith("text/"):
@@ -1546,6 +1804,8 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
             truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
             total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
             sheets=stats["sheets"], storage_mode=stats["storage_mode"],
+            skipped_images=stats["skipped_images"], skipped_charts=stats["skipped_charts"],
+            skipped_notes=stats["skipped_notes"],
         )
 
     def ParseDocumentStream(self, request_iterator, context):
@@ -1571,6 +1831,8 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
                 truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
                 total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
                 sheets=stats["sheets"], storage_mode=stats["storage_mode"],
+                skipped_images=stats["skipped_images"], skipped_charts=stats["skipped_charts"],
+                skipped_notes=stats["skipped_notes"],
             )
         finally:
             state.close()
@@ -1635,6 +1897,8 @@ class Reader(docreader_pb2_grpc.DocumentReaderServicer):
                 truncated=stats["truncated"], total_rows=stats["total_rows"], indexed_rows=stats["indexed_rows"],
                 total_sheets=stats["total_sheets"], indexed_sheets=stats["indexed_sheets"],
                 sheets=stats["sheets"], storage_mode=stats["storage_mode"],
+                skipped_images=stats["skipped_images"], skipped_charts=stats["skipped_charts"],
+                skipped_notes=stats["skipped_notes"],
             ))
         finally:
             cancelled.set()

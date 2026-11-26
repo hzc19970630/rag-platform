@@ -22,13 +22,14 @@ import (
 // RemoteChatter calls an OpenAI-compatible /chat/completions endpoint, which
 // covers hosted providers and self-hosted gateways without provider SDKs.
 type RemoteChatter struct {
-	baseURL   string
-	apiKey    string
-	model     string
-	maxTokens int
-	healthURL string
-	client    *http.Client
-	guard     *resilience.Guard
+	baseURL       string
+	apiKey        string
+	model         string
+	maxTokens     int
+	healthURL     string
+	supportsTools bool
+	client        *http.Client
+	guard         *resilience.Guard
 }
 
 type RemoteChatterOptions struct {
@@ -42,6 +43,9 @@ type RemoteChatterOptions struct {
 	HealthURL string
 	// Guard is optional; nil creates a default breaker/bulkhead/retry budget.
 	Guard *resilience.Guard
+	// SupportsTools declares the model can accept function schemas. Nil means
+	// true for OpenAI-compatible endpoints; a model entry may opt out.
+	SupportsTools *bool
 }
 
 func NewRemoteChatter(opts RemoteChatterOptions) (*RemoteChatter, error) {
@@ -66,18 +70,29 @@ func NewRemoteChatter(opts RemoteChatterOptions) (*RemoteChatter, error) {
 	if guard == nil {
 		guard = resilience.New(resilience.DefaultConfig())
 	}
+	supportsTools := true
+	if opts.SupportsTools != nil {
+		supportsTools = *opts.SupportsTools
+	}
 	return &RemoteChatter{
-		baseURL:   baseURL,
-		apiKey:    opts.APIKey,
-		model:     opts.Model,
-		maxTokens: opts.MaxTokens,
-		healthURL: healthURL,
-		client:    &http.Client{Timeout: opts.Timeout},
-		guard:     guard,
+		baseURL:       baseURL,
+		apiKey:        opts.APIKey,
+		model:         opts.Model,
+		maxTokens:     opts.MaxTokens,
+		healthURL:     healthURL,
+		supportsTools: supportsTools,
+		client:        &http.Client{Timeout: opts.Timeout},
+		guard:         guard,
 	}, nil
 }
 
 func (c *RemoteChatter) Name() string { return c.model }
+
+// SupportsTools reports whether this model accepts function schemas.
+func (c *RemoteChatter) SupportsTools() bool { return c.supportsTools }
+
+// SupportsToolCalls implements the per-model resolver for routing adapters.
+func (c *RemoteChatter) SupportsToolCalls(context.Context, string) bool { return c.supportsTools }
 
 // Probe reports provider reachability for the model catalog. The catalog caches
 // the result, so this runs at most once per health TTL.
@@ -85,14 +100,42 @@ func (c *RemoteChatter) Probe(ctx context.Context) error {
 	return netprobe.Check(ctx, c.healthURL, c.apiKey)
 }
 
+type chatToolFunction struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Parameters  map[string]any `json:"parameters,omitempty"`
+}
+
+type chatTool struct {
+	Type     string           `json:"type"`
+	Function chatToolFunction `json:"function"`
+}
+
+type chatToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type chatToolCall struct {
+	ID       string               `json:"id"`
+	Type     string               `json:"type"`
+	Function chatToolCallFunction `json:"function"`
+}
+
 type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role         string                `json:"role"`
+	Content      string                `json:"content,omitempty"`
+	ToolCalls    []chatToolCall        `json:"tool_calls,omitempty"`
+	ToolCallID   string                `json:"tool_call_id,omitempty"`
+	Name         string                `json:"name,omitempty"`
+	FunctionCall *chatToolCallFunction `json:"function_call,omitempty"`
 }
 
 type chatRequest struct {
 	Model       string        `json:"model"`
 	Messages    []chatMessage `json:"messages"`
+	Tools       []chatTool    `json:"tools,omitempty"`
+	ToolChoice  string        `json:"tool_choice,omitempty"`
 	MaxTokens   int           `json:"max_tokens,omitempty"`
 	Temperature float64       `json:"temperature"`
 }
@@ -100,7 +143,8 @@ type chatRequest struct {
 type chatResponse struct {
 	Model   string `json:"model"`
 	Choices []struct {
-		Message chatMessage `json:"message"`
+		Message      chatMessage `json:"message"`
+		FinishReason string      `json:"finish_reason"`
 	} `json:"choices"`
 	Usage struct {
 		PromptTokens     int `json:"prompt_tokens"`
@@ -132,15 +176,33 @@ func (c *RemoteChatter) Complete(ctx context.Context, request model.ChatRequest)
 		}
 		span.End()
 	}()
+	if len(request.Tools) > 0 && !c.supportsTools {
+		return model.ChatResponse{}, fmt.Errorf("%w: model %s", model.ErrToolsUnsupported, modelName)
+	}
 	messages := make([]chatMessage, 0, len(request.History)+2)
 	messages = append(messages, chatMessage{Role: "system", Content: request.SystemInstruction})
 	for _, turn := range request.History {
-		messages = append(messages, chatMessage{Role: turn.Role, Content: turn.Content})
+		messages = append(messages, turnMessage(turn))
 	}
 	messages = append(messages, chatMessage{Role: "user", Content: model.ApplyContextTemplate(request.ContextTemplate, request.Query, request.Evidence)})
+	tools := make([]chatTool, 0, len(request.Tools))
+	for _, spec := range request.Tools {
+		tools = append(tools, chatTool{
+			Type: "function",
+			Function: chatToolFunction{
+				Name: spec.Name, Description: spec.Description, Parameters: spec.InputSchema,
+			},
+		})
+	}
+	toolChoice := request.ToolChoice
+	if toolChoice == "" && len(tools) > 0 {
+		toolChoice = "auto"
+	}
 	body, err := json.Marshal(chatRequest{
 		Model:       modelName,
 		Messages:    messages,
+		Tools:       tools,
+		ToolChoice:  toolChoice,
 		MaxTokens:   maxTokens,
 		Temperature: 0,
 	})
@@ -185,8 +247,24 @@ func (c *RemoteChatter) Complete(ctx context.Context, request model.ChatRequest)
 		if responseModel == "" {
 			responseModel = modelName
 		}
+		choice := decoded.Choices[0]
+		calls := make([]model.ToolCall, 0, len(choice.Message.ToolCalls)+1)
+		for index, call := range choice.Message.ToolCalls {
+			if call.Type != "" && call.Type != "function" {
+				continue
+			}
+			id := call.ID
+			if id == "" {
+				id = fmt.Sprintf("call_%d", index)
+			}
+			calls = append(calls, model.ToolCall{ID: id, Name: call.Function.Name, Arguments: call.Function.Arguments})
+		}
+		if legacy := choice.Message.FunctionCall; legacy != nil && legacy.Name != "" {
+			calls = append(calls, model.ToolCall{ID: "call_legacy", Name: legacy.Name, Arguments: legacy.Arguments})
+		}
 		response = model.ChatResponse{
-			Text:             decoded.Choices[0].Message.Content,
+			Text:             choice.Message.Content,
+			ToolCalls:        calls,
 			Model:            responseModel,
 			PromptTokens:     decoded.Usage.PromptTokens,
 			CompletionTokens: decoded.Usage.CompletionTokens,
@@ -201,4 +279,20 @@ func (c *RemoteChatter) Complete(ctx context.Context, request model.ChatRequest)
 		return model.ChatResponse{}, err
 	}
 	return response, nil
+}
+
+func turnMessage(turn model.Turn) chatMessage {
+	message := chatMessage{Role: turn.Role, Content: turn.Content}
+	if turn.Role == "tool" {
+		message.ToolCallID = turn.ToolCallID
+		message.Name = turn.Name
+		return message
+	}
+	for _, call := range turn.ToolCalls {
+		message.ToolCalls = append(message.ToolCalls, chatToolCall{
+			ID: call.ID, Type: "function",
+			Function: chatToolCallFunction{Name: call.Name, Arguments: call.Arguments},
+		})
+	}
+	return message
 }

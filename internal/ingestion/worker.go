@@ -342,7 +342,8 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	}
 	slog.Info("document_parsed", "document_version_id", version.ID, "parser_version", result.ParserVersion,
 		"blocks", len(result.Blocks), "truncated", result.Truncated, "total_rows", result.TotalRows,
-		"indexed_rows", result.IndexedRows, "total_sheets", result.TotalSheets, "indexed_sheets", result.IndexedSheets)
+		"indexed_rows", result.IndexedRows, "total_sheets", result.TotalSheets, "indexed_sheets", result.IndexedSheets,
+		"skipped_images", result.SkippedImages, "skipped_charts", result.SkippedCharts, "skipped_notes", result.SkippedNotes)
 	if result.ErrorCode != "" {
 		if terminalParserCode(result.ErrorCode) {
 			return apperror.Terminalf(result.ErrorCode, "%s", result.ErrorMessage)
@@ -352,7 +353,7 @@ func (w *PipelineWorker) parse(ctx context.Context, task Task) error {
 	if len(result.Blocks) == 0 {
 		return apperror.Terminalf("empty_document", "parser returned no text blocks")
 	}
-	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks, Truncated: result.Truncated, TotalRows: result.TotalRows, IndexedRows: result.IndexedRows, TotalSheets: result.TotalSheets, IndexedSheets: result.IndexedSheets, Sheets: result.Sheets, StorageMode: result.StorageMode}
+	normalized := NormalizedDocument{SchemaVersion: SchemaNormalizedDocument, Envelope: Envelope{SchemaVersion: SchemaNormalizedDocument, TenantID: version.TenantID, KnowledgeBaseID: version.KnowledgeBaseID, DocumentID: version.DocumentID, DocumentVersionID: version.ID, PipelineRunID: task.PipelineRunID, StageRunID: task.StageRunID, TraceID: task.TraceID, RequestID: task.RequestID, ActorID: task.ActorID, IdempotencyKey: task.IdempotencyKey, ContentHash: version.ContentHash, CreatedAt: time.Now().UTC()}, Title: result.Title, Language: result.Language, ParserVersion: result.ParserVersion, Blocks: result.Blocks, Truncated: result.Truncated, TotalRows: result.TotalRows, IndexedRows: result.IndexedRows, TotalSheets: result.TotalSheets, IndexedSheets: result.IndexedSheets, Sheets: result.Sheets, StorageMode: result.StorageMode, SkippedImages: result.SkippedImages, SkippedCharts: result.SkippedCharts, SkippedNotes: result.SkippedNotes}
 	if len(materialized) > 0 {
 		normalized.Materialize = materialized
 	}
@@ -588,6 +589,9 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 		storageMode    string
 		parseTruncated bool
 		coverageKnown  bool
+		skippedImages  int
+		skippedCharts  int
+		skippedNotes   int
 	}{vectorSheets: map[string]bool{}, storageMode: StorageModeFull}
 	childOrdinal := 0
 	type plannedChunk struct {
@@ -688,6 +692,9 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 	}
 	coverage.coverageKnown = len(normalized.Sheets) > 0
 	coverage.storageMode = normalized.StorageMode
+	coverage.skippedImages = normalized.SkippedImages
+	coverage.skippedCharts = normalized.SkippedCharts
+	coverage.skippedNotes = normalized.SkippedNotes
 	for _, asset := range assets {
 		rowsTotal := asset.TotalRows
 		if rowsTotal == 0 {
@@ -782,6 +789,8 @@ func (w *PipelineWorker) chunk(ctx context.Context, task Task) error {
 				"vector_sheets": len(coverage.vectorSheets),
 				"vector_tokens": estimateTokens(int(coverage.vectorChars)), "estimated_tokens": estimateTokens(int(coverage.vectorChars)),
 				"coverage_known": coverage.coverageKnown,
+				"skipped_images": coverage.skippedImages, "skipped_charts": coverage.skippedCharts,
+				"skipped_notes": coverage.skippedNotes,
 			}))
 		if result.Error != nil {
 			return result.Error

@@ -365,7 +365,7 @@ func (s *Service) coverageNotices(ctx context.Context, scope authz.Authorization
 	}
 	var versions []models.DocumentVersion
 	if err := tenantdb.MustScoped(s.db.WithContext(ctx), scope.TenantID).
-		Where("knowledge_base_id = ? AND status = ? AND (storage_mode <> ? OR parse_truncated = ?)",
+		Where("knowledge_base_id = ? AND status = ? AND (storage_mode <> ? OR parse_truncated = ? OR skipped_images > 0 OR skipped_charts > 0 OR skipped_notes > 0)",
 			knowledgeBaseID, "EVIDENCE_READY", "full", true).
 		Order("updated_at DESC").Limit(20).Find(&versions).Error; err != nil {
 		return nil
@@ -376,6 +376,7 @@ func (s *Service) coverageNotices(ctx context.Context, scope authz.Authorization
 			DocumentID: version.DocumentID, StorageMode: version.StorageMode,
 			ParseTruncated: version.ParseTruncated, ParsedSheets: version.ParsedSheets,
 			TotalSheets: version.TotalSheets, ParsedRows: version.ParsedRows, TotalRows: version.TotalRows,
+			SkippedImages: version.SkippedImages, SkippedCharts: version.SkippedCharts, SkippedNotes: version.SkippedNotes,
 		})
 	}
 	return notices

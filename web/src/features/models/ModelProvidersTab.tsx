@@ -15,6 +15,7 @@ export type DraftModel = {
   version: string;
   dimension: number;
   enabled: boolean;
+  supportsTools: boolean;
 };
 
 export type Draft = {
@@ -31,7 +32,7 @@ export type Draft = {
 function emptyDraft(): Draft {
   return {
     name: "", kind: "openai_compatible", baseUrl: "", apiKey: "", apiKeySet: false,
-    healthUrl: "", enabled: true, models: [{ model: "", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true }],
+    healthUrl: "", enabled: true, models: [{ model: "", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true, supportsTools: true }],
   };
 }
 
@@ -44,6 +45,7 @@ function draftFrom(provider: ModelProvider): Draft {
       model: entry.model, displayName: entry.displayName,
       capability: (entry.capability as DraftModel["capability"]) ?? "chat",
       version: entry.version, dimension: entry.dimension, enabled: entry.enabled,
+      supportsTools: entry.supportsTools ?? entry.capability === "chat",
     })),
   };
 }
@@ -64,6 +66,7 @@ export function buildProviderRequest(draft: Draft): ModelProviderUpsertRequest {
         model: entry.model.trim(), display_name: entry.displayName.trim(),
         capability: entry.capability, version: entry.version.trim(),
         dimension: entry.capability === "embedding" ? entry.dimension : 0, enabled: entry.enabled,
+        supports_tools: entry.capability === "chat" ? entry.supportsTools : false,
       })),
   };
 }
@@ -361,6 +364,15 @@ export function ModelProvidersTab() {
                   onChange={(value) => patchModel(index, { dimension: value ?? 0 })}
                 />
               </label>
+              <label className="model-field model-field-tools">
+                <Typography.Text type="secondary">{t("admin.modelProviders.supportsTools")}</Typography.Text>
+                <Switch
+                  size="small"
+                  checked={entry.capability === "chat" && entry.supportsTools}
+                  disabled={entry.capability !== "chat"}
+                  onChange={(checked) => patchModel(index, { supportsTools: checked })}
+                />
+              </label>
               <Button
                 danger
                 disabled={draft.models.length <= 1}
@@ -370,10 +382,11 @@ export function ModelProvidersTab() {
               </Button>
             </Flex>
           ))}
-          <Button onClick={() => patchDraft({ models: [...draft.models, { model: "", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true }] })}>
+          <Button onClick={() => patchDraft({ models: [...draft.models, { model: "", displayName: "", capability: "chat", version: "", dimension: 0, enabled: true, supportsTools: true }] })}>
             {t("admin.modelProviders.addModel")}
           </Button>
           <Typography.Text type="secondary">{t("admin.modelProviders.embeddingHint")}</Typography.Text>
+          <Typography.Text type="secondary">{t("admin.modelProviders.supportsToolsHint")}</Typography.Text>
           {error ? <Alert type="error" showIcon message={error} /> : null}
         </Flex>
       </Drawer>
