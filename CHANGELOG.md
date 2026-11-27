@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- 运行时镜像升级 openssl 到 3.5.9-r2，修复 `CVE-2026-124709`（api 与 mcp 镜像）；Trivy 漏洞库更新后 `security` 的镜像扫描转红。
+- MCP 验收缺少表格夹具：`cmd/mcp/e2e_test.go` 的 `list_tables/table_schema/table_query` 断言要求知识库内存在 docx 表格，但 `scripts/b16_acceptance.sh` 只上传 markdown 手册，CI `e2e` 稳定失败；验收脚本现复用 B40 的 docx 夹具并等待两个文档就绪。
 - 表格行引用无法落库导致回答流不终止：`message_citations` 的 `chunk_id/document_version_id` 为 NOT NULL 外键，而工具生成的表行引用只有资产/行号。迁移 0046 允许这两列为空并新增 `table_asset_id/sheet/row_start/row_end`；`finishAnswer` 在引用持久化失败时补发 `error` 终态，SSE 不再悬挂；消息重放保留表行位置。
 - 工具轮预算耗尽时返回空答案：模型在最后一轮仍发起工具调用会返回空文本并被引用校验判为 `ungrounded_answer`。现于预算耗尽后追加一次不带工具的收尾回答；引用重试会显式列出可用证据序号。
 - SSE 回答流被 60s 请求 deadline 提前切断：`routeDeadline` 的豁免模板仍是旧路径 `/api/v1/conversations/sessions/:id/messages`，与注册的 `/api/v1/sessions/:id/messages` 不一致，导致工具多轮或慢供应商的回答在 60.0s 断流（答案本身仍会落库）。注册与豁免现共用同一组路由常量，`deadline_test` 同步真实路径。

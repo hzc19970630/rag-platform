@@ -30,7 +30,8 @@ LABEL org.opencontainers.image.title="rag-platform" \
 
 # ALPINE-CVE-2026-4738: the pinned 3.22.8 image ships zlib 1.3.2-r1; the
 # Alpine v3.22 repository publishes the fixed 1.4-r0.
-RUN apk add --no-cache zlib=1.4-r0
+# CVE-2026-124709: the same base ships openssl 3.5.9-r0; v3.22 publishes 3.5.9-r2.
+RUN apk add --no-cache zlib=1.4-r0 libcrypto3=3.5.9-r2 libssl3=3.5.9-r2
 WORKDIR /app
 RUN adduser -D -u 10001 app
 COPY --from=build /out/api /usr/local/bin/api
