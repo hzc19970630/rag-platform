@@ -48,7 +48,7 @@ func openPreviewDB(t *testing.T) *gorm.DB {
 	}
 	for _, statement := range []string{
 		`CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT, quota TEXT, retrieval_config TEXT, chunking_config TEXT, created_at DATETIME, updated_at DATETIME)`,
-		`CREATE TABLE knowledge_bases (id TEXT PRIMARY KEY, tenant_id TEXT, owner_id TEXT, name TEXT, description TEXT, embedding_model TEXT, embedding_dimension INTEGER, chat_model TEXT, chat_model_version TEXT, rerank_model TEXT, rerank_model_version TEXT, acl_version INTEGER, retrieval_config TEXT, indexing_strategy TEXT, preset_name TEXT NOT NULL DEFAULT '', preset_version TEXT NOT NULL DEFAULT '', chunking_config TEXT NOT NULL DEFAULT '{}', created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE knowledge_bases (id TEXT PRIMARY KEY, tenant_id TEXT, owner_id TEXT, name TEXT, description TEXT, embedding_model TEXT, embedding_dimension INTEGER, chat_model TEXT, chat_model_version TEXT, rerank_model TEXT, rerank_model_version TEXT, acl_version INTEGER, retrieval_config TEXT, indexing_strategy TEXT, table_qa_enabled TEXT NOT NULL DEFAULT 'auto', preset_name TEXT NOT NULL DEFAULT '', preset_version TEXT NOT NULL DEFAULT '', chunking_config TEXT NOT NULL DEFAULT '{}', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE documents (id TEXT PRIMARY KEY, tenant_id TEXT, knowledge_base_id TEXT, deleted_at DATETIME)`,
 		`CREATE TABLE chunks (id TEXT PRIMARY KEY, tenant_id TEXT, knowledge_base_id TEXT)`,
 	} {

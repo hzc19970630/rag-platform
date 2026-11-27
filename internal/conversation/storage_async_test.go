@@ -172,9 +172,10 @@ func TestConversationServiceSessionReads(t *testing.T) {
 	}).Error; err != nil {
 		t.Fatalf("seed message: %v", err)
 	}
+	versionID, chunkID := "ver-1", "chunk-1"
 	if err := db.Create(&models.MessageCitation{
 		ID: "cit-1", MessageID: "msg-1", TenantID: "tenant-a", KnowledgeBaseID: "kb-a",
-		DocumentID: "doc-1", DocumentVersionID: "ver-1", ChunkID: "chunk-1",
+		DocumentID: "doc-1", DocumentVersionID: &versionID, ChunkID: &chunkID,
 		CitationIndex: 1, Rank: 1, CreatedAt: now,
 	}).Error; err != nil {
 		t.Fatalf("seed citation: %v", err)

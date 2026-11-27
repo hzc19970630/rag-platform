@@ -104,9 +104,9 @@ def chat_with_tools(kb, question):
                         pass
     for _ in range(60):
         messages = json_request("GET", f"/sessions/{session_id}/messages")
-        assistants = [item.get("message", item) for item in messages.get("items", [])
+        assistants = [item for item in messages.get("items", [])
                       if (item.get("message", item)).get("role") == "assistant"]
-        if assistants and assistants[-1].get("status") in ("COMPLETED", "REFUSED", "FAILED", "CANCELLED", "TIMEOUT", "TIMED_OUT"):
+        if assistants and (assistants[-1].get("message", assistants[-1])).get("status") in ("COMPLETED", "REFUSED", "FAILED", "CANCELLED", "TIMEOUT", "TIMED_OUT"):
             return events, assistants[-1]
         time.sleep(2)
     raise AssertionError("chat answer did not reach a terminal state")
@@ -150,10 +150,16 @@ def main():
         print("tables: two sheets materialized, sum=300")
 
         if not SKIP_CHAT:
-            events, message = chat_with_tools(kb, "表格 1 的金额总和是多少")
+            events, view = chat_with_tools(kb, "客户.docx 中「表格 1」的金额总和是多少")
+            message = view.get("message", view)
             calls = [event for event in events if event.get("type") == "tool_call"]
             assert any((event.get("data") or {}).get("tool") == "table_query" for event in calls), calls
+            # A message row alone is not enough: the SSE tail and the citation
+            # persistence must both reach the end, or the UI hangs on "answering".
+            kinds = [event.get("type") for event in events]
+            assert "answer" in kinds and "complete" in kinds, kinds
             assert message.get("status") == "COMPLETED", message
+            assert view.get("citations"), view
             assert "300" in (message.get("content") or ""), message
             print("chat: tool_call/table_query ->", (message.get("content") or "")[:120])
         print("B40 acceptance: ok")

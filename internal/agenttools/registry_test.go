@@ -71,7 +71,7 @@ func TestRegistryInvoke(t *testing.T) {
 func TestRegistryAuthorizationReadOnlyAndRecovery(t *testing.T) {
 	registry := NewRegistry()
 	denied := echoTool("denied")
-	denied.Authorize = func(context.Context, Scope) error { return errors.New("no access") }
+	denied.Guard = func(context.Context, Scope) error { return errors.New("no access") }
 	if err := registry.Register(denied); err != nil {
 		t.Fatalf("register: %v", err)
 	}

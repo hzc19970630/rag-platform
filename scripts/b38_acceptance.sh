@@ -126,8 +126,10 @@ request GET "/api/v1/documents/$sampled_doc/index-estimate" 200 "$tmp_dir/sample
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
 assert d["storageMode"] in ("sampled", "metadata"), d
-assert d["parseTruncated"] is True, d
-assert d["parsedRows"] < d["totalRows"], d
+# B39 streams every row into the columnar copy, so a sheet above the block cap
+# is "sampled" for indexing without being parse-truncated; only the 2M safety
+# valve sets parseTruncated. Sampling must still show up in the vector budget.
+assert d["parseTruncated"] or d["vectorRows"] < d["parsedRows"], d
 PY
 request GET "/api/v1/knowledge-bases/$kb/tables" 200 "$tmp_dir/sampled-tables.json" "${headers[@]}"
 sampled_asset="$("$python_bin" - "$tmp_dir/sampled-tables.json" "$sampled_doc" <<'PY'

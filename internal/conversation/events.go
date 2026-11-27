@@ -97,13 +97,27 @@ func (s *Service) persistMessage(ctx context.Context, message models.Message) (s
 func (s *Service) persistCitations(ctx context.Context, messageID string, principal authz.Principal, conversation models.Conversation, citations []CitationView) error {
 	rows := make([]models.MessageCitation, 0, len(citations))
 	for _, citation := range citations {
-		rows = append(rows, models.MessageCitation{
+		row := models.MessageCitation{
 			ID: stableID("cit", messageID, fmt.Sprint(citation.Index)), MessageID: messageID,
 			TenantID: principal.TenantID, KnowledgeBaseID: conversation.KnowledgeBaseID,
-			DocumentID: citation.DocumentID, DocumentVersionID: citation.DocumentVersionID,
-			ChunkID: citation.ChunkID, CitationIndex: citation.Index, Rank: citation.Rank,
+			DocumentID: citation.DocumentID, CitationIndex: citation.Index, Rank: citation.Rank,
 			Score: citation.Score, Quote: citation.Quote,
-		})
+			TableAssetID: citation.TableAssetID, Sheet: citation.Sheet,
+			RowStart: citation.RowStart, RowEnd: citation.RowEnd,
+		}
+		// Table-row citations carry a synthetic chunk id for the live event; it
+		// must not be written to the FK-backed chunk/version columns (0046).
+		if citation.TableAssetID == "" {
+			if citation.ChunkID != "" {
+				chunkID := citation.ChunkID
+				row.ChunkID = &chunkID
+			}
+			if citation.DocumentVersionID != "" {
+				versionID := citation.DocumentVersionID
+				row.DocumentVersionID = &versionID
+			}
+		}
+		rows = append(rows, row)
 	}
 	return s.messages.CreateCitations(ctx, rows)
 }
@@ -115,10 +129,19 @@ func (s *Service) loadCitations(ctx context.Context, tenantID, messageID string)
 	}
 	views := make([]CitationView, 0, len(rows))
 	for _, row := range rows {
+		chunkID, versionID := "", ""
+		if row.ChunkID != nil {
+			chunkID = *row.ChunkID
+		}
+		if row.DocumentVersionID != nil {
+			versionID = *row.DocumentVersionID
+		}
 		views = append(views, CitationView{
-			Index: row.CitationIndex, ChunkID: row.ChunkID, DocumentID: row.DocumentID,
-			DocumentVersionID: row.DocumentVersionID, KnowledgeBaseID: row.KnowledgeBaseID,
+			Index: row.CitationIndex, ChunkID: chunkID, DocumentID: row.DocumentID,
+			DocumentVersionID: versionID, KnowledgeBaseID: row.KnowledgeBaseID,
 			Quote: row.Quote, Rank: row.Rank, Score: row.Score,
+			TableAssetID: row.TableAssetID, Sheet: row.Sheet,
+			RowStart: row.RowStart, RowEnd: row.RowEnd,
 		})
 	}
 	return views, nil

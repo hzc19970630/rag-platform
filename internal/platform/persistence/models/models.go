@@ -586,13 +586,20 @@ type Message struct {
 func (Message) TableName() string { return "messages" }
 
 type MessageCitation struct {
-	ID                string    `gorm:"primaryKey;size:96" json:"id"`
-	MessageID         string    `gorm:"size:64;not null;index" json:"messageId"`
-	TenantID          string    `gorm:"size:64;not null;index" json:"tenantId"`
-	KnowledgeBaseID   string    `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
-	DocumentID        string    `gorm:"size:64;not null" json:"documentId"`
-	DocumentVersionID string    `gorm:"size:64;not null" json:"documentVersionId"`
-	ChunkID           string    `gorm:"size:96;not null" json:"chunkId"`
+	ID              string `gorm:"primaryKey;size:96" json:"id"`
+	MessageID       string `gorm:"size:64;not null;index" json:"messageId"`
+	TenantID        string `gorm:"size:64;not null;index" json:"tenantId"`
+	KnowledgeBaseID string `gorm:"size:64;not null;index" json:"knowledgeBaseId"`
+	DocumentID      string `gorm:"size:64;not null" json:"documentId"`
+	// Table-row citations come from the read-only tools: they have no chunk or
+	// single document version, so those columns stay NULL and the locator is
+	// carried by the table fields below (migration 0046).
+	DocumentVersionID *string   `gorm:"size:64" json:"documentVersionId"`
+	ChunkID           *string   `gorm:"size:96;index" json:"chunkId"`
+	TableAssetID      string    `gorm:"size:64;index" json:"tableAssetId,omitempty"`
+	Sheet             string    `gorm:"size:255" json:"sheet,omitempty"`
+	RowStart          int       `gorm:"column:row_start;not null;default:0" json:"rowStart,omitempty"`
+	RowEnd            int       `gorm:"column:row_end;not null;default:0" json:"rowEnd,omitempty"`
 	CitationIndex     int       `gorm:"not null" json:"citationIndex"`
 	Rank              int       `gorm:"not null" json:"rank"`
 	Score             float64   `gorm:"not null;default:0" json:"score"`

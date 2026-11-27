@@ -303,6 +303,9 @@ func (s *Service) finishAnswer(ctx context.Context, emitEvent func(string, map[s
 		return AnswerResult{}, err
 	}
 	if err := s.persistCitations(writeCtx, messageID, input.principal, input.conversation, input.citations); err != nil {
+		// The message is already durable, so a silent error would leave the SSE
+		// tail waiting forever: terminate the stream explicitly.
+		_ = emitEvent(EventError, map[string]any{"code": "citation_persist_failed", "message": err.Error()})
 		return AnswerResult{}, err
 	}
 	if err := s.touchConversation(ctx, input.conversation, input.query); err != nil && ctx.Err() == nil {

@@ -5,12 +5,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func toolErrorText(result *mcp.CallToolResult) string {
+	for _, content := range result.Content {
+		if text, ok := content.(*mcp.TextContent); ok {
+			return text.Text
+		}
+	}
+	return ""
+}
 
 func callToolE2E(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) (*mcp.CallToolResult, map[string]any) {
 	t.Helper()
@@ -48,7 +58,7 @@ func TestQuickstartE2E(t *testing.T) {
 
 	result, output := callToolE2E(t, session, "list_knowledge_bases", map[string]any{})
 	if result.IsError {
-		t.Fatalf("list_knowledge_bases failed")
+		t.Fatalf("list_knowledge_bases failed: %s", toolErrorText(result))
 	}
 	if output["knowledgeBases"] == nil {
 		t.Fatalf("list_knowledge_bases returned no payload")
@@ -130,6 +140,46 @@ func TestQuickstartE2E(t *testing.T) {
 	chunk, _ := output["chunk"].(map[string]any)
 	if chunk["content"] == "" {
 		t.Fatalf("citation chunk has no content: %v", chunk)
+	}
+
+	// Table tools share the agenttools registry with chat: one docx table fixture
+	// must be visible, schema-readable and queryable through MCP.
+	result, output = callToolE2E(t, session, "list_tables", map[string]any{"knowledgeBaseId": knowledgeBaseID})
+	if result.IsError {
+		t.Fatalf("list_tables failed")
+	}
+	tables, _ := output["tables"].([]any)
+	if len(tables) == 0 {
+		t.Fatalf("list_tables returned no assets; upload a docx/pptx table fixture to %s and rerun", knowledgeBaseID)
+	}
+	table, _ := tables[0].(map[string]any)
+	assetID, _ := table["id"].(string)
+	if assetID == "" {
+		t.Fatalf("table asset has no id: %v", table)
+	}
+
+	result, output = callToolE2E(t, session, "table_schema", map[string]any{
+		"knowledgeBaseId": knowledgeBaseID, "assetId": assetID,
+	})
+	if result.IsError || output["table"] == nil {
+		t.Fatalf("table_schema failed: %v", output)
+	}
+
+	result, output = callToolE2E(t, session, "table_query", map[string]any{
+		"knowledgeBaseId": knowledgeBaseID, "assetId": assetID, "question": "该表的金额总和是多少",
+	})
+	if result.IsError {
+		t.Fatalf("table_query failed")
+	}
+	tableQuery, _ := output["tableQuery"].(map[string]any)
+	tableResult, _ := tableQuery["result"].(map[string]any)
+	if fmt.Sprint(tableResult["value"]) != "300" {
+		t.Fatalf("table_query value = %v, want 300 (%v)", tableResult["value"], tableQuery)
+	}
+
+	result, _ = callToolE2E(t, session, "list_tables", map[string]any{"knowledgeBaseId": forbiddenKB})
+	if !result.IsError {
+		t.Fatalf("out-of-scope list_tables must be a tool error")
 	}
 
 	result, _ = callToolE2E(t, session, "search", map[string]any{

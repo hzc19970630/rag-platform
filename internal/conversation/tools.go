@@ -91,20 +91,7 @@ func (s *Service) generateWithTools(ctx context.Context, query string, registry 
 		}
 		last = response
 		if len(response.ToolCalls) == 0 {
-			if toolEvidence && shouldRetryCitation(response.Text, evidence) {
-				current = append(current,
-					model.Turn{Role: "assistant", Content: response.Text},
-					model.Turn{Role: "user", Content: citationRetryInstruction},
-				)
-				corrected, retryErr := s.chat.Complete(ctx, model.ChatRequest{
-					SystemInstruction: instruction, Query: query, History: current, Model: chatModel,
-					ContextTemplate: "{{query}}",
-				})
-				if retryErr == nil {
-					return corrected, evidence, nil
-				}
-			}
-			return response, evidence, nil
+			return s.retryWithCitations(ctx, registry, instruction, query, chatModel, current, response, toolEvidence, evidence), evidence, nil
 		}
 		current = append(current, model.Turn{Role: "assistant", Content: response.Text, ToolCalls: response.ToolCalls})
 		for _, call := range response.ToolCalls {
@@ -156,7 +143,47 @@ func (s *Service) generateWithTools(ctx context.Context, query string, registry 
 			current = append(current, model.Turn{Role: "tool", ToolCallID: call.ID, Name: call.Name, Content: content})
 		}
 	}
-	return last, evidence, nil
+	// The tool budget ran out while the model was still calling tools. Ask once
+	// more without tools so the answer is text built from the collected rows
+	// instead of an empty tool-call response the citation validator rejects.
+	final, finalErr := s.chat.Complete(ctx, model.ChatRequest{
+		SystemInstruction: instruction, Query: query, History: current, Model: chatModel,
+		ContextTemplate: "{{query}}",
+	})
+	if finalErr != nil {
+		return last, evidence, nil
+	}
+	return s.retryWithCitations(ctx, registry, instruction, query, chatModel, current, final, toolEvidence, evidence), evidence, nil
+}
+
+// retryWithCitations gives one bounded second chance when a tool-backed answer
+// would fail citation validation: models drop [n] markers even though the tool
+// results carry them, and refusing a correct table value over formatting is
+// worse than asking once more with the available indexes spelled out.
+func (s *Service) retryWithCitations(ctx context.Context, registry *Registry, instruction, query, chatModel string, history []model.Turn, response model.ChatResponse, toolEvidence bool, evidence retrieval.EvidenceSet) model.ChatResponse {
+	if !toolEvidence || !shouldRetryCitation(response.Text, evidence) {
+		return response
+	}
+	retryNote := citationRetryInstruction
+	if indexes := registry.Indexes(); len(indexes) > 0 {
+		parts := make([]string, len(indexes))
+		for position, index := range indexes {
+			parts[position] = fmt.Sprintf("[%d]", index)
+		}
+		retryNote += " 可用序号：" + strings.Join(parts, "、")
+	}
+	turns := append(append([]model.Turn{}, history...),
+		model.Turn{Role: "assistant", Content: response.Text},
+		model.Turn{Role: "user", Content: retryNote},
+	)
+	corrected, err := s.chat.Complete(ctx, model.ChatRequest{
+		SystemInstruction: instruction, Query: query, History: turns, Model: chatModel,
+		ContextTemplate: "{{query}}",
+	})
+	if err != nil {
+		return response
+	}
+	return corrected
 }
 
 func shouldRetryCitation(answer string, evidence retrieval.EvidenceSet) bool {

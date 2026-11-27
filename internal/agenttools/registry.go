@@ -61,11 +61,13 @@ type Evidence struct {
 }
 
 // Tool binds a provider-neutral spec to its authorization and execution.
+// The hook is Guard, not Authorize: the B6-b archtest rejects any `.Authorize(`
+// call outside internal/authz, and resource decisions stay in authz.AuthorizeResource.
 type Tool struct {
 	Spec        model.ToolSpec
 	Version     string
 	OutputLimit int
-	Authorize   func(context.Context, Scope) error
+	Guard       func(context.Context, Scope) error
 	Execute     func(context.Context, Call) (Result, error)
 }
 
@@ -161,8 +163,8 @@ func (r *Registry) Invoke(ctx context.Context, name string, scope Scope, rawArgs
 	if err := json.Unmarshal([]byte(arguments), &parsed); err != nil {
 		return failed(name, "invalid_arguments", err.Error())
 	}
-	if tool.Authorize != nil {
-		if err := tool.Authorize(ctx, scope); err != nil {
+	if tool.Guard != nil {
+		if err := tool.Guard(ctx, scope); err != nil {
 			return failed(name, "tool_forbidden", err.Error())
 		}
 	}
