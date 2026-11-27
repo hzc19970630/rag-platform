@@ -26,6 +26,7 @@ created_kb=0
 tmp_dir="$(mktemp -d)"
 key_id=""
 document_id=""
+table_document_id=""
 
 cleanup() {
   if [[ -n "$key_id" ]]; then
@@ -33,6 +34,9 @@ cleanup() {
   fi
   if [[ -n "$document_id" ]]; then
     curl -sS -o /dev/null -X DELETE "$base/documents/$document_id" "${dev[@]}" || true
+  fi
+  if [[ -n "$table_document_id" ]]; then
+    curl -sS -o /dev/null -X DELETE "$base/documents/$table_document_id" "${dev[@]}" || true
   fi
   if [[ "$created_kb" == "1" && -n "$kb" ]]; then
     curl -sS -o /dev/null -X DELETE "$base/knowledge-bases/$kb" "${dev[@]}" || true
@@ -79,22 +83,43 @@ token="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["toke
 key_id="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["apiKey"]["id"])' "$tmp_dir/key.json")"
 [[ -n "$token" && -n "$key_id" ]] || fail "API key creation returned no token"
 
-step "upload the demo document and wait for EVIDENCE_READY"
+step "upload the demo document and the docx table fixture, then wait for EVIDENCE_READY"
 curl -fsS -X POST "$base/knowledge-bases/$kb/documents" "${dev[@]}" \
   -H "Idempotency-Key: b16-$(date +%s)" \
   -F "file=@examples/demo/retrieval-handbook.md;type=text/markdown" > "$tmp_dir/upload.json"
 document_id="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["document"]["id"])' "$tmp_dir/upload.json")"
 [[ -n "$document_id" ]] || fail "upload returned no document id"
-status=""
-for _ in $(seq 1 60); do
-  curl -fsS "$base/documents/$document_id" "${dev[@]}" > "$tmp_dir/status.json"
-  status="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["pipeline"]["status"])' "$tmp_dir/status.json")"
-  [[ "$status" == "EVIDENCE_READY" ]] && break
-  sleep 2
-done
-[[ "$status" == "EVIDENCE_READY" ]] || fail "document did not reach EVIDENCE_READY (last status: $status)"
 
-step "run the live MCP client: list docs -> detail -> content -> search -> ask -> citation -> forbidden KB"
+"$PYTHON" - "$tmp_dir/table.docx" <<'PY' || fail "failed to build the docx table fixture"
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("b40fixtures", "scripts/b40_docreader_tables.py")
+fixtures = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(fixtures)
+with open(sys.argv[1], "wb") as handle:
+    handle.write(fixtures.zip_bytes({
+        "word/document.xml": fixtures.DOCX,
+        "word/footnotes.xml": fixtures.FOOTNOTES,
+    }))
+PY
+curl -fsS -X POST "$base/knowledge-bases/$kb/documents" "${dev[@]}" \
+  -H "Idempotency-Key: b16-table-$(date +%s)" \
+  -F "file=@$tmp_dir/table.docx;type=application/vnd.openxmlformats-officedocument.wordprocessingml.document" \
+  > "$tmp_dir/table-upload.json"
+table_document_id="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["document"]["id"])' "$tmp_dir/table-upload.json")"
+[[ -n "$table_document_id" ]] || fail "table fixture upload returned no document id"
+
+for uploaded in "$document_id" "$table_document_id"; do
+  status=""
+  for _ in $(seq 1 60); do
+    curl -fsS "$base/documents/$uploaded" "${dev[@]}" > "$tmp_dir/status.json"
+    status="$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["pipeline"]["status"])' "$tmp_dir/status.json")"
+    [[ "$status" == "EVIDENCE_READY" ]] && break
+    sleep 2
+  done
+  [[ "$status" == "EVIDENCE_READY" ]] || fail "document $uploaded did not reach EVIDENCE_READY (last status: $status)"
+done
+
+step "run the live MCP client: list docs -> detail -> content -> search -> ask -> citation -> table tools -> forbidden KB"
 RAG_API_URL="http://host.docker.internal:${api_port}/api/v1" \
 RAG_API_KEY="$token" \
 RAG_KNOWLEDGE_BASE_ID="$kb" \
