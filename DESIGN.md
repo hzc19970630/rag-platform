@@ -1224,7 +1224,7 @@ RECEIVED
 | `connectors` | `tenant_id`, `type`, `credential_ref` | 外部数据源配置 |
 | `sync_runs` | `connector_id`, `cursor`, `status` | 增量同步记录 |
 | `sessions/messages` | `tenant_id`, `user_id`, `request_id` | 对话和流式回答 |
-| `message_citations` | `message_id`, `chunk_id`, `rank`, `score` | 回答引用 |
+| `message_citations` | `message_id`, `chunk_id`（表行引用为空）, `table_asset_id`/`sheet`/`row_start`/`row_end`（表行引用）, `rank`, `score` | 回答引用（证据块或表行） |
 | `api_keys` | `tenant_id`, `key_hash`, `capabilities` | 程序化访问密钥 |
 | `audit_logs` | `tenant_id`, `actor_id`, `action`, `resource` | 管理和数据操作审计 |
 | `outbox_events` | `aggregate_id`, `event_type`, `payload`, `published_at` | 可靠领域事件发布 |

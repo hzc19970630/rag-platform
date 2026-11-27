@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- 表格行引用无法落库导致回答流不终止：`message_citations` 的 `chunk_id/document_version_id` 为 NOT NULL 外键，而工具生成的表行引用只有资产/行号。迁移 0046 允许这两列为空并新增 `table_asset_id/sheet/row_start/row_end`；`finishAnswer` 在引用持久化失败时补发 `error` 终态，SSE 不再悬挂；消息重放保留表行位置。
+- 工具轮预算耗尽时返回空答案：模型在最后一轮仍发起工具调用会返回空文本并被引用校验判为 `ungrounded_answer`。现于预算耗尽后追加一次不带工具的收尾回答；引用重试会显式列出可用证据序号。
 - SSE 回答流被 60s 请求 deadline 提前切断：`routeDeadline` 的豁免模板仍是旧路径 `/api/v1/conversations/sessions/:id/messages`，与注册的 `/api/v1/sessions/:id/messages` 不一致，导致工具多轮或慢供应商的回答在 60.0s 断流（答案本身仍会落库）。注册与豁免现共用同一组路由常量，`deadline_test` 同步真实路径。
 - 推理模型拒绝强制工具选择：表格问题首轮下发 `tool_choice=required` 时，DeepSeek thinking mode 等供应商返回 400，现自动降级为 `auto` 重试一次再继续工具轮，不再让整题失败。
 - `scripts/b40_acceptance.py` 轮询终态缺 `TIMEOUT`：后端超时终态为 `TIMEOUT`，脚本只认 `TIMED_OUT`，会把已结束的超时回答误报为“未到达终态”；同时新增 `B40_CHAT_MODEL` 用于绑定临时知识库的 chat 模型。
