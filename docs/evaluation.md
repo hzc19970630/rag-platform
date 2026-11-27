@@ -221,3 +221,42 @@ python3 scripts/eval_suite.py --auth api-key \
 - **告警**：`retrieval_quality_regressions_total` 计数出现增长时触发 `RagRetrievalQualityRegression`。
 
 运营顺序：调整检索/rerank → 在评估集回放 → 导入报告 → 查看质量视图 → 保存配置。
+
+## 7. 工具调用矩阵（B40 T5-2）
+
+问答工具层（B40）的评估不只看答案文本，还要看模型是否选对工具、表答案是否带回可核对的行级引用，以及相对纯 RAG 的 token/延迟成本。矩阵脚本对每个工具模型分别跑“工具开启（`table_qa_enabled=auto`）”和“纯 RAG 基线（`off`，仅表题）”。
+
+前置与命令：
+
+- 开发栈可用（dev 身份），至少注册两个声明 `supportsTools` 的 chat 模型（`openai_compatible` 或 `ollama`），并能在 `/models/providers/:id/test` 通过健康检查。
+- `make tool-matrix`；默认 `TOOL_MATRIX_MODELS=deepseek-flash,gpt-6.1-sol`、`TOOL_MATRIX_REPEATS=3`。`TOOL_MATRIX_ONLY` 可只跑指定题号（调试），`TOOL_MATRIX_REPORT` 改写报告路径。
+- 脚本创建临时知识库，上传 B40 的 docx/pptx 表格夹具与 `examples/demo/retrieval-handbook.md`，等待 `EVIDENCE_READY`、确认存在两个表资产后开始提问，结束时删除知识库。
+
+题目与口径：
+
+| 类别 | 题数 | 判定 |
+| --- | --- | --- |
+| 聚合（aggregate） | 2 | 答案含 `300`；引用须为指定 sheet 的表行，且引用原文合计覆盖 `100` 与 `200` 两行。 |
+| 查找（lookup） | 2 | 答案含 `华东`；同一行引用原文须同时包含查找键与答案值（`A公司`+`华东`、`200`+`华东`）。 |
+| 导航（navigation） | 1 | 仅判工具选择（`list_tables`）。`list_tables`/`table_schema` 是导航而非证据（B40 不变量 c），元数据类回答会被引用校验拒答，属预期行为，不计入答案/groundedness。 |
+| 解释（explain） | 1 | 手册题，答案含 `BM25` 与任一向量/融合词；不得调用表工具。 |
+
+其余指标：`toolSelectionAccuracy`（期望工具出现且禁用工具未出现）、`answerAccuracy`、`tableRowAccuracy`（表行引用比例）、`groundedRate`（`citationValidation.valid` 且至少一条引用）、`promptTokens/completionTokens`（`complete` 事件）、`avgLatencyMs`、`avgToolCalls`、`toolErrors`/`failedTools`。基线不提供工具，其 `toolSelectionAccuracy` 记为 n/a 而不是 0。
+
+输出与解读：
+
+- 报告写到 `tests/eval/tool_matrix_report.json`，含 `summary.overall/byCategory/byQuestion` 与逐次 `runs`（工具序列/参数摘要、失败工具、引用原文摘要、校验原因）。
+- 语料是合成的，表格行会被展开成文本 chunk，因此纯 RAG 基线也可能答对聚合/查找；工具层的主要增量是表行引用与结构化执行，而不是本题集上的答案召回。结论对模型规划敏感，单次绿色不代表稳定，至少保留 3 次重复。
+- 导航题的拒答是当前证据模型的有意限制（导航输出不可引用），不是矩阵缺陷；若要支持“列出表/列”的正式回答，需要单独立项补充资产级引用。
+- 本轮矩阵覆盖两个 `openai_compatible` provider；`ollama` 原生 tools 映射仍需在有可用实例时补跑一轮真实工具调用。
+
+本轮结果（2026-11-27，每模型 33 次 = 11 题 × 3）：
+
+| 模型 | 模式 | 完成/拒答/超时 | toolSel | answer | tableRow | grounded | 平均延迟 | prompt/completion tokens |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| deepseek-flash | tools | 16/2/0 | 1.0 | 1.0 | 1.0 | 1.0 | 5.3s | 1711/312 |
+| deepseek-flash | baseline | 12/3/0 | n/a | 1.0 | 0.0 | 1.0 | 2.6s | 486/452 |
+| gpt-6.1-sol | tools | 6/7/5 | 0.72 | 0.40 | 0.50 | 0.40 | 95.4s | 4988/260 |
+| gpt-6.1-sol | baseline | 8/3/4 | n/a | 0.67 | 0.0 | 0.67 | 39.0s | 4678/248 |
+
+解读：deepseek-flash 在工具模式下四道表题（12 次）工具选择、答案、表行引用与 groundedness 全部通过，导航题 1 次经 `search_knowledge` 完成、2 次按预期拒答，解释题 3/3 不误用表工具；基线只能靠展开的文本 chunk 答对表题，且不产生表行引用（`tableRow=0` 为设计差异）。`gpt-6.1-sol` 走第三方中转网关：聚合题 3/3 正确且带行引用，但查找题全部因 `ungrounded_answer` 拒答，33 次里 9 次服务端超时（消息 `TIMEOUT`、`validation.reason=timeout`），平均 95s，不适合做工具轮的主模型。该差异说明“支持 tools 声明”不等于可用，选型应以本矩阵为准。

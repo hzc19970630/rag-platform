@@ -494,7 +494,8 @@ WHERE (ti.tenant_id IS NULL OR ti.tenant_id = '')
 - 默认策略：`CHAT_TOOLS_ENABLED=true`（部署级 kill switch）；知识库 `table_qa_enabled=auto|on|off`（默认 auto）。auto 仅当该知识库当前版本存在未软删的表资产时启用。绑定模型必须声明 `supportsTools`（provider 目录字段）；不支持或关闭时走确定性表格兜底。
 - 有界执行：`CHAT_TOOL_MAX_ROUNDS`（默认 3）、`CHAT_TOOL_MAX_CALLS`（默认 8）、`CHAT_TOOL_TIMEOUT_SECONDS`（默认 20）；工具输出默认 16KB 截断。表问题（规则分类为 lookup/aggregate）首轮使用 `tool_choice=required`，避免模型拿检索到的行片段当全量事实。
 - 授权与审计：工具继承本次会话的知识库授权；`table_query` 复用 `AskTableSQL` 的白名单/参数/行数/超时与 `table_query` 审计；跨知识库、越权资产与软删文档被拒。
-- 事件：SSE 发送 `tool_call`（工具名/callId/参数摘要）与 `tool_result`（isError/truncated/evidence 数/内容长度），事件持久化后可经 `/requests/:id/events` 重放；最终答案的 `citations` 可包含 `tableAssetId/sheet/rowStart/rowEnd` 的表行引用。
+- 事件：SSE 发送 `tool_call`（工具名/callId/参数摘要）与 `tool_result`（isError/truncated/evidence 数/内容长度），事件持久化后可经 `/requests/:id/events` 重放；最终答案的 `citations` 可包含 `tableAssetId/sheet/rowStart/rowEnd` 的表行引用。`complete` 事件携带 `status/code/latencyMs/promptTokens/completionTokens`，重放路径同样补齐 token（读取历史消息的 `token_usage` 列）。
+- 评估：`make tool-matrix` 对每个工具模型分别跑工具模式与纯 RAG 基线，输出工具选择、表行引用、groundedness、tokens、延迟与工具调用/失败统计到 `tests/eval/tool_matrix_report.json`；默认两个 `openai_compatible` provider、3 次重复，临时知识库结束后自动删除。`ollama` 原生 tools 映射需在有可用实例时补跑。
 - MCP：`list_tables`、`table_schema`、`table_query` 与对话共用 schema，执行仍走 REST（API key 授权）；MCP 侧需显式传 `knowledgeBaseId`。
 - 解析前置（T0）：docx `w:tbl` 与 pptx `a:tbl` 转为表资产；图片/图表/脚注批注/备注页计入 `skipped_images/skipped_charts/skipped_notes` 并在文档覆盖卡片与回答 coverage 警告中展示，不作为检索证据。
 
