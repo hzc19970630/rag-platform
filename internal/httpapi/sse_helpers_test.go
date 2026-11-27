@@ -26,6 +26,7 @@ func TestStreamRecordedAnswerSynthesizesTerminalEvents(t *testing.T) {
 	stream, recorder := newTestStream()
 	result := conversation.AnswerResult{
 		RequestID: "req-1", Content: "answer", Status: "answered", LatencyMS: 12,
+		PromptTokens: 7, CompletionTokens: 9,
 		EvidenceSet: retrieval.EvidenceSet{Items: []retrieval.Candidate{{ChunkID: "chunk-1"}}},
 	}
 	streamRecordedAnswer(stream, result, 3)
@@ -35,6 +36,9 @@ func TestStreamRecordedAnswerSynthesizesTerminalEvents(t *testing.T) {
 	}
 	if !strings.Contains(body, "chunk-1") || !strings.Contains(body, "req-1:4") || !strings.Contains(body, "req-1:5") {
 		t.Fatalf("event payloads missing: %q", body)
+	}
+	if !strings.Contains(body, `"promptTokens":7`) || !strings.Contains(body, `"completionTokens":9`) {
+		t.Fatalf("complete event is missing token usage: %q", body)
 	}
 }
 

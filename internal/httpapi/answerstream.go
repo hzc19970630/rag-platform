@@ -91,7 +91,10 @@ func streamRecordedAnswer(stream *sseStream, result conversation.AnswerResult, a
 	})
 	_ = stream.emit(conversation.Event{
 		RequestID: result.RequestID, Sequence: after + 2, Type: conversation.EventComplete,
-		Data: map[string]any{"status": result.Status, "code": result.ErrorCode, "latencyMs": result.LatencyMS},
+		Data: map[string]any{
+			"status": result.Status, "code": result.ErrorCode, "latencyMs": result.LatencyMS,
+			"promptTokens": result.PromptTokens, "completionTokens": result.CompletionTokens,
+		},
 	})
 }
 

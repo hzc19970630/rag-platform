@@ -322,7 +322,10 @@ func (s *Service) finishAnswer(ctx context.Context, emitEvent func(string, map[s
 	}); err != nil {
 		return AnswerResult{}, err
 	}
-	if err := emitEvent(EventComplete, map[string]any{"status": input.status, "code": input.code, "latencyMs": latency}); err != nil {
+	if err := emitEvent(EventComplete, map[string]any{
+		"status": input.status, "code": input.code, "latencyMs": latency,
+		"promptTokens": input.promptTokens, "completionTokens": input.completionTokens,
+	}); err != nil {
 		return AnswerResult{}, err
 	}
 	return AnswerResult{

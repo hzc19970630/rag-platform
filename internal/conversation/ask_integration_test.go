@@ -79,6 +79,13 @@ func TestAskEndToEndPersistsGroundedAnswer(t *testing.T) {
 	if events[len(events)-1].Type != EventComplete {
 		t.Fatalf("terminal event = %s, want %s", events[len(events)-1].Type, EventComplete)
 	}
+	complete := events[len(events)-1].Data
+	if complete["promptTokens"] != 12 || complete["completionTokens"] != 5 {
+		t.Fatalf("complete event is missing token usage: %+v", complete)
+	}
+	if result.PromptTokens != 12 || result.CompletionTokens != 5 {
+		t.Fatalf("result token usage = %d/%d, want 12/5", result.PromptTokens, result.CompletionTokens)
+	}
 
 	var assistant models.Message
 	if err := db.Where("conversation_id = ? AND role = ?", conversation.ID, MessageRoleAssistant).First(&assistant).Error; err != nil {
